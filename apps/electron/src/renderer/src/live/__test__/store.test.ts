@@ -61,4 +61,40 @@ describe('live store（对话框/通知/bootstrap 合并）', () => {
     expect(store.getState().activeThreadId).not.toBe('t1');
     expect('t1' in store.getState().sessions).toBe(false);
   });
+
+  test('host/sessionUpdated/sessionRenamed 会话表维护 + sessionDied 线程标记', () => {
+    const store = createLiveStore();
+    store.getState().bootstrap({ sessions: [session('t1')], saved: [], models: [], providers: [] });
+    store.getState().applyEvent({ type: 'host', phase: 'restarting' }, 1);
+    expect(store.getState().hostPhase).toBe('restarting');
+    store.getState().applyEvent({ type: 'sessionUpdated', session: { ...session('t1'), streaming: true } }, 2);
+    expect(store.getState().sessions['t1']?.streaming).toBe(true);
+    store.getState().applyEvent({ type: 'sessionRenamed', threadId: 't1', name: '新名' }, 3);
+    expect(store.getState().sessions['t1']?.title).toBe('新名');
+    // 未知线程的改名无操作
+    store.getState().applyEvent({ type: 'sessionRenamed', threadId: 'ghost', name: 'x' }, 4);
+    store.getState().applyEvent({ type: 'sessionDied', threadId: 't1', reason: 'crash' }, 5);
+    expect(store.getState().threads['t1']?.crashed).toBe(true);
+    // 未知线程的对话流事件兜底建线程（不崩溃）
+    store.getState().applyEvent({ type: 'queueChanged', threadId: 'ghost', steering: [], followUp: ['m'] }, 6);
+    expect(store.getState().threads['ghost']?.queue.followUp).toEqual(['m']);
+  });
+
+  test('hydrate/stopIntent/updateStats/reset 动作', () => {
+    const store = createLiveStore();
+    store.getState().bootstrap({ sessions: [session('t1')], saved: [], models: [], providers: [] });
+    store.getState().hydrate('t1', {
+      kind: 'hydrate/initial',
+      items: [{ kind: 'user', id: 'e1', text: 'hi', origin: 'user', at: 1 }],
+      cursor: 'e1',
+    });
+    expect(store.getState().threads['t1']?.items.length).toBe(1);
+    store.getState().applyEvent({ type: 'turnStarted', threadId: 't1', at: 2 }, 2);
+    store.getState().stopIntent('t1');
+    expect(store.getState().threads['t1']?.stopping).toBe(true);
+    store.getState().updateStats('t1', { contextUsage: 0.5, tokensTotal: 100 });
+    expect(store.getState().stats['t1']).toEqual({ contextUsage: 0.5, tokensTotal: 100 });
+    store.getState().reset();
+    expect(store.getState().bootstrapLoaded).toBe(false);
+  });
 });
