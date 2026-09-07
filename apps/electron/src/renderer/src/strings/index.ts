@@ -16,6 +16,7 @@ export const copy = {
     workflows: 'Workflows',
     usage: 'Usage',
     refresh: 'Refresh sessions',
+    closeSession: 'Close conversation',
   },
   thread: {
     addAction: 'Add action',
@@ -73,6 +74,7 @@ export const copy = {
     crashedBanner: 'This conversation hit a worker crash and is recovering. The next command resumes it automatically.',
     compacting: 'Compacting context…',
     systemMessageLabel: 'System',
+    sendFailed: (reason: string): string => `Message not sent (${reason}). Try again.`,
     toolFailed: (exitCode: number): string => `exit ${exitCode}`,
     copyMessage: 'Copy message',
     editMessage: 'Edit message',
@@ -150,5 +152,12 @@ export const copy = {
   },
   notices: {
     dismiss: 'Dismiss',
+  },
+  bootstrap: {
+    loadingTitle: 'Starting up…',
+    loadingHint: 'Connecting to the coding agent host.',
+    failedTitle: 'Cannot start',
+    bridgeHint: 'The preload bridge is unavailable. Relaunch the app from the desktop entry.',
+    hostFailed: 'The agent host failed to start. Check Settings for provider configuration and the pai-cli path.',
   },
 } as const;

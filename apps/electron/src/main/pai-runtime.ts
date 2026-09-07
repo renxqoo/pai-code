@@ -195,16 +195,15 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
     if (hub === null) {
       throw new Error('hub_paths_unconfigured');
     }
-    // 每次 spawn 前重生成 models.json（provider 配置可能已变更）
-    const { env } = writeModelsConfig(deps.paths.agentDir, deps.providers().map((p) => ({ ...p, models: [...p.models] })), deps.keyStore);
-    const configEnv = { ...env };
     return createHostProcess({
       config: {
         bunPath: hub.bunPath,
         hubEntry: hub.hubEntry,
         agentDir: deps.paths.agentDir,
         cwd: homedir(),
-        buildEnv: () => configEnv,
+        // 每次 spawn（含重启）重生成 models.json 并解析最新 key 注入
+        buildEnv: () =>
+          writeModelsConfig(deps.paths.agentDir, deps.providers().map((p) => ({ ...p, models: [...p.models] })), deps.keyStore).env,
       },
       onFrame: handleFrame,
       onPhase: (phase: HostPhase) => {

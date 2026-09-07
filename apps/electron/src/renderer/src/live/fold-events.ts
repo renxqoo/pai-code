@@ -138,11 +138,25 @@ export function foldHydrate(state: LiveThreadState, action: HydrateAction): Live
       const fresh = hydrateNewItems(action.items).filter(({ entryIds }) => entryIds.some((id) => !state.seenIds.has(id)));
       const liveTurn = action.dropLiveTurn ? null : state.liveTurnId;
       let items = state.items;
+      const wasStopped =
+        action.dropLiveTurn && state.liveTurnId !== null
+          ? items.some((item) => item.kind === 'turn' && item.turn.id === state.liveTurnId && item.turn.status === 'stopped')
+          : false;
       for (const { item } of fresh) {
         items = insertBeforeLiveTurn(items, item, liveTurn);
       }
       if (action.dropLiveTurn && state.liveTurnId !== null) {
         items = items.filter((item) => !(item.kind === 'turn' && item.turn.id === state.liveTurnId));
+      }
+      // 权威替换继承用户停止语义：settle 前被停止的轮次保持 stopped 终态
+      if (wasStopped) {
+        for (let index = items.length - 1; index >= 0; index -= 1) {
+          const item = items[index];
+          if (item?.kind === 'turn') {
+            items = [...items.slice(0, index), { kind: 'turn', turn: { ...item.turn, status: 'stopped' } }, ...items.slice(index + 1)];
+            break;
+          }
+        }
       }
       const seen = new Set([...state.seenIds, ...action.items.map((item) => item.id)]);
       return { ...state, items, cursor: action.cursor ?? state.cursor, seenIds: seen, liveTurnId: liveTurn };

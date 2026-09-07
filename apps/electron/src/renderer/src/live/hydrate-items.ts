@@ -22,6 +22,8 @@ export function hydrateItems(history: readonly HistoryItem[]): readonly ThreadIt
     const last = assistants[assistants.length - 1];
     if (first === undefined || last === undefined) return;
     const blocks = buildTurnBlocks(assistants);
+    // 中止/出错的空 assistant（无正文无工具）不产生空轮次
+    if (blocks.length === 0) return;
     const turn: TurnModel = {
       id: `turn-${first.id}`,
       status: 'completed',

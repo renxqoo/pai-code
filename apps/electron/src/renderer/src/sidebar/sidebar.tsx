@@ -31,6 +31,8 @@ type SidebarProps = {
   onSelectProject: (project: string) => void
   onNewProject: () => void
   onSelectSession: (sessionId: string) => void
+  /** 关闭会话（dispose，文件保留）；不传则卡片不显示关闭入口。 */
+  onCloseSession?: (sessionId: string) => void
 }
 
 /** 会话侧栏：搜索、项目筛选、会话列表与底部工具；标题行由窗口顶栏承担。 */
@@ -50,6 +52,7 @@ function Sidebar({
   onSelectProject,
   onNewProject,
   onSelectSession,
+  onCloseSession,
 }: SidebarProps) {
   return (
     <aside
@@ -84,6 +87,7 @@ function Sidebar({
               age={ages[item.id] ?? ''}
               active={item.id === activeSessionId}
               onSelect={() => onSelectSession(item.id)}
+              onClose={onCloseSession === undefined ? undefined : () => onCloseSession(item.id)}
             />
           ))}
         </div>

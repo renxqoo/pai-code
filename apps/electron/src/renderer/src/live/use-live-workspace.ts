@@ -7,6 +7,7 @@ import { collectThreadDiff } from '@/diff-panel/collect-thread-diff';
 import type { SessionCardModel } from '@/sidebar/session-card-model';
 import type { ThreadModel } from '@/thread/thread-model';
 import { summarizeAgents } from '@/thread/panel-summary';
+import { copy } from '@/strings';
 
 import { createBridgeClient } from './client-invoke';
 import { createLiveController, type LiveController } from './live-controller';
@@ -20,6 +21,15 @@ import { createLiveStore, threadModelOf, type LiveStoreState, type PendingDialog
 const store = createLiveStore();
 const bridgeClient = createBridgeClient(window.pai);
 const controller: LiveController = createLiveController(bridgeClient, store);
+// 诊断句柄（e2e/排障用）：只读快照 + 事件观察
+declare global {
+  interface Window {
+    __paiDebug?: { snapshot(): unknown };
+  }
+}
+if (typeof window !== 'undefined') {
+  window.__paiDebug = { snapshot: () => ({ ...store.getState(), controllerPhase: 'n/a' }) };
+}
 
 export type ComposerSelection = {
   model: string;
@@ -60,7 +70,7 @@ export type LiveWorkspaceView = {
   providers: LiveStoreState['providers'];
   thinkingLevels: readonly string[];
   actions: {
-    readonly submitDraft: (message: string) => Promise<boolean>;
+    readonly submitDraft: (message: string) => Promise<string | null>;
     readonly stopActiveTurn: () => void;
     readonly selectSession: (threadId: string) => void;
     readonly createSession: (cwd: string) => Promise<boolean>;
@@ -162,12 +172,21 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     providers: state.providers,
     thinkingLevels: effortLevels,
     actions: {
-      submitDraft: (message) => controller.submitDraft(activeThreadId, message),
+      submitDraft: async (message) => {
+        const reason = await controller.submitDraft(activeThreadId, message);
+        if (reason !== null && reason !== 'bridge_unavailable') {
+          store.setState({ notices: [...store.getState().notices.slice(-4), { id: `send-fail-${Date.now()}`, text: copy.flow.sendFailed(reason) }] });
+        }
+        return reason;
+      },
       stopActiveTurn: () => void controller.stopActiveTurn(activeThreadId),
       selectSession: (threadId) => {
         store.getState().setActiveThread(threadId);
       },
-      createSession: (cwd) => controller.createSession(cwd),
+      createSession: (cwd) => {
+        const selected = state.models.find((entry) => `${entry.provider}/${entry.modelId}` === composer.model) ?? state.models[0];
+        return controller.createSession(cwd, selected);
+      },
       openSavedSession: (sessionPath) => controller.openSavedSession(sessionPath),
       closeSession: (threadId) => void controller.closeSession(threadId),
       selectModel: (value) => {
@@ -198,16 +217,16 @@ function buildComposer(
   const modelOptions = state.models.map((model) => `${model.provider}/${model.modelId}`);
   const currentModel = session?.model ?? modelOptions[0] ?? '';
   const levels = effortLevels.length > 0 ? effortLevels : ['off', 'low', 'medium', 'high'];
-  const effort =
-    session?.thinkingLevel !== null && session?.thinkingLevel !== undefined && EFFORT_LABELS[session.thinkingLevel] !== undefined
-      ? (EFFORT_LABELS[session.thinkingLevel] as string)
-      : (EFFORT_LABELS['high'] as string);
+  const levelLabels = levels.map((level) => EFFORT_LABELS[level] ?? level);
+  const currentLabel = session?.thinkingLevel !== undefined && session.thinkingLevel !== null ? EFFORT_LABELS[session.thinkingLevel] : undefined;
+  // 未知档位回落到第一个可选档（模型能力列表是真相，不臆造默认）
+  const effort = currentLabel ?? levelLabels[0] ?? '';
   const cwdBase = basename(session?.cwd ?? '');
   return {
     model: currentModel,
     modelOptions,
     effort,
-    effortOptions: levels.map((level) => EFFORT_LABELS[level] ?? level),
+    effortOptions: levelLabels,
     access: 'Standard',
     accessOptions: ['Standard'],
     checkout: cwdBase,

@@ -16,9 +16,10 @@ const RECONCILE_SETTLE_DELAY_MS = 120;
 export interface LiveController {
   readonly start: () => Promise<void>;
   readonly dispose: () => void;
-  readonly submitDraft: (threadId: string, message: string) => Promise<boolean>;
+  /** 发送：成功返回 null，失败返回原因（调用方转用户可见提示）。 */
+  readonly submitDraft: (threadId: string, message: string) => Promise<string | null>;
   readonly stopActiveTurn: (threadId: string) => Promise<void>;
-  readonly createSession: (cwd: string) => Promise<boolean>;
+  readonly createSession: (cwd: string, model?: { provider: string; modelId: string }) => Promise<boolean>;
   readonly openSavedSession: (sessionPath: string) => Promise<boolean>;
   readonly closeSession: (threadId: string) => Promise<void>;
   readonly renameSession: (threadId: string, name: string) => Promise<boolean>;
@@ -36,7 +37,7 @@ export interface LiveController {
 
 export function createLiveController(client: BridgeClient, store: LiveStore): LiveController {
   let unsubscribe: (() => void) | null = null;
-  let disposed = false;
+  let disposed = true;
   /** 对账在途标记（每线程一个），防止重复拉取。 */
   const reconciling = new Set<string>();
 
@@ -88,10 +89,13 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
 
   const controller: LiveController = {
     async start(): Promise<void> {
-      unsubscribe = client.subscribe((raw) => {
-      const parsed = parseEvent(raw);
-      if (parsed !== null) onEvent(parsed);
-    });
+      // 可重入：StrictMode/HMR 的双挂载会先 dispose 再 start；复原 disposed、
+      // 订阅以 unsubscribe 为准只建一次，bootstrap 每次刷新（幂等快照替换）。
+      disposed = false;
+      unsubscribe ??= client.subscribe((raw) => {
+        const parsed = parseEvent(raw);
+        if (parsed !== null) onEvent(parsed);
+      });
       const outcome = await client.invoke('app/bootstrap', {});
       if (disposed) return;
       if (!outcome.ok) {
@@ -107,21 +111,21 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       unsubscribe?.();
       unsubscribe = null;
     },
-    async submitDraft(threadId: string, message: string): Promise<boolean> {
+    async submitDraft(threadId: string, message: string): Promise<string | null> {
       const text = message.trim();
-      if (text.length === 0) return false;
+      if (text.length === 0) return 'empty_message';
       const streaming = store.getState().threads[threadId]?.streaming ?? false;
       const outcome = streaming
         ? await client.invoke('session/followUp', { threadId, message: text })
         : await client.invoke('session/prompt', { threadId, message: text });
-      return outcome.ok;
+      return outcome.ok ? null : outcome.reason;
     },
     async stopActiveTurn(threadId: string): Promise<void> {
       store.getState().stopIntent(threadId);
       await client.invoke('session/abort', { threadId });
     },
-    async createSession(cwd: string): Promise<boolean> {
-      const outcome = await client.invoke('session/start', { cwd });
+    async createSession(cwd: string, model?: { provider: string; modelId: string }): Promise<boolean> {
+      const outcome = await client.invoke('session/start', { cwd, provider: model?.provider, modelId: model?.modelId });
       if (!outcome.ok) return false;
       store.getState().setActiveThread(outcome.data.threadId);
       await hydrateFull(outcome.data.threadId).catch(() => undefined);

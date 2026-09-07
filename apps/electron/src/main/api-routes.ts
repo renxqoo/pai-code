@@ -30,6 +30,26 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     return outcome.ok ? { ok: true, data: outcome.data } : fail(outcome.error);
   };
 
+  /** 已知工作目录集合：活跃会话 + 注册表（list_saved 按目录过滤，需逐目录聚合）。 */
+  const knownCwds = (): string[] => {
+    const cwds = new Set<string>(runtime.sessions().map((session) => session.cwd));
+    for (const row of runtime.registry.list()) {
+      if (row.cwd.length > 0) cwds.add(row.cwd);
+    }
+    return [...cwds];
+  };
+
+  const savedAcrossCwds = async (cwd?: string): Promise<ReturnType<typeof savedSessions>> => {
+    const targets = cwd !== undefined ? [cwd] : knownCwds();
+    const merged = new Map<string, ReturnType<typeof savedSessions>[number]>();
+    for (const target of targets) {
+      const result = await runtime.host.request({ type: 'thread/list_saved', cwd: target });
+      if (!result.ok) continue;
+      for (const session of savedSessions(result.data)) merged.set(session.sessionPath, session);
+    }
+    return [...merged.values()].sort((a, b) => b.modifiedAt - a.modifiedAt);
+  };
+
   const providersView = (): Array<{ name: string; baseUrl: string; api: string; models: string[]; hasKey: boolean }> =>
     deps.settings.listProviders().map((provider) => ({
       name: provider.name,
@@ -56,13 +76,10 @@ export function createApiRoutes(deps: ApiRouteDeps) {
   const routes: RouteTable = {
     'app/bootstrap': async () => {
       runtime.markBootstrapped();
-      const [saved, models] = await Promise.all([
-        runtime.host.request({ type: 'thread/list_saved' }),
-        runtime.host.request({ type: 'get_models' }),
-      ]);
+      const [saved, models] = await Promise.all([savedAcrossCwds(), runtime.host.request({ type: 'get_models' })]);
       const outcome = {
         sessions: runtime.sessions(),
-        saved: saved.ok ? savedSessions(saved.data) : [],
+        saved,
         models: models.ok ? modelInfos(models.data) : [],
         providers: providersView(),
       };
@@ -96,9 +113,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       return { ok: true as const, data: null };
     },
     'session/listSaved': async (params) => {
-      const result = await command({ type: 'thread/list_saved', cwd: params.cwd });
-      if (!result.ok) return fail(result.reason);
-      return { ok: true as const, data: savedSessions(result.data) };
+      return { ok: true as const, data: await savedAcrossCwds(params.cwd) };
     },
     'session/prompt': async (params) => {
       const result = await command({

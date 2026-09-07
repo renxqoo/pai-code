@@ -10,6 +10,9 @@ import { resolveAppPaths } from './paths';
 import { createPaiRuntime } from './pai-runtime';
 import { createProviderKeyStore } from './provider-key-store';
 
+// 开启 Web 内容可访问性树（辅助技术 + 自动化验证都依赖它）
+app.commandLine.appendSwitch('force-renderer-accessibility');
+
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });

@@ -119,16 +119,17 @@ describe('SessionView / HistoryItem schema', () => {
 
   test('HistoryItem 三形态样本', () => {
     const items = [
-      { kind: 'user', id: 'm1', text: 'hi', origin: 'user' },
+      { kind: 'user', id: 'm1', text: 'hi', origin: 'user', at: 1 },
       {
         kind: 'assistant',
         id: 'm2',
+        at: 2,
         text: 'hello',
         thinking: '',
         toolCalls: [{ id: 'tc1', name: 'bash', argsPreview: 'ls', output: 'a\nb', isError: false, diff: null }],
         usage: { input: 10, output: 5 },
       },
-      { kind: 'bash', id: 'm3', command: 'git status', output: 'ok', exitCode: 0, cancelled: false },
+      { kind: 'bash', id: 'm3', command: 'git status', output: 'ok', exitCode: 0, cancelled: false, at: 3 },
     ] as const;
     for (const item of items) expect(HistoryItemSchema.parse(item)).toEqual(item);
   });
