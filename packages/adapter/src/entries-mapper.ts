@@ -30,11 +30,12 @@ export function mapEntries(entries: unknown): { items: HistoryItem[]; cursor: st
     if (id.length === 0) continue;
     cursor = id;
     if (entry.type !== 'message') continue;
+    const at = timeMs(entry.timestamp);
     const message = recordOf(entry.message);
     const role = message.role;
     if (role === 'user') {
       const text = flattenUserText(message.content);
-      items.push({ kind: 'user', id, text, origin: systemOrigin(text) ? 'system' : 'user' });
+      items.push({ kind: 'user', id, text, origin: systemOrigin(text) ? 'system' : 'user', at });
       pendingTools.clear();
       continue;
     }
@@ -46,6 +47,7 @@ export function mapEntries(entries: unknown): { items: HistoryItem[]; cursor: st
         output: str(message.output),
         exitCode: num(message.exitCode, 0),
         cancelled: message.cancelled === true,
+        at,
       });
       continue;
     }
@@ -84,6 +86,7 @@ export function mapEntries(entries: unknown): { items: HistoryItem[]; cursor: st
       items.push({
         kind: 'assistant',
         id,
+        at,
         text: assistantText(message.content),
         thinking: assistantThinking(message.content),
         toolCalls: toolCallViews,
@@ -97,6 +100,12 @@ export function mapEntries(entries: unknown): { items: HistoryItem[]; cursor: st
   }
 
   return { items, cursor };
+}
+
+function timeMs(value: unknown): number {
+  if (typeof value !== 'string' && typeof value !== 'number') return 0;
+  const ms = typeof value === 'number' ? value : Date.parse(value);
+  return Number.isFinite(ms) ? ms : 0;
 }
 
 function systemOrigin(text: string): boolean {

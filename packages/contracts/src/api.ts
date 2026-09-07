@@ -19,12 +19,15 @@ export const HistoryItemSchema = z.discriminatedUnion('kind', [
     id: z.string(),
     text: z.string(),
     origin: z.enum(['user', 'system']),
+    /** 条目时刻（ms）：轮次计时行与排序用。 */
+    at: z.number(),
   }),
   z.object({
     kind: z.literal('assistant'),
     id: z.string(),
     text: z.string(),
     thinking: z.string(),
+    at: z.number(),
     toolCalls: z.array(
       z.object({
         id: z.string(),
@@ -45,6 +48,7 @@ export const HistoryItemSchema = z.discriminatedUnion('kind', [
     output: z.string(),
     exitCode: z.number(),
     cancelled: z.boolean(),
+    at: z.number(),
   }),
 ]);
 export type HistoryItem = z.infer<typeof HistoryItemSchema>;

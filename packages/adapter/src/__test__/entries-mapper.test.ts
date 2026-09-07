@@ -15,8 +15,8 @@ describe('mapEntries（转写真相源）', () => {
       messageEntry('e2', { role: 'user', content: [{ type: 'text', text: 'a' }, { type: 'image', data: 'x', mimeType: 'image/png' }, { type: 'text', text: 'b' }], timestamp: 2 }),
     ]);
     expect(items).toEqual([
-      { kind: 'user', id: 'e1', text: 'hello', origin: 'user' },
-      { kind: 'user', id: 'e2', text: 'a\nb', origin: 'user' },
+      { kind: 'user', id: 'e1', text: 'hello', origin: 'user', at: 1767225600000 },
+      { kind: 'user', id: 'e2', text: 'a\nb', origin: 'user', at: 1767225600000 },
     ]);
     expect(cursor).toBe('e2');
   });
@@ -47,16 +47,17 @@ describe('mapEntries（转写真相源）', () => {
       messageEntry('e4', { role: 'assistant', timestamp: 4, content: [{ type: 'text', text: '全绿' }], usage: { input: 30, output: 2, total: 32 } }),
     ]);
     expect(items).toEqual([
-      { kind: 'user', id: 'e1', text: '跑测试', origin: 'user' },
+      { kind: 'user', id: 'e1', text: '跑测试', origin: 'user', at: 1767225600000 },
       {
         kind: 'assistant',
         id: 'e2',
+        at: 1767225600000,
         text: '跑起来了',
         thinking: '先跑',
         toolCalls: [{ id: 'tc1', name: 'bash', argsPreview: 'bun test', output: '3 pass', isError: false, diff: null }],
         usage: { input: 10, output: 5 },
       },
-      { kind: 'assistant', id: 'e4', text: '全绿', thinking: '', toolCalls: [], usage: { input: 30, output: 2 } },
+      { kind: 'assistant', id: 'e4', at: 1767225600000, text: '全绿', thinking: '', toolCalls: [], usage: { input: 30, output: 2 } },
     ]);
   });
 
@@ -89,7 +90,7 @@ describe('mapEntries（转写真相源）', () => {
     const { items } = mapEntries([
       messageEntry('e1', { role: 'bashExecution', command: 'git status', output: 'clean', exitCode: 0, cancelled: false, timestamp: 1 }),
     ]);
-    expect(items).toEqual([{ kind: 'bash', id: 'e1', command: 'git status', output: 'clean', exitCode: 0, cancelled: false }]);
+    expect(items).toEqual([{ kind: 'bash', id: 'e1', command: 'git status', output: 'clean', exitCode: 0, cancelled: false, at: 1767225600000 }]);
   });
 
   test('元数据条目跳过但推进 cursor', () => {
