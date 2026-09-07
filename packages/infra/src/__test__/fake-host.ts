@@ -44,6 +44,11 @@ function handle(line: string): void {
   const rawType = cmd['type'];
   const type = typeof rawType === 'string' ? rawType : '';
   const id = cmd['id'];
+  if (type === 'emit') {
+    reply(id, { ok: true });
+    process.stdout.write(`{"type":"event","threadId":"t-emit","event":{"type":"agent_start"}}\n`);
+    return;
+  }
   if (type === 'die') {
     stopHeartbeat();
     reply(id, { ok: true });

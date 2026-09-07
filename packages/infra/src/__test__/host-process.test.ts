@@ -60,6 +60,11 @@ function waitFor(predicate: () => boolean, timeoutMs = 8_000, label = 'condition
 
 const spawned: Array<ReturnType<typeof createHostProcess>> = [];
 
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
 function launch(harness: Harness): ReturnType<typeof createHostProcess> {
   const host = createHostProcess(harness.deps);
   spawned.push(host);
@@ -68,6 +73,53 @@ function launch(harness: Harness): ReturnType<typeof createHostProcess> {
 
 afterAll(async () => {
   for (const host of spawned) await host.dispose();
+});
+
+describe('createHostProcess · 失败与重启链路', () => {
+  test('显式 restart：与挂死同一链路（杀组→重spawn→恢复钩子→ready）', async () => {
+    const harness = makeHarness();
+    const host = launch(harness);
+    await waitFor(() => host.phase === 'ready', 8_000, 'first ready');
+    const before = harness.restartCount();
+    await host.restart('manual_test');
+    await waitFor(() => host.phase === 'ready', 8_000, 'ready after manual restart');
+    expect(harness.restartCount()).toBeGreaterThan(before);
+    const outcome = await host.request({ type: 'thread/list' } satisfies HubCommand, 2_000);
+    expect(outcome.ok).toBe(true);
+    await host.dispose();
+  }, 20_000);
+
+  test('进程反复立即退出 → 连续失败超限转 failed（不再自愈）', async () => {
+    const harness = makeHarness({
+      config: { bunPath: process.execPath, hubEntry: join(import.meta.dir, 'exit-host.ts'), agentDir, buildEnv: () => ({}) },
+      timing: { ...fastTiming, maxConsecutiveRestarts: 2, restartBackoffMs: [0, 0] as unknown as readonly number[] },
+    });
+    const host = launch(harness);
+    await waitFor(() => host.phase === 'failed', 15_000, 'failed after repeated exits');
+    expect(harness.phases.filter((phase) => phase === 'restarting').length).toBeGreaterThanOrEqual(2);
+    await host.dispose();
+  }, 25_000);
+
+  test('dispose 超优雅上限：SIGKILL 进程组兜底', async () => {
+    const harness = makeHarness({
+      config: { bunPath: process.execPath, hubEntry: join(import.meta.dir, 'hang-eof-host.ts'), agentDir, buildEnv: () => ({}) },
+    });
+    const host = launch(harness);
+    // 无心跳也必须可停机：直接走 dispose 的超时兜底
+    const startedAt = Date.now();
+    await host.dispose();
+    expect(Date.now() - startedAt).toBeLessThan(5_000);
+  }, 15_000);
+
+  test('重复 dispose 幂等；dispose 后再 restart 无操作', async () => {
+    const harness = makeHarness();
+    const host = launch(harness);
+    await waitFor(() => host.phase === 'ready');
+    await host.dispose();
+    await host.dispose();
+    await host.restart('after-dispose');
+    expect(host.phase).not.toBe('restarting');
+  }, 12_000);
 });
 
 describe('createHostProcess（fake-host 集成）', () => {
@@ -80,6 +132,40 @@ describe('createHostProcess（fake-host 集成）', () => {
     expect(harness.phases).toEqual(['starting', 'ready']);
     await host.dispose();
   }, 12_000);
+
+  test('onFrame 订阅收到事件帧并退订；response 帧分流不走订阅', async () => {
+    const harness = makeHarness();
+    const host = launch(harness);
+    await waitFor(() => host.phase === 'ready');
+    const seen: string[] = [];
+    const off = host.onFrame((frame) => seen.push(frame.type));
+    const outcome = await host.request({ type: 'emit' } as unknown as HubCommand, 2_000);
+    expect(outcome.ok).toBe(true);
+    await sleep(200);
+    expect(seen).toEqual(['event']);
+    off();
+    const second = await host.request({ type: 'emit' } as unknown as HubCommand, 2_000);
+    expect(second.ok).toBe(true);
+    await sleep(200);
+    expect(seen).toEqual(['event']);
+    const offPhase = host.onPhase(() => undefined);
+    offPhase();
+    await host.dispose();
+  }, 12_000);
+
+  test('重启退避 >0：挂死后按序列延迟再拉起', async () => {
+    const harness = makeHarness({
+      timing: { ...fastTiming, restartBackoffMs: [120] as unknown as readonly number[] },
+    });
+    const host = launch(harness);
+    await waitFor(() => host.phase === 'ready', 8_000, 'ready');
+    const dieAt = Date.now();
+    await host.request({ type: 'die' } as unknown as HubCommand, 2_000);
+    await waitFor(() => host.phase === 'restarting', 8_000, 'restarting');
+    await waitFor(() => host.phase === 'ready', 8_000, 'ready after backoff');
+    expect(Date.now() - dieAt).toBeGreaterThanOrEqual(120);
+    await host.dispose();
+  }, 20_000);
 
   test('订阅机制：onFrame/onPhase 可退订且互不影响', async () => {
     const harness = makeHarness();
