@@ -26,8 +26,13 @@ export function createApiRoutes(deps: ApiRouteDeps) {
   const fail = (reason: string): { ok: false; reason: string } => ({ ok: false, reason });
 
   const command = async (cmd: Parameters<PaiRuntime['host']['request']>[0]): Promise<{ ok: true; data: unknown } | { ok: false; reason: string }> => {
-    const outcome = await runtime.host.request(cmd);
-    return outcome.ok ? { ok: true, data: outcome.data } : fail(outcome.error);
+    try {
+      const outcome = await runtime.host.request(cmd);
+      return outcome.ok ? { ok: true, data: outcome.data } : fail(outcome.error);
+    } catch {
+      // host 未启动/装配失败走 outcome 而非异常（渲染层据此进降级 UI）
+      return fail('host_unavailable');
+    }
   };
 
   /** 已知工作目录集合：活跃会话 + 注册表（list_saved 按目录过滤，需逐目录聚合）。 */

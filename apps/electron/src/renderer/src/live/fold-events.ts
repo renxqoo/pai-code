@@ -39,9 +39,9 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
       // 重试成功后模型继续出消息：清除重试提示
       return ensureLiveTurn({ ...state, liveMessageId: event.messageId, retrying: null }, now);
     case 'textDelta':
-      return appendDelta(state, event.messageId, 'text', event.delta, now);
+      return appendDelta(state, resolveMessageId(state, event.messageId), 'text', event.delta, now);
     case 'thinkingDelta':
-      return appendDelta(state, event.messageId, 'thinking', event.delta, now);
+      return appendDelta(state, resolveMessageId(state, event.messageId), 'thinking', event.delta, now);
     case 'toolCallAdded': {
       const withTurn = ensureLiveTurn(state, now);
       const turn = findTurn(withTurn, withTurn.liveTurnId);
@@ -161,6 +161,22 @@ export function foldHydrate(state: LiveThreadState, action: HydrateAction): Live
       const seen = new Set([...state.seenIds, ...action.items.map((item) => item.id)]);
       return { ...state, items, cursor: action.cursor ?? state.cursor, seenIds: seen, liveTurnId: liveTurn };
     }
+    case 'hydrate/rebuild': {
+      const items = [...hydrateItems(action.items)];
+      // 继承用户停止语义：live 轮在 settle 前被停止时，末轮标 stopped
+      const wasStopped =
+        state.liveTurnId !== null && state.items.some((item) => item.kind === 'turn' && item.turn.id === state.liveTurnId && item.turn.status === 'stopped');
+      if (wasStopped) {
+        for (let index = items.length - 1; index >= 0; index -= 1) {
+          const item = items[index];
+          if (item?.kind === 'turn') {
+            items[index] = { kind: 'turn', turn: { ...item.turn, status: 'stopped' } };
+            break;
+          }
+        }
+      }
+      return { ...state, items, cursor: action.cursor, seenIds: new Set(action.items.map((item) => item.id)), liveTurnId: null, liveMessageId: null, hydrateFailed: false };
+    }
     case 'hydrate/failed':
       return { ...state, hydrateFailed: true };
     default:
@@ -249,6 +265,11 @@ function onToolEnded(
     }
   }
   return next;
+}
+
+/** message_update 的 partial 被 pai-cli 剥离时增量为空 id：挂到当前流式消息。 */
+function resolveMessageId(state: LiveThreadState, messageId: string): string {
+  return messageId.length > 0 ? messageId : state.liveMessageId ?? messageId;
 }
 
 function onMessageFinal(

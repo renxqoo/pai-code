@@ -70,10 +70,7 @@ function Composer({
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          if (generating) {
-            onStop();
-            return;
-          }
+          // 生成中 Enter = 排队消息（followUp，api.md 语义）；停止走停止按钮/Esc
           if (!canSend) return;
           onSubmit();
         }}

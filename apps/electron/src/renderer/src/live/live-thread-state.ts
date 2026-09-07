@@ -56,4 +56,6 @@ export const initialThreadState: LiveThreadState = {
 export type HydrateAction =
   | { kind: 'hydrate/initial'; items: readonly HistoryItem[]; cursor: string | null }
   | { kind: 'hydrate/reconcile'; items: readonly HistoryItem[]; cursor: string | null; dropLiveTurn: boolean }
+  /** 全量重建（settle 对账）：条目真相整体替换 items，继承停止语义。 */
+  | { kind: 'hydrate/rebuild'; items: readonly HistoryItem[]; cursor: string | null }
   | { kind: 'hydrate/failed' };

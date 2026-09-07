@@ -125,6 +125,55 @@ describe('foldEvents · 轮次生命周期', () => {
   });
 });
 
+describe('foldEvents · 真实协议形态回归（对抗审查 P0-1/P0-2）', () => {
+  test('message_update 增量 id 为空串：挂到 message_start 建立的 liveMessageId，messageFinal 权威替换不双份', () => {
+    let s = initialThreadState;
+    s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(0) }), tick(0));
+    s = foldThreadEvent(s, ev({ type: 'messageStarted', threadId: 't', messageId: 'm1', at: tick(1) }), tick(1));
+    // pai-cli toWireEvent 剥离 partial/message：delta 无 id
+    s = foldThreadEvent(s, ev({ type: 'textDelta', threadId: 't', messageId: '', delta: '苹果 ' }), tick(2));
+    s = foldThreadEvent(s, ev({ type: 'textDelta', threadId: 't', messageId: '', delta: '香蕉' }), tick(3));
+    s = foldThreadEvent(
+      s,
+      ev({ type: 'messageFinal', threadId: 't', message: { id: 'm1', text: '苹果 香蕉 橘子', thinking: '', toolCalls: [], usage: null } }),
+      tick(4),
+    );
+    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', usage: null }), tick(5));
+    const turn = liveTurn(s);
+    if (turn?.kind !== 'turn') throw new Error('expected turn');
+    const texts = turn.turn.blocks.filter((b) => b.kind === 'text');
+    expect(texts.length).toBe(1);
+    expect(texts[0]).toMatchObject({ text: '苹果 香蕉 橘子' });
+  });
+
+  test('user 消息的 message_start/end 不再产生渲染事件（adapter 过滤后的链路）', () => {
+    // adapter 层已过滤；fold 侧防御：messageStarted 空 id 不炸
+    let s = initialThreadState;
+    s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(0) }), tick(0));
+    s = foldThreadEvent(s, ev({ type: 'messageStarted', threadId: 't', messageId: '', at: tick(1) }), tick(1));
+    s = foldThreadEvent(s, ev({ type: 'textDelta', threadId: 't', messageId: '', delta: 'x' }), tick(2));
+    expect(s.items.length).toBe(1);
+  });
+
+  test('hydrate/rebuild：全量重建替换 items、继承 stopped、清 live 轮句柄', () => {
+    let s = initialThreadState;
+    s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(0) }), tick(0));
+    s = foldStopIntent(s);
+    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', usage: null }), tick(10));
+    s = foldHydrate(s, {
+      kind: 'hydrate/rebuild',
+      items: [
+        history({ kind: 'user', id: 'u1', text: '问' }),
+        history({ kind: 'assistant', id: 'a1', text: '答', at: tick(5) }),
+      ],
+      cursor: 'a1',
+    });
+    expect(s.liveTurnId).toBeNull();
+    expect(s.items.map((i) => (i.kind === 'message' ? i.message.text : i.turn.status))).toEqual(['问', 'stopped']);
+    expect([...s.seenIds]).toEqual(['u1', 'a1']);
+  });
+});
+
 describe('foldEvents · 工具与 diff', () => {
   test('toolCallAdded → toolUpdated → toolEnded（durationMs 客户端观测；diff 聚合块）', () => {
     let s = initialThreadState;

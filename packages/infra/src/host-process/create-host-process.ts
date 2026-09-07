@@ -68,6 +68,7 @@ export function createHostProcess(deps: HostProcessDeps): HostProcessPort {
   let consecutiveFailures = 0;
   let watchdog: ReturnType<typeof setInterval> | null = null;
   let lastHeartbeatAt = 0;
+  let spawnStartedAt = 0;
   let sawFirstHeartbeat = false;
   let restarting = false;
   let nextId = 1;
@@ -129,7 +130,8 @@ export function createHostProcess(deps: HostProcessDeps): HostProcessPort {
   const spawnHost = (): void => {
     setPhase('starting');
     sawFirstHeartbeat = false;
-    lastHeartbeatAt = Date.now();
+    spawnStartedAt = Date.now();
+    lastHeartbeatAt = spawnStartedAt;
     const env: Record<string, string> = { ...process.env, ...config.buildEnv(), PI_CODING_AGENT_DIR: config.agentDir };
     const proc = spawn(config.bunPath, [config.hubEntry], {
       cwd: config.cwd ?? process.cwd(),
@@ -140,6 +142,11 @@ export function createHostProcess(deps: HostProcessDeps): HostProcessPort {
     });
     child = proc;
     stderrRing = '';
+
+    // 流级错误兜底：host 崩溃瞬间的 EPIPE 不允许击穿主进程
+    proc.stdin?.on('error', (error) => note(`stdin_error:${error.message}`));
+    proc.stdout?.on('error', (error) => note(`stdout_error:${error.message}`));
+    proc.stderr?.on('error', (error) => note(`stderr_error:${error.message}`));
 
     proc.stdout?.setEncoding('utf8');
     const decoder = createFrameDecoder((frame) => {

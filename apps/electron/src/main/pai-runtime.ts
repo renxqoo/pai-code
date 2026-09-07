@@ -161,19 +161,24 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
       }
       const outcome = await active.request({ type: 'thread/resume', sessionPath: row.sessionPath });
       if (!outcome.ok) {
+        // 可重试失败（超时/暂时错误）保留行：下次重启/手动仍可恢复；
+        // 仅会话文件缺失（不可恢复）才除名
         log(`resume_failed:${row.threadId}:${outcome.error}`);
-        registry.remove(row.threadId);
-        sessions.delete(row.threadId);
-        emit({ type: 'sessionRemoved', threadId: row.threadId });
+        if (/not found|no such/i.test(outcome.error)) {
+          registry.remove(row.threadId);
+          sessions.delete(row.threadId);
+          emit({ type: 'sessionRemoved', threadId: row.threadId });
+        }
         continue;
       }
       const view = sessionFromStartOutcome(outcome.data, row.title);
-      if (view === null) {
+      if (view === null) continue;
+      // resume 可能换 id；注册表与内存表按新 id 整行替换（旧 id 视图同步清出）
+      if (view.threadId !== row.threadId) {
         registry.remove(row.threadId);
-        continue;
+        sessions.delete(row.threadId);
+        emit({ type: 'sessionRemoved', threadId: row.threadId });
       }
-      // resume 可能换 id（罕见）；注册表按新 id 整行替换
-      if (view.threadId !== row.threadId) registry.remove(row.threadId);
       upsertSession({ ...view, title: row.title });
       persistSession({ ...view, title: row.title });
     }

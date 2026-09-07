@@ -10,6 +10,9 @@ import { diffFromToolCall, diffFromToolResult } from './diff-extract';
  *
  * 显式忽略清单（渲染无直接消费，或由别的事件/对账路径覆盖）：
  * turn_start / turn_end（message 粒度已覆盖）
+ * message_update 的 message_start 段外字段（pai-cli toWireEvent 剥离 message/partial，
+ *   增量 id 由渲染层以 liveMessageId 兜底，见 fold-events）
+ * tool_execution_start（执行时长以渲染层到达时刻观测；args 已由 toolcall_end 携带）
  * agent_end（auto-retry 会多次触发；终态以 agent_settled 为准）
  * message_update 的 start/end/done/error 段（text/thinking/toolcall 三类增量已覆盖；
  *   段边界由渲染层按 contentIndex 语义重建，权威内容走 messageFinal）
@@ -27,12 +30,18 @@ export function mapSessionEvent(threadId: string, raw: AgentSessionEvent, deps: 
   switch (raw.type) {
     case 'agent_start':
       return [{ type: 'turnStarted', threadId, at: deps.now() }];
-    case 'message_start':
+    case 'message_start': {
+      // pi 对 user/toolResult 消息同样发 message_start/end（agent-loop 全消息发射），
+      // 只有 assistant 消息参与流式渲染
+      if (!isAssistant(raw.message)) return [];
       return [{ type: 'messageStarted', threadId, messageId: messageIdOf(raw.message), at: deps.now() }];
+    }
     case 'message_update':
       return mapMessageUpdate(threadId, raw);
-    case 'message_end':
+    case 'message_end': {
+      if (!isAssistant(raw.message)) return [];
       return [mapMessageEnd(threadId, raw.message)];
+    }
     case 'tool_execution_update':
       return [{ type: 'toolUpdated', threadId, callId: str(raw.toolCallId), output: partialOutput(raw.partialResult) }];
     case 'tool_execution_end':
@@ -186,6 +195,10 @@ export function mapSubagentEvent(frame: SubagentEventFrame): UiEvent[] {
 function messageIdOf(message: unknown): string {
   const ts = recordOf(message)['timestamp'];
   return typeof ts === 'number' ? String(ts) : '';
+}
+
+function isAssistant(message: unknown): boolean {
+  return recordOf(message)['role'] === 'assistant';
 }
 
 function segmentMessageId(raw: AgentSessionEvent): string {

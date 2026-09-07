@@ -125,18 +125,24 @@ export function createLiveStore() {
       bootstrap(data) {
         const sessions: Record<string, SessionView> = {};
         for (const session of data.sessions) sessions[session.threadId] = session;
-        const threads: Record<string, LiveThreadState> = {};
-        for (const threadId of Object.keys(sessions)) threads[threadId] = initialThreadState;
-        set((state) => ({
-          bootstrapLoaded: true,
-          bootstrapError: null,
-          sessions,
-          saved: data.saved,
-          models: data.models,
-          providers: data.providers,
-          threads,
-          activeThreadId: state.activeThreadId ?? firstSessionId(sessions),
-        }));
+        set((state) => {
+          // 会话表全量替换；线程折叠状态按会话存在性合并（bootstrap 可能晚于在途事件到达）
+          const threads: Record<string, LiveThreadState> = {};
+          for (const threadId of Object.keys(sessions)) {
+            threads[threadId] = state.threads[threadId] ?? initialThreadState;
+          }
+          const activeThreadId = state.activeThreadId !== null && state.activeThreadId in sessions ? state.activeThreadId : firstSessionId(sessions);
+          return {
+            bootstrapLoaded: true,
+            bootstrapError: null,
+            sessions,
+            saved: data.saved,
+            models: data.models,
+            providers: data.providers,
+            threads,
+            activeThreadId,
+          };
+        });
       },
       bootstrapFailed(reason) {
         set({ bootstrapLoaded: true, bootstrapError: reason });

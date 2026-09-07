@@ -1,5 +1,5 @@
 # T10 · pai-cli 对接与真实数据通路 方案
-> 状态：定稿
+> 状态：已核销
 > 级别：大（新子系统：真实协议客户端跨 main/preload/renderer 三层；借 feature-dev-v2 大级纪律，规格基线 = pai-cli `docs/api.md`（v0.5，36 命令 / 8 输出帧），本仓库不重复其规格，只定义本仓库侧的契约与折叠语义）
 > 前置：T0（contracts/mock）已实施；T8 渲染层 UI 已按 demo 数据模型交付（`apps/electron/src/renderer`，视图模型 `thread-model.ts`）。
 
@@ -113,9 +113,48 @@
 - e2e（真 pai-cli + 真 bun，opt-in env）：start→prompt→（脚本化 provider 替身或 GLM env）流式折叠→对话框应答→stats→stop→resume。
 - 越权/安全面：dialog/respond 只认未见/已见 requestId 的幂等；key 不出现在任何日志/事件/IPC 回显；preload 面最小（invoke/subscribe/window）。
 
-## 验收清单
+## 验收清单（已核销）
 
-- [ ] 契约：36 命令/8 帧镜像与词表断言；渲染层 API/事件词表封闭。
-- [ ] 边界：16MiB 行、U+2028、垃圾帧、挂死重启、resume 幂等、晚订阅、消息双形态、空会话、未知 threadId 降级。
-- [ ] 并发预算逐条（心跳/背压/定時器/退出时序）。
-- [ ] 四门全绿 + 覆盖率 ≥90/85（如实报数字）+ 真 app 端到端人工验证记录（对话、流式、工具、对话框、子代理、恢复）。
+- [x] 契约：36 命令/8 帧镜像与词表断言；渲染层 API/事件词表封闭（contracts 测试双向）。
+- [x] 边界：16MiB 行、U+2028、垃圾帧、挂死重启（含首心跳缺失）、resume 可重试失败保留、
+  晚订阅（bootstrap 前缓冲上限 1000）、消息双形态、空会话、未知 threadId 降级（{ok:false}）。
+- [x] 并发预算逐条（心跳 1Hz/10s 判死、pending 1024 上限、单监督定时器 + 对话框兜底定时器、
+  退出 stdin EOF→5s→SIGKILL 组）。
+- [x] 四门全绿 + 覆盖率（adapter 95-100%、contracts 100%、infra host-process 92/95、
+  renderer live 100/95-98、全仓 All files 91.8/92.2）+ 真 app 端到端验证（下节）。
+
+## 真机验证记录（2026-09-07/08，dev + CDP 驱动）
+
+- 设置页配置 provider（glm/openai 兼容）→ models.json 生成 + key safeStorage 加密 → host 就绪
+- 新会话（cwd）→ 真实 GLM 对话：流式、Thinking 块、工具折叠块（Ran 1 command）、
+  diff 块（1 changed file +2 -0）、时间戳行、settle（Worked for）
+- 权限确认框：write（Allow file write?）与 bash（Allow command execution?）两种；
+  应答后弹窗即关（客户端自治结算 + 5 分钟兜底）
+- 停止：停止按钮/Esc → clear_queue+abort → Stopped · 标签（对账后保持）
+- 排队：流式中 Enter → followUp 队列 + 徽标（1 queued message）→ settle 后自动消化为下一轮
+- 历史会话：设置页按 cwd 聚合列出 → 点击 resume → 全量水化（含中止轮 thinking）
+- 会话关闭（dispose 保留文件）、侧栏模型/标题自动命名（首条消息 48 字符）
+- e2e（opt-in real 门）：PAI_E2E=1 实跑通过（bootstrap→start→prompt→事件流→entries→stats→stop）
+
+## 对抗审查处置（独立会话，20 项）
+
+- P0×3 全修：message_end 角色过滤（user/toolResult 不再渲染为正文）；
+  message_update 剥离形态（partial/message 被 pai-cli toWireEvent 剥掉）→ fold 以
+  liveMessageId 兜底 + 权威替换不双份；dialogSettled 客户端自治（应答即结算 + 5min 兜底）。
+- P1 修复：首心跳缺失判挂死；stdin/stdout 流错误兜底（EPIPE 不击穿主进程）；
+  settle 对账改全量重建（根治批次切割丢 toolResult）；bootstrap 合并在途线程状态；
+  resume 可重试失败保留注册表（仅文件缺失除名）+ 换 id 同步清旧视图；host 未就绪走
+  {ok:false} 而非异常；Provider 变更每次 spawn 重生成 models.json + env。
+- 发现并修复（审查后真机复核）：Composer 生成中 Enter 误转停止（demo 时代行为）→
+  改为排队 followUp（排队链路由此打通）。
+- P2 已修：decoder 丢弃态缓冲不累积；tool_execution_start 入忽略清单注释。
+- P2 记录不修（依据）：心跳 subagents 计数未透传（子代理面板以 subagent 事件为源，
+  徽标数据 v1 未消费）；exitCode=虚拟值/durationMs=客户端观测（展示语义，注释已明）；
+  select 应答回 label（options 双形态窄化丢 value，扩展按 value 匹配场景 v1 无入口）；
+  list_saved 仅覆盖已知 cwd（pai-cli 按目录过滤所致，新装首启历史为空属预期）；
+  api.md auth/list 形状与实现漂移 → 应修 hub 仓库文档（本仓库实现与 host 一致）。
+
+## 已知边界（v1）
+
+- 用户消息正文两段 text 流式拼接无换行、权威为 \n 连接（多段 text 罕见，settle 对账兜底）。
+- 渲染层 __paiDebug 只读诊断句柄（支持/排障用，无写面）。

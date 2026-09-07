@@ -12,6 +12,7 @@ import type { LiveStore } from './store';
  */
 
 const RECONCILE_SETTLE_DELAY_MS = 120;
+const DIALOG_AUTO_DISMISS_MS = 5 * 60 * 1_000;
 
 export interface LiveController {
   readonly start: () => Promise<void>;
@@ -60,6 +61,16 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     }
   };
 
+  const rebuildFromTranscript = async (threadId: string): Promise<void> => {
+    const outcome = await client.invoke('session/entries', { threadId });
+    if (disposed) return;
+    if (!outcome.ok) {
+      store.getState().hydrate(threadId, { kind: 'hydrate/failed' });
+      return;
+    }
+    store.getState().hydrate(threadId, { kind: 'hydrate/rebuild', items: outcome.data.items, cursor: outcome.data.cursor });
+  };
+
   const hydrateFull = async (threadId: string): Promise<void> => {
     const outcome = await client.invoke('session/entries', { threadId });
     if (disposed) return;
@@ -70,18 +81,31 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     store.getState().hydrate(threadId, { kind: 'hydrate/initial', items: outcome.data.items, cursor: outcome.data.cursor });
   };
 
+  /** 对话框本地结算：ui_response 只有 ack 无事件回执，宿主侧超时/未知 id 均静默——弹窗关闭由客户端自治。 */
+  const settleDialog = (requestId: string): void => {
+    store.getState().applyEvent({ type: 'dialogSettled', requestId }, Date.now());
+  };
+
   const onEvent = (event: UiEvent): void => {
     const state = store.getState();
     state.applyEvent(event, now());
+    if (event.type === 'dialogRequest' && event.method !== 'notify' && event.method !== 'setStatus') {
+      // 宿主侧 5 分钟超时默认拒绝后无回执帧：客户端同步兜底收起
+      window.setTimeout(() => {
+        const stillPending = event.requestId in store.getState().dialogs;
+        if (stillPending) void controller.cancelDialog(event.requestId);
+      }, DIALOG_AUTO_DISMISS_MS);
+      return;
+    }
     if (event.type === 'turnStarted') {
       // 用户回显/通知注入经条目对账到达（消息不走事件流）
       void fetchEntries(event.threadId, state.threads[event.threadId]?.cursor ?? null, false).catch(() => undefined);
     } else if (event.type === 'turnSettled') {
-      // 等条目落盘的短延迟后对账替换 live 轮次
+      // 等条目落盘的短延迟后【全量重建】：以完整转写替换轮次区域，
+      // 根治增量批次切在 assistant/toolResult 之间导致的配对丢失
       window.setTimeout(() => {
         if (disposed) return;
-        const cursor = store.getState().threads[event.threadId]?.cursor ?? null;
-        void fetchEntries(event.threadId, cursor, true).catch(() => undefined);
+        void rebuildFromTranscript(event.threadId).catch(() => undefined);
         void controller.refreshStats(event.threadId);
       }, RECONCILE_SETTLE_DELAY_MS);
     }
@@ -96,12 +120,18 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
         const parsed = parseEvent(raw);
         if (parsed !== null) onEvent(parsed);
       });
-      const outcome = await client.invoke('app/bootstrap', {});
+      let outcome: Awaited<ReturnType<typeof client.invoke<'app/bootstrap'>>> | null = null;
+      try {
+        outcome = await client.invoke('app/bootstrap', {});
+      } catch {
+        outcome = { ok: false, reason: 'bootstrap_crashed' };
+      }
       if (disposed) return;
-      if (!outcome.ok) {
+      if (outcome !== null && !outcome.ok) {
         store.getState().bootstrapFailed(outcome.reason);
         return;
       }
+      if (outcome === null) return;
       store.getState().bootstrap(outcome.data);
       const active = store.getState().activeThreadId;
       if (active !== null) await hydrateFull(active).catch(() => undefined);
@@ -147,10 +177,12 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       return outcome.ok;
     },
     async respondDialog(requestId: string, payload: Record<string, unknown>): Promise<void> {
-      await client.invoke('dialog/respond', { requestId, payload });
+      settleDialog(requestId);
+      await client.invoke('dialog/respond', { requestId, payload }).catch(() => undefined);
     },
     async cancelDialog(requestId: string): Promise<void> {
-      await client.invoke('dialog/respond', { requestId, payload: { cancelled: true } });
+      settleDialog(requestId);
+      await client.invoke('dialog/respond', { requestId, payload: { cancelled: true } }).catch(() => undefined);
     },
     async selectModel(threadId: string, provider: string, modelId: string): Promise<void> {
       await client.invoke('session/setModel', { threadId, provider, modelId });

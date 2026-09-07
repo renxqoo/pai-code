@@ -22,26 +22,34 @@ describe('mapSessionEvent 全表', () => {
     ]);
   });
 
-  test('message_update text_delta → textDelta', () => {
+  test('message_update text_delta → textDelta（真实协议：partial/message 被剥离，id 为空串）', () => {
     const events = mapSessionEvent(
       't',
       {
         type: 'message_update',
-        message: assistantMessage({}),
-        assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: '你好', partial: assistantMessage({}) },
+        assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: '你好' },
       },
       deps,
     );
-    expect(events).toEqual([{ type: 'textDelta', threadId: 't', messageId: '1234', delta: '你好' }]);
+    expect(events).toEqual([{ type: 'textDelta', threadId: 't', messageId: '', delta: '你好' }]);
   });
 
-  test('message_update thinking_delta → thinkingDelta；缺 partial 回退 message id', () => {
+  test('message_update thinking_delta → thinkingDelta（同样剥离形态）', () => {
     const events = mapSessionEvent(
       't',
-      { type: 'message_update', message: assistantMessage({ timestamp: 77 }), assistantMessageEvent: { type: 'thinking_delta', contentIndex: 1, delta: 'hm' } },
+      { type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', contentIndex: 1, delta: 'hm' } },
       deps,
     );
-    expect(events).toEqual([{ type: 'thinkingDelta', threadId: 't', messageId: '77', delta: 'hm' }]);
+    expect(events).toEqual([{ type: 'thinkingDelta', threadId: 't', messageId: '', delta: 'hm' }]);
+  });
+
+  test('回归：user 消息的 message_start/end 不产生渲染事件（pi 全消息发射）', () => {
+    const userMsg = { role: 'user', content: 'hi', timestamp: 9 };
+    expect(mapSessionEvent('t', { type: 'message_start', message: userMsg }, deps)).toEqual([]);
+    expect(mapSessionEvent('t', { type: 'message_end', message: userMsg }, deps)).toEqual([]);
+    const toolResult = { role: 'toolResult', toolCallId: 'c', toolName: 'bash', content: [], isError: false, timestamp: 10 };
+    expect(mapSessionEvent('t', { type: 'message_start', message: toolResult }, deps)).toEqual([]);
+    expect(mapSessionEvent('t', { type: 'message_end', message: toolResult }, deps)).toEqual([]);
   });
 
   test('message_update toolcall_end → toolCallAdded（bash 显示命令本体；write 带 diff）', () => {
