@@ -1,0 +1,7 @@
+{
+  "name": "@paiapp/adapter",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": { "@paiapp/contracts": "workspace:*" }
+}
