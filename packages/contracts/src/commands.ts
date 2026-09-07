@@ -19,6 +19,7 @@ export type PaiCommandType =
   | 'compact'
   | 'get_state'
   | 'get_messages'
+  | 'get_entries'
   | 'get_models'
   | 'set_model'
   | 'set_thinking_level'
@@ -47,6 +48,7 @@ export const PAI_COMMAND_TYPES = [
   'compact',
   'get_state',
   'get_messages',
+  'get_entries',
   'get_models',
   'set_model',
   'set_thinking_level',

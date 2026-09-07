@@ -9,8 +9,8 @@ export interface HostRuntimeConfig {
   hubEntry: string;
   /** PI_CODING_AGENT_DIR：配置目录（models.json/auth.json/sessions）。 */
   agentDir: string;
-  /** 额外环境变量（provider key 注入等；进程环境之外的增量）。 */
-  env: Record<string, string>;
+  /** 每次 spawn 前解析的增量环境（provider key 注入；key 可变，故为函数）。 */
+  buildEnv(): Record<string, string>;
   /** host 工作目录（仅影响缺省 thread cwd）。 */
   cwd?: string;
 }
@@ -32,6 +32,8 @@ export interface HostProcessPort {
   request(command: PaiCommand, timeoutMs?: number): Promise<HostCommandOutcome>;
   onFrame(cb: (frame: HubFrame) => void): () => void;
   onPhase(cb: (phase: HostPhase) => void): () => void;
+  /** 显式重启（配置变更等）：与挂死重启同一链路（杀组→重spawn→恢复钩子）。 */
+  restart(reason: string): Promise<void>;
   /** 优雅停机：stdin EOF → 等 exit（上限内）→ SIGKILL 进程组兜底。 */
   dispose(): Promise<void>;
   /** 只读诊断：当前相位与 host stderr 尾部（排障用）。 */

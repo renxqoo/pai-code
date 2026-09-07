@@ -130,7 +130,7 @@ export function createHostProcess(deps: HostProcessDeps): HostProcessPort {
     setPhase('starting');
     sawFirstHeartbeat = false;
     lastHeartbeatAt = Date.now();
-    const env: Record<string, string> = { ...process.env, ...config.env, PI_CODING_AGENT_DIR: config.agentDir };
+    const env: Record<string, string> = { ...process.env, ...config.buildEnv(), PI_CODING_AGENT_DIR: config.agentDir };
     const proc = spawn(config.bunPath, [config.hubEntry], {
       cwd: config.cwd ?? process.cwd(),
       env,
@@ -267,6 +267,11 @@ export function createHostProcess(deps: HostProcessDeps): HostProcessPort {
       return () => {
         phaseListeners.delete(cb);
       };
+    },
+    async restart(reason: string): Promise<void> {
+      if (disposed) return;
+      note(`restart:manual:${reason}`);
+      await restart(`manual:${reason}`);
     },
     async dispose(): Promise<void> {
       if (disposed) return;

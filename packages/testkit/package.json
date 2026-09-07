@@ -1,0 +1,7 @@
+{
+  "name": "@paiapp/testkit",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": { "@paiapp/contracts": "workspace:*" }
+}

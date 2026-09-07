@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
-import type { SessionView } from './ui-events';
-import { DiffFileViewSchema } from './ui-events';
+import { DiffFileViewSchema, SessionViewSchema } from './ui-events';
 
 /**
  * 渲染层 API 面：方法名用应用语义（渲染层不出现协议字面量）。
@@ -111,7 +110,7 @@ export const ProviderConfigViewSchema = z.object({
 export type ProviderConfigView = z.infer<typeof ProviderConfigViewSchema>;
 
 export const BootstrapViewSchema = z.object({
-  sessions: z.custom<SessionView>(),
+  sessions: z.array(SessionViewSchema),
   saved: z.array(SavedSessionViewSchema),
   models: z.array(ModelInfoViewSchema),
   providers: z.array(ProviderConfigViewSchema),
@@ -139,11 +138,11 @@ export const ApiSchemas = {
         modelId: z.string().optional(),
       })
       .strict(),
-    result: z.custom<SessionView>(),
+    result: SessionViewSchema,
   },
   'session/resume': {
     params: z.object({ sessionPath: z.string().min(1) }).strict(),
-    result: z.custom<SessionView>(),
+    result: SessionViewSchema,
   },
   'session/stop': {
     params: threadOnly,

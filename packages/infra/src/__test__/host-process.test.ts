@@ -27,7 +27,7 @@ function makeHarness(overrides: Partial<HostProcessDeps> = {}): Harness {
   const notes: string[] = [];
   let restarts = 0;
   const deps: HostProcessDeps = {
-    config: { bunPath: process.execPath, hubEntry: fakeHostPath, agentDir, env: {} },
+    config: { bunPath: process.execPath, hubEntry: fakeHostPath, agentDir, buildEnv: () => ({}) },
     onFrame: (frame) => frames.push(frame),
     onPhase: (phase) => phases.push(phase),
     onRestart: () => {
@@ -147,7 +147,7 @@ describe('createHostProcess（fake-host 集成）', () => {
 
   test('bun 路径不存在 → spawn error → failed 相位，命令立即拒绝', async () => {
     const harness = makeHarness({
-      config: { bunPath: '/nonexistent/bun-xyz', hubEntry: fakeHostPath, agentDir, env: {} },
+      config: { bunPath: '/nonexistent/bun-xyz', hubEntry: fakeHostPath, agentDir, buildEnv: () => ({}) },
     });
     const host = launch(harness);
     await waitFor(() => host.phase === 'failed', 8_000, 'failed phase');
