@@ -72,6 +72,7 @@
     "packages/infra": {
       "name": "@paiapp/infra",
       "dependencies": {
+        "@paiapp/adapter": "workspace:*",
         "@paiapp/contracts": "workspace:*",
         "@paiapp/core": "workspace:*",
       },

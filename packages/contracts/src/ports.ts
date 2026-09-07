@@ -1,4 +1,5 @@
-import type { HubCommand, HubFrame } from './hub-protocol';
+import type { HubFrame } from './hub-protocol';
+import type { PaiCommand } from './commands';
 
 /** pai-cli host 进程装配输入（apps/electron 组合根构造后注入）。 */
 export interface HostRuntimeConfig {
@@ -28,13 +29,14 @@ export type HostPhase = 'starting' | 'ready' | 'restarting' | 'failed';
  * 挂死检测（>10s 无心跳）由实现负责并驱动重启回调。
  */
 export interface HostProcessPort {
-  request(command: HubCommand, timeoutMs?: number): Promise<HostCommandOutcome>;
+  request(command: PaiCommand, timeoutMs?: number): Promise<HostCommandOutcome>;
   onFrame(cb: (frame: HubFrame) => void): () => void;
   onPhase(cb: (phase: HostPhase) => void): () => void;
   /** 优雅停机：stdin EOF → 等 exit（上限内）→ SIGKILL 进程组兜底。 */
   dispose(): Promise<void>;
-  /** 只读诊断：当前相位与挂死重启计数。 */
+  /** 只读诊断：当前相位与 host stderr 尾部（排障用）。 */
   readonly phase: HostPhase;
+  diagnostics(): { stderrTail: string };
 }
 
 /** 会话注册表行：窗口打开的会话（恢复链与侧栏的真相源，实现：infra/registry-store）。 */
