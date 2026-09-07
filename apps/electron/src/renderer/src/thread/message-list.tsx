@@ -4,6 +4,7 @@ import { ScrollToBottomButton } from '@/thread/scroll-to-bottom-button';
 import { TextBlock } from '@/thread/text-block';
 import { TurnGroup } from '@/thread/turn-group';
 import { useStickToBottom } from '@/thread/use-stick-to-bottom';
+import { SystemMessageRow } from '@/thread/system-message-row';
 import { UserMessageRow } from '@/thread/user-message-row';
 
 import type { ThreadItem, ThreadModel } from '@/thread/thread-model';
@@ -52,6 +53,8 @@ function MessageList({ thread, now, emptyTitle, emptyHint, onOpenAgents, onOpenD
               {item.kind === 'message' ? (
                 item.message.role === 'user' ? (
                   <UserMessageRow message={item.message} onEdit={onEditUserMessage} />
+                ) : item.message.role === 'system' ? (
+                  <SystemMessageRow message={item.message} />
                 ) : (
                   <TextBlock id={item.message.id} text={item.message.text} />
                 )

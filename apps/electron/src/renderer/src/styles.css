@@ -1,0 +1,179 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/inter";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+    --font-heading: var(--font-sans);
+    --font-sans: 'Inter Variable', sans-serif;
+    --color-sidebar-ring: var(--sidebar-ring);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar: var(--sidebar);
+    --color-chart-5: var(--chart-5);
+    --color-chart-4: var(--chart-4);
+    --color-chart-3: var(--chart-3);
+    --color-chart-2: var(--chart-2);
+    --color-chart-1: var(--chart-1);
+    --color-ring: var(--ring);
+    --color-input: var(--input);
+    --color-border: var(--border);
+    --color-destructive: var(--destructive);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-accent: var(--accent);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-muted: var(--muted);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-secondary: var(--secondary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-primary: var(--primary);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-popover: var(--popover);
+    --color-card-foreground: var(--card-foreground);
+    --color-card: var(--card);
+    --color-foreground: var(--foreground);
+    --color-background: var(--background);
+    /* 品牌光刺与发送态（设计稿取值） */
+    --color-spark: var(--spark);
+    --color-send: var(--send);
+    --color-send-active: var(--send-active);
+    --color-surface-subtle: var(--surface-subtle);
+    /* 对话流过程块与 Agent 面板（设计稿取值） */
+    --color-link: var(--link);
+    --color-dot-active: var(--dot-active);
+    --color-dot-done: var(--dot-done);
+    --color-diff-add: var(--diff-add);
+    --color-diff-del: var(--diff-del);
+    --color-stop: var(--stop);
+    --color-meta-faint: var(--meta-faint);
+    --font-mono: ui-monospace, 'SFMono-Regular', 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+    --radius-sm: calc(var(--radius) * 0.6);
+    --radius-md: calc(var(--radius) * 0.8);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) * 1.4);
+    --radius-2xl: calc(var(--radius) * 1.8);
+    --radius-3xl: calc(var(--radius) * 2.2);
+    --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+    --background: oklch(0.991 0 0);
+    --foreground: oklch(0.235 0.005 286);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.235 0.005 286);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.235 0.005 286);
+    --primary: oklch(0.235 0.005 286);
+    --primary-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.962 0 0);
+    --secondary-foreground: oklch(0.235 0.005 286);
+    --muted: oklch(0.962 0.002 286);
+    --muted-foreground: oklch(0.537 0.013 286);
+    --accent: oklch(0.95 0.002 286);
+    --accent-foreground: oklch(0.235 0.005 286);
+    --destructive: oklch(0.577 0.245 27.325);
+    --border: oklch(0.932 0.002 286);
+    --input: oklch(0.932 0.002 286);
+    --ring: oklch(0.701 0.008 286);
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --radius: 0.625rem;
+    --sidebar: oklch(0.973 0 0);
+    --sidebar-foreground: oklch(0.235 0.005 286);
+    --sidebar-primary: oklch(0.235 0.005 286);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.945 0.002 286);
+    --sidebar-accent-foreground: oklch(0.235 0.005 286);
+    --sidebar-border: oklch(0.906 0.003 286);
+    --sidebar-ring: oklch(0.701 0.008 286);
+    --spark: oklch(0.61 0.152 39.4);
+    --send: oklch(0.831 0.056 274.6);
+    --send-active: oklch(0.7 0.115 269.5);
+    --surface-subtle: oklch(0.978 0 0);
+    --link: oklch(0.558 0.205 266.1);
+    --dot-active: oklch(0.619 0.207 259.2);
+    --dot-done: oklch(0.702 0.158 160.4);
+    --diff-add: oklch(0.733 0.148 163.3);
+    --diff-del: oklch(0.663 0.198 22);
+    --stop: oklch(0.663 0.219 23.6);
+    --meta-faint: oklch(0.765 0.007 286.2);
+}
+
+.dark {
+    --background: oklch(0.19 0.004 286);
+    --foreground: oklch(0.962 0.002 286);
+    --card: oklch(0.285 0.005 286);
+    --card-foreground: oklch(0.962 0.002 286);
+    --popover: oklch(0.24 0.005 286);
+    --popover-foreground: oklch(0.962 0.002 286);
+    --primary: oklch(0.962 0.002 286);
+    --primary-foreground: oklch(0.19 0.004 286);
+    --secondary: oklch(0.27 0.005 286);
+    --secondary-foreground: oklch(0.962 0.002 286);
+    --muted: oklch(0.27 0.005 286);
+    --muted-foreground: oklch(0.701 0.008 286);
+    --accent: oklch(0.29 0.005 286);
+    --accent-foreground: oklch(0.962 0.002 286);
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: oklch(0.32 0.005 286);
+    --input: oklch(0.32 0.005 286);
+    --ring: oklch(0.556 0 0);
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --sidebar: oklch(0.215 0.004 286);
+    --sidebar-foreground: oklch(0.962 0.002 286);
+    --sidebar-primary: oklch(0.488 0.243 264.376);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.29 0.005 286);
+    --sidebar-accent-foreground: oklch(0.962 0.002 286);
+    --sidebar-border: oklch(0.32 0.005 286);
+    --sidebar-ring: oklch(0.556 0 0);
+    --spark: oklch(0.68 0.14 39.4);
+    --send: oklch(0.831 0.056 274.6);
+    --send-active: oklch(0.7 0.115 269.5);
+    --surface-subtle: oklch(0.24 0.005 286);
+    --link: oklch(0.68 0.16 264);
+    --dot-active: oklch(0.68 0.18 259.2);
+    --dot-done: oklch(0.75 0.15 160.4);
+    --diff-add: oklch(0.78 0.14 163.3);
+    --diff-del: oklch(0.72 0.19 22);
+    --stop: oklch(0.663 0.219 23.6);
+    --meta-faint: oklch(0.6 0.008 286.2);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    }
+  body {
+    @apply bg-background text-foreground;
+    }
+  html {
+    @apply font-sans;
+    }
+}
+
+/* 无边框窗口（hiddenInset）拖拽区：标题行整体可拖，交互控件还原可点 */
+@layer utilities {
+  .app-drag {
+    -webkit-app-region: drag;
+  }
+  .app-no-drag {
+    -webkit-app-region: no-drag;
+  }
+}
+/* 显式内容源：禁用自动探测（monorepo 下必漏），新增目录在此登记 */
+@source "./**/*.{ts,tsx}";
+@source "../../../../../packages/ui/src/**/*.{ts,tsx}";

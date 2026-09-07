@@ -14,24 +14,24 @@ import type { LiveStore } from './store';
 const RECONCILE_SETTLE_DELAY_MS = 120;
 
 export interface LiveController {
-  start(): Promise<void>;
-  dispose(): void;
-  submitDraft(threadId: string, message: string): Promise<boolean>;
-  stopActiveTurn(threadId: string): Promise<void>;
-  createSession(cwd: string): Promise<boolean>;
-  openSavedSession(sessionPath: string): Promise<boolean>;
-  closeSession(threadId: string): Promise<void>;
-  renameSession(threadId: string, name: string): Promise<boolean>;
-  respondDialog(requestId: string, payload: Record<string, unknown>): Promise<void>;
-  cancelDialog(requestId: string): Promise<void>;
-  selectModel(threadId: string, provider: string, modelId: string): Promise<void>;
-  selectThinking(threadId: string, level: string): Promise<void>;
-  compact(threadId: string): Promise<void>;
-  refreshSaved(): Promise<void>;
-  upsertProvider(input: { name: string; baseUrl: string; api: string; models: string[]; apiKey?: string }): Promise<boolean>;
-  removeProvider(name: string): Promise<boolean>;
-  refreshStats(threadId: string): Promise<void>;
-  ensureHydrated(threadId: string): Promise<void>;
+  readonly start: () => Promise<void>;
+  readonly dispose: () => void;
+  readonly submitDraft: (threadId: string, message: string) => Promise<boolean>;
+  readonly stopActiveTurn: (threadId: string) => Promise<void>;
+  readonly createSession: (cwd: string) => Promise<boolean>;
+  readonly openSavedSession: (sessionPath: string) => Promise<boolean>;
+  readonly closeSession: (threadId: string) => Promise<void>;
+  readonly renameSession: (threadId: string, name: string) => Promise<boolean>;
+  readonly respondDialog: (requestId: string, payload: Record<string, unknown>) => Promise<void>;
+  readonly cancelDialog: (requestId: string) => Promise<void>;
+  readonly selectModel: (threadId: string, provider: string, modelId: string) => Promise<void>;
+  readonly selectThinking: (threadId: string, level: string) => Promise<void>;
+  readonly compact: (threadId: string) => Promise<void>;
+  readonly refreshSaved: () => Promise<void>;
+  readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: string[]; apiKey?: string }) => Promise<boolean>;
+  readonly removeProvider: (name: string) => Promise<boolean>;
+  readonly refreshStats: (threadId: string) => Promise<void>;
+  readonly ensureHydrated: (threadId: string) => Promise<void>;
 }
 
 export function createLiveController(client: BridgeClient, store: LiveStore): LiveController {

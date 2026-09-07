@@ -1,0 +1,108 @@
+import * as React from 'react';
+
+import { CaretToggle, DurationTag, MetaLine, StatusDot, TypePill } from '@paiapp/ui';
+
+import { copy } from '@/strings';
+import { agentActivity, panelStatusLabelKey } from '@/thread/agent-activity';
+import { agentElapsedMs } from '@/thread/panel-summary';
+import { formatElapsed } from '@/thread/format-elapsed';
+import { formatTokenCount } from '@/thread/format-count-unit';
+import type { SubagentModel } from '@/thread/thread-model';
+
+import { AgentToolRow } from './agent-tool-row';
+
+type AgentListItemProps = {
+  agent: SubagentModel
+  now: number
+}
+
+type DetailLine =
+  | { kind: 'summary'; text: string }
+  | { kind: 'tool'; toolName: string }
+  | { kind: 'status'; label: string }
+  | { kind: 'none' };
+
+/**
+ * 第二行的内容推导：进行中显「▸ 当前工具」或状态词；
+ * 完成后显报告摘要，无摘要时退回最后一个工具名。
+ */
+function detailLine(agent: SubagentModel, now: number): DetailLine {
+  if (agent.status === 'done') {
+    if (agent.summary.length > 0) return { kind: 'summary', text: agent.summary };
+    const lastTool = agent.tools[agent.tools.length - 1];
+    if (lastTool !== undefined) return { kind: 'tool', toolName: lastTool.name };
+    return { kind: 'none' };
+  }
+  const activity = agentActivity(agent, now);
+  if (activity.kind === 'tool') return { kind: 'tool', toolName: activity.toolName };
+  const statusKey = panelStatusLabelKey(activity);
+  if (statusKey !== null) return { kind: 'status', label: copy.flow.statusWorking };
+  return { kind: 'none' };
+}
+
+/** 面板列表项：状态点 + 名称 + 类型胶囊 + 耗时 + 活动行 + 元信息行，可展开工具明细。 */
+function AgentListItem({ agent, now }: AgentListItemProps) {
+  const [open, setOpen] = React.useState(false);
+  const toggle = () => setOpen((current) => !current);
+  const detail = detailLine(agent, now);
+  const duration = agentElapsedMs(agent, now);
+  const metaItems = [
+    agent.model,
+    agent.effort,
+    copy.flow.metaTokens(formatTokenCount(agent.tokens)),
+    copy.flow.metaTools(agent.toolCount),
+  ].filter((item): item is string => item !== null);
+
+  return (
+    <div className="py-[8px]">
+      <div className="flex h-[20px] items-center gap-[9px]">
+        <StatusDot tone={agent.status === 'working' ? 'active' : 'done'} />
+        <button
+          type="button"
+          onClick={toggle}
+          aria-expanded={open}
+          className="min-w-0 shrink cursor-pointer truncate text-left text-[12.5px] leading-none font-medium text-foreground outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          {agent.name}
+        </button>
+        <TypePill label={agent.agentType} />
+        <DurationTag className="ml-auto">{formatElapsed(duration)}</DurationTag>
+      </div>
+      {detail.kind !== 'none' ? (
+        <button
+          type="button"
+          onClick={toggle}
+          aria-expanded={open}
+          className="mt-[6px] flex h-[16px] w-full cursor-pointer items-center rounded-md text-left outline-none select-none hover:bg-accent/50 focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          <span className="flex min-w-0 items-center gap-[5px] pl-[16px] pr-[4px]">
+            {detail.kind === 'tool' ? (
+              <>
+                <CaretToggle open={open} />
+                <span className="truncate font-mono text-[11px] leading-none text-muted-foreground">
+                  {detail.toolName}
+                </span>
+              </>
+            ) : detail.kind === 'status' ? (
+              <span className="text-[11.5px] leading-none text-muted-foreground">{detail.label}</span>
+            ) : (
+              <span className="truncate text-[11.5px] leading-[16px] text-foreground/85">{detail.text}</span>
+            )}
+          </span>
+        </button>
+      ) : null}
+      {open ? (
+        <div className="mt-[4px] flex flex-col gap-[2px] pb-[2px] pl-[16px]">
+          {agent.tools.map((call) => (
+            <AgentToolRow key={call.id} call={call} />
+          ))}
+        </div>
+      ) : null}
+      <div className="mt-[6px] pl-[16px]">
+        <MetaLine items={metaItems} />
+      </div>
+    </div>
+  );
+}
+
+export { AgentListItem };
