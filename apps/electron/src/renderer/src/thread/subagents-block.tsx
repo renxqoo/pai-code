@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { Bot } from 'lucide-react';
 
 import { CaretToggle, StatusDot } from '@paiapp/ui';
@@ -58,4 +59,5 @@ function SubagentsBlock({ agents, now, open, onToggle, onOpenAgents }: Subagents
   );
 }
 
-export { SubagentsBlock };
+const SubagentsBlockMemo = React.memo(SubagentsBlock);
+export { SubagentsBlockMemo as SubagentsBlock };

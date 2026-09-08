@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { SessionCard } from '@/sidebar/session-card';
 import { SidebarFooter, type SidebarFooterAction } from '@/sidebar/sidebar-footer';
 import { SidebarProjectsRow } from '@/sidebar/sidebar-projects-row';
@@ -97,4 +98,5 @@ function Sidebar({
   );
 }
 
-export { Sidebar };
+const SidebarMemo = React.memo(Sidebar);
+export { SidebarMemo as Sidebar };

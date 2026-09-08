@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { copy } from '@/strings';
 import { formatClockTime } from './format-clock-time';
 import { formatElapsed } from './format-elapsed';
@@ -59,4 +60,10 @@ function TurnGroup({ turn, now, onOpenAgents, onOpenDiff }: TurnGroupProps) {
   );
 }
 
-export { TurnGroup };
+// 比较器只看数据身份与时刻：回调/开面板函数引用不稳（内联箭头）不触发重渲，
+// 流式期间仅当前轮次（turn 引用变化）真正重渲
+const TurnGroupMemo = React.memo(
+  TurnGroup,
+  (prev, next) => prev.turn === next.turn && prev.now === next.now,
+);
+export { TurnGroupMemo as TurnGroup };

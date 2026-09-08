@@ -91,8 +91,8 @@ export const SavedSessionViewSchema = z.object({
 });
 export type SavedSessionView = z.infer<typeof SavedSessionViewSchema>;
 
+/** 可用思考档位（协议 get_thinking_levels 仅返回 levels；当前值走 get_state.thinkingLevel）。 */
 export const ThinkingLevelViewSchema = z.object({
-  current: z.string(),
   allowed: z.array(z.string()),
 });
 export type ThinkingLevelView = z.infer<typeof ThinkingLevelViewSchema>;

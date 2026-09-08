@@ -114,14 +114,16 @@ describe('foldEvents · 轮次生命周期', () => {
     expect(next.turn.status).toBe('completed');
   });
 
-  test('错过 settle 的遗留 running 轮在下一轮 turnStarted 冻结', () => {
+  test('错过 settle 的遗留 running 轮：冻结后退场（权威内容由对账提供，防双显）', () => {
     let s = initialThreadState;
     s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(0) }), tick(0));
     s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(500) }), tick(500));
-    expect(s.items.length).toBe(2);
-    const first = s.items[0];
-    if (first?.kind !== 'turn') throw new Error('expected turn');
-    expect(first.turn.status).toBe('completed');
+    // 只剩新一轮的 live 轮；旧装饰轮退场（其内容由 settle 对账的权威条目恢复）
+    expect(s.items.length).toBe(1);
+    const only = s.items[0];
+    if (only?.kind !== 'turn') throw new Error('expected turn');
+    expect(only.turn.status).toBe('running');
+    expect(only.turn.startedAt).toBe(tick(500));
   });
 });
 

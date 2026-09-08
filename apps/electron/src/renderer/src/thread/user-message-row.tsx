@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { PenLine } from 'lucide-react';
 
 import { ChatBubble, CopyButton, IconButton } from '@paiapp/ui';
@@ -37,4 +38,5 @@ function UserMessageRow({ message, onEdit }: UserMessageRowProps) {
   );
 }
 
-export { UserMessageRow };
+const UserMessageRowMemo = React.memo(UserMessageRow);
+export { UserMessageRowMemo as UserMessageRow };

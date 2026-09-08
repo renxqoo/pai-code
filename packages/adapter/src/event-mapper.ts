@@ -182,7 +182,9 @@ export function mapSubagentEvent(frame: SubagentEventFrame): UiEvent[] {
     case 'agent_settled':
       return [header, { type: 'subagentSettled', threadId, subagentId }];
     case 'message_end': {
-      // 子代理正文权威快照：完整文本替换增量缓冲
+      // 子代理正文权威快照：完整文本替换增量缓冲；
+      // 非 assistant 消息（user/toolResult）同样会发 message_end，必须过滤
+      if (!isAssistant(event.message)) return [header];
       const text = assistantText(recordOf(event.message)['content']);
       return [header, { type: 'subagentDelta', threadId, subagentId, delta: '' }, { type: 'subagentText', threadId, subagentId, text }];
     }

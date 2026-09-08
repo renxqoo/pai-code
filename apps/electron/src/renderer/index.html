@@ -1,6 +1,8 @@
 <!doctype html>
 <html lang="zh-CN">
   <head>
+    <!-- 纵深防御：即使沙箱被突破也限制资源加载面（dev 下 vite HMR 需 ws/inline style，仅 dev-server URL 放行） -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws://localhost:* http://localhost:*" />
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Pai</title>

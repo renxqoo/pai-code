@@ -75,6 +75,46 @@ afterAll(async () => {
   for (const host of spawned) await host.dispose();
 });
 
+describe('createHostProcess · 启动期假死与 failed 复活（对抗审查 C-S1/C-S9 回归）', () => {
+  test('C-S1：spawn 后完全静默 → hangAfter 内判挂死并重启（而非永停 starting）', async () => {
+    const phases: string[] = [];
+    const harness = makeHarness({
+      config: { bunPath: process.execPath, hubEntry: join(import.meta.dir, 'silent-host.ts'), agentDir, buildEnv: () => ({}) },
+      onPhase: (phase) => phases.push(phase),
+      timing: { ...fastTiming, restartBackoffMs: [0] as const },
+    });
+    const host = launch(harness);
+    // restarting 是瞬态（backoff=0），用回调记录的相位序列判定
+    await waitFor(() => phases.filter((phase) => phase === 'restarting').length >= 1, 5_000, 'restarting from silent start');
+    expect(phases).toContain('starting');
+    await host.dispose();
+  }, 12_000);
+
+  test('C-S1 场景 B：挂死重启出的新进程继续静默 → 连续失败达上限转 failed', async () => {
+    const harness = makeHarness({
+      config: { bunPath: process.execPath, hubEntry: join(import.meta.dir, 'silent-host.ts'), agentDir, buildEnv: () => ({}) },
+      timing: { ...fastTiming, maxConsecutiveRestarts: 2, restartBackoffMs: [0, 0] as unknown as readonly number[] },
+    });
+    const host = launch(harness);
+    await waitFor(() => host.phase === 'failed', 10_000, 'failed after repeated silent spawns');
+    await host.dispose();
+  }, 20_000);
+
+  test('C-S9：failed 后显式 restart 复活（计数重置）', async () => {
+    const harness = makeHarness({
+      config: { bunPath: process.execPath, hubEntry: join(import.meta.dir, 'silent-host.ts'), agentDir, buildEnv: () => ({}) },
+      timing: { ...fastTiming, maxConsecutiveRestarts: 1, restartBackoffMs: [0] as const },
+    });
+    const host = launch(harness);
+    await waitFor(() => host.phase === 'failed', 10_000, 'failed');
+    // 换正常 host 再显式重启：failed 必须可复活
+    await host.restart('manual_revive');
+    // silent-host 依旧静默 → 会再次 failed（证明 restart 未被 failed 短路）
+    await waitFor(() => host.phase === 'failed', 10_000, 'failed again after revive attempt');
+    await host.dispose();
+  }, 25_000);
+});
+
 describe('createHostProcess · 失败与重启链路', () => {
   test('显式 restart：与挂死同一链路（杀组→重spawn→恢复钩子→ready）', async () => {
     const harness = makeHarness();

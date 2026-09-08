@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { BrainCircuit } from 'lucide-react';
 
 import { copy } from '@/strings';
@@ -30,4 +31,5 @@ function ThinkingBlock({ text, open, onToggle }: ThinkingBlockProps) {
   );
 }
 
-export { ThinkingBlock };
+const ThinkingBlockMemo = React.memo(ThinkingBlock);
+export { ThinkingBlockMemo as ThinkingBlock };

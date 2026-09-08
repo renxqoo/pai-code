@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { FileDiff } from 'lucide-react';
 
 import { ChevronToggle, SplitButton } from '@paiapp/ui';
@@ -66,4 +67,5 @@ function DiffBlock({ diff, open, onToggle, onOpenDiff }: DiffBlockProps) {
   );
 }
 
-export { DiffBlock };
+const DiffBlockMemo = React.memo(DiffBlock);
+export { DiffBlockMemo as DiffBlock };

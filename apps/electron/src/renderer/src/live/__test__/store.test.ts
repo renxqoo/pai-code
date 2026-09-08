@@ -29,6 +29,14 @@ describe('live store（对话框/通知/bootstrap 合并）', () => {
     expect(store.getState().dialogOrder).toEqual([]);
   });
 
+  test('B-P6：notify 同 requestId 重投去重（与 dialog 路径对称）', () => {
+    const store = createLiveStore();
+    const notify = { type: 'dialogRequest', threadId: 't', requestId: 'n9', method: 'notify', message: 'm' } as const;
+    store.getState().applyEvent(notify, 1);
+    store.getState().applyEvent(notify, 2);
+    expect(store.getState().notices).toEqual([{ id: 'n9', text: 'm' }]);
+  });
+
   test('notify 走通知条不入对话框队列；setStatus 静默', () => {
     const store = createLiveStore();
     store.getState().applyEvent({ type: 'dialogRequest', threadId: 't', requestId: 'n1', method: 'notify', message: 'hello' }, 1);
@@ -48,8 +56,11 @@ describe('live store（对话框/通知/bootstrap 合并）', () => {
     expect(store.getState().threads['t1']?.streaming).toBe(true);
     expect(store.getState().threads['t1']?.items.length).toBe(1);
     expect(store.getState().threads['t2']).toBeDefined();
-    // 会话消失的线程状态同步清理
+    // 滞后快照不清在途会话（B-P5/P7 合并语义）：t1 保留，由 sessionRemoved 显式清理
     store.getState().bootstrap({ sessions: [session('t2')], saved: [], models: [], providers: [] });
+    expect(store.getState().threads['t1']).toBeDefined();
+    expect(store.getState().sessions['t1']).toBeDefined();
+    store.getState().applyEvent({ type: 'sessionRemoved', threadId: 't1' }, 9);
     expect(store.getState().threads['t1']).toBeUndefined();
   });
 

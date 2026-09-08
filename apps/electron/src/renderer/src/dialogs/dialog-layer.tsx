@@ -1,3 +1,5 @@
+import * as React from 'react';
+
 import { copy } from '@/strings';
 import type { PendingDialog } from '@/live/store';
 import { ConfirmBody } from './confirm-body';
@@ -16,6 +18,18 @@ type DialogLayerProps = {
  */
 function DialogLayer({ dialogs, onRespond, onCancel }: DialogLayerProps) {
   const current = dialogs[0];
+  // Esc = 关闭即 cancelled（api.md 客户端约定）：对话框层是 Esc 的最终消费方
+  React.useEffect(() => {
+    if (current === undefined) return;
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        onCancel(current.requestId);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [current?.requestId, onCancel]);
   if (current === undefined) return null;
   const rest = dialogs.length - 1;
   return (

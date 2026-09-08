@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { cn } from '@/lib/utils';
 import { EmptyThread } from '@/thread/empty-thread';
 import { ScrollToBottomButton } from '@/thread/scroll-to-bottom-button';
@@ -70,4 +71,8 @@ function MessageList({ thread, now, emptyTitle, emptyHint, onOpenAgents, onOpenD
   );
 }
 
-export { MessageList };
+const MessageListMemo = React.memo(
+  MessageList,
+  (prev, next) => prev.thread === next.thread && prev.now === next.now && prev.emptyTitle === next.emptyTitle && prev.emptyHint === next.emptyHint,
+);
+export { MessageListMemo as MessageList };

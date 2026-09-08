@@ -138,14 +138,19 @@ export function useLiveWorkspace(): LiveWorkspaceView {
   }, [hasActivity]);
 
   const activeSession = state.sessions[activeThreadId];
-  const composer = buildComposer(state, activeSession, threadState, effortLevels);
+  const stateModels = state.models;
+  const stateStats = state.stats;
+  const composer = React.useMemo(
+    () => buildComposer({ ...state, models: stateModels, stats: stateStats }, activeSession, threadState, effortLevels),
+    [stateModels, stateStats, activeSession, threadState, effortLevels],
+  );
 
   return {
     ready: state.bootstrapLoaded,
     bootstrapError: state.bootstrapError,
     bridgeAvailable: bridgeClient.available,
     hostPhase: state.hostPhase,
-    sessions: toCards(state.sessions),
+    sessions: React.useMemo(() => toCards(state.sessions), [state.sessions]),
     activeThreadId,
     activeThread,
     activeCwd: activeSession?.cwd ?? '',
@@ -158,7 +163,7 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     hydrateFailed: threadState?.hydrateFailed ?? false,
     now,
     hasActivity,
-    threadDiff: collectThreadDiff(activeThread),
+    threadDiff: React.useMemo(() => collectThreadDiff(activeThread), [activeThread]),
     composer,
     dialogs: state.dialogOrder.map((id) => state.dialogs[id]).filter((dialog): dialog is PendingDialog => dialog !== undefined),
     notices: state.notices,

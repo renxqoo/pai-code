@@ -68,13 +68,19 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
     case 'messageFinal':
       return onMessageFinal(state, event);
     case 'turnSettled': {
-      if (state.liveTurnId === null) return { ...state, streaming: false, retrying: null, stopping: false };
+      // 用户停止 = abort：杀掉该对话全部子代理（前台+后台，无通知，api.md U2）；自然结束不动（后台任务跨轮）
+      const agents =
+        state.stopping && state.agents.some((agent) => agent.status === 'working')
+          ? state.agents.map((agent) => (agent.status === 'working' ? { ...agent, status: 'done' as const, endedAt: now } : agent))
+          : state.agents;
+      if (state.liveTurnId === null) return { ...state, streaming: false, retrying: null, stopping: false, agents };
       const stopped = state.stopping;
       return {
         ...state,
         streaming: false,
         stopping: false,
         retrying: null,
+        agents,
         liveMessageId: null,
         items: state.items.map((item) =>
           item.kind === 'turn' && item.turn.id === state.liveTurnId && item.turn.status === 'running'
@@ -113,7 +119,12 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
         summary: agent.summary.length > 0 ? `${agent.summary}\n${event.text}` : event.text,
       }));
     case 'sessionDied':
-      return { ...state, crashed: true };
+      // worker 死亡时全部在途子代理随进程自灭且无 settle 通知（api.md U2）：就地终态
+      return {
+        ...state,
+        crashed: true,
+        agents: state.agents.map((agent) => (agent.status === 'working' ? { ...agent, status: 'done' as const, endedAt: now } : agent)),
+      };
     case 'dialogRequest':
     case 'dialogSettled':
     case 'host':
@@ -132,7 +143,7 @@ export function foldHydrate(state: LiveThreadState, action: HydrateAction): Live
   switch (action.kind) {
     case 'hydrate/initial': {
       const items = hydrateItems(action.items);
-      return { ...initialThreadState, items, cursor: action.cursor, seenIds: new Set(action.items.map((item) => item.id)) };
+      return { ...initialThreadState, items, cursor: action.cursor, seenIds: new Set(action.items.map((item) => item.id)), hydrated: true };
     }
     case 'hydrate/reconcile': {
       const fresh = hydrateNewItems(action.items).filter(({ entryIds }) => entryIds.some((id) => !state.seenIds.has(id)));
@@ -192,7 +203,8 @@ export function foldStopIntent(state: LiveThreadState): LiveThreadState {
 }
 
 function onTurnStarted(state: LiveThreadState, at: number): LiveThreadState {
-  // 遗留 running 轮（错过 settle）先冻结为 completed
+  // 遗留 running 轮（错过 settle）先冻结为 completed；已终结的装饰轮退场
+  // （其权威内容由对账提供，残留会与后续插入的权威轮双显）
   let items = state.items;
   if (state.liveTurnId !== null) {
     items = items.map((item) =>
@@ -201,6 +213,7 @@ function onTurnStarted(state: LiveThreadState, at: number): LiveThreadState {
         : item,
     );
   }
+  items = items.filter((item) => !(item.kind === 'turn' && item.turn.id.startsWith(LIVE_TURN_PREFIX) && item.turn.status !== 'running'));
   const turn: TurnModel = {
     id: `${LIVE_TURN_PREFIX}${at}-${items.length}`,
     status: 'running',
@@ -444,9 +457,14 @@ function updateTurn(state: LiveThreadState, turnId: string, patch: (turn: TurnMo
 
 function insertBeforeLiveTurn(items: readonly ThreadItem[], item: ThreadItem, liveTurnId: string | null): ThreadItem[] {
   if (liveTurnId === null) return [...items, item];
-  const index = items.findIndex((existing) => existing.kind === 'turn' && existing.turn.id === liveTurnId);
-  if (index === -1) return [...items, item];
-  return [...items.slice(0, index), item, ...items.slice(index)];
+  // live 轮恒在尾部附近：从尾向前找，避免长会话每次插入从头扫
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const existing = items[index];
+    if (existing?.kind === 'turn' && existing.turn.id === liveTurnId) {
+      return [...items.slice(0, index), item, ...items.slice(index)];
+    }
+  }
+  return [...items, item];
 }
 
 function clip(text: string): string {

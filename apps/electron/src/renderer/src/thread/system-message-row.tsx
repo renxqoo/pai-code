@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { BellRing } from 'lucide-react';
 
 import { copy } from '@/strings';
@@ -24,4 +25,5 @@ function SystemMessageRow({ message }: SystemMessageRowProps) {
   );
 }
 
-export { SystemMessageRow };
+const SystemMessageRowMemo = React.memo(SystemMessageRow);
+export { SystemMessageRowMemo as SystemMessageRow };

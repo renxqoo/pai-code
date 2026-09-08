@@ -37,6 +37,22 @@ describe('classifyFrame', () => {
     expect('reason' in result).toBe(true);
   });
 
+  test.each([
+    ['event 载荷为 null', { type: 'event', threadId: 't', event: null }],
+    ['event 载荷缺 type', { type: 'event', threadId: 't', event: { x: 1 } }],
+    ['event 载荷为数组', { type: 'event', threadId: 't', event: [1] }],
+    ['subagent_event 载荷为 null', { type: 'subagent_event', threadId: 't', subagentId: 's', agent: 'a', task: 'k', event: null }],
+  ])('垃圾事件载荷降级不穿透：%s', (_name, value) => {
+    const result = classifyFrame(value);
+    expect('reason' in result).toBe(true);
+    expect(result).toMatchObject({ reason: expect.stringContaining('frame_payload_invalid') });
+  });
+
+  test('合法 event 载荷正常放行', () => {
+    const result = classifyFrame({ type: 'event', threadId: 't', event: { type: 'agent_start' } });
+    expect('frame' in result).toBe(true);
+  });
+
   test('缺 command 的 response：command 收窄为空串不抛', () => {
     const result = classifyFrame({ type: 'response', success: false });
     expect(result).toEqual({ frame: { type: 'response', id: undefined, command: '', success: false, data: undefined, error: undefined } });

@@ -240,8 +240,15 @@ describe('mapSubagentEvent', () => {
       { type: 'subagentStarted', threadId: 't', subagentId: 's1', agent: 'explore', task: 'scan' },
       { type: 'subagentSettled', threadId: 't', subagentId: 's1' },
     ]);
-    const settled = mapSubagentEvent(frame({ type: 'message_end', message: { timestamp: 9, content: [{ type: 'text', text: 'summary' }] } }), deps);
+    const settled = mapSubagentEvent(frame({ type: 'message_end', message: { role: 'assistant', timestamp: 9, content: [{ type: 'text', text: 'summary' }] } }), deps);
     expect(settled[2]).toEqual({ type: 'subagentText', threadId: 't', subagentId: 's1', text: 'summary' });
+  });
+
+  test('回归：子代理 user/toolResult 的 message_end 不产 subagentText（只回头事件）', () => {
+    const userEnd = mapSubagentEvent(frame({ type: 'message_end', message: { role: 'user', content: 'go', timestamp: 1 } }), deps);
+    expect(userEnd).toEqual([{ type: 'subagentStarted', threadId: 't', subagentId: 's1', agent: 'explore', task: 'scan' }]);
+    const toolResultEnd = mapSubagentEvent(frame({ type: 'message_end', message: { role: 'toolResult', toolCallId: 'c', toolName: 'bash', content: [{ type: 'text', text: 'SECRET' }], isError: false, timestamp: 2 } }), deps);
+    expect(toolResultEnd).toEqual([{ type: 'subagentStarted', threadId: 't', subagentId: 's1', agent: 'explore', task: 'scan' }]);
   });
 
   test('其它事件（agent_start 等）→ 仅头事件', () => {

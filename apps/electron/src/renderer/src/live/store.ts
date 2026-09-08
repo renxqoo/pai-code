@@ -95,7 +95,9 @@ export function createLiveStore() {
               if (event.method === 'notify') {
                 const text = event.message ?? event.title ?? '';
                 if (text.length === 0) return state;
-                return { notices: [...state.notices.slice(-4), { id: event.requestId, text }] };
+                // 与 dialog 路径对称：同 requestId 重投去重
+                const deduped = state.notices.filter((notice) => notice.id !== event.requestId);
+                return { notices: [...deduped.slice(-4), { id: event.requestId, text }] };
               }
               if (event.method === 'setStatus') return state;
               const dialogs = { ...state.dialogs, [event.requestId]: toPendingDialog(event) };
@@ -123,15 +125,18 @@ export function createLiveStore() {
         set((state) => ({ threads: { ...state.threads, [threadId]: foldStopIntent(threadOf(state, threadId)) } }));
       },
       bootstrap(data) {
-        const sessions: Record<string, SessionView> = {};
-        for (const session of data.sessions) sessions[session.threadId] = session;
         set((state) => {
-          // 会话表全量替换；线程折叠状态按会话存在性合并（bootstrap 可能晚于在途事件到达）
+          // 滞后快照合并语义：快照补缺、不清在途（事件流可能先于 bootstrap 建立更新的会话/字段）
+          const sessions: Record<string, SessionView> = { ...state.sessions };
+          for (const session of data.sessions) {
+            sessions[session.threadId] = sessions[session.threadId] ?? session;
+          }
           const threads: Record<string, LiveThreadState> = {};
           for (const threadId of Object.keys(sessions)) {
             threads[threadId] = state.threads[threadId] ?? initialThreadState;
           }
-          const activeThreadId = state.activeThreadId !== null && state.activeThreadId in sessions ? state.activeThreadId : firstSessionId(sessions);
+          const activeThreadId =
+            state.activeThreadId !== null && state.activeThreadId in sessions ? state.activeThreadId : firstSessionId(sessions);
           return {
             bootstrapLoaded: true,
             bootstrapError: null,

@@ -81,8 +81,16 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     store.getState().hydrate(threadId, { kind: 'hydrate/initial', items: outcome.data.items, cursor: outcome.data.cursor });
   };
 
+  /** 对话框兜底定时器登记：结算/dispose 时清理，避免滞留句柄。 */
+  const dialogTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
   /** 对话框本地结算：ui_response 只有 ack 无事件回执，宿主侧超时/未知 id 均静默——弹窗关闭由客户端自治。 */
   const settleDialog = (requestId: string): void => {
+    const timer = dialogTimers.get(requestId);
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      dialogTimers.delete(requestId);
+    }
     store.getState().applyEvent({ type: 'dialogSettled', requestId }, Date.now());
   };
 
@@ -91,10 +99,14 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     state.applyEvent(event, now());
     if (event.type === 'dialogRequest' && event.method !== 'notify' && event.method !== 'setStatus') {
       // 宿主侧 5 分钟超时默认拒绝后无回执帧：客户端同步兜底收起
-      window.setTimeout(() => {
-        const stillPending = event.requestId in store.getState().dialogs;
-        if (stillPending) void controller.cancelDialog(event.requestId);
-      }, DIALOG_AUTO_DISMISS_MS);
+      dialogTimers.set(
+        event.requestId,
+        setTimeout(() => {
+          dialogTimers.delete(event.requestId);
+          const stillPending = event.requestId in store.getState().dialogs;
+          if (stillPending) void controller.cancelDialog(event.requestId);
+        }, DIALOG_AUTO_DISMISS_MS),
+      );
       return;
     }
     if (event.type === 'turnStarted') {
@@ -102,9 +114,13 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       void fetchEntries(event.threadId, state.threads[event.threadId]?.cursor ?? null, false).catch(() => undefined);
     } else if (event.type === 'turnSettled') {
       // 等条目落盘的短延迟后【全量重建】：以完整转写替换轮次区域，
-      // 根治增量批次切在 assistant/toolResult 之间导致的配对丢失
-      window.setTimeout(() => {
+      // 根治增量批次切在 assistant/toolResult 之间导致的配对丢失。
+      // 代际守卫：窗口内若新一轮已开始（followUp 自动续轮），本次重建让位给下一轮的 settle。
+      const settledTurnId = state.threads[event.threadId]?.liveTurnId ?? null;
+      setTimeout(() => {
         if (disposed) return;
+        const current = store.getState().threads[event.threadId];
+        if (current !== undefined && current.liveTurnId !== settledTurnId) return;
         void rebuildFromTranscript(event.threadId).catch(() => undefined);
         void controller.refreshStats(event.threadId);
       }, RECONCILE_SETTLE_DELAY_MS);
@@ -138,6 +154,8 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     },
     dispose(): void {
       disposed = true;
+      for (const timer of dialogTimers.values()) clearTimeout(timer);
+      dialogTimers.clear();
       unsubscribe?.();
       unsubscribe = null;
     },
@@ -145,9 +163,13 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       const text = message.trim();
       if (text.length === 0) return 'empty_message';
       const streaming = store.getState().threads[threadId]?.streaming ?? false;
-      const outcome = streaming
+      let outcome = streaming
         ? await client.invoke('session/followUp', { threadId, message: text })
         : await client.invoke('session/prompt', { threadId, message: text });
+      // TOCTOU 兜底：读取 streaming 与 invoke 之间轮次边界翻转时，按对侧路径回落一次
+      if (!outcome.ok && !streaming && /stream/i.test(outcome.reason)) {
+        outcome = await client.invoke('session/followUp', { threadId, message: text });
+      }
       return outcome.ok ? null : outcome.reason;
     },
     async stopActiveTurn(threadId: string): Promise<void> {
@@ -219,12 +241,17 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     async refreshStats(threadId: string): Promise<void> {
       const outcome = await client.invoke('session/stats', { threadId });
       if (outcome.ok) {
-        store.getState().updateStats(threadId, { contextUsage: outcome.data.contextUsage, tokensTotal: outcome.data.tokensTotal });
+        const stats = outcome.data as { contextUsage?: number | null; tokensTotal?: number } | null;
+        store.getState().updateStats(threadId, {
+          contextUsage: typeof stats?.contextUsage === 'number' ? stats.contextUsage : null,
+          tokensTotal: typeof stats?.tokensTotal === 'number' ? stats.tokensTotal : 0,
+        });
       }
     },
     async ensureHydrated(threadId: string): Promise<void> {
       const thread = store.getState().threads[threadId];
-      if (thread !== undefined && thread.cursor !== null) return;
+      // hydrated 标志判定（空会话 cursor 恒 null，不能以 cursor 判，否则切回即重水化抹掉在途现场）
+      if (thread?.hydrated) return;
       await hydrateFull(threadId).catch(() => undefined);
     },
   };

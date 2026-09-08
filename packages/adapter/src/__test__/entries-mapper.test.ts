@@ -179,8 +179,8 @@ describe('response-views', () => {
     expect(sessionStatsView({}).contextUsage).toBeNull();
   });
 
-  test('thinkingLevels：levels 列表 + current', () => {
-    expect(thinkingLevels({ current: 'high', levels: ['off', 'high'] })).toEqual({ current: 'high', allowed: ['off', 'high'] });
-    expect(thinkingLevels(null)).toEqual({ current: '', allowed: [] });
+  test('thinkingLevels：仅 levels（协议无 current 字段，当前值走 get_state）', () => {
+    expect(thinkingLevels({ current: 'high', levels: ['off', 'high'] })).toEqual({ allowed: ['off', 'high'] });
+    expect(thinkingLevels(null)).toEqual({ allowed: [] });
   });
 });

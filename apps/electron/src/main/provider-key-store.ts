@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 import { safeStorage } from 'electron';
@@ -35,7 +35,12 @@ export function createProviderKeyStore(providerKeysFile: string): ProviderKeySto
 
   const writeFile = (file: KeyFile): void => {
     mkdirSync(dirname(providerKeysFile), { recursive: true });
-    writeFileSync(providerKeysFile, JSON.stringify(file));
+    writeFileSync(providerKeysFile, JSON.stringify(file), { mode: 0o600 });
+    try {
+      chmodSync(providerKeysFile, 0o600);
+    } catch {
+      // 平台不支持 chmod（如部分 Windows）：内容本身是 safeStorage 密文
+    }
   };
 
   return {

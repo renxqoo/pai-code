@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { Terminal } from 'lucide-react';
 
 import { ChevronToggle } from '@paiapp/ui';
@@ -43,4 +44,5 @@ function ToolsBlock({ calls, open, onToggle }: ToolsBlockProps) {
   );
 }
 
-export { ToolsBlock };
+const ToolsBlockMemo = React.memo(ToolsBlock);
+export { ToolsBlockMemo as ToolsBlock };

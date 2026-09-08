@@ -122,4 +122,5 @@ function Composer({
   );
 }
 
-export { Composer };
+const ComposerMemo = React.memo(Composer);
+export { ComposerMemo as Composer };

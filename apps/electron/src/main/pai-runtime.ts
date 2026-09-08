@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
+import { join } from 'node:path';
 
 import { mapDialogRequest, mapSessionEvent, mapSubagentEvent, sessionFromStartResponse, threadListEntries, toSessionView } from '@paiapp/adapter';
 import {
@@ -43,6 +44,8 @@ export interface PaiRuntimeDeps {
 
 export interface PaiRuntime {
   readonly host: HostProcessPort;
+  /** 会话文件根目录（agentDir/sessions；session/resume 白名单基准）。 */
+  readonly sessionsRoot: string;
   start(): Promise<void>;
   stop(): Promise<void>;
   sessions(): SessionView[];
@@ -115,6 +118,15 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
   };
 
   const handleFrame: HostProcessDeps['onFrame'] = (frame) => {
+    try {
+      dispatchFrame(frame);
+    } catch (error) {
+      // 帧处理不得击穿主进程（stdout 回调内同步执行）
+      log(`frame_dispatch_error:${errorMessage(error)}`);
+    }
+  };
+
+  const dispatchFrame = (frame: Parameters<HostProcessDeps['onFrame']>[0]): void => {
     switch (frame.type) {
       case 'event':
         applyUiEvents(frame.threadId, mapSessionEvent(frame.threadId, frame.event, { now: () => Date.now() }));
@@ -225,6 +237,9 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
     get host(): HostProcessPort {
       if (host === null) throw new Error('runtime_not_started');
       return host;
+    },
+    get sessionsRoot(): string {
+      return join(deps.paths.agentDir, 'sessions');
     },
     registry,
     defaultTitle: DEFAULT_TITLE,
@@ -362,4 +377,8 @@ function waitForPhase(host: HostProcessPort, target: HostPhase, timeoutMs: numbe
 /** 启动时注册表视图兜底（host 未恢复前的侧栏占位）。 */
 export function registryViews(registry: RegistryStorePort): SessionView[] {
   return registry.list().map((row) => toSessionView({ threadId: row.threadId, cwd: row.cwd, sessionPath: row.sessionPath, state: 'parked', title: row.title, lastActivityAt: row.updatedAt }));
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

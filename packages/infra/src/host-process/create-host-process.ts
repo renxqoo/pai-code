@@ -120,8 +120,9 @@ export function createHostProcess(deps: HostProcessDeps): HostProcessPort {
     if (watchdog !== null) return;
     watchdog = setInterval(() => {
       if (disposed || restarting || exitingGracefully) return;
-      if (!sawFirstHeartbeat) return;
-      if (Date.now() - lastHeartbeatAt <= timing.hangAfterMs) return;
+      // 启动期同样判挂死：spawn 后 hangAfterMs 内无首心跳即重启（spawnStartedAt 即首个基准）
+      const lastBeat = sawFirstHeartbeat ? lastHeartbeatAt : spawnStartedAt;
+      if (Date.now() - lastBeat <= timing.hangAfterMs) return;
       note(`heartbeat stale >${timing.hangAfterMs}ms; restarting host`);
       void restart('hang');
     }, timing.checkIntervalMs);
@@ -204,6 +205,8 @@ export function createHostProcess(deps: HostProcessDeps): HostProcessPort {
   const restart = async (cause: string): Promise<void> => {
     if (restarting || disposed) return;
     restarting = true;
+    // failed 是「自动自愈」的终态；显式 restart（配置变更等）重置计数给予复活
+    if (phase === 'failed') consecutiveFailures = 0;
     consecutiveFailures += 1;
     note(`restart:cause=${cause}:attempt=${consecutiveFailures}`);
     if (consecutiveFailures > timing.maxConsecutiveRestarts) {

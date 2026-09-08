@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { Folder, X } from 'lucide-react';
 
 import { SparkMark } from '@paiapp/ui';
@@ -59,4 +60,5 @@ function SessionCard({ session, age, active, onSelect, onClose }: SessionCardPro
   );
 }
 
-export { SessionCard };
+const SessionCardMemo = React.memo(SessionCard);
+export { SessionCardMemo as SessionCard };

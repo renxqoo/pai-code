@@ -1,4 +1,8 @@
+import { realpathSync } from 'node:fs';
+import { basename as baseName, dirname as dirnamePath, join as joinPaths, resolve as resolvePath, sep as pathSep } from 'node:path';
+
 import { mapEntries, modelInfos, savedSessions, sessionStatsView, threadStateView, thinkingLevels } from '@paiapp/adapter';
+import { envVarNameForProvider } from './models-config';
 import { ApiSchemas, type ApiMethod, type ApiOutcome, type ApiParams } from '@paiapp/contracts';
 
 import type { PaiRuntime } from './pai-runtime';
@@ -16,6 +20,8 @@ export interface ApiRouteDeps {
   runtime: PaiRuntime;
   settings: FileSettings;
   keyStore: ProviderKeyStore;
+  /** 审计日志（权限应答等安全敏感动作）。 */
+  audit: (message: string) => void;
 }
 
 type Outcome<M extends ApiMethod> = Promise<ApiOutcome<M>>;
@@ -24,6 +30,29 @@ export function createApiRoutes(deps: ApiRouteDeps) {
   const { runtime } = deps;
 
   const fail = (reason: string): { ok: false; reason: string } => ({ ok: false, reason });
+
+  /** 会话文件白名单：resolve 后必须位于 sessionsRoot 之下（真实路径优先，缺文件回退 resolve）。 */
+  const insideSessionsRoot = (sessionPath: string): boolean => {
+    let root = runtime.sessionsRoot;
+    try {
+      root = realpathSync(root);
+    } catch {
+      // 目录不存在时 resolve 语义兜底
+    }
+    let target = resolvePath(sessionPath);
+    try {
+      target = realpathSync(target);
+    } catch {
+      // 目标文件尚不存在：按已存在的父目录归一（macOS /tmp→/private/tmp 符号链接），
+      // 前缀拦截仍生效；文件缺失的报错交给 host
+      try {
+        target = joinPaths(realpathSync(dirnamePath(target)), baseName(target));
+      } catch {
+        // 父目录也不存在：保持 resolve 形态（多半已在白名单外）
+      }
+    }
+    return target === root || target.startsWith(`${root}${pathSep}`);
+  };
 
   const command = async (cmd: Parameters<PaiRuntime['host']['request']>[0]): Promise<{ ok: true; data: unknown } | { ok: false; reason: string }> => {
     try {
@@ -48,7 +77,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     const targets = cwd !== undefined ? [cwd] : knownCwds();
     const merged = new Map<string, ReturnType<typeof savedSessions>[number]>();
     for (const target of targets) {
-      const result = await runtime.host.request({ type: 'thread/list_saved', cwd: target });
+      const result = await command({ type: 'thread/list_saved', cwd: target });
       if (!result.ok) continue;
       for (const session of savedSessions(result.data)) merged.set(session.sessionPath, session);
     }
@@ -64,16 +93,20 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       hasKey: deps.keyStore.getKey(provider.name) !== null,
     }));
 
-  /** provider 配置变更：重生成 models.json；若 host 未热加载则重启恢复链路。 */
+  /** provider 配置变更：重生成 models.json；若 host 未热加载则重启恢复链路（host 未启动则待下次启动生效）。 */
   const applyProviderChange = async (): Promise<void> => {
     const providers = deps.settings.listProviders();
-    const models = await runtime.host.request({ type: 'get_models' });
-    if (models.ok) {
-      const known = new Set(modelInfos(models.data).map((model) => model.provider));
-      const missing = providers.some((provider) => !known.has(provider.name));
-      if (!missing) return;
+    try {
+      const models = await runtime.host.request({ type: 'get_models' });
+      if (models.ok) {
+        const known = new Set(modelInfos(models.data).map((model) => model.provider));
+        const missing = providers.some((provider) => !known.has(provider.name));
+        if (!missing) return;
+      }
+      await runtime.host.restart('providers_changed');
+    } catch {
+      // host 未启动/未配置：配置已落盘，下次启动时 buildEnv 重生成生效
     }
-    await runtime.host.restart('providers_changed');
   };
 
   type RouteTable = { [M in ApiMethod]: (params: ApiParams<M>) => Outcome<M> };
@@ -81,7 +114,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
   const routes: RouteTable = {
     'app/bootstrap': async () => {
       runtime.markBootstrapped();
-      const [saved, models] = await Promise.all([savedAcrossCwds(), runtime.host.request({ type: 'get_models' })]);
+      const [saved, models] = await Promise.all([savedAcrossCwds(), command({ type: 'get_models' })]);
       const outcome = {
         sessions: runtime.sessions(),
         saved,
@@ -102,6 +135,8 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       return { ok: true as const, data: view };
     },
     'session/resume': async (params) => {
+      // 路径白名单：只允许恢复本应用 agentDir/sessions 下的会话文件（防被攻陷渲染层任意读）
+      if (!insideSessionsRoot(params.sessionPath)) return fail('session_path_forbidden');
       const result = await command({ type: 'thread/resume', sessionPath: params.sessionPath });
       if (!result.ok) return fail(result.reason);
       const data = result.data as { threadId?: string; cwd?: string; sessionPath?: string | null };
@@ -222,7 +257,10 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       return result.ok ? { ok: true as const, data: null } : fail(result.reason);
     },
     'dialog/respond': async (params) => {
-      // 任何情况下都必答（晚到/未知 id 由 host 静默忽略并 ack）
+      // 任何情况下都必答（晚到/未知 id 由 host 静默忽略并 ack）；权限应答落审计日志
+      const confirmed = params.payload['confirmed'] === true;
+      const cancelled = params.payload['cancelled'] === true;
+      deps.audit(`dialog_respond:${params.requestId}:${cancelled ? 'cancelled' : confirmed ? 'confirmed' : 'value'}`);
       const result = await command({ type: 'ui_response', requestId: params.requestId, payload: params.payload });
       return result.ok ? { ok: true as const, data: null } : fail(result.reason);
     },
@@ -231,6 +269,12 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       return result.ok ? { ok: true as const, data: null } : fail(result.reason);
     },
     'provider/upsert': async (params) => {
+      // env 变量名碰撞防护：不同名字 sanitize 后同名会导致 key 互串（a-b 与 a_b 同映射 PAI_KEY_A_B）
+      const envName = envVarNameForProvider(params.name);
+      const collides = deps.settings
+        .listProviders()
+        .some((provider) => provider.name !== params.name && envVarNameForProvider(provider.name) === envName);
+      if (collides) return fail('provider_name_conflict');
       deps.settings.upsertProvider({
         name: params.name,
         baseUrl: params.baseUrl,

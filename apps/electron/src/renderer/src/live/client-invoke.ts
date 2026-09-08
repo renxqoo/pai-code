@@ -26,7 +26,16 @@ export function createBridgeClient(bridge: PreloadBridgeShape | undefined): Brid
       return (await bridge.invoke(method, params)) as ApiOutcome<M>;
     },
     subscribe(onEvent: (event: unknown) => void): () => void {
-      return bridge?.subscribe(onEvent) ?? (() => undefined);
+      return (
+        bridge?.subscribe((payload) => {
+          // 主进程 50ms 批推：单事件与数组双形态都收
+          if (Array.isArray(payload)) {
+            for (const item of payload) onEvent(item);
+            return;
+          }
+          onEvent(payload);
+        }) ?? (() => undefined)
+      );
     },
   };
 }

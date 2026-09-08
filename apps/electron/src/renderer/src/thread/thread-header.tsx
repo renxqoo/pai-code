@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { Folder, Maximize2, PanelRight, Plus } from 'lucide-react';
 
 import { IconButton, SplitButton } from '@paiapp/ui';
@@ -141,5 +142,6 @@ function ThreadHeader({
   );
 }
 
-export { ThreadHeader };
+const ThreadHeaderMemo = React.memo(ThreadHeader);
+export { ThreadHeaderMemo as ThreadHeader };
 export type { ThreadTabsState };

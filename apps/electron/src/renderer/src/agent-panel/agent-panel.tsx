@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { X } from 'lucide-react';
 
 import { IconButton } from '@paiapp/ui';
@@ -49,4 +50,5 @@ function AgentPanel({ agents, now, onClose }: AgentPanelProps) {
   );
 }
 
-export { AgentPanel };
+const AgentPanelMemo = React.memo(AgentPanel);
+export { AgentPanelMemo as AgentPanel };

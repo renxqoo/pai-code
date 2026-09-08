@@ -154,7 +154,30 @@
   list_saved 仅覆盖已知 cwd（pai-cli 按目录过滤所致，新装首启历史为空属预期）；
   api.md auth/list 形状与实现漂移 → 应修 hub 仓库文档（本仓库实现与 host 一致）。
 
+## 第二轮对抗审查（四路独立红测，2026-09-08）
+
+四个独立子代理（协议 A / 状态机 B / 安全 C / 性能 D）只读仓库、红测落 /tmp/pai-red/，
+共 30 项发现；全部由本仓裁决：**22 项确认为真并修复**（每项带仓库内回归测试或红测翻转验证）、
+5 项驳回（含 B-P4 的「settle 终结全部子代理」——会破坏后台任务跨轮语义，仅采纳 sessionDied/abort 路径）、
+3 项记录边界。修复要点：子代理 message_end 角色过滤（A-1）；帧事件载荷防线（A-2，event:null 不再击穿主进程）；
+首心跳假死判挂死（C-S1——第一轮的该修复实际未落地，本轮红测抓住并以带断言测试固化）；session/resume
+白名单（C-S2，含 macOS 符号链接归一）；单实例锁 + 装配兜底 + sqlite busy 窗口（C-S3）；host 未就绪全走
+outcome（C-S4）；关窗生命周期 + activate 重建（C-S5）；provider env 名碰撞（C-S8）；failed 可显式复活（C-S9）；
+CSP + key 文件 0600（C-S10）；权限应答审计日志（S6 部分）；settle 对账代际守卫（B-P1）；空会话 hydrated 标志
+（B-P2）；装饰轮退场防双显（B-P3）；notify 去重/bootstrap 快照合并（B-P5/P6/P7）；对话框 Esc（B-P8）；
+prompt TOCTOU 回落 followUp（B-P9）；对话框兜底定时器清理（B-P10）；渲染层 memo 边界 + 派生/回调稳定化 +
+主进程 50ms 事件批推（D-P1：2000 条目会话流式 135.4ms/delta → 12.3ms/delta，11 倍）；解码器已扫描偏移 +
+超限提前丢弃（D-P2：12MB 堆积 69.3ms → 0.3ms）；insertBeforeLiveTurn 尾扫（D-P4）。
+驳回与边界：B-P4 后台子代理跨轮为协议语义；C-S6 cwd/自动批权属桌面威胁模型权衡（审计日志已加，cwd 白名单
+入后续任务）；C-S7 baseUrl SSRF 需先攻陷渲染层（key 经 env 注入不出 models.json），同模型内无技术防线；
+C-S11 慢心跳风暴（心跳契约 1Hz，偏离契约的 host 不设防）；S12 内存峰值随 D-P2 消解；虚拟列表与 StreamAggregator
+分桶的进一步演进为已量化边界（每轮 settle 一次 ≤135ms 重渲尖峰）。
+
 ## 已知边界（v1）
 
 - 用户消息正文两段 text 流式拼接无换行、权威为 \n 连接（多段 text 罕见，settle 对账兜底）。
 - 渲染层 __paiDebug 只读诊断句柄（支持/排障用，无写面）。
+- 长会话（2000+ 条目）每轮 settle 存在一次全量重建渲染尖峰（≤135ms，流式路径已 memo 隔离到 12ms/delta）；
+  虚拟列表为后续演进项。
+- cwd 值域与 dialog/respond 的程序化批权属渲染层被攻陷后的威胁模型权衡（沙箱+contextIsolation+CSP+审计为现行防线）。
+- hub 侧 sessionPath 任意路径接受（C-S2 的另一半）与 api.md auth/list 形状漂移：待 hub 仓库流程。

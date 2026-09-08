@@ -60,9 +60,18 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     });
   };
 
-  const togglePanel = (which: Exclude<SidePanel, null>) => {
+  const togglePanel = React.useCallback((which: Exclude<SidePanel, null>) => {
     setPanel((current) => (current === which ? null : which));
-  };
+  }, []);
+
+  const openAgents = React.useCallback(() => setPanel('agents'), []);
+  const openDiff = React.useCallback(() => setPanel('diff'), []);
+  const closePanel = React.useCallback(() => setPanel(null), []);
+  const openSettings = React.useCallback(() => setSettingsOpen(true), []);
+  const closeSettings = React.useCallback(() => setSettingsOpen(false), []);
+  const openNewThread = React.useCallback(() => setNewThreadOpen(true), []);
+  const closeNewThread = React.useCallback(() => setNewThreadOpen(false), []);
+  const noopSelectProject = React.useCallback(() => undefined, []);
 
   const editUserMessage = (text: string) => {
     setDraft(text);
@@ -97,11 +106,16 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     void window.pai?.window.toggleMaximize();
   };
 
-  const projects = [...new Set(sessions.map((session) => session.projectName))];
-  const ages: Record<string, string> = {};
-  for (const session of sessions) {
-    ages[session.id] = formatRelativeAge(workspace.now, session.lastActivityAt);
-  }
+  const refreshSaved = workspace.actions.refreshSaved;
+  const refreshAction = React.useMemo(() => ({ label: copy.sidebar.refresh, onSelect: refreshSaved }), [refreshSaved]);
+  const projects = React.useMemo(() => [...new Set(sessions.map((session) => session.projectName))], [sessions]);
+  const ages = React.useMemo(() => {
+    const table: Record<string, string> = {};
+    for (const session of sessions) {
+      table[session.id] = formatRelativeAge(workspace.now, session.lastActivityAt);
+    }
+    return table;
+  }, [sessions, workspace.now]);
 
   return (
     <div className="relative flex h-screen min-h-0 overflow-hidden bg-background text-foreground">
@@ -124,15 +138,15 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         projects={projects}
         selectedProject={copy.sidebar.allProjects}
         footerActions={[
-          { label: copy.sidebar.settings, onSelect: () => setSettingsOpen(true) },
+          { label: copy.sidebar.settings, onSelect: openSettings },
           { label: copy.sidebar.workflows, onSelect: noop },
           { label: copy.sidebar.usage, onSelect: noop },
         ]}
-        refreshAction={{ label: copy.sidebar.refresh, onSelect: () => workspace.actions.refreshSaved() }}
+        refreshAction={refreshAction}
         onSearch={noop}
-        onNewThread={() => setNewThreadOpen(true)}
-        onSelectProject={noop}
-        onNewProject={() => setNewThreadOpen(true)}
+        onNewThread={openNewThread}
+        onSelectProject={noopSelectProject}
+        onNewProject={openNewThread}
         onSelectSession={(sessionId) => {
           workspace.actions.selectSession(sessionId);
           setPanel(null);
@@ -170,8 +184,8 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
             agentsLabel: copy.thread.tabAgents,
             addLabel: copy.thread.tabAdd,
             agentsActive: workspace.agentsActive,
-            onDiff: () => togglePanel('diff'),
-            onAgents: () => togglePanel('agents'),
+            onDiff: openDiff,
+            onAgents: openAgents,
             onAdd: noop,
           }}
           activePanel={panel}
@@ -190,8 +204,8 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
           now={workspace.now}
           emptyTitle={copy.thread.emptyTitle}
           emptyHint={copy.thread.emptyHint}
-          onOpenAgents={() => setPanel('agents')}
-          onOpenDiff={() => setPanel('diff')}
+          onOpenAgents={openAgents}
+          onOpenDiff={openDiff}
           onEditUserMessage={editUserMessage}
         />
         <div
@@ -237,8 +251,8 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
           />
         </div>
       </div>
-      {panel === 'agents' ? <AgentPanel agents={workspace.activeThread.agents} now={workspace.now} onClose={() => setPanel(null)} /> : null}
-      {panel === 'diff' ? <DiffPanel diff={workspace.threadDiff} onClose={() => setPanel(null)} /> : null}
+      {panel === 'agents' ? <AgentPanel agents={workspace.activeThread.agents} now={workspace.now} onClose={closePanel} /> : null}
+      {panel === 'diff' ? <DiffPanel diff={workspace.threadDiff} onClose={closePanel} /> : null}
       <TitleBarLeft
         titleName={copy.appTitle.name}
         titleSuffix={copy.appTitle.suffix}
@@ -252,7 +266,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         open={settingsOpen}
         providers={workspace.providers}
         saved={workspace.saved}
-        onClose={() => setSettingsOpen(false)}
+        onClose={closeSettings}
         onUpsertProvider={workspace.actions.upsertProvider}
         onRemoveProvider={workspace.actions.removeProvider}
         onOpenSaved={(sessionPath) => {
@@ -264,7 +278,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
       <NewThreadModal
         open={newThreadOpen}
         defaultCwd={workspace.activeCwd.length > 0 ? workspace.activeCwd : ''}
-        onClose={() => setNewThreadOpen(false)}
+        onClose={closeNewThread}
         onCreate={workspace.actions.createSession}
       />
       <NoticeStrip notices={workspace.notices} onDismiss={workspace.actions.dismissNotice} />

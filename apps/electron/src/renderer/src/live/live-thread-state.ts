@@ -33,6 +33,8 @@ export type LiveThreadState = {
   crashed: boolean;
   /** 水化失败（重试入口提示）。 */
   hydrateFailed: boolean;
+  /** 是否已成功水化过（空会话 cursor 为 null，不能以 cursor 判定）。 */
+  hydrated: boolean;
 };
 
 export const initialThreadState: LiveThreadState = {
@@ -50,6 +52,7 @@ export const initialThreadState: LiveThreadState = {
   stopping: false,
   crashed: false,
   hydrateFailed: false,
+  hydrated: false,
 };
 
 /** 对账动作（非 UiEvent 的内部输入，controller 编排水化时派发）。 */

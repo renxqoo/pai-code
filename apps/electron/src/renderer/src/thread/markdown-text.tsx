@@ -1,3 +1,4 @@
+import * as React from 'react';
 import type { ReactNode } from 'react';
 
 import { parseMarkdown, type MarkdownBlock } from './parse-markdown';
@@ -57,7 +58,8 @@ function renderBlock(id: string, block: MarkdownBlock, index: number): ReactNode
 
 /** 对话正文：受限 Markdown 子集渲染（解析为结构块映射 React 节点，不产生 HTML）。 */
 function MarkdownText({ id, text, className }: MarkdownTextProps) {
-  const blocks = parseMarkdown(text);
+  // 正文只在变化时重解析（流式期间每 delta 一次，长文解析是热路径）
+  const blocks = React.useMemo(() => parseMarkdown(text), [text]);
   if (blocks.length === 0) return null;
   return (
     <div

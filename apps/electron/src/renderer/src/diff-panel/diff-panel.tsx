@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { X } from 'lucide-react';
 
 import { IconButton } from '@paiapp/ui';
@@ -61,4 +62,5 @@ function DiffPanel({ diff, onClose }: DiffPanelProps) {
   );
 }
 
-export { DiffPanel };
+const DiffPanelMemo = React.memo(DiffPanel);
+export { DiffPanelMemo as DiffPanel };

@@ -135,10 +135,9 @@ export function sessionStatsView(data: unknown): SessionStatsView {
   };
 }
 
-export function thinkingLevels(data: unknown): { current: string; allowed: string[] } {
+export function thinkingLevels(data: unknown): { allowed: string[] } {
   const d = recordOf(data);
   return {
-    current: str(d.current),
     allowed: Array.isArray(d.levels) ? d.levels.filter((item): item is string => typeof item === 'string') : [],
   };
 }

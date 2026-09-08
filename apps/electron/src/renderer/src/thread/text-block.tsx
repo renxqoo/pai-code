@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { MarkdownText } from './markdown-text';
 
 type TextBlockProps = {
@@ -11,4 +12,5 @@ function TextBlock({ id, text, className }: TextBlockProps) {
   return <MarkdownText id={id} text={text} className={className} />;
 }
 
-export { TextBlock };
+const TextBlockMemo = React.memo(TextBlock);
+export { TextBlockMemo as TextBlock };

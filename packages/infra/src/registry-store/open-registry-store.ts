@@ -7,7 +7,8 @@ import type { RegistryStorePort, SessionRow } from '@paiapp/contracts';
  * 同步 API（node:sqlite 语义）；进程内单实例，close 后不可再用。
  */
 export function openRegistryStore(dbPath: string): RegistryStorePort {
-  const db = new DatabaseSync(dbPath);
+  // busy 窗口：双开/外部工具短暂持锁时等待而非立刻抛错（单实例锁是第一道防线）
+  const db = new DatabaseSync(dbPath, { timeout: 3_000 });
   db.exec(`
     CREATE TABLE IF NOT EXISTS sessions (
       threadId TEXT PRIMARY KEY,
