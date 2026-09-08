@@ -180,6 +180,20 @@ export const copy = {
   notices: {
     dismiss: 'Dismiss',
   },
+  onboarding: {
+    title: 'Welcome to pai',
+    hint: 'Connect a provider and pick a model to start chatting. You can skip this and configure later in Settings.',
+    stepProvider: 'Connect a provider',
+    stepModel: 'Choose the default model',
+    stepCwd: 'Pick a working directory',
+    cwdField: '/path/to/your/project',
+    next: 'Next',
+    back: 'Back',
+    finish: 'Start chatting',
+    skip: 'Skip setup',
+    noModelsYet: 'No models yet. Finish provider setup or refresh.',
+    refreshModels: 'Refresh',
+  },
   bootstrap: {
     loadingTitle: 'Starting up…',
     loadingHint: 'Connecting to the coding agent host.',

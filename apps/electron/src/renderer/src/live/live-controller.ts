@@ -31,6 +31,8 @@ export interface LiveController {
   /** 压缩：成功返回 null，失败返回原因（调用方转用户可见提示）。 */
   readonly compact: (threadId: string) => Promise<string | null>;
   readonly refreshSaved: () => Promise<void>;
+  /** 模型目录刷新（provider 保存触发 host 重启后向导/设置页手动补拉）。 */
+  readonly refreshModels: () => Promise<void>;
   /** hub 凭据目录刷新（auth/list，永不含 key 本身）。 */
   readonly refreshCredentials: () => Promise<void>;
   /** 写入官方 provider key（hub 侧 auth.json）；成功返回 null，失败返回原因。 */
@@ -237,6 +239,10 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
         // saved 列表直接进 store（避免与 bootstrap 动作耦合）
         store.setState({ saved: outcome.data });
       }
+    },
+    async refreshModels(): Promise<void> {
+      const outcome = await client.invoke('model/list', {});
+      if (outcome.ok) store.setState({ models: outcome.data });
     },
     async refreshCredentials(): Promise<void> {
       const outcome = await client.invoke('auth/list', {});

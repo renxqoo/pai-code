@@ -84,6 +84,7 @@ export type LiveWorkspaceView = {
     readonly dismissNotice: (id: string) => void;
     readonly refreshSaved: () => void;
     readonly refreshCredentials: () => void;
+    readonly refreshModels: () => void;
     readonly setProviderKey: (provider: string, apiKey: string) => Promise<boolean>;
     readonly removeProviderKey: (provider: string) => Promise<boolean>;
     readonly setDefaultModel: (value: string | null) => void;
@@ -229,6 +230,7 @@ export function useLiveWorkspace(): LiveWorkspaceView {
       dismissNotice: (id) => store.getState().dismissNotice(id),
       refreshSaved: () => void controller.refreshSaved(),
       refreshCredentials: () => void controller.refreshCredentials(),
+      refreshModels: () => void controller.refreshModels(),
       setProviderKey: async (provider, apiKey) => {
         const reason = await controller.setProviderKey(provider, apiKey);
         if (reason !== null) pushNotice(copy.settings.keySaveFailed(reason));
