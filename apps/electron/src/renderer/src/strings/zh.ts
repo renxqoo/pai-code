@@ -29,6 +29,7 @@ export const zh: typeof en = {
     clearSearch: '清空搜索',
     collapseGroup: '展开/折叠项目分组',
     noMatches: '没有匹配的会话',
+    emptyTasks: (hotkey: string): string => `暂无任务，按 ${hotkey} 开始`,
     age: {
       justNow: '刚刚',
       minutes: (value: number): string => `${value}分钟`,

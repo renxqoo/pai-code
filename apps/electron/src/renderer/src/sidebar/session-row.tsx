@@ -15,13 +15,14 @@ type SessionRowProps = {
   pinned?: boolean
   /** 项目视图缩进：与会话所在项目文件夹行内容对齐。 */
   indent?: boolean
-  onSelect: () => void
+  /** 选中会话（平铺回调：引用稳定，行级 memo 不被内联闭包击穿）。 */
+  onSelect: (sessionId: string) => void
   /** 关闭（dispose）会话：hover 显示；文件保留，可从历史恢复。 */
-  onClose?: () => void
+  onClose?: (sessionId: string) => void
   /** 行内重命名：提交值 trim 后为空或与原标题相同视为取消。 */
-  onRename?: (name: string) => void
-  /** 置顶切换：不传则不渲染钉子按钮（未落盘会话无置顶键）。 */
-  onTogglePin?: () => void
+  onRename?: (sessionId: string, name: string) => void
+  /** 置顶切换：sessionPath 为 null（未落盘）的行不渲染钉子按钮。 */
+  onTogglePin?: (sessionPath: string) => void
 }
 
 const actionButtonClass =
@@ -45,10 +46,10 @@ function SessionRow({
   const commitRename = () => {
     setEditing(false);
     const next = renameCommitValue(draft, session.title);
-    if (next !== null) onRename?.(next);
+    if (next !== null) onRename?.(session.id, next);
   };
 
-  const canTogglePin = onTogglePin !== undefined;
+  const canTogglePin = onTogglePin !== undefined && session.sessionPath !== null;
   const canRename = onRename !== undefined;
   const canClose = onClose !== undefined;
   /** hover 动作与时间标签互斥展示；编辑态只留输入框。 */
@@ -60,11 +61,11 @@ function SessionRow({
       data-active={active ? 'true' : 'false'}
       role="button"
       tabIndex={0}
-      onClick={onSelect}
+      onClick={() => onSelect(session.id)}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
-          onSelect();
+          onSelect(session.id);
         }
       }}
       className={cn(
@@ -82,9 +83,14 @@ function SessionRow({
           onChange={(event) => setDraft(event.target.value)}
           onClick={(event) => event.stopPropagation()}
           onKeyDown={(event) => {
-            event.stopPropagation();
-            if (event.key === 'Enter') commitRename();
-            if (event.key === 'Escape') setEditing(false);
+            // 只拦本意按键（Enter 提交 / Esc 取消）不外溢全局 Esc 链；其余放行，⌘N/⌘K 等组合键不失效
+            if (event.key === 'Escape') {
+              event.stopPropagation();
+              setEditing(false);
+            } else if (event.key === 'Enter') {
+              event.stopPropagation();
+              commitRename();
+            }
           }}
           onBlur={commitRename}
           className="mr-1 h-[22px] min-w-0 flex-1 cursor-text rounded-[6px] border border-border bg-transparent px-[6px] text-[12px] leading-none text-foreground outline-none select-text focus-visible:ring-3 focus-visible:ring-ring/50"
@@ -118,7 +124,7 @@ function SessionRow({
                 title={pinned ? copy.sidebar.unpinSession : copy.sidebar.pinSession}
                 onClick={(event) => {
                   event.stopPropagation();
-                  onTogglePin();
+                  if (session.sessionPath !== null) onTogglePin?.(session.sessionPath);
                 }}
                 className={actionButtonClass}
               >
@@ -151,7 +157,7 @@ function SessionRow({
                 title={copy.sidebar.closeSession}
                 onClick={(event) => {
                   event.stopPropagation();
-                  onClose();
+                  onClose?.(session.id);
                 }}
                 className={actionButtonClass}
               >

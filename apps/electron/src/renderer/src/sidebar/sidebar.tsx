@@ -22,6 +22,8 @@ type SidebarProps = {
   onViewChange: (view: SidebarView) => void
   searchOpen: boolean
   onSearchOpenChange: (open: boolean) => void
+  /** 快捷区「搜索」行入口：展开 + 聚焦（已展开时重新聚焦；含收起态展开侧栏）。 */
+  onOpenSearch: () => void
   /** 聚焦信号：每次 ⌘K/快捷行触发递增，驱动已展开的搜索框重新聚焦。 */
   searchFocusToken: number
   /** 会话过滤查询（受控）：空串 = 不过滤。 */
@@ -43,6 +45,8 @@ type SidebarProps = {
   activeSessionId: string
   /** 搜索非空且列表全空时的空态文案。 */
   filterEmptyLabel: string
+  /** 零会话（非过滤）时的引导文案。 */
+  emptyTasksLabel: string
   onNewThread: () => void
   onCollapseSidebar: () => void
   onSelectSession: (sessionId: string) => void
@@ -64,6 +68,7 @@ function Sidebar({
   onViewChange,
   searchOpen,
   onSearchOpenChange,
+  onOpenSearch,
   searchFocusToken,
   searchQuery,
   onSearchQueryChange,
@@ -76,6 +81,7 @@ function Sidebar({
   ages,
   activeSessionId,
   filterEmptyLabel,
+  emptyTasksLabel,
   onNewThread,
   onCollapseSidebar,
   onSelectSession,
@@ -100,7 +106,7 @@ function Sidebar({
       {/* 顶行由 fixed 标题覆盖块承担，这里只留等高占位 */}
       <div aria-hidden="true" className="h-[46px] shrink-0" />
       <div className="flex min-h-0 flex-1 flex-col px-2 pt-1">
-        <QuickActionsRow onNewThread={onNewThread} onOpenSearch={() => onSearchOpenChange(true)} />
+        <QuickActionsRow onNewThread={onNewThread} onOpenSearch={onOpenSearch} />
         {searchOpen ? (
           <div className="pt-1.5">
             <SidebarSearchInput
@@ -121,6 +127,10 @@ function Sidebar({
           <p className="px-2 pt-6 text-center text-[11.5px] leading-[16px] text-muted-foreground/80">
             {filterEmptyLabel}
           </p>
+        ) : !filtering && listEmpty ? (
+          <p className="px-2 pt-6 text-center text-[11.5px] leading-[16px] text-muted-foreground/80">
+            {emptyTasksLabel}
+          </p>
         ) : (
           <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pt-2 pb-2">
             {pinned.length > 0 ? (
@@ -135,24 +145,19 @@ function Sidebar({
               />
             ) : null}
             {view === 'grouped' ? (
-              timeList.map((session) => {
-                const sessionPath = session.sessionPath;
-                return (
-                  <SessionRow
-                    key={session.id}
-                    session={session}
-                    age={ages[session.id] ?? ''}
-                    active={session.id === activeSessionId}
-                    onSelect={() => onSelectSession(session.id)}
-                    onClose={onCloseSession === undefined ? undefined : () => onCloseSession(session.id)}
-                    onRename={onRenameSession === undefined ? undefined : (name) => onRenameSession(session.id, name)}
-                    onTogglePin={
-                      onTogglePin === undefined || sessionPath === null ? undefined : () => onTogglePin(sessionPath)
-                    }
-                  />
-                );
-              })
-            ) : (
+              timeList.map((session) => (
+                <SessionRow
+                  key={session.id}
+                  session={session}
+                  age={ages[session.id] ?? ''}
+                  active={session.id === activeSessionId}
+                  onSelect={onSelectSession}
+                  onClose={onCloseSession}
+                  onRename={onRenameSession}
+                  onTogglePin={onTogglePin}
+                />
+              ))
+            ) : projectGroups.length > 0 ? (
               <>
                 <div className="px-2 pt-1 pb-[2px] text-[11.5px] leading-none text-muted-foreground">
                   {copy.sidebar.viewProjects}
@@ -173,7 +178,7 @@ function Sidebar({
                   />
                 ))}
               </>
-            )}
+            ) : null}
           </div>
         )}
       </div>

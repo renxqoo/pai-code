@@ -17,11 +17,14 @@ type CmdHotkeysHandlers = {
 
 /**
  * 窗口级 ⌘N/⌘K 快捷键（带修饰键组合在输入框聚焦时同样生效，平台惯例）。
- * 两个回调需引用稳定（本 hook 不做最新值中转）。
+ * enabled=false（任一模态覆盖/对话框开着）时不劫持：模态层优先于全局热键，
+ * 否则 ⌘K 会把焦点从对话框抢进遮罩后方的搜索框。
+ * 回调需引用稳定（本 hook 不做最新值中转）。
  */
-export function useCmdHotkeys(handlers: CmdHotkeysHandlers): void {
+export function useCmdHotkeys(handlers: CmdHotkeysHandlers, enabled: boolean): void {
   const { onNewThread, onSearch } = handlers;
   React.useEffect(() => {
+    if (!enabled) return;
     const onKeyDown = (event: KeyboardEvent): void => {
       const action = resolveCmdHotkey({ meta: event.metaKey, ctrl: event.ctrlKey, alt: event.altKey }, event.key);
       if (action === null) return;
@@ -31,5 +34,5 @@ export function useCmdHotkeys(handlers: CmdHotkeysHandlers): void {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onNewThread, onSearch]);
+  }, [onNewThread, onSearch, enabled]);
 }

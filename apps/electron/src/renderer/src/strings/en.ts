@@ -28,6 +28,7 @@ export const en = {
     clearSearch: 'Clear search',
     collapseGroup: 'Toggle project group',
     noMatches: 'No matching conversations',
+    emptyTasks: (hotkey: string): string => `No tasks yet — press ${hotkey} to start`,
     age: {
       justNow: 'now',
       minutes: (value: number): string => `${value}m`,

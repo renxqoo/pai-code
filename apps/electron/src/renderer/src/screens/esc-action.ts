@@ -22,7 +22,7 @@ export type EscAction =
 
 export type EscState = {
   dialogCount: number;
-  /** 侧栏搜索框展开：优先于面板/停止语义收起（对话框模态层仍最先）。 */
+  /** 侧栏搜索可见且展开（侧栏未收起、无更高层覆盖时由调用方算出）：内联层，覆盖层全部收起后才轮到它。 */
   sidebarSearchOpen: boolean;
   usageOpen: boolean;
   /** 新会话弹窗优先于底层动作：Esc 只关弹窗，不穿透触发停止/清队列。 */
@@ -38,10 +38,12 @@ export type EscState = {
 
 export function escActionFor(state: EscState): EscAction {
   if (state.dialogCount > 0) return { kind: 'dismiss-dialogs' };
-  if (state.sidebarSearchOpen) return { kind: 'close-sidebar-search' };
   if (state.usageOpen) return { kind: 'close-usage' };
   if (state.newThreadOpen) return { kind: 'close-new-thread' };
   if (state.settingsOpen) return { kind: 'close-settings' };
+  // 侧栏搜索是内联层：位于全屏覆盖（Usage/新会话/设置）之下，且只有可见时才参与链
+  // （不可见搜索不得吞掉一拍 Esc；调用方传「可见搜索」语义）
+  if (state.sidebarSearchOpen) return { kind: 'close-sidebar-search' };
   if (state.panel !== null) return { kind: 'close-panel' };
   if (state.bashRunning) return { kind: 'abort-bash' };
   if (state.confirmStop) return { kind: 'execute-confirmed-stop' };

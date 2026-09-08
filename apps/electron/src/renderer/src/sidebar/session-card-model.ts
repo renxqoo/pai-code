@@ -3,8 +3,9 @@ export type SessionCardModel = {
   id: string;
   projectName: string;
   title: string;
+  /** 模型展示名（provider/modelId；Usage 总览行的 model 列消费）。 */
   version: string;
-  /** 工作目录（新会话快捷目录等消费方；不再仅是展示位）。 */
+  /** 工作目录（项目分组键与新会话快捷目录消费方）。 */
   cwd: string;
   /** 会话 jsonl 文件路径；null = 首条消息前未落盘（无置顶键）。 */
   sessionPath: string | null;

@@ -7,7 +7,7 @@ function card(id: string, projectName: string, lastActivityAt: number): SessionC
   return { id, projectName, title: id, version: 'm', cwd: `/w/${projectName}`, sessionPath: `/s/${id}.jsonl`, streaming: false, lastActivityAt };
 }
 
-test('按 projectName 分组，组内最近活跃倒序', () => {
+test('按 cwd 分组，组内最近活跃倒序', () => {
   const sessions = [
     card('a2', 'app', 20),
     card('w1', 'web', 30),
@@ -18,6 +18,17 @@ test('按 projectName 分组，组内最近活跃倒序', () => {
   expect(groups.map((g) => g.projectName)).toEqual(['web', 'app']);
   expect(groups[0].visible.map((s) => s.id)).toEqual(['w1']);
   expect(groups[1].visible.map((s) => s.id)).toEqual(['a2', 'a1']);
+});
+
+test('症状回归（T17 测试轮）：同名异目录项目不并组（键 = cwd，显示名 = basename）', () => {
+  const sessions: readonly SessionCardModel[] = [
+    { ...card('a1', 'app', 10), cwd: '/a/app' },
+    { ...card('b1', 'app', 20), cwd: '/b/app' },
+  ];
+  const groups = buildProjectGroups(sessions, new Set(), new Set());
+  expect(groups).toHaveLength(2);
+  expect(groups.map((g) => g.key)).toEqual(['/b/app', '/a/app']);
+  expect(groups.every((g) => g.projectName === 'app')).toBe(true);
 });
 
 test('组内条数不超 limit 时全量可见、无折叠', () => {
@@ -37,9 +48,9 @@ test('组内超 limit 且未展开时截断为前 limit 条', () => {
   expect(group.visible.map((s) => s.id)).toEqual(['s7', 's6', 's5', 's4', 's3']);
 });
 
-test('expanded 集合命中的组全量可见', () => {
+test('expanded 集合命中（键 = cwd）的组全量可见', () => {
   const sessions = Array.from({ length: SHOW_MORE_LIMIT + 2 }, (_, i) => card(`s${i}`, 'app', i));
-  const [group] = buildProjectGroups(sessions, new Set(), new Set(['app']));
+  const [group] = buildProjectGroups(sessions, new Set(), new Set(['/w/app']));
   expect(group.expanded).toBe(true);
   expect(group.visible).toHaveLength(SHOW_MORE_LIMIT + 2);
 });

@@ -6,11 +6,12 @@ import { NewThreadModal } from '@/dialogs/new-thread-modal';
 import { SidebarSeparator } from '@/layout/sidebar-separator';
 import { TitleBarLeft } from '@/layout/title-bar-left';
 import { WindowCaptionButtons } from '@/layout/window-caption-buttons';
-import { isWindowsPlatform } from '@/lib/platform';
+import { isWindowsPlatform, MODIFIER_KEY_LABEL } from '@/lib/platform';
 import { projectDirsOf } from '@/lib/project-dirs';
 import { useSidebarResize } from '@/hooks/use-sidebar-resize';
 import { useObservedHeight } from '@/hooks/use-observed-height';
 import { useCmdHotkeys } from '@/hooks/cmd-hotkeys';
+import { useSessionAges } from '@/hooks/use-session-ages';
 import { NoticeStrip } from '@/notices/notice-strip';
 import { SettingsScreen } from '@/settings/settings-screen';
 import { HostDownBanner } from '@/screens/host-down-banner';
@@ -22,7 +23,6 @@ import { buildPinnedList } from '@/sidebar/build-pinned-list';
 import { buildTimeList } from '@/sidebar/build-time-list';
 import { buildProjectGroups } from '@/sidebar/build-project-groups';
 import { toggleGroupFold, expandGroup, type GroupFold } from '@/sidebar/group-collapse';
-import { formatSidebarAge } from '@/sidebar/format-sidebar-age';
 import { changeLocale, getLocale, type Locale } from '@/strings';
 import { MessageList } from '@/thread/message-list';
 import { StopConfirmBar } from '@/thread/stop-confirm-bar';
@@ -46,7 +46,7 @@ const SIDEBAR_MAX_WIDTH = 400;
 /** 新会话已知目录快捷条目上限（更多走系统文件夹选择）。 */
 const KNOWN_DIRS_LIMIT = 6;
 
-/** 语言切换触发根级重挂载时需要存续的 UI 态（会话草稿/侧栏几何与视图/开合）。 */
+/** 语言切换触发根级重挂载时需要存续的 UI 态（会话草稿/侧栏几何与视图/开合/过滤词）。 */
 const uiState = {
   composerDraft: '',
   drafts: {} as Record<string, string>,
@@ -54,6 +54,7 @@ const uiState = {
   sidebarCollapsed: false,
   sidebarView: 'grouped' as SidebarView,
   sidebarSearchOpen: false,
+  sidebarQuery: '',
   sidebarGroupFold: { collapsed: new Set<string>(), expanded: new Set<string>() } as GroupFold,
   settingsOpen: false,
 };
@@ -68,8 +69,8 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(uiState.sidebarCollapsed);
   /** 侧栏视图（T17）：分组 = 时间平铺，项目 = 项目分组树 */
   const [sidebarView, setSidebarView] = React.useState<SidebarView>(uiState.sidebarView);
-  /** 侧栏会话过滤查询：按标题/项目名过滤；搜索框展开态与查询联动（Esc 收起并清空） */
-  const [sidebarQuery, setSidebarQuery] = React.useState('');
+  /** 侧栏会话过滤查询：按标题/项目名过滤；收起侧栏保留过滤词（桌面惯例），Esc 收起并清空 */
+  const [sidebarQuery, setSidebarQuery] = React.useState(uiState.sidebarQuery);
   const [searchOpen, setSearchOpen] = React.useState(uiState.sidebarSearchOpen);
   /** ⌘K/快捷行聚焦信号：每次触发递增，驱动已展开的搜索框重新聚焦 */
   const [searchFocusToken, setSearchFocusToken] = React.useState(0);
@@ -117,9 +118,10 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     uiState.sidebarCollapsed = sidebarCollapsed;
     uiState.sidebarView = sidebarView;
     uiState.sidebarSearchOpen = searchOpen;
+    uiState.sidebarQuery = sidebarQuery;
     uiState.sidebarGroupFold = groupFold;
     uiState.settingsOpen = settingsOpen;
-  }, [width, sidebarCollapsed, sidebarView, searchOpen, groupFold, settingsOpen]);
+  }, [width, sidebarCollapsed, sidebarView, searchOpen, sidebarQuery, groupFold, settingsOpen]);
 
   const clearDraft = () => {
     setComposerDraft('');
@@ -135,6 +137,8 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const openNewThread = React.useCallback(() => setNewThreadOpen(true), []);
   const closeNewThread = React.useCallback(() => setNewThreadOpen(false), []);
   const openSidebarSearch = React.useCallback(() => {
+    // 收起态先展开侧栏：⌘K 不得把焦点劫进零宽容器里的隐形输入框
+    setSidebarCollapsed(false);
     setSearchOpen(true);
     setSearchFocusToken((token) => token + 1);
   }, []);
@@ -142,12 +146,10 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     setSearchOpen(false);
     setSidebarQuery('');
   }, []);
-  const collapseSidebar = React.useCallback(() => {
-    // 收起时联动收起搜索：不可见的搜索框不得占用 Esc 分发链一拍
-    setSidebarCollapsed(true);
-    closeSidebarSearch();
-  }, [closeSidebarSearch]);
-  useCmdHotkeys({ onNewThread: openNewThread, onSearch: openSidebarSearch });
+  const collapseSidebar = React.useCallback(() => setSidebarCollapsed(true), []);
+  /** 全局 ⌘N/⌘K 在任一模态覆盖/对话框开着时不劫持（模态层优先于全局热键）。 */
+  const hotkeysEnabled = workspace.dialogs.length === 0 && !usageOpen && !newThreadOpen && !settingsOpen;
+  useCmdHotkeys({ onNewThread: openNewThread, onSearch: openSidebarSearch }, hotkeysEnabled);
 
   /** 分叉重发（B2/A5）：fork 到该用户消息之前；autoResend=true 原样重发，否则回填草稿。
    * 仅水化消息可分叉（live 回显是 UUID，对账后才有协议 entryId）。 */
@@ -198,7 +200,8 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
 
   useEscDismiss({
     dialogCount: workspace.dialogs.length,
-    sidebarSearchOpen: searchOpen,
+    /** 可见搜索才参与 Esc 链：收起态下的搜索不得吞掉一拍 Esc（过滤词保留，展开后恢复） */
+    sidebarSearchOpen: searchOpen && !sidebarCollapsed,
     usageOpen,
     newThreadOpen,
     settingsOpen,
@@ -240,20 +243,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     [workspace.sessions, workspace.statsById],
   );
   const savedProjects = React.useMemo(() => [...new Set(workspace.saved.map((session) => session.cwd))], [workspace.saved]);
-  /** 相对年龄为分钟级粒度：独立低频 tick（静止会话不随流式 tick 重渲，流式 tick 只走消息流）。 */
-  const [ageNow, setAgeNow] = React.useState(() => Date.now());
-  React.useEffect(() => {
-    const handle = window.setInterval(() => setAgeNow(Date.now()), 30_000);
-    return () => window.clearInterval(handle);
-  }, []);
-  const ages = React.useMemo(() => {
-    const labels = copy.sidebar.age;
-    const table: Record<string, string> = {};
-    for (const session of sessions) {
-      table[session.id] = formatSidebarAge(ageNow, session.lastActivityAt, labels);
-    }
-    return table;
-  }, [sessions, ageNow]);
+  const ages = useSessionAges(sessions);
 
   const onToggleGroupCollapse = React.useCallback((key: string) => {
     setGroupFold((current) => toggleGroupFold(current, key));
@@ -310,6 +300,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         onViewChange={setSidebarView}
         searchOpen={searchOpen}
         onSearchOpenChange={setSearchOpen}
+        onOpenSearch={openSidebarSearch}
         searchFocusToken={searchFocusToken}
         searchQuery={sidebarQuery}
         onSearchQueryChange={setSidebarQuery}
@@ -322,6 +313,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         ages={ages}
         activeSessionId={activeThreadId}
         filterEmptyLabel={copy.sidebar.noMatches}
+        emptyTasksLabel={copy.sidebar.emptyTasks(copy.sidebar.hotkeyNewTask(MODIFIER_KEY_LABEL))}
         onNewThread={openNewThread}
         onCollapseSidebar={collapseSidebar}
         onSelectSession={onSelectSession}

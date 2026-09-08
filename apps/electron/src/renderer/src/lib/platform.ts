@@ -13,5 +13,5 @@ export const TITLEBAR_LEFT_PADDING = isMacPlatform ? 83 : 10;
 /** Windows caption 三键（最小化/最大化/关闭）占位宽，顶行内容右侧需避让 */
 export const WINDOWS_CAPTION_WIDTH = isWindowsPlatform ? 3 * 46 : 0;
 
-/** 快捷键修饰键符号（⌘K 徽标等平台化文案的数据源） */
-export const MODIFIER_KEY_LABEL = isMacPlatform ? '⌘' : 'Ctrl';
+/** 快捷键修饰键前缀（⌘K/Ctrl+K 徽标等平台化文案的数据源；含与键位的分隔） */
+export const MODIFIER_KEY_LABEL = isMacPlatform ? '⌘' : 'Ctrl+';

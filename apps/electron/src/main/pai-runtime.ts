@@ -162,7 +162,8 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
         return;
       case 'thread_died': {
         const view = sessions.get(frame.threadId);
-        if (view !== undefined) upsertSession({ ...view, state: 'dead' });
+        // 死亡终态必须折叠 streaming 镜像：侧栏活动指示消费该字段，滞留会永久转圈
+        if (view !== undefined) upsertSession({ ...view, state: 'dead', streaming: false });
         emit({ type: 'sessionDied', threadId: frame.threadId, reason: frame.reason });
         return;
       }

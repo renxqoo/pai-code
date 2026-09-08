@@ -53,24 +53,19 @@ function ProjectSection({
       </button>
       {collapsed
         ? null
-        : group.visible.map((session) => {
-            const sessionPath = session.sessionPath;
-            return (
-              <SessionRow
-                key={session.id}
-                session={session}
-                age={ages[session.id] ?? ''}
-                active={session.id === activeSessionId}
-                indent
-                onSelect={() => onSelect(session.id)}
-                onClose={onClose === undefined ? undefined : () => onClose(session.id)}
-                onRename={onRename === undefined ? undefined : (name) => onRename(session.id, name)}
-                onTogglePin={
-                  onTogglePin === undefined || sessionPath === null ? undefined : () => onTogglePin(sessionPath)
-                }
-              />
-            );
-          })}
+        : group.visible.map((session) => (
+            <SessionRow
+              key={session.id}
+              session={session}
+              age={ages[session.id] ?? ''}
+              active={session.id === activeSessionId}
+              indent
+              onSelect={onSelect}
+              onClose={onClose}
+              onRename={onRename}
+              onTogglePin={onTogglePin}
+            />
+          ))}
       {!collapsed && group.total > group.visible.length ? (
         <button
           type="button"

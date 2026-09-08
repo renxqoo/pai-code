@@ -30,24 +30,19 @@ function PinnedSection({
       <div className="px-2 pt-1 pb-[2px] text-[11.5px] leading-none text-muted-foreground">
         {copy.sidebar.pinnedSection}
       </div>
-      {sessions.map((session) => {
-        const sessionPath = session.sessionPath;
-        return (
-          <SessionRow
-            key={session.id}
-            session={session}
-            age={ages[session.id] ?? ''}
-            active={session.id === activeSessionId}
-            pinned
-            onSelect={() => onSelect(session.id)}
-            onClose={onClose === undefined ? undefined : () => onClose(session.id)}
-            onRename={onRename === undefined ? undefined : (name) => onRename(session.id, name)}
-            onTogglePin={
-              onTogglePin === undefined || sessionPath === null ? undefined : () => onTogglePin(sessionPath)
-            }
-          />
-        );
-      })}
+      {sessions.map((session) => (
+        <SessionRow
+          key={session.id}
+          session={session}
+          age={ages[session.id] ?? ''}
+          active={session.id === activeSessionId}
+          pinned
+          onSelect={onSelect}
+          onClose={onClose}
+          onRename={onRename}
+          onTogglePin={onTogglePin}
+        />
+      ))}
     </section>
   );
 }

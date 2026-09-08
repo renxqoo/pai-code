@@ -47,6 +47,7 @@ function makeProps(overrides: Partial<SidebarProps> = {}): SidebarProps {
     onViewChange: noop,
     searchOpen: false,
     onSearchOpenChange: noop,
+    onOpenSearch: noop,
     searchFocusToken: 0,
     searchQuery: '',
     onSearchQueryChange: noop,
@@ -59,6 +60,7 @@ function makeProps(overrides: Partial<SidebarProps> = {}): SidebarProps {
     ages: {},
     activeSessionId: 'session-1',
     filterEmptyLabel: '没有匹配的会话',
+    emptyTasksLabel: '暂无任务，按 ⌘N 开始',
     onNewThread: noop,
     onCollapseSidebar: noop,
     onSelectSession: noop,
@@ -178,6 +180,16 @@ describe('Sidebar 渲染冒烟', () => {
     );
     expect(html).toContain('没有匹配的会话');
     expect(html).not.toContain('已置顶');
+  });
+
+  test('零会话（非过滤）显示引导文案；项目视图不渲染孤零区头', () => {
+    const grouped = renderToStaticMarkup(<Sidebar {...makeProps({ emptyTasksLabel: '暂无任务，按 ⌘N 开始' })} />);
+    expect(grouped).toContain('暂无任务，按 ⌘N 开始');
+    const projects = renderToStaticMarkup(
+      <Sidebar {...makeProps({ view: 'projects', emptyTasksLabel: '暂无任务，按 ⌘N 开始' })} />,
+    );
+    expect(projects).toContain('暂无任务，按 ⌘N 开始');
+    expect(projects).not.toContain('>项目</div>');
   });
 
   test('底部工具条在位（动作与刷新）', () => {
