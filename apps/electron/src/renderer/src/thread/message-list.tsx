@@ -80,9 +80,9 @@ function MessageList({ thread, now, loading, bottomInset, emptyTitle, emptyHint,
 
   return (
     <div className="relative min-h-0 flex-1">
-      <div ref={containerRef} onScroll={onScroll} className="h-full overflow-y-auto overflow-x-hidden">
-        <div className={`${CONVERSATION_COLUMN_CLASS} relative flex flex-col pt-6`} style={{ paddingBottom: bottomInset }}>
-          <TurnAnchorRail anchors={anchors} onJump={jumpToTurn} />
+      <div ref={containerRef} onScroll={onScroll} className="relative h-full overflow-y-auto overflow-x-hidden">
+        <TurnAnchorRail anchors={anchors} onJump={jumpToTurn} />
+        <div className={`${CONVERSATION_COLUMN_CLASS} flex flex-col pt-6`} style={{ paddingBottom: bottomInset }}>
           {thread.items.map((item, index) => (
             <div key={item.kind === 'message' ? item.message.id : item.turn.id} className={cn(itemTopMargin(index, item))}>
               {item.kind === 'message' ? (
