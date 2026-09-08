@@ -17,7 +17,7 @@ type TurnBlockViewProps = {
  */
 function TurnBlockView({ block, onOpenAgents, onOpenDiff }: TurnBlockViewProps) {
   if (block.kind === 'text') {
-    return <TextBlock id={block.id} text={block.text} />;
+    return <TextBlock text={block.text} />;
   }
   if (block.kind === 'subagents') {
     return <SubagentsBlock agents={block.agents} onOpenAgents={onOpenAgents} />;

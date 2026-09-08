@@ -87,7 +87,7 @@ function MessageList({ thread, now, loading, emptyTitle, emptyHint, onOpenAgents
                 ) : item.message.role === 'system' ? (
                   <SystemMessageRow message={item.message} />
                 ) : (
-                  <TextBlock id={item.message.id} text={item.message.text} />
+                  <TextBlock text={item.message.text} />
                 )
               ) : (
                 <TurnGroup turn={item.turn} now={now} onOpenAgents={onOpenAgents} onOpenDiff={onOpenDiff} />
