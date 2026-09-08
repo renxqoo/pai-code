@@ -113,11 +113,19 @@ export const ProviderConfigViewSchema = z.object({
 });
 export type ProviderConfigView = z.infer<typeof ProviderConfigViewSchema>;
 
+/** 应用偏好（settings.json 的渲染层视图子集）。 */
+export const PreferencesViewSchema = z.object({
+  defaultModel: z.string().nullable(),
+  onboarded: z.boolean(),
+});
+export type PreferencesView = z.infer<typeof PreferencesViewSchema>;
+
 export const BootstrapViewSchema = z.object({
   sessions: z.array(SessionViewSchema),
   saved: z.array(SavedSessionViewSchema),
   models: z.array(ModelInfoViewSchema),
   providers: z.array(ProviderConfigViewSchema),
+  preferences: PreferencesViewSchema,
 });
 export type BootstrapView = z.infer<typeof BootstrapViewSchema>;
 
@@ -261,6 +269,22 @@ export const ApiSchemas = {
   'provider/remove': {
     params: z.object({ name: z.string().min(1) }).strict(),
     result: z.array(ProviderConfigViewSchema),
+  },
+  /** 连接探活：主进程直发 OpenAI 兼容 1-token 请求，不经 hub、不落状态。 */
+  'provider/test': {
+    params: z.object({ name: z.string().min(1) }).strict(),
+    result: z.object({ latencyMs: z.number().int().nonnegative() }).strict(),
+  },
+  /** 应用偏好部分写（至少一个字段；结果为写后的完整偏好视图）。 */
+  'app/setPreference': {
+    params: z
+      .object({
+        defaultModel: z.string().nullable().optional(),
+        onboarded: z.boolean().optional(),
+      })
+      .strict()
+      .refine((value) => value.defaultModel !== undefined || value.onboarded !== undefined, { message: 'empty_preference' }),
+    result: PreferencesViewSchema,
   },
 } as const;
 

@@ -276,10 +276,14 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         open={settingsOpen}
         providers={workspace.providers}
         credentials={workspace.credentials}
+        defaultModel={workspace.preferences.defaultModel}
+        modelOptions={workspace.composer.modelOptions}
         saved={workspace.saved}
         onClose={closeSettings}
         onUpsertProvider={workspace.actions.upsertProvider}
         onRemoveProvider={workspace.actions.removeProvider}
+        onSelectDefaultModel={workspace.actions.setDefaultModel}
+        onTestProvider={workspace.actions.testProvider}
         onOpenSaved={(sessionPath) => {
           void workspace.actions.openSavedSession(sessionPath);
           setSettingsOpen(false);

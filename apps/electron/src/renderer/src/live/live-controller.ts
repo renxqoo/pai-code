@@ -1,4 +1,4 @@
-import type { UiEvent } from '@paiapp/contracts';
+import type { PreferencesView, UiEvent } from '@paiapp/contracts';
 
 import type { BridgeClient } from './client-invoke';
 import type { LiveStore } from './store';
@@ -39,6 +39,10 @@ export interface LiveController {
   readonly removeProviderKey: (provider: string) => Promise<string | null>;
   readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: string[]; apiKey?: string }) => Promise<boolean>;
   readonly removeProvider: (name: string) => Promise<boolean>;
+  /** 应用偏好部分写（返回写后视图；失败返回 null，原因走通知条）。 */
+  readonly updatePreferences: (patch: { defaultModel?: string | null; onboarded?: boolean }) => Promise<PreferencesView | null>;
+  /** provider 连接探活（主进程直发；结果原样透传给调用方做内联展示）。 */
+  readonly testProvider: (name: string) => Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }>;
   readonly refreshStats: (threadId: string) => Promise<void>;
   readonly ensureHydrated: (threadId: string) => Promise<void>;
 }
@@ -267,6 +271,16 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       const models = await client.invoke('model/list', {});
       if (models.ok) store.setState({ models: models.data });
       return true;
+    },
+    async updatePreferences(patch: { defaultModel?: string | null; onboarded?: boolean }): Promise<PreferencesView | null> {
+      const outcome = await client.invoke('app/setPreference', patch);
+      if (!outcome.ok) return null;
+      store.setState({ preferences: outcome.data });
+      return outcome.data;
+    },
+    async testProvider(name: string): Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }> {
+      const outcome = await client.invoke('provider/test', { name });
+      return outcome.ok ? { ok: true, latencyMs: outcome.data.latencyMs } : { ok: false, reason: outcome.reason };
     },
     async refreshStats(threadId: string): Promise<void> {
       const outcome = await client.invoke('session/stats', { threadId });

@@ -4,6 +4,7 @@ import type {
   ApiData,
   CredentialView,
   ModelInfoView,
+  PreferencesView,
   ProviderConfigView,
   SavedSessionView,
   SessionView,
@@ -42,6 +43,8 @@ export interface LiveStoreState {
   providers: readonly ProviderConfigView[];
   /** hub 侧 auth.json 凭据目录（永不含 key 本身）。 */
   credentials: readonly CredentialView[];
+  /** 应用偏好（默认模型 / 引导完成标志）。 */
+  preferences: PreferencesView;
   threads: Readonly<Record<string, LiveThreadState>>;
   dialogs: Readonly<Record<string, PendingDialog>>;
   dialogOrder: readonly string[];
@@ -147,6 +150,8 @@ export function createLiveStore() {
             saved: data.saved,
             models: data.models,
             providers: data.providers,
+            credentials: state.credentials,
+            preferences: data.preferences,
             threads,
             activeThreadId,
           };
@@ -217,6 +222,7 @@ function initialStoreState(): LiveStoreState {
     models: [],
     providers: [],
     credentials: [],
+    preferences: { defaultModel: null, onboarded: false },
     threads: {},
     dialogs: {},
     dialogOrder: [],

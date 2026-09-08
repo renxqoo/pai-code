@@ -25,6 +25,10 @@ export const SettingsSchema = z
     providers: z.array(ProviderConfigSchema).default([]),
     /** thread/start 的 trusted 缺省（项目扩展加载策略的全局默认）。 */
     trustedDefault: z.boolean().default(false),
+    /** 新会话预选模型（"provider/modelId"）；null = 未设置（回落首个可用模型）。 */
+    defaultModel: z.string().nullable().default(null),
+    /** 首次引导完成标志（跳过也算完成；与 provider 配置解耦）。 */
+    onboarded: z.boolean().default(false),
   })
   .strict();
 

@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import type { CredentialView, SessionView } from '@paiapp/contracts';
+import type { CredentialView, PreferencesView, SessionView } from '@paiapp/contracts';
 import { useStore } from 'zustand';
 
 import { collectThreadDiff } from '@/diff-panel/collect-thread-diff';
@@ -68,6 +68,7 @@ export type LiveWorkspaceView = {
   providers: LiveStoreState['providers'];
   /** hub 侧凭据目录（provider 名 + 凭据类型，永不含 key）。 */
   credentials: readonly CredentialView[];
+  preferences: PreferencesView;
   thinkingLevels: readonly string[];
   actions: {
     readonly submitDraft: (message: string) => Promise<string | null>;
@@ -85,6 +86,9 @@ export type LiveWorkspaceView = {
     readonly refreshCredentials: () => void;
     readonly setProviderKey: (provider: string, apiKey: string) => Promise<boolean>;
     readonly removeProviderKey: (provider: string) => Promise<boolean>;
+    readonly setDefaultModel: (value: string | null) => void;
+    readonly completeOnboarding: () => void;
+    readonly testProvider: (name: string) => Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }>;
     readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: string[]; apiKey?: string }) => Promise<boolean>;
     readonly removeProvider: (name: string) => Promise<boolean>;
     readonly renameSession: (threadId: string, name: string) => Promise<boolean>;
@@ -187,6 +191,7 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     })),
     providers: state.providers,
     credentials: state.credentials,
+    preferences: state.preferences,
     thinkingLevels: effortLevels,
     actions: {
       submitDraft: async (message) => {
@@ -201,7 +206,12 @@ export function useLiveWorkspace(): LiveWorkspaceView {
         store.getState().setActiveThread(threadId);
       },
       createSession: (cwd) => {
-        const selected = state.models.find((entry) => `${entry.provider}/${entry.modelId}` === composer.model) ?? state.models[0];
+        // 默认模型偏好优先（新会话预选）；失效回落 composer 当前选择 → 首个可用模型
+        const key = (model: { provider: string; modelId: string }) => `${model.provider}/${model.modelId}`;
+        const selected =
+          state.models.find((model) => key(model) === state.preferences.defaultModel) ??
+          state.models.find((model) => key(model) === composer.model) ??
+          state.models[0];
         return controller.createSession(cwd, selected);
       },
       openSavedSession: (sessionPath) => controller.openSavedSession(sessionPath),
@@ -229,6 +239,15 @@ export function useLiveWorkspace(): LiveWorkspaceView {
         if (reason !== null) pushNotice(copy.settings.keyRemoveFailed(reason));
         return reason === null;
       },
+      setDefaultModel: (value) => {
+        void controller.updatePreferences({ defaultModel: value }).then((next) => {
+          if (next === null) pushNotice(copy.settings.preferenceSaveFailed);
+        });
+      },
+      completeOnboarding: () => {
+        void controller.updatePreferences({ onboarded: true });
+      },
+      testProvider: (name) => controller.testProvider(name),
       upsertProvider: (input) => controller.upsertProvider(input),
       removeProvider: (name) => controller.removeProvider(name),
       renameSession: async (threadId, name) => {

@@ -62,7 +62,7 @@ test('B-P1：settle→rebuild 窗口内新轮开始，重建让位不执行', as
   const controller = createLiveController(client, store);
   await controller.start();
   const threadId = 't1';
-  store.getState().bootstrap({ sessions: [], saved: [], models: [], providers: [] });
+  store.getState().bootstrap({ sessions: [], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true } });
 
   // 第一轮：开轮 → settle（安排延迟 rebuild）；事件走 controller 订阅入口
   client.emitToController({ type: 'turnStarted', threadId, at: 1 });

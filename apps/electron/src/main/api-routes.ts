@@ -3,6 +3,7 @@ import { basename as baseName, dirname as dirnamePath, join as joinPaths, resolv
 
 import { mapEntries, modelInfos, savedSessions, sessionStatsView, threadStateView, thinkingLevels } from '@paiapp/adapter';
 import { envVarNameForProvider } from './models-config';
+import { createProviderProbe } from './provider-probe';
 import { ApiSchemas, type ApiMethod, type ApiOutcome, type ApiParams } from '@paiapp/contracts';
 
 import type { PaiRuntime } from './pai-runtime';
@@ -93,6 +94,17 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       hasKey: deps.keyStore.getKey(provider.name) !== null,
     }));
 
+  const preferencesView = (): { defaultModel: string | null; onboarded: boolean } => {
+    const settings = deps.settings.get();
+    return { defaultModel: settings.defaultModel, onboarded: settings.onboarded };
+  };
+
+  /** 连接探活（主进程直发，不经 hub；key 不进日志）。 */
+  const probe = createProviderProbe({
+    getProvider: (name) => deps.settings.listProviders().find((provider) => provider.name === name),
+    getKey: (name) => deps.keyStore.getKey(name),
+  });
+
   /** provider 配置变更：重生成 models.json；若 host 未热加载则重启恢复链路（host 未启动则待下次启动生效）。 */
   const applyProviderChange = async (): Promise<void> => {
     const providers = deps.settings.listProviders();
@@ -120,6 +132,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
         saved,
         models: models.ok ? modelInfos(models.data) : [],
         providers: providersView(),
+        preferences: preferencesView(),
       };
       runtime.emitBuffered();
       return { ok: true as const, data: outcome };
@@ -289,6 +302,17 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       deps.settings.removeProvider(params.name);
       await applyProviderChange();
       return { ok: true as const, data: providersView() };
+    },
+    'provider/test': async (params) => {
+      const outcome = await probe.probe(params.name);
+      return outcome.ok ? { ok: true as const, data: { latencyMs: outcome.latencyMs } } : fail(outcome.reason);
+    },
+    'app/setPreference': (params) => {
+      const patch: { defaultModel?: string | null; onboarded?: boolean } = {};
+      if (params.defaultModel !== undefined) patch.defaultModel = params.defaultModel;
+      if (params.onboarded !== undefined) patch.onboarded = params.onboarded;
+      const next = deps.settings.patch(patch);
+      return Promise.resolve({ ok: true as const, data: { defaultModel: next.defaultModel, onboarded: next.onboarded } });
     },
   };
 

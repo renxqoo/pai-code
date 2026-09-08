@@ -11,10 +11,14 @@ type SettingsScreenProps = {
   open: boolean
   providers: readonly ProviderConfigView[]
   credentials: readonly CredentialView[]
+  defaultModel: string | null
+  modelOptions: readonly string[]
   saved: ReadonlyArray<{ sessionPath: string; title: string; cwd: string; modifiedAt: number; messageCount: number }>
   onClose: () => void
   onUpsertProvider: (input: { name: string; baseUrl: string; api: string; models: string[]; apiKey?: string }) => Promise<boolean>
   onRemoveProvider: (name: string) => Promise<boolean>
+  onSelectDefaultModel: (value: string | null) => void
+  onTestProvider: (name: string) => Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }>
   onOpenSaved: (sessionPath: string) => void
   onRefreshSaved: () => void
   onSaveKey: (provider: string, apiKey: string) => Promise<boolean>
@@ -30,10 +34,14 @@ function SettingsScreen({
   open,
   providers,
   credentials,
+  defaultModel,
+  modelOptions,
   saved,
   onClose,
   onUpsertProvider,
   onRemoveProvider,
+  onSelectDefaultModel,
+  onTestProvider,
   onOpenSaved,
   onRefreshSaved,
   onSaveKey,
@@ -63,7 +71,15 @@ function SettingsScreen({
           <div className="min-w-0 flex-1 overflow-y-auto">
             <div className="mx-auto w-full max-w-[720px] px-[28px] pb-[32px]">
               {section === 'providers' ? (
-                <ProvidersSection providers={providers} onUpsertProvider={onUpsertProvider} onRemoveProvider={onRemoveProvider} />
+                <ProvidersSection
+                  providers={providers}
+                  defaultModel={defaultModel}
+                  modelOptions={modelOptions}
+                  onUpsertProvider={onUpsertProvider}
+                  onRemoveProvider={onRemoveProvider}
+                  onSelectDefaultModel={onSelectDefaultModel}
+                  onTestProvider={onTestProvider}
+                />
               ) : section === 'keys' ? (
                 <KeysSection credentials={credentials} onSaveKey={onSaveKey} onRemoveKey={onRemoveKey} onRefresh={onRefreshKeys} />
               ) : (

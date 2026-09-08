@@ -88,6 +88,8 @@ describe('Settings zod：round-trip 与拒绝表', () => {
       hubDev: { bunPath: '/usr/local/bin/bun', hubEntry: '/Users/x/pi/app/dist/cli.js' },
       providers: [{ name: 'glm', baseUrl: 'https://api.example.com', api: 'openai-completions', models: ['glm-5.3'] }],
       trustedDefault: true,
+      defaultModel: 'glm/glm-5.3',
+      onboarded: true,
     };
     expect(SettingsSchema.parse(input)).toEqual(input);
   });
