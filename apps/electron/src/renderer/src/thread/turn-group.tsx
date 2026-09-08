@@ -2,8 +2,10 @@ import * as React from 'react';
 import { copy } from '@/strings';
 import { formatClockTime } from './format-clock-time';
 import { formatElapsed } from './format-elapsed';
-import { turnElapsedMs, visibleTurnBlocks } from './turn-state';
+import { processRuns } from './process-runs';
+import { turnElapsedMs, isTurnRunning, visibleTurnBlocks } from './turn-state';
 import { turnTextContent } from './turn-text';
+import { ProcessGroup } from './process-group';
 import { TurnBlockView } from './turn-block-view';
 import { TurnStatusLine } from './turn-status-line';
 import { TurnTimestampRow } from './turn-timestamp-row';
@@ -18,8 +20,9 @@ type TurnGroupProps = {
 }
 
 /**
- * 单个轮次：状态行（走表/冻结，过程整体开合的唯一开关）+ 内容块 + 结束时刻时间戳行。
+ * 单个轮次：状态行（走表/冻结，过程整体开合的唯一开关）+ 渲染段 + 结束时刻时间戳行。
  * 过程（思考/工具/子代理/diff/中间文本）作为整体展开或收起；收起时只留最后一条文本输出。
+ * 展开时相邻思考/工具聚合为带竖轨的过程组，正文/diff 等独立呈现。
  */
 function TurnGroup({ turn, now, onOpenAgents, onOpenDiff }: TurnGroupProps) {
   const collapse = useTurnCollapse(turn);
@@ -29,7 +32,7 @@ function TurnGroup({ turn, now, onOpenAgents, onOpenDiff }: TurnGroupProps) {
       ? copy.flow.turnStoppedSummary(formatElapsed(elapsed))
       : `${turn.status === 'running' ? copy.flow.workingFor : copy.flow.workedFor} ${formatElapsed(elapsed)}`;
   const endedAt = turn.status === 'running' ? null : turn.endedAt;
-  const blocks = visibleTurnBlocks(turn.blocks, collapse.turnOpen);
+  const runs = processRuns(visibleTurnBlocks(turn.blocks, collapse.turnOpen));
 
   return (
     <section>
@@ -40,9 +43,17 @@ function TurnGroup({ turn, now, onOpenAgents, onOpenDiff }: TurnGroupProps) {
         onToggle={collapse.toggleTurn}
       />
       <div className="flex flex-col gap-[18px] pt-[22px]">
-        {blocks.map((block) => (
-          <TurnBlockView key={block.id} block={block} onOpenAgents={onOpenAgents} onOpenDiff={onOpenDiff} />
-        ))}
+        {runs.map((run) =>
+          run.kind === 'process' ? (
+            <ProcessGroup
+              key={`process-${run.blocks[0]?.id ?? ''}`}
+              blocks={run.blocks}
+              running={isTurnRunning(turn)}
+            />
+          ) : (
+            <TurnBlockView key={run.block.id} block={run.block} onOpenAgents={onOpenAgents} onOpenDiff={onOpenDiff} />
+          ),
+        )}
       </div>
       {endedAt !== null ? (
         <div className="pt-[24px]">

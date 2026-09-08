@@ -1,28 +1,23 @@
 import { DiffBlock } from './diff-block';
 import { SubagentsBlock } from './subagents-block';
 import { TextBlock } from './text-block';
-import { ThinkingBlock } from './thinking-block';
-import { ToolsBlock } from './tools-block';
-import type { TurnBlock } from './thread-model';
+import type { StandaloneTurnBlock } from './process-runs';
 
 import { copy } from '@/strings';
 
 type TurnBlockViewProps = {
-  block: TurnBlock
+  block: StandaloneTurnBlock
   onOpenAgents: () => void
   onOpenDiff: () => void
 }
 
-/** 轮次内容块分发：过程开合由轮级开关整体控制，块自身不再携带二级开关。 */
+/**
+ * 独立块的展示分发：思考/工具块渲染期已聚合成过程组，不经过这里；
+ * 只处理正文、子代理条、diff 卡与轮次异常提示。
+ */
 function TurnBlockView({ block, onOpenAgents, onOpenDiff }: TurnBlockViewProps) {
   if (block.kind === 'text') {
     return <TextBlock id={block.id} text={block.text} />;
-  }
-  if (block.kind === 'thinking') {
-    return <ThinkingBlock id={block.id} text={block.text} />;
-  }
-  if (block.kind === 'tools') {
-    return <ToolsBlock calls={block.calls} />;
   }
   if (block.kind === 'subagents') {
     return <SubagentsBlock agents={block.agents} onOpenAgents={onOpenAgents} />;

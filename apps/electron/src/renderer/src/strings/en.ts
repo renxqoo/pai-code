@@ -51,8 +51,6 @@ export const en = {
     captionMaximize: 'Maximize',
     captionRestore: 'Restore',
     captionClose: 'Close',
-    /** 折叠摘要：Ran 3 commands */
-    commandsSummary: (count: number): string => (count === 1 ? 'Ran 1 command' : `Ran ${count} commands`),
     /** 折叠摘要：Kicked off 4 subagents */
     subagentsSummary: (count: number): string =>
       count === 1 ? 'Kicked off 1 subagent' : `Kicked off ${count} subagents`,
@@ -71,6 +69,16 @@ export const en = {
     executing: 'Working…',
     toolStopped: 'Stopped',
     toolRunning: 'Running',
+    /** 执行单元类型标签（未知工具直接显示工具名） */
+    labelBash: 'Command',
+    labelRead: 'Read',
+    labelEdit: 'Edit',
+    labelWrite: 'Write',
+    labelSearch: 'Search',
+    labelList: 'List',
+    labelSubagent: 'Subagent',
+    /** 思考单元收起态标签（运行中显 Thinking） */
+    thought: 'Thought',
     /** 中断轮次的状态行：Stopped · 8m 0s */
     turnStoppedSummary: (elapsed: string): string => `Stopped · ${elapsed}`,
     thinking: 'Thinking',
