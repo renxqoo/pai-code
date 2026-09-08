@@ -22,8 +22,7 @@
 | `session/resume` | `{sessionPath}` → `SessionView` | `thread/resume` + 注册表 upsert |
 | `session/stop` | `{threadId}` | `thread/stop` + 注册表标记 closed |
 | `session/listSaved` | `{cwd?}` → `SavedSessionView[]` | `thread/list_saved` |
-| `session/prompt` | `{threadId, message, streamingBehavior?}` | `prompt` |
-| `session/steer` / `session/followUp` | `{threadId, message}` | `steer` / `follow_up` |
+| `session/prompt` | `{threadId, message, streamingBehavior?, images?}` | `prompt`（投递裁决在 hub：空闲立即发、流式按 streamingBehavior 入队；渲染层不做 prompt/steer/follow_up 选路） |
 | `session/abort` | `{threadId}` | `clear_queue` + `abort` |
 | `session/messages` | `{threadId}` → `HistoryItem[]`（正规化） | `get_messages` + adapter 历史映射 |
 | `session/state` | `{threadId}` → `ThreadStateView` | `get_state` |
