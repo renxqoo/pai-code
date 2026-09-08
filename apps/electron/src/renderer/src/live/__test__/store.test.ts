@@ -140,7 +140,6 @@ describe('live store（对话框/通知/bootstrap 合并）', () => {
     store.getState().applyEvent({ type: 'dialogRequest', threadId: 't2', requestId: 'r2', method: 'confirm', title: '另一个会话' }, 2);
     store.getState().applyEvent({ type: 'sessionDied', threadId: 't1', reason: 'crash' }, 3);
     expect(store.getState().dialogs.map((dialog) => dialog.requestId)).toEqual(['r2']);
-    expect(store.getState().dialogs.map((dialog) => dialog.requestId)).toEqual(['r2']);
     expect(store.getState().threads['t1']?.crashed).toBe(true);
   });
 
