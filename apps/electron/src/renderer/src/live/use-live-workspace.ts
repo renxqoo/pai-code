@@ -267,11 +267,12 @@ function toCards(sessions: Readonly<Record<string, SessionView>>): readonly Sess
     .sort((a, b) => b.lastActivityAt - a.lastActivityAt)
     .map((session) => ({
       id: session.threadId,
-      conversationId: session.threadId,
       projectName: baseNameOf(session.cwd) || session.cwd,
       title: session.title,
       version: session.model ?? '',
       cwd: session.cwd,
+      sessionPath: session.sessionPath,
+      streaming: session.streaming,
       lastActivityAt: session.lastActivityAt,
     }));
 }

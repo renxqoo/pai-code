@@ -6,19 +6,24 @@ import { NewThreadModal } from '@/dialogs/new-thread-modal';
 import { SidebarSeparator } from '@/layout/sidebar-separator';
 import { TitleBarLeft } from '@/layout/title-bar-left';
 import { WindowCaptionButtons } from '@/layout/window-caption-buttons';
-import { formatRelativeAge } from '@/lib/relative-age';
 import { isWindowsPlatform } from '@/lib/platform';
 import { projectDirsOf } from '@/lib/project-dirs';
 import { useSidebarResize } from '@/hooks/use-sidebar-resize';
 import { useObservedHeight } from '@/hooks/use-observed-height';
+import { useCmdHotkeys } from '@/hooks/cmd-hotkeys';
 import { NoticeStrip } from '@/notices/notice-strip';
 import { SettingsScreen } from '@/settings/settings-screen';
 import { HostDownBanner } from '@/screens/host-down-banner';
 import { Sidebar } from '@/sidebar/sidebar';
+import type { SidebarView } from '@/sidebar/sidebar-view';
 import type { SidebarFooterAction } from '@/sidebar/sidebar-footer';
 import { filterSessions } from '@/sidebar/filter-sessions';
+import { buildPinnedList } from '@/sidebar/build-pinned-list';
+import { buildTimeList } from '@/sidebar/build-time-list';
+import { buildProjectGroups } from '@/sidebar/build-project-groups';
+import { toggleGroupFold, expandGroup, type GroupFold } from '@/sidebar/group-collapse';
+import { formatSidebarAge } from '@/sidebar/format-sidebar-age';
 import { changeLocale, getLocale, type Locale } from '@/strings';
-import type { SessionCardModel } from '@/sidebar/session-card-model';
 import { MessageList } from '@/thread/message-list';
 import { StopConfirmBar } from '@/thread/stop-confirm-bar';
 import { QueuePanel } from '@/thread/queue-panel';
@@ -35,46 +40,41 @@ import type { LiveWorkspaceView } from '@/live/use-live-workspace';
 
 import { copy } from '@/strings';
 
-const SIDEBAR_WIDTH = 188;
-const SIDEBAR_MIN_WIDTH = 168;
-const SIDEBAR_MAX_WIDTH = 320;
+const SIDEBAR_WIDTH = 264;
+const SIDEBAR_MIN_WIDTH = 208;
+const SIDEBAR_MAX_WIDTH = 400;
 /** 新会话已知目录快捷条目上限（更多走系统文件夹选择）。 */
 const KNOWN_DIRS_LIMIT = 6;
 
-/** 语言切换触发根级重挂载时需要存续的 UI 态（会话草稿/侧栏几何/开合）。 */
+/** 语言切换触发根级重挂载时需要存续的 UI 态（会话草稿/侧栏几何与视图/开合）。 */
 const uiState = {
   composerDraft: '',
   drafts: {} as Record<string, string>,
   sidebarWidth: SIDEBAR_WIDTH,
   sidebarCollapsed: false,
+  sidebarView: 'grouped' as SidebarView,
+  sidebarSearchOpen: false,
+  sidebarGroupFold: { collapsed: new Set<string>(), expanded: new Set<string>() } as GroupFold,
   settingsOpen: false,
 };
 
 /** 尚未接线/不适用当前会话的动作统一落到空实现，接线点保持稳定。 */
 function noop(): void {}
 
-/** 侧栏静态文案（模块级常量：copy 目录稳定，避免每渲染新对象击穿 Sidebar memo）。 */
-const sidebarLabels = {
-  search: copy.sidebar.search,
-  newThread: copy.sidebar.newThread,
-  allProjects: copy.sidebar.allProjects,
-  newProject: copy.sidebar.newProject,
-  settings: copy.sidebar.settings,
-  workflows: copy.sidebar.workflows,
-  usage: copy.sidebar.usage,
-  refresh: copy.sidebar.refresh,
-  clearSearch: copy.sidebar.noMatches,
-};
-
 function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.JSX.Element {
   const [composerDraft, setComposerDraft] = React.useState(uiState.composerDraft);
   /** 草稿按会话隔离：切走再回来不丢，也互不串扰 */
   const [drafts, setDrafts] = React.useState<Readonly<Record<string, string>>>(uiState.drafts);
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(uiState.sidebarCollapsed);
-  /** 侧栏会话过滤查询（A3）：按标题/项目名过滤 */
+  /** 侧栏视图（T17）：分组 = 时间平铺，项目 = 项目分组树 */
+  const [sidebarView, setSidebarView] = React.useState<SidebarView>(uiState.sidebarView);
+  /** 侧栏会话过滤查询：按标题/项目名过滤；搜索框展开态与查询联动（Esc 收起并清空） */
   const [sidebarQuery, setSidebarQuery] = React.useState('');
-  /** 折叠的项目分组名集合（A4） */
-  const [collapsedGroups, setCollapsedGroups] = React.useState<ReadonlySet<string>>(new Set());
+  const [searchOpen, setSearchOpen] = React.useState(uiState.sidebarSearchOpen);
+  /** ⌘K/快捷行聚焦信号：每次触发递增，驱动已展开的搜索框重新聚焦 */
+  const [searchFocusToken, setSearchFocusToken] = React.useState(0);
+  /** 项目组折叠面：文件夹行折叠集合 + 「显示更多」展开集合（折叠联动重置） */
+  const [groupFold, setGroupFold] = React.useState<GroupFold>(uiState.sidebarGroupFold);
   /** 面板开合挂在会话之上：切换会话不丢失 */
   const [settingsOpen, setSettingsOpen] = React.useState(uiState.settingsOpen);
   /** 排队消息面板开合（A7；横幅排队行点击切换） */
@@ -115,8 +115,11 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   React.useEffect(() => {
     uiState.sidebarWidth = width;
     uiState.sidebarCollapsed = sidebarCollapsed;
+    uiState.sidebarView = sidebarView;
+    uiState.sidebarSearchOpen = searchOpen;
+    uiState.sidebarGroupFold = groupFold;
     uiState.settingsOpen = settingsOpen;
-  }, [width, sidebarCollapsed, settingsOpen]);
+  }, [width, sidebarCollapsed, sidebarView, searchOpen, groupFold, settingsOpen]);
 
   const clearDraft = () => {
     setComposerDraft('');
@@ -131,7 +134,20 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const closeSettings = React.useCallback(() => setSettingsOpen(false), []);
   const openNewThread = React.useCallback(() => setNewThreadOpen(true), []);
   const closeNewThread = React.useCallback(() => setNewThreadOpen(false), []);
-  const noopSelectProject = React.useCallback(() => undefined, []);
+  const openSidebarSearch = React.useCallback(() => {
+    setSearchOpen(true);
+    setSearchFocusToken((token) => token + 1);
+  }, []);
+  const closeSidebarSearch = React.useCallback(() => {
+    setSearchOpen(false);
+    setSidebarQuery('');
+  }, []);
+  const collapseSidebar = React.useCallback(() => {
+    // 收起时联动收起搜索：不可见的搜索框不得占用 Esc 分发链一拍
+    setSidebarCollapsed(true);
+    closeSidebarSearch();
+  }, [closeSidebarSearch]);
+  useCmdHotkeys({ onNewThread: openNewThread, onSearch: openSidebarSearch });
 
   /** 分叉重发（B2/A5）：fork 到该用户消息之前；autoResend=true 原样重发，否则回填草稿。
    * 仅水化消息可分叉（live 回显是 UUID，对账后才有协议 entryId）。 */
@@ -182,6 +198,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
 
   useEscDismiss({
     dialogCount: workspace.dialogs.length,
+    sidebarSearchOpen: searchOpen,
     usageOpen,
     newThreadOpen,
     settingsOpen,
@@ -192,6 +209,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     agentsActive: workspace.agentsActive,
     abortBash: workspace.actions.abortBash,
     stopActiveTurn: workspace.actions.stopActiveTurn,
+    onSidebarSearchClose: closeSidebarSearch,
     onUsageClose: closeUsage,
     onNewThreadClose: closeNewThread,
     onSettingsClose: closeSettings,
@@ -208,35 +226,19 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const refreshAction = React.useMemo(() => ({ label: copy.sidebar.refresh, onSelect: refreshSaved }), [refreshSaved]);
   /** 宿主掉线（从未构建或 failed）：置顶横幅 + 模型位换「宿主未连接」，不得伪装成「未配置模型」。 */
   const hostDown = workspace.hostPhase === null || workspace.hostPhase === 'failed';
-  const projects = React.useMemo(() => [...new Set(sessions.map((session) => session.projectName))], [sessions]);
+  /** 置顶键集合（sessionPath）：设置页已保存列表与侧栏已置顶区共用同一真相。 */
+  const pinnedSessions = React.useMemo(() => new Set(workspace.preferences.pinnedSessions), [workspace.preferences.pinnedSessions]);
   const visibleSessions = React.useMemo(() => filterSessions(sessions, sidebarQuery), [sessions, sidebarQuery]);
-  const sessionGroups = React.useMemo(
-    () =>
-      [...visibleSessions.reduce((map, session) => {
-        const list: SessionCardModel[] = map.get(session.projectName) ?? [];
-        list.push(session);
-        map.set(session.projectName, list);
-        return map;
-      }, new Map<string, SessionCardModel[]>())].map(([projectName, list]) => ({
-        key: projectName,
-        projectName,
-        sessions: list,
-        collapsed: collapsedGroups.has(projectName),
-        onToggle: () =>
-          setCollapsedGroups((current) => {
-            const next = new Set(current);
-            if (next.has(projectName)) next.delete(projectName);
-            else next.add(projectName);
-            return next;
-          }),
-      })),
-    [visibleSessions, collapsedGroups],
+  const pinnedList = React.useMemo(() => buildPinnedList(visibleSessions, pinnedSessions), [visibleSessions, pinnedSessions]);
+  const timeList = React.useMemo(() => buildTimeList(visibleSessions, pinnedSessions), [visibleSessions, pinnedSessions]);
+  const projectGroups = React.useMemo(
+    () => buildProjectGroups(visibleSessions, pinnedSessions, groupFold.expanded),
+    [visibleSessions, pinnedSessions, groupFold],
   );
   const usageEntries = React.useMemo(
     () => buildUsageEntries(workspace.sessions, workspace.statsById),
     [workspace.sessions, workspace.statsById],
   );
-  const pinnedSessions = React.useMemo(() => new Set(workspace.preferences.pinnedSessions), [workspace.preferences.pinnedSessions]);
   const savedProjects = React.useMemo(() => [...new Set(workspace.saved.map((session) => session.cwd))], [workspace.saved]);
   /** 相对年龄为分钟级粒度：独立低频 tick（静止会话不随流式 tick 重渲，流式 tick 只走消息流）。 */
   const [ageNow, setAgeNow] = React.useState(() => Date.now());
@@ -245,12 +247,24 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     return () => window.clearInterval(handle);
   }, []);
   const ages = React.useMemo(() => {
+    const labels = copy.sidebar.age;
     const table: Record<string, string> = {};
     for (const session of sessions) {
-      table[session.id] = formatRelativeAge(ageNow, session.lastActivityAt);
+      table[session.id] = formatSidebarAge(ageNow, session.lastActivityAt, labels);
     }
     return table;
   }, [sessions, ageNow]);
+
+  const onToggleGroupCollapse = React.useCallback((key: string) => {
+    setGroupFold((current) => toggleGroupFold(current, key));
+  }, []);
+  const onExpandGroup = React.useCallback((key: string) => {
+    setGroupFold((current) => expandGroup(current, key));
+  }, []);
+  const onTogglePin = React.useCallback(
+    (sessionPath: string) => workspace.actions.togglePinnedSession(sessionPath),
+    [workspace.actions],
+  );
 
   /** 侧栏/顶栏回调与常量 props：引用恒定（actions 已稳定），Sidebar/ThreadHeader memo 不被父级重渲击穿。 */
   const onSelectSession = React.useCallback(
@@ -292,23 +306,30 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
       <Sidebar
         width={width}
         collapsed={sidebarCollapsed}
-        labels={sidebarLabels}
-        groups={sessionGroups}
-        ages={ages}
-        activeSessionId={activeThreadId}
-        projects={projects}
-        selectedProject={copy.sidebar.allProjects}
+        view={sidebarView}
+        onViewChange={setSidebarView}
+        searchOpen={searchOpen}
+        onSearchOpenChange={setSearchOpen}
+        searchFocusToken={searchFocusToken}
         searchQuery={sidebarQuery}
         onSearchQueryChange={setSidebarQuery}
+        pinned={pinnedList}
+        timeList={timeList}
+        projectGroups={projectGroups}
+        collapsedGroups={groupFold.collapsed}
+        onToggleGroupCollapse={onToggleGroupCollapse}
+        onExpandGroup={onExpandGroup}
+        ages={ages}
+        activeSessionId={activeThreadId}
         filterEmptyLabel={copy.sidebar.noMatches}
-        footerActions={footerActions}
-        refreshAction={refreshAction}
         onNewThread={openNewThread}
-        onSelectProject={noopSelectProject}
-        onNewProject={openNewThread}
+        onCollapseSidebar={collapseSidebar}
         onSelectSession={onSelectSession}
         onCloseSession={workspace.actions.closeSession}
         onRenameSession={onRenameSession}
+        onTogglePin={onTogglePin}
+        footerActions={footerActions}
+        refreshAction={refreshAction}
       />
       <div className="relative flex min-w-0 flex-1 flex-col px-[40px]">
         {sidebarCollapsed ? null : (

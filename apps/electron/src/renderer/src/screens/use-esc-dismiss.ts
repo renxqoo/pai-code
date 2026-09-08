@@ -5,6 +5,7 @@ import type { WorkspaceActions } from '@/live/workspace-actions';
 
 type UseEscDismissInput = {
   dialogCount: number;
+  sidebarSearchOpen: boolean;
   usageOpen: boolean;
   newThreadOpen: boolean;
   settingsOpen: boolean;
@@ -15,6 +16,7 @@ type UseEscDismissInput = {
   agentsActive: boolean;
   abortBash: WorkspaceActions['abortBash'];
   stopActiveTurn: WorkspaceActions['stopActiveTurn'];
+  onSidebarSearchClose: () => void;
   onUsageClose: () => void;
   onNewThreadClose: () => void;
   onSettingsClose: () => void;
@@ -25,13 +27,16 @@ type UseEscDismissInput = {
 /** Esc 键全局分发（语义裁决在 escActionFor 纯函数，本 hook 只做动作映射）。
  * 裁决输入与分发函数全量进依赖：actions 稳定化后本 effect 不再每渲染重挂，漏依赖即闭包陈旧。 */
 export function useEscDismiss(input: UseEscDismissInput): void {
-  const { dialogCount, usageOpen, newThreadOpen, settingsOpen, panel, bashRunning, confirmStop, generating, agentsActive } = input;
-  const { abortBash, stopActiveTurn, onUsageClose, onNewThreadClose, onSettingsClose, onPanelClose, onConfirmStopChange } = input;
+  const { dialogCount, sidebarSearchOpen, usageOpen, newThreadOpen, settingsOpen, panel, bashRunning, confirmStop, generating, agentsActive } = input;
+  const { abortBash, stopActiveTurn, onSidebarSearchClose, onUsageClose, onNewThreadClose, onSettingsClose, onPanelClose, onConfirmStopChange } = input;
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') return;
-      const action = escActionFor({ dialogCount, usageOpen, newThreadOpen, settingsOpen, panel, bashRunning, confirmStop, generating, agentsActive });
+      const action = escActionFor({ dialogCount, sidebarSearchOpen, usageOpen, newThreadOpen, settingsOpen, panel, bashRunning, confirmStop, generating, agentsActive });
       switch (action.kind) {
+        case 'close-sidebar-search':
+          onSidebarSearchClose();
+          break;
         case 'close-usage':
           onUsageClose();
           break;
@@ -63,5 +68,5 @@ export function useEscDismiss(input: UseEscDismissInput): void {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [dialogCount, usageOpen, newThreadOpen, settingsOpen, panel, bashRunning, confirmStop, generating, agentsActive, abortBash, stopActiveTurn, onUsageClose, onNewThreadClose, onSettingsClose, onPanelClose, onConfirmStopChange]);
+  }, [dialogCount, sidebarSearchOpen, usageOpen, newThreadOpen, settingsOpen, panel, bashRunning, confirmStop, generating, agentsActive, abortBash, stopActiveTurn, onSidebarSearchClose, onUsageClose, onNewThreadClose, onSettingsClose, onPanelClose, onConfirmStopChange]);
 }

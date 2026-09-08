@@ -77,11 +77,12 @@ const greetingTurn: TurnModel = {
 function session(id: string, title: string, ageInDays: number): SessionCardModel {
   return {
     id,
-    conversationId: `conversation-${id}`,
     projectName: 'bun-koa',
     title,
     version: 'v1.0.0',
     cwd: '/demo/bun-koa',
+    sessionPath: `/demo/sessions/${id}.jsonl`,
+    streaming: false,
     lastActivityAt: now - ageInDays * DAY,
   };
 }

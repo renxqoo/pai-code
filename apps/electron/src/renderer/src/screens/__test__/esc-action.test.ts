@@ -5,6 +5,7 @@ import { escActionFor, type EscState } from '../esc-action';
 function base(overrides: Partial<EscState> = {}): EscState {
   return {
     dialogCount: 0,
+    sidebarSearchOpen: false,
     usageOpen: false,
     newThreadOpen: false,
     settingsOpen: false,
@@ -26,12 +27,18 @@ describe('escActionFor', () => {
     expect(escActionFor(base({ bashRunning: true }))).toEqual({ kind: 'abort-bash' });
   });
 
-  test('逐层收起优先级：对话框 → Usage → 新会话弹窗 → 设置 → 面板 → bash/停止', () => {
-    expect(escActionFor(base({ dialogCount: 1, usageOpen: true, settingsOpen: true }))).toEqual({ kind: 'dismiss-dialogs' });
+  test('逐层收起优先级：对话框 → 侧栏搜索 → Usage → 新会话弹窗 → 设置 → 面板 → bash/停止', () => {
+    expect(escActionFor(base({ dialogCount: 1, sidebarSearchOpen: true, usageOpen: true, settingsOpen: true }))).toEqual({ kind: 'dismiss-dialogs' });
+    expect(escActionFor(base({ sidebarSearchOpen: true, usageOpen: true }))).toEqual({ kind: 'close-sidebar-search' });
     expect(escActionFor(base({ usageOpen: true, newThreadOpen: true }))).toEqual({ kind: 'close-usage' });
     expect(escActionFor(base({ newThreadOpen: true, settingsOpen: true }))).toEqual({ kind: 'close-new-thread' });
     expect(escActionFor(base({ settingsOpen: true, panel: 'diff' }))).toEqual({ kind: 'close-settings' });
     expect(escActionFor(base({ panel: 'agents', bashRunning: true }))).toEqual({ kind: 'close-panel' });
+  });
+
+  test('侧栏搜索展开时 Esc 先收搜索，不穿透触发停止/中止', () => {
+    expect(escActionFor(base({ sidebarSearchOpen: true, bashRunning: true }))).toEqual({ kind: 'close-sidebar-search' });
+    expect(escActionFor(base({ sidebarSearchOpen: true, generating: true }))).toEqual({ kind: 'close-sidebar-search' });
   });
 
   test('生成中：有在途子代理先确认，否则直接停止；确认条开着则执行停止', () => {
