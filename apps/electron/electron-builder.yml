@@ -1,0 +1,20 @@
+# 冒烟包配置（T9 §未决项 Spike 1：未签名 mac 包）。签名/公证/codesign、三平台
+# bun 锁定修订、哈希清单与 license 审计属 T9 M6，此处不实现。
+appId: app.paiapp.pai
+productName: Pai
+directories:
+  output: release
+files:
+  # 运行时零 node_modules 依赖：全部经 electron-vite 打进 out/（主进程仅外部化
+  # node 内建与 electron），包内只装载荷；依赖全在 devDependencies，
+  # electron-builder 不会装配任何 node_modules
+  - out/**
+extraResources:
+  # 仓库根 resources/（bun/bun + pai-cli/cli.js）由 scripts/packaging/sync-resources.ts 填充
+  - from: ../../resources
+    to: .
+mac:
+  identity: null
+  target:
+    - target: dir
+    - target: dmg
