@@ -293,6 +293,20 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       const result = await command({ type: 'agents/list', threadId: params.threadId });
       return result.ok ? { ok: true as const, data: agentViews(result.data) } : fail(result.reason);
     },
+    'session/fork': async (params) => {
+      const result = await command({ type: 'fork', threadId: params.threadId, entryId: params.entryId, position: params.position });
+      if (!result.ok) return fail(result.reason);
+      const data = result.data as { threadId?: string; cwd?: string; sessionPath?: string | null };
+      const threadId = data.threadId ?? '';
+      if (threadId.length === 0) return fail('malformed_response');
+      const view = runtime.applyStartOutcome(threadId, data.cwd ?? '', data.sessionPath ?? null, runtime.defaultTitle);
+      fillSessionMeta(threadId);
+      return { ok: true as const, data: view };
+    },
+    'session/clearQueue': async (params) => {
+      const result = await command({ type: 'clear_queue', threadId: params.threadId });
+      return result.ok ? { ok: true as const, data: null } : fail(result.reason);
+    },
     'session/bash': async (params) => {
       deps.audit(`bash_run:${params.threadId}`);
       const result = await command({ type: 'bash', threadId: params.threadId, command: params.command });

@@ -17,8 +17,13 @@ const DIALOG_AUTO_DISMISS_MS = 5 * 60 * 1_000;
 export interface LiveController {
   readonly start: () => Promise<void>;
   readonly dispose: () => void;
-  /** 发送：成功返回 null，失败返回原因（调用方转用户可见提示）。 */
-  readonly submitDraft: (threadId: string, message: string, images?: readonly ImagePayload[]) => Promise<string | null>;
+  /** 发送：成功返回 null，失败返回原因（调用方转用户可见提示）。mode 显式指定生成中投递方式。 */
+  readonly submitDraft: (
+    threadId: string,
+    message: string,
+    images?: readonly ImagePayload[],
+    mode?: 'auto' | 'steer' | 'followUp',
+  ) => Promise<string | null>;
   readonly stopActiveTurn: (threadId: string) => Promise<void>;
   readonly createSession: (cwd: string, model?: { provider: string; modelId: string }, trusted?: boolean) => Promise<boolean>;
   readonly openSavedSession: (sessionPath: string, trusted?: boolean) => Promise<boolean>;
@@ -58,6 +63,10 @@ export interface LiveController {
   /** 直执行 bash（`!` 前缀）：成功返回 null；权威条目经对账进入对话流。 */
   readonly runBash: (threadId: string, command: string) => Promise<string | null>;
   readonly abortBash: (threadId: string) => Promise<void>;
+  /** 清空排队消息（全清语义）。 */
+  readonly clearQueue: (threadId: string) => Promise<void>;
+  /** 从历史条目分叉（position=before）→ 激活新会话。 */
+  readonly forkSession: (threadId: string, entryId: string) => Promise<boolean>;
   readonly refreshStats: (threadId: string) => Promise<void>;
   readonly ensureHydrated: (threadId: string) => Promise<void>;
 }
@@ -187,15 +196,24 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       unsubscribe?.();
       unsubscribe = null;
     },
-    async submitDraft(threadId: string, message: string, images?: readonly ImagePayload[]): Promise<string | null> {
+    async submitDraft(
+      threadId: string,
+      message: string,
+      images?: readonly ImagePayload[],
+      mode: 'auto' | 'steer' | 'followUp' = 'auto',
+    ): Promise<string | null> {
       const text = message.trim();
       if (text.length === 0) return 'empty_message';
       const payloads = images === undefined || images.length === 0 ? undefined : [...images];
       const withImages = payloads === undefined ? {} : { images: payloads };
       const streaming = store.getState().threads[threadId]?.streaming ?? false;
-      let outcome = streaming
-        ? await client.invoke('session/followUp', { threadId, message: text, ...withImages })
-        : await client.invoke('session/prompt', { threadId, message: text, ...withImages });
+      // 生成中按显式模式投递（默认轮后排队）；非生成中一律走 prompt
+      const send = streaming
+        ? mode === 'steer'
+          ? client.invoke('session/steer', { threadId, message: text, ...withImages })
+          : client.invoke('session/followUp', { threadId, message: text, ...withImages })
+        : client.invoke('session/prompt', { threadId, message: text, ...withImages });
+      let outcome = await send;
       // TOCTOU 兜底：读取 streaming 与 invoke 之间轮次边界翻转时，按对侧路径回落一次
       if (!outcome.ok && !streaming && /stream/i.test(outcome.reason)) {
         outcome = await client.invoke('session/followUp', { threadId, message: text, ...withImages });
@@ -307,6 +325,16 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     },
     async abortBash(threadId: string): Promise<void> {
       await client.invoke('session/abortBash', { threadId });
+    },
+    async clearQueue(threadId: string): Promise<void> {
+      await client.invoke('session/clearQueue', { threadId });
+    },
+    async forkSession(threadId: string, entryId: string): Promise<boolean> {
+      const outcome = await client.invoke('session/fork', { threadId, entryId, position: 'before' });
+      if (!outcome.ok) return false;
+      store.getState().setActiveThread(outcome.data.threadId);
+      await hydrateFull(outcome.data.threadId).catch(() => undefined);
+      return true;
     },
     async searchFiles(cwd: string, query: string): Promise<string[] | null> {
       if (cwd.length === 0) return null;

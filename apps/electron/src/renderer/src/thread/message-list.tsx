@@ -18,6 +18,12 @@ type MessageListProps = {
   onOpenAgents: () => void
   onOpenDiff: () => void
   onEditUserMessage: (text: string) => void
+  onForkUserMessage?: (entryId: string, text: string, autoResend: boolean) => void
+}
+
+/** 水化消息 id（msg-<entryId>）→ 协议 entryId；非水化形态返回原样（调用方守卫）。 */
+function entryIdOf(messageId: string): string {
+  return messageId.replace(/^msg-/, '');
 }
 
 function itemTopMargin(index: number, item: ThreadItem): string {
@@ -26,7 +32,7 @@ function itemTopMargin(index: number, item: ThreadItem): string {
 }
 
 /** 消息流：用户气泡右对齐、轮次组左对齐，轮与轮之间落时间戳行；离开底部时右下浮出回到底部浮标。 */
-function MessageList({ thread, now, emptyTitle, emptyHint, onOpenAgents, onOpenDiff, onEditUserMessage }: MessageListProps) {
+function MessageList({ thread, now, emptyTitle, emptyHint, onOpenAgents, onOpenDiff, onEditUserMessage, onForkUserMessage }: MessageListProps) {
   const { containerRef, onScroll, atBottom, scrollToBottom } = useStickToBottom();
 
   const jumpButton = atBottom ? null : (
@@ -53,7 +59,20 @@ function MessageList({ thread, now, emptyTitle, emptyHint, onOpenAgents, onOpenD
             <div key={item.kind === 'message' ? item.message.id : item.turn.id} className={cn(itemTopMargin(index, item))}>
               {item.kind === 'message' ? (
                 item.message.role === 'user' ? (
-                  <UserMessageRow message={item.message} onEdit={onEditUserMessage} />
+                  <UserMessageRow
+                    message={item.message}
+                    onEdit={onEditUserMessage}
+                    onEditRerun={
+                      onForkUserMessage === undefined
+                        ? undefined
+                        : (text) => onForkUserMessage(entryIdOf(item.message.id), text, false)
+                    }
+                    onRetry={
+                      onForkUserMessage === undefined
+                        ? undefined
+                        : (text) => onForkUserMessage(entryIdOf(item.message.id), text, true)
+                    }
+                  />
                 ) : item.message.role === 'system' ? (
                   <SystemMessageRow message={item.message} />
                 ) : (

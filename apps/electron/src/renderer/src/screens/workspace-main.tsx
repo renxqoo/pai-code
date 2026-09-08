@@ -16,6 +16,7 @@ import { SettingsScreen } from '@/settings/settings-screen';
 import { Sidebar } from '@/sidebar/sidebar';
 import { filterSessions } from '@/sidebar/filter-sessions';
 import { MessageList } from '@/thread/message-list';
+import { QueuePanel } from '@/thread/queue-panel';
 import { ThreadBanner } from '@/thread/thread-banner';
 import { ThreadHeader } from '@/thread/thread-header';
 import type { ImagePayload } from '@paiapp/contracts';
@@ -44,6 +45,8 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   /** 面板开合挂在会话之上：切换会话不丢失 */
   const [panel, setPanel] = React.useState<SidePanel>(null);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
+  /** 排队消息面板开合（A7；横幅排队行点击切换） */
+  const [queueOpen, setQueueOpen] = React.useState(false);
   const [newThreadOpen, setNewThreadOpen] = React.useState(false);
   /** 编辑重发：回填草稿后聚焦输入框 */
   const composerTextRef = React.useRef<HTMLTextAreaElement | null>(null);
@@ -73,12 +76,26 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const closeNewThread = React.useCallback(() => setNewThreadOpen(false), []);
   const noopSelectProject = React.useCallback(() => undefined, []);
 
+  /** 分叉重发（B2/A5）：fork 到该用户消息之前；autoResend=true 原样重发，否则回填草稿。
+   * 仅水化消息可分叉（live 回显是 UUID，对账后才有协议 entryId）。 */
+  const forkUserMessage = (entryId: string, text: string, autoResend: boolean) => {
+    void workspace.actions.forkFromEntry(entryId).then((ok) => {
+      if (!ok) return;
+      if (autoResend) {
+        void workspace.actions.submitDraft(text);
+      } else {
+        setDraft(text);
+        composerTextRef.current?.focus();
+      }
+    });
+  };
+
   const editUserMessage = (text: string) => {
     setDraft(text);
     composerTextRef.current?.focus();
   };
 
-  const submitDraft = (text: string, images?: readonly ImagePayload[]) => {
+  const submitDraft = (text: string, images?: readonly ImagePayload[], mode: 'auto' | 'steer' | 'followUp' = 'auto') => {
     const trimmed = text.trim();
     if (trimmed.length === 0) return Promise.resolve(false);
     // 行首 `! ` 前缀 = 直执行命令（B4）：走 bash 通路，不进模型轮次
@@ -90,7 +107,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         return reason === null;
       });
     }
-    return workspace.actions.submitDraft(trimmed, images).then((reason) => {
+    return workspace.actions.submitDraft(trimmed, images, mode).then((reason) => {
       if (reason === null) clearDraft();
       return reason === null;
     });
@@ -243,6 +260,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
           onOpenAgents={openAgents}
           onOpenDiff={openDiff}
           onEditUserMessage={editUserMessage}
+          onForkUserMessage={forkUserMessage}
         />
         <div
           className="shrink-0 pb-[18px]"
@@ -258,7 +276,15 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
             queueCount={workspace.queueCount}
             bashRunning={workspace.bashRunning}
             bashTail={workspace.bashTail}
+            onToggleQueue={() => setQueueOpen((open) => !open)}
           />
+          {queueOpen && workspace.queueCount > 0 ? (
+            <QueuePanel
+              steering={workspace.queueItems.steering}
+              followUp={workspace.queueItems.followUp}
+              onClear={workspace.actions.clearQueue}
+            />
+          ) : null}
           <Composer
             textareaRef={composerTextRef}
             value={draft}

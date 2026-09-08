@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { PenLine } from 'lucide-react';
+import { GitBranch, PenLine, RotateCcw } from 'lucide-react';
 
 import { ChatBubble, CopyButton, IconButton } from '@paiapp/ui';
 
@@ -9,12 +9,16 @@ import type { SessionMessage } from './thread-model';
 
 type UserMessageRowProps = {
   message: SessionMessage
-  /** 编辑重发：把原文回填草稿并聚焦输入框（截断重发语义在接入 Client 后扩展） */
+  /** 编辑重发：把原文回填草稿并聚焦输入框 */
   onEdit: (text: string) => void
+  /** 编辑并重开：fork 到该消息之前并回填草稿（用户改完手动发，落在分叉线程） */
+  onEditRerun?: (text: string) => void
+  /** 从这里重试：fork 到该消息之前并自动原样重发 */
+  onRetry?: (text: string) => void
 }
 
 /** 用户消息行：右对齐气泡 + hover 浮出的复制/编辑操作。 */
-function UserMessageRow({ message, onEdit }: UserMessageRowProps) {
+function UserMessageRow({ message, onEdit, onEditRerun, onRetry }: UserMessageRowProps) {
   return (
     <div className="group flex flex-col items-end">
       <ChatBubble>{message.text}</ChatBubble>
@@ -33,6 +37,26 @@ function UserMessageRow({ message, onEdit }: UserMessageRowProps) {
         >
           <PenLine className="size-3.5" strokeWidth={1.75} />
         </IconButton>
+        {onEditRerun !== undefined ? (
+          <IconButton
+            label={copy.flow.editRerun}
+            size="xs"
+            onClick={() => onEditRerun(message.text)}
+            className="text-muted-foreground/85"
+          >
+            <GitBranch className="size-3.5" strokeWidth={1.75} />
+          </IconButton>
+        ) : null}
+        {onRetry !== undefined ? (
+          <IconButton
+            label={copy.flow.retryFromHere}
+            size="xs"
+            onClick={() => onRetry(message.text)}
+            className="text-muted-foreground/85"
+          >
+            <RotateCcw className="size-3.5" strokeWidth={1.75} />
+          </IconButton>
+        ) : null}
       </div>
     </div>
   );

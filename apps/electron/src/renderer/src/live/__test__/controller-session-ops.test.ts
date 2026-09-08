@@ -111,3 +111,37 @@ test('runBash 空命令拒绝且不发命令；abortBash 发出中止', async ()
   await controller.abortBash('t1');
   expect(client.calls).toContainEqual({ method: 'session/abortBash', params: { threadId: 't1' } });
 });
+
+test('submitDraft 生成中显式 steer 模式走 session/steer', async () => {
+  const client = makeClient({});
+  const store = createLiveStore();
+  const controller = createLiveController(client, store);
+  store.getState().bootstrap({ sessions: [], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true } });
+  store.getState().applyEvent({ type: 'turnStarted', threadId: 't1', at: 1 }, 1);
+  expect(await controller.submitDraft('t1', '改需求', undefined, 'steer')).toBeNull();
+  expect(client.calls.find((call) => call.method === 'session/steer')?.params).toMatchObject({ threadId: 't1', message: '改需求' });
+  // 默认（auto）仍走 followUp
+  expect(await controller.submitDraft('t1', '排队消息')).toBeNull();
+  expect(client.calls.find((call) => call.method === 'session/followUp')).toBeDefined();
+});
+
+test('clearQueue 与 forkSession：命令形状与新会话激活', async () => {
+  const client = makeClient({
+    'session/fork': { ok: true, data: { threadId: 't-fork', cwd: '/w', sessionPath: '/a.jsonl', state: 'live', streaming: false, title: '分叉', model: null, thinkingLevel: null, lastActivityAt: 0 } },
+  });
+  const store = createLiveStore();
+  const controller = createLiveController(client, store);
+  await controller.clearQueue('t1');
+  expect(client.calls).toContainEqual({ method: 'session/clearQueue', params: { threadId: 't1' } });
+
+  expect(await controller.forkSession('t1', 'entry-9')).toBe(true);
+  expect(client.calls).toContainEqual({ method: 'session/fork', params: { threadId: 't1', entryId: 'entry-9', position: 'before' } });
+  expect(store.getState().activeThreadId).toBe('t-fork');
+});
+
+test('forkSession 失败返回 false 不切会话', async () => {
+  const client = makeClient({ 'session/fork': { ok: false, reason: 'entry_not_found' } });
+  const store = createLiveStore();
+  expect(await createLiveController(client, store).forkSession('t1', 'x')).toBe(false);
+  expect(store.getState().activeThreadId).toBeNull();
+});

@@ -183,6 +183,13 @@ describe('API schema：每方法合法/非法样本', () => {
     expect(ApiSchemas['session/abortBash'].params.parse({ threadId: 't' })).toEqual({ threadId: 't' });
   });
 
+  test('session/fork 与 clearQueue 样本', () => {
+    expect(ApiSchemas['session/fork'].params.parse({ threadId: 't', entryId: 'e1' })).toEqual({ threadId: 't', entryId: 'e1' });
+    expect(ApiSchemas['session/fork'].params.parse({ threadId: 't', entryId: 'e1', position: 'at' })).toEqual({ threadId: 't', entryId: 'e1', position: 'at' });
+    expect(() => ApiSchemas['session/fork'].params.parse({ threadId: 't', entryId: '', position: 'after' })).toThrow();
+    expect(ApiSchemas['session/clearQueue'].params.parse({ threadId: 't' })).toEqual({ threadId: 't' });
+  });
+
   test('file/search 合法样本与拒绝', () => {
     expect(ApiSchemas['file/search'].params.parse({ cwd: '/w', query: 'ap' })).toEqual({ cwd: '/w', query: 'ap' });
     expect(() => ApiSchemas['file/search'].params.parse({ cwd: '', query: '' })).toThrow();

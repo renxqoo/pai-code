@@ -34,7 +34,8 @@ export type PaiCommandType =
   | 'subagent/steer'
   | 'agents/list'
   | 'bash'
-  | 'abort_bash';
+  | 'abort_bash'
+  | 'fork';
 
 export type PaiCommand = Extract<HubCommand, { type: PaiCommandType }>;
 
@@ -68,6 +69,7 @@ export const PAI_COMMAND_TYPES = [
   'agents/list',
   'bash',
   'abort_bash',
+  'fork',
 ] as const satisfies readonly PaiCommandType[];
 
 // 编译期封闭断言：Pai 命令词表与类型联合双向绑定（漏登记即编译失败）。

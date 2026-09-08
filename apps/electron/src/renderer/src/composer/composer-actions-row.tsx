@@ -2,6 +2,8 @@ import { ChevronDown, FoldVertical, Paperclip, ArrowUp } from 'lucide-react';
 
 import { IconButton, MenuButton, SparkMark, UsageRing } from '@paiapp/ui';
 
+import { SendModeToggle } from './send-mode-toggle';
+
 type ComposerActionsRowProps = {
   model: string
   effort: string
@@ -24,6 +26,9 @@ type ComposerActionsRowProps = {
   onSelectEffort: (value: string) => void
   onCompact: () => void
   onAttach: () => void
+  /** 生成中显示投递方式切换（null = 隐藏） */
+  sendMode: 'steer' | 'followUp' | null
+  onSendModeChange: (value: 'steer' | 'followUp') => void
   /** 无可选模型时点击引导跳设置 */
   onOpenSettings?: () => void
   onStop: () => void
@@ -57,6 +62,8 @@ function ComposerActionsRow({
   onSelectEffort,
   onCompact,
   onAttach,
+  sendMode,
+  onSendModeChange,
   onOpenSettings,
   onStop,
 }: ComposerActionsRowProps) {
@@ -109,6 +116,7 @@ function ComposerActionsRow({
         />
       )}
       <div className="ml-auto flex items-center gap-[9px]">
+        {sendMode !== null ? <SendModeToggle value={sendMode} onChange={onSendModeChange} /> : null}
         <IconButton label={compactLabel} size="sm" onClick={onCompact} disabled={compacting} className="text-muted-foreground/90">
           <FoldVertical strokeWidth={1.75} />
         </IconButton>

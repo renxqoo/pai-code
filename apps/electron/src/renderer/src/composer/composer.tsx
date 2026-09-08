@@ -44,8 +44,8 @@ type ComposerProps = {
   /** 压缩进行中：压缩按钮禁用，横幅由 ThreadBanner 呈现 */
   compacting: boolean
   onChange: (value: string) => void
-  /** 提交（文本 + 图片附件）；resolve true = 已发出（composer 据此清空附件） */
-  onSubmit: (text: string, images: readonly ImagePayload[]) => Promise<boolean>
+  /** 提交（文本 + 图片附件 + 生成中投递模式）；resolve true = 已发出（composer 据此清空附件） */
+  onSubmit: (text: string, images: readonly ImagePayload[], mode: 'auto' | 'steer' | 'followUp') => Promise<boolean>
   onStop: () => void
   onCompact: () => void
   onOpenSettings?: () => void
@@ -95,6 +95,8 @@ function Composer({
   type Attachment = { id: number; name: string; previewUrl: string; payload: PendingImage };
   const [attachments, setAttachments] = React.useState<readonly Attachment[]>([]);
   const [attachError, setAttachError] = React.useState<string | null>(null);
+  /** 生成中的投递方式（A7 显式选择；非生成中不生效） */
+  const [sendMode, setSendMode] = React.useState<'steer' | 'followUp'>('followUp');
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const attachSeqRef = React.useRef(0);
   const attachUrlRef = React.useRef<ReadonlySet<string>>(new Set());
@@ -248,7 +250,7 @@ function Composer({
           event.preventDefault();
           // 生成中 Enter = 排队消息（followUp，api.md 语义）；停止走停止按钮/Esc
           if (!canSend) return;
-          void onSubmit(value, attachments.map((item) => imagePayloadOf(item.payload))).then((sent) => {
+          void onSubmit(value, attachments.map((item) => imagePayloadOf(item.payload)), generating ? sendMode : 'auto').then((sent) => {
             if (sent) clearAttachments();
           });
         }}
@@ -350,6 +352,8 @@ function Composer({
           effortUnavailableLabel={effortUnavailableLabel}
           onSelectModel={onSelectModel}
           onSelectEffort={onSelectEffort}
+          sendMode={generating ? sendMode : null}
+          onSendModeChange={setSendMode}
           onAttach={() => fileInputRef.current?.click()}
           onCompact={onCompact}
           onOpenSettings={onOpenSettings}

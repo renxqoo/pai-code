@@ -55,6 +55,8 @@ export type LiveWorkspaceView = {
   generating: boolean;
   agentsActive: boolean;
   queueCount: number;
+  /** 排队消息分组视图（A7 面板数据源）。 */
+  queueItems: { steering: readonly string[]; followUp: readonly string[] };
   crashed: boolean;
   compacting: boolean;
   /** 直执行 bash 在途与其流式输出尾部。 */
@@ -81,7 +83,7 @@ export type LiveWorkspaceView = {
   permissionRules: PermissionRules | null;
   thinkingLevels: readonly string[];
   actions: {
-    readonly submitDraft: (message: string, images?: readonly ImagePayload[]) => Promise<string | null>;
+    readonly submitDraft: (message: string, images?: readonly ImagePayload[], mode?: 'auto' | 'steer' | 'followUp') => Promise<string | null>;
     readonly stopActiveTurn: () => void;
     readonly selectSession: (threadId: string) => void;
     readonly createSession: (cwd: string, trusted?: boolean) => Promise<boolean>;
@@ -105,6 +107,9 @@ export type LiveWorkspaceView = {
     readonly searchFiles: (query: string) => Promise<string[] | null>;
     readonly runBash: (command: string) => Promise<string | null>;
     readonly abortBash: () => void;
+    readonly clearQueue: () => void;
+    readonly forkFromEntry: (entryId: string) => Promise<boolean>;
+    readonly submitDraftAs: (message: string, mode: 'steer' | 'followUp') => Promise<string | null>;
     readonly reloadSessionTrusted: (threadId: string, trusted: boolean) => void;
     readonly testProvider: (name: string) => Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }>;
     readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: string[]; apiKey?: string }) => Promise<boolean>;
@@ -201,6 +206,7 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     generating,
     agentsActive: summarizeAgents(activeThread.agents).workingCount > 0,
     queueCount: (threadState?.queue.steering.length ?? 0) + (threadState?.queue.followUp.length ?? 0),
+    queueItems: { steering: threadState?.queue.steering ?? [], followUp: threadState?.queue.followUp ?? [] },
     crashed: threadState?.crashed ?? false,
     compacting: threadState?.compacting ?? false,
     bashRunning: threadState?.bashRunning ?? false,
@@ -228,8 +234,15 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     permissionRules: state.permissionRules,
     thinkingLevels: effortLevels,
     actions: {
-      submitDraft: async (message, images) => {
-        const reason = await controller.submitDraft(activeThreadId, message, images);
+      submitDraft: async (message, images, mode) => {
+        const reason = await controller.submitDraft(activeThreadId, message, images, mode);
+        if (reason !== null && reason !== 'bridge_unavailable') {
+          pushNotice(copy.flow.sendFailed(reason));
+        }
+        return reason;
+      },
+      submitDraftAs: async (message, mode) => {
+        const reason = await controller.submitDraft(activeThreadId, message, undefined, mode);
         if (reason !== null && reason !== 'bridge_unavailable') {
           pushNotice(copy.flow.sendFailed(reason));
         }
@@ -306,6 +319,12 @@ export function useLiveWorkspace(): LiveWorkspaceView {
         return reason;
       },
       abortBash: () => void controller.abortBash(activeThreadId),
+      clearQueue: () => void controller.clearQueue(activeThreadId),
+      forkFromEntry: async (entryId) => {
+        const ok = await controller.forkSession(activeThreadId, entryId);
+        if (!ok) pushNotice(copy.flow.forkFailed);
+        return ok;
+      },
       upsertProvider: (input) => controller.upsertProvider(input),
       removeProvider: (name) => controller.removeProvider(name),
       renameSession: async (threadId, name) => {

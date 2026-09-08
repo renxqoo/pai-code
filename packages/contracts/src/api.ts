@@ -297,6 +297,16 @@ export const ApiSchemas = {
     params: z.object({ cwd: z.string().min(1), query: z.string() }).strict(),
     result: z.array(z.string()),
   },
+  /** 从历史条目分叉（position before|at，默认 before）→ 新会话视图。 */
+  'session/fork': {
+    params: z.object({ threadId: z.string().min(1), entryId: z.string().min(1), position: z.enum(['before', 'at']).optional() }).strict(),
+    result: SessionViewSchema,
+  },
+  /** 清空排队消息（协议仅全清，无单条操作）。 */
+  'session/clearQueue': {
+    params: threadOnly,
+    result: z.null(),
+  },
   /** 直执行 shell（hub 侧走同一权限门；结果在 response，流式经 bashOutput 事件）。 */
   'session/bash': {
     params: z.object({ threadId: z.string().min(1), command: z.string().min(1) }).strict(),
