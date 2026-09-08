@@ -19,4 +19,17 @@ describe('TurnAnchor 渲染', () => {
     expect(html).toContain('3:05 PM');
     expect(html).not.toContain(' · ');
   });
+
+  test('刻痕默认 14px 短条（bg-border），hover/聚焦动效变长到 22px 并变实（bg-foreground）', () => {
+    const html = renderToStaticMarkup(
+      <TurnAnchor time="10:46 AM" summary="" onJump={() => undefined} />,
+    );
+    expect(html).toContain('w-[14px]');
+    expect(html).toContain('bg-border');
+    expect(html).toContain('group-hover:w-[22px]');
+    expect(html).toContain('group-hover:bg-foreground');
+    expect(html).toContain('group-focus-visible:w-[22px]');
+    expect(html).toContain('group-focus-visible:bg-foreground');
+    expect(html).toContain('motion-reduce:transition-none');
+  });
 });

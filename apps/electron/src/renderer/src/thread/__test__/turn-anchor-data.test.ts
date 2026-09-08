@@ -1,10 +1,28 @@
 import { describe, expect, test } from 'bun:test';
 
-import { truncateAnchorSummary, turnAnchorSummary } from '../turn-anchor-data';
-import type { TurnBlock } from '../thread-model';
+import { truncateAnchorSummary, turnAnchorSummary, turnAnchors } from '../turn-anchor-data';
+import type { ThreadItem, TurnBlock, TurnModel } from '../thread-model';
 
 function text(id: string, value: string): TurnBlock {
   return { kind: 'text', id, text: value };
+}
+
+function turnFixture(id: string, endedAt: number | null): TurnModel {
+  return {
+    id,
+    status: endedAt === null ? 'running' : 'completed',
+    startedAt: 0,
+    endedAt,
+    blocks: [text(`t-${id}`, `结论 ${id}`)],
+  };
+}
+
+function turnItem(turn: TurnModel): ThreadItem {
+  return { kind: 'turn', turn };
+}
+
+function messageItem(id: string): ThreadItem {
+  return { kind: 'message', message: { id, role: 'user', text: '你好', images: [] } };
 }
 
 /** 全空白子代理夹具（名称/摘要降级链路的垃圾输入形态） */
@@ -104,5 +122,31 @@ describe('truncateAnchorSummary（按码点截断）', () => {
   test('垃圾上限降级为空串', () => {
     expect(truncateAnchorSummary('abc', 0)).toBe('');
     expect(truncateAnchorSummary('abc', Number.NaN)).toBe('');
+  });
+});
+
+describe('turnAnchors（消息流 items → 锚点带数据）', () => {
+  test('只保留已结束轮次：跳过消息项与 running 轮，顺序与消息流一致', () => {
+    // 2026-09-07 10:46 / 15:05 local
+    const items: ThreadItem[] = [
+      messageItem('m1'),
+      turnItem(turnFixture('t1', new Date(2026, 8, 7, 10, 46).getTime())),
+      turnItem(turnFixture('t2', null)),
+      messageItem('m2'),
+      turnItem(turnFixture('t3', new Date(2026, 8, 7, 15, 5).getTime())),
+    ];
+    expect(turnAnchors(items).map((anchor) => anchor.id)).toEqual(['t1', 't3']);
+  });
+
+  test('锚点携带格式化时刻与轮次摘要', () => {
+    const anchors = turnAnchors([turnItem(turnFixture('t1', new Date(2026, 8, 7, 10, 46).getTime()))]);
+    expect(anchors).toHaveLength(1);
+    expect(anchors[0]?.time).toBe('10:46 AM');
+    expect(anchors[0]?.summary).toBe('结论 t1');
+  });
+
+  test('空消息流与全 running 轮次均降级为空数组', () => {
+    expect(turnAnchors([])).toEqual([]);
+    expect(turnAnchors([turnItem(turnFixture('t1', null))])).toEqual([]);
   });
 });

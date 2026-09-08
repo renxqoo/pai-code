@@ -1,4 +1,5 @@
-import type { TurnModel } from './thread-model';
+import { formatClockTime } from './format-clock-time';
+import type { ThreadItem, TurnModel } from './thread-model';
 
 /** 锚点摘要上限（码点数）：超出截断补省略号，tooltip 内最多两行。 */
 const ANCHOR_SUMMARY_MAX = 96;
@@ -58,4 +59,32 @@ export function turnAnchorSummary(turn: Pick<TurnModel, 'blocks'>): string {
     if (preview.length > 0) return truncateAnchorSummary(preview);
   }
   return '';
+}
+
+/** 锚点带单条数据：跳转目标 turn id + tooltip 两要素（时刻 · 摘要）。 */
+export type TurnAnchorDatum = {
+  /** 跳转目标 turn id（与 TurnGroup section 的 data-turn-id 对应） */
+  id: string;
+  /** 轮次结束时刻（已格式化的钟面时间） */
+  time: string;
+  /** 轮次内容摘要（空串时 tooltip 只展示时刻） */
+  summary: string;
+};
+
+/**
+ * 消息流 items → 锚点带数据：只保留已结束轮次（endedAt 非 null；
+ * running 轮时刻未落，无可跳目标），非 turn 项跳过，顺序与消息流一致。
+ */
+export function turnAnchors(items: readonly ThreadItem[]): TurnAnchorDatum[] {
+  const anchors: TurnAnchorDatum[] = [];
+  for (const item of items) {
+    if (item.kind !== 'turn') continue;
+    if (item.turn.endedAt === null) continue;
+    anchors.push({
+      id: item.turn.id,
+      time: formatClockTime(item.turn.endedAt),
+      summary: turnAnchorSummary(item.turn),
+    });
+  }
+  return anchors;
 }

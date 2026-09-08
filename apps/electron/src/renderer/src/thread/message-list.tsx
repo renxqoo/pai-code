@@ -9,6 +9,8 @@ import { TurnLoadingRow } from '@/thread/turn-loading-row';
 import { useStickToBottom } from '@/thread/use-stick-to-bottom';
 import { SystemMessageRow } from '@/thread/system-message-row';
 import { CONVERSATION_COLUMN_CLASS } from '@/thread/conversation-column';
+import { TurnAnchorRail } from '@/thread/turn-anchor-rail';
+import { turnAnchors } from '@/thread/turn-anchor-data';
 import { UserMessageRow } from '@/thread/user-message-row';
 
 import type { ThreadItem, ThreadModel } from '@/thread/thread-model';
@@ -42,6 +44,17 @@ function itemTopMargin(index: number, item: ThreadItem): string {
 function MessageList({ thread, now, loading, bottomInset, emptyTitle, emptyHint, onOpenAgents, onOpenDiff, onEditUserMessage, onForkUserMessage }: MessageListProps) {
   const { containerRef, onScroll, atBottom, scrollToBottom } = useStickToBottom();
 
+  const anchors = React.useMemo(() => turnAnchors(thread.items), [thread.items]);
+  const jumpToTurn = React.useCallback((turnId: string) => {
+    const container = containerRef.current;
+    if (container === null) return;
+    const section = container.querySelector(`[data-turn-id="${CSS.escape(turnId)}"]`);
+    if (section === null) return;
+    // 尊重系统减弱动态偏好：平滑滚动降级为直接定位
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    section.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start', inline: 'nearest' });
+  }, []);
+
   const jumpButton = atBottom ? null : (
     <div className="animate-in fade-in duration-150">
       <ScrollToBottomButton onClick={scrollToBottom} style={{ bottom: bottomInset + 14 }} />
@@ -68,7 +81,8 @@ function MessageList({ thread, now, loading, bottomInset, emptyTitle, emptyHint,
   return (
     <div className="relative min-h-0 flex-1">
       <div ref={containerRef} onScroll={onScroll} className="h-full overflow-y-auto overflow-x-hidden">
-        <div className={`${CONVERSATION_COLUMN_CLASS} flex flex-col pt-6`} style={{ paddingBottom: bottomInset }}>
+        <div className={`${CONVERSATION_COLUMN_CLASS} relative flex flex-col pt-6`} style={{ paddingBottom: bottomInset }}>
+          <TurnAnchorRail anchors={anchors} onJump={jumpToTurn} />
           {thread.items.map((item, index) => (
             <div key={item.kind === 'message' ? item.message.id : item.turn.id} className={cn(itemTopMargin(index, item))}>
               {item.kind === 'message' ? (
