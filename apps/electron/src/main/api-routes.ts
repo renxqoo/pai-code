@@ -4,6 +4,8 @@ import { basename as baseName, dirname as dirnamePath, join as joinPaths, resolv
 import { mapEntries, modelInfos, savedSessions, sessionCommands, sessionStatsView, threadStateView, thinkingLevels } from '@paiapp/adapter';
 import { envVarNameForProvider } from './models-config';
 import { createProviderProbe } from './provider-probe';
+import type { AgentDirFiles } from './agent-dir-files';
+import { defaultPermissionRules, PermissionRulesSchema } from '@paiapp/contracts';
 import { ApiSchemas, type ApiMethod, type ApiOutcome, type ApiParams } from '@paiapp/contracts';
 
 import type { PaiRuntime } from './pai-runtime';
@@ -23,6 +25,8 @@ export interface ApiRouteDeps {
   keyStore: ProviderKeyStore;
   /** 审计日志（权限应答等安全敏感动作）。 */
   audit: (message: string) => void;
+  /** agentDir 受控文件面（固定文件名白名单，原子写）。 */
+  agentDirFiles: AgentDirFiles;
 }
 
 type Outcome<M extends ApiMethod> = Promise<ApiOutcome<M>>;
@@ -138,7 +142,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       return { ok: true as const, data: outcome };
     },
     'session/start': async (params) => {
-      const result = await command({ type: 'thread/start', cwd: params.cwd, provider: params.provider, modelId: params.modelId });
+      const result = await command({ type: 'thread/start', cwd: params.cwd, provider: params.provider, modelId: params.modelId, trusted: params.trusted });
       if (!result.ok) return fail(result.reason);
       const data = result.data as { threadId?: string; cwd?: string; sessionPath?: string | null };
       const threadId = data.threadId ?? '';
@@ -150,7 +154,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     'session/resume': async (params) => {
       // 路径白名单：只允许恢复本应用 agentDir/sessions 下的会话文件（防被攻陷渲染层任意读）
       if (!insideSessionsRoot(params.sessionPath)) return fail('session_path_forbidden');
-      const result = await command({ type: 'thread/resume', sessionPath: params.sessionPath });
+      const result = await command({ type: 'thread/resume', sessionPath: params.sessionPath, trusted: params.trusted });
       if (!result.ok) return fail(result.reason);
       const data = result.data as { threadId?: string; cwd?: string; sessionPath?: string | null };
       const threadId = data.threadId ?? '';
@@ -280,6 +284,15 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     'command/list': async (params) => {
       const result = await command({ type: 'get_commands', threadId: params.threadId });
       return result.ok ? { ok: true as const, data: sessionCommands(result.data) } : fail(result.reason);
+    },
+    'permission/read': () => {
+      const parsed = PermissionRulesSchema.safeParse(deps.agentDirFiles.readJson('permission-rules.json'));
+      // 缺文件/坏 JSON/形状不符 → 与 hub 热读一致的 ask 降级
+      return Promise.resolve({ ok: true as const, data: parsed.success ? parsed.data : defaultPermissionRules() });
+    },
+    'permission/write': (params) => {
+      const written = deps.agentDirFiles.writeJsonAtomic('permission-rules.json', params.rules);
+      return Promise.resolve(written ? { ok: true as const, data: params.rules } : fail('write_failed'));
     },
     'subagent/steer': async (params) => {
       const result = await command({ type: 'subagent/steer', threadId: params.threadId, subagentId: params.subagentId, message: params.message });

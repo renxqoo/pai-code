@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { createApiRoutes } from '../api-routes';
+import { createAgentDirFiles } from '../agent-dir-files';
 import { createFileSettings, type ProviderKeyStore } from '../file-settings';
 import { createPaiRuntime } from '../pai-runtime';
 
@@ -40,7 +41,7 @@ function makeRoutes(work: string) {
     emit: () => undefined,
   });
   const audits: string[] = [];
-  const routes = createApiRoutes({ runtime, settings, keyStore, audit: (m) => audits.push(m) });
+  const routes = createApiRoutes({ runtime, settings, keyStore, audit: (m) => audits.push(m), agentDirFiles: createAgentDirFiles(agentDir) });
   return { routes, audits, agentDir };
 }
 

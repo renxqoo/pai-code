@@ -199,12 +199,19 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
             onAdd: noop,
           }}
           activePanel={panel}
-          openMenu={copy.thread.openMenu}
+          openMenu={[copy.thread.reloadTrusted, copy.thread.reloadUntrusted, ...copy.thread.openMenu]}
           commitMenu={copy.thread.commitMenu}
           onAddAction={noop}
           onOpen={noop}
           onCommit={noop}
-          onOpenMenuSelect={noop}
+          onOpenMenuSelect={(label) => {
+            // 受信重开：stop → 同文件 resume(trusted)；其余装饰项维持原空操作
+            if (label === copy.thread.reloadTrusted) {
+              workspace.actions.reloadSessionTrusted(activeThreadId, true);
+            } else if (label === copy.thread.reloadUntrusted) {
+              workspace.actions.reloadSessionTrusted(activeThreadId, false);
+            }
+          }}
           onCommitMenuSelect={noop}
           onToggleSplitView={() => setPanel((current) => (current === 'agents' ? null : 'agents'))}
           onToggleMaximize={toggleMaximize}
@@ -283,12 +290,15 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         credentials={workspace.credentials}
         defaultModel={workspace.preferences.defaultModel}
         modelOptions={workspace.composer.modelOptions}
+        permissionRules={workspace.permissionRules}
         saved={workspace.saved}
         onClose={closeSettings}
         onUpsertProvider={workspace.actions.upsertProvider}
         onRemoveProvider={workspace.actions.removeProvider}
         onSelectDefaultModel={workspace.actions.setDefaultModel}
         onTestProvider={workspace.actions.testProvider}
+        onSavePermissionRules={workspace.actions.writePermissionRules}
+        onShowPermissions={workspace.actions.refreshPermissionRules}
         onOpenSaved={(sessionPath) => {
           void workspace.actions.openSavedSession(sessionPath);
           setSettingsOpen(false);
@@ -301,6 +311,8 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
       <NewThreadModal
         open={newThreadOpen}
         defaultCwd={workspace.activeCwd.length > 0 ? workspace.activeCwd : ''}
+        trustedLabel={copy.newThread.trustedLabel}
+        trustedHint={copy.newThread.trustedHint}
         onClose={closeNewThread}
         onCreate={workspace.actions.createSession}
       />

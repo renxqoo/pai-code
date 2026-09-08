@@ -4,6 +4,7 @@ import type {
   ApiData,
   CredentialView,
   ModelInfoView,
+  PermissionRules,
   PreferencesView,
   ProviderConfigView,
   SavedSessionView,
@@ -45,6 +46,8 @@ export interface LiveStoreState {
   credentials: readonly CredentialView[];
   /** 应用偏好（默认模型 / 引导完成标志）。 */
   preferences: PreferencesView;
+  /** 全局权限规则（null = 未加载；设置页打开时拉取）。 */
+  permissionRules: PermissionRules | null;
   threads: Readonly<Record<string, LiveThreadState>>;
   dialogs: Readonly<Record<string, PendingDialog>>;
   dialogOrder: readonly string[];
@@ -225,6 +228,7 @@ function initialStoreState(): LiveStoreState {
     providers: [],
     credentials: [],
     preferences: { defaultModel: null, onboarded: false },
+    permissionRules: null,
     threads: {},
     dialogs: {},
     dialogOrder: [],

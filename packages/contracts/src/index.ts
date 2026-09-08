@@ -4,4 +4,5 @@ export * from './commands';
 export * from './api';
 export * from './client';
 export * from './settings';
+export * from './permissions';
 export * from './ports';

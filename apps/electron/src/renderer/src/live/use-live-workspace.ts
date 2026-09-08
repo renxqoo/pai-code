@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import type { CommandView, CredentialView, PreferencesView, SessionView } from '@paiapp/contracts';
+import type { CommandView, CredentialView, PermissionRules, PreferencesView, SessionView } from '@paiapp/contracts';
 import { useStore } from 'zustand';
 
 import { collectThreadDiff } from '@/diff-panel/collect-thread-diff';
@@ -72,12 +72,14 @@ export type LiveWorkspaceView = {
   /** 当前会话的斜杠命令/技能目录（补全数据源）。 */
   commands: readonly CommandView[];
   preferences: PreferencesView;
+  /** 全局权限规则（null = 未加载）。 */
+  permissionRules: PermissionRules | null;
   thinkingLevels: readonly string[];
   actions: {
     readonly submitDraft: (message: string) => Promise<string | null>;
     readonly stopActiveTurn: () => void;
     readonly selectSession: (threadId: string) => void;
-    readonly createSession: (cwd: string) => Promise<boolean>;
+    readonly createSession: (cwd: string, trusted?: boolean) => Promise<boolean>;
     readonly openSavedSession: (sessionPath: string) => Promise<boolean>;
     readonly closeSession: (threadId: string) => void;
     readonly selectModel: (value: string) => void;
@@ -92,6 +94,9 @@ export type LiveWorkspaceView = {
     readonly removeProviderKey: (provider: string) => Promise<boolean>;
     readonly setDefaultModel: (value: string | null) => void;
     readonly completeOnboarding: () => void;
+    readonly refreshPermissionRules: () => void;
+    readonly writePermissionRules: (rules: PermissionRules) => Promise<boolean>;
+    readonly reloadSessionTrusted: (threadId: string, trusted: boolean) => void;
     readonly testProvider: (name: string) => Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }>;
     readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: string[]; apiKey?: string }) => Promise<boolean>;
     readonly removeProvider: (name: string) => Promise<boolean>;
@@ -206,6 +211,7 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     credentials: state.credentials,
     commands,
     preferences: state.preferences,
+    permissionRules: state.permissionRules,
     thinkingLevels: effortLevels,
     actions: {
       submitDraft: async (message) => {
@@ -219,9 +225,9 @@ export function useLiveWorkspace(): LiveWorkspaceView {
       selectSession: (threadId) => {
         store.getState().setActiveThread(threadId);
       },
-      createSession: (cwd) => {
+      createSession: (cwd, trusted) => {
         const selected = pickSessionModel(state.models, state.preferences.defaultModel, composer.model);
-        return controller.createSession(cwd, selected).then((ok) => {
+        return controller.createSession(cwd, selected, trusted).then((ok) => {
           if (!ok) pushNotice(copy.newThread.createFailed);
           return ok;
         });
@@ -263,6 +269,19 @@ export function useLiveWorkspace(): LiveWorkspaceView {
         });
       },
       testProvider: (name) => controller.testProvider(name),
+      refreshPermissionRules: () => {
+        void controller.refreshPermissionRules();
+      },
+      writePermissionRules: async (rules) => {
+        const reason = await controller.writePermissionRules(rules);
+        if (reason !== null) pushNotice(copy.settings.permissionSaveFailed);
+        return reason === null;
+      },
+      reloadSessionTrusted: (threadId, trusted) => {
+        void controller.reloadSessionTrusted(threadId, trusted).then((ok) => {
+          if (!ok) pushNotice(copy.thread.reloadTrustFailed);
+        });
+      },
       upsertProvider: (input) => controller.upsertProvider(input),
       removeProvider: (name) => controller.removeProvider(name),
       renameSession: async (threadId, name) => {

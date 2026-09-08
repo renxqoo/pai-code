@@ -5,6 +5,7 @@ import { existsSync } from 'node:fs';
 import { ApiSchemas, type UiEvent } from '@paiapp/contracts';
 
 import { createApiRoutes } from './api-routes';
+import { createAgentDirFiles } from './agent-dir-files';
 import { createFileLogger, createFileSettings } from './file-settings';
 import { resolveAppPaths } from './paths';
 import { createPaiRuntime } from './pai-runtime';
@@ -95,7 +96,13 @@ void app.whenReady().then(async () => {
       logger,
       emit: emitToRenderer,
     });
-    routes = createApiRoutes({ runtime, settings, keyStore, audit: (message) => logger.log(`audit:${message}`) });
+    routes = createApiRoutes({
+      runtime,
+      settings,
+      keyStore,
+      audit: (message) => logger.log(`audit:${message}`),
+      agentDirFiles: createAgentDirFiles(paths.agentDir),
+    });
     await runtime.start();
   } catch (error) {
     logger.log(`runtime_start_failed:${error instanceof Error ? error.message : String(error)}`);

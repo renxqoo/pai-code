@@ -5,19 +5,23 @@ import { copy } from '@/strings';
 type NewThreadModalProps = {
   open: boolean;
   defaultCwd: string;
+  trustedLabel: string;
+  trustedHint: string;
   onClose: () => void;
-  onCreate: (cwd: string) => Promise<boolean>;
+  onCreate: (cwd: string, trusted: boolean) => Promise<boolean>;
 };
 
-/** 新会话：输入工作目录（决定 agent 操作的项目，api.md thread/start.cwd）。 */
-function NewThreadModal({ open, defaultCwd, onClose, onCreate }: NewThreadModalProps) {
+/** 新会话：输入工作目录（thread/start.cwd）+ 受信开关（trusted=false 时不加载项目扩展）。 */
+function NewThreadModal({ open, defaultCwd, trustedLabel, trustedHint, onClose, onCreate }: NewThreadModalProps) {
   const [cwd, setCwd] = React.useState(defaultCwd);
+  const [trusted, setTrusted] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (open) {
       setCwd(defaultCwd);
+      setTrusted(false);
       setError(null);
     }
   }, [open, defaultCwd]);
@@ -31,7 +35,7 @@ function NewThreadModal({ open, defaultCwd, onClose, onCreate }: NewThreadModalP
           if (cwd.trim().length === 0) return;
           setBusy(true);
           setError(null);
-          const ok = await onCreate(cwd.trim());
+          const ok = await onCreate(cwd.trim(), trusted);
           setBusy(false);
           if (ok) onClose();
         }}
@@ -46,6 +50,17 @@ function NewThreadModal({ open, defaultCwd, onClose, onCreate }: NewThreadModalP
           autoFocus
           className="mt-[14px] h-[34px] w-full rounded-[10px] border border-border bg-background px-[12px] font-mono text-[12px] outline-none focus:border-foreground/25"
         />
+        <label className="mt-[10px] flex w-fit cursor-pointer items-center gap-[8px] select-none">
+          <input
+            type="checkbox"
+            checked={trusted}
+            onChange={(event) => setTrusted(event.target.checked)}
+            disabled={busy}
+            className="size-[14px] shrink-0 cursor-pointer accent-foreground disabled:cursor-not-allowed disabled:opacity-60"
+          />
+          <span className="text-[12px] leading-[16px] text-foreground/85">{trustedLabel}</span>
+        </label>
+        <p className="mt-[4px] text-[11px] leading-[16px] text-muted-foreground">{trustedHint}</p>
         {error !== null ? <p className="pt-[8px] text-[11.5px] text-red-600">{error}</p> : null}
         <div className="flex justify-end gap-[10px] pt-[18px]">
           <button type="button" onClick={onClose} className="h-[32px] rounded-[8px] border border-border px-[14px] text-[12.5px] text-foreground/85 hover:bg-muted/60">

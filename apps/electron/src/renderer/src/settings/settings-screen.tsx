@@ -3,9 +3,10 @@ import * as React from 'react';
 import { copy } from '@/strings';
 import { HistorySection } from './history-section';
 import { KeysSection } from './keys-section';
+import { PermissionsSection } from './permissions-section';
 import { ProvidersSection } from './providers-section';
 import { SettingsSectionNav } from './settings-section-nav';
-import type { CredentialView, ProviderConfigView } from '@paiapp/contracts';
+import type { CredentialView, PermissionRules, ProviderConfigView } from '@paiapp/contracts';
 
 type SettingsScreenProps = {
   open: boolean
@@ -13,12 +14,16 @@ type SettingsScreenProps = {
   credentials: readonly CredentialView[]
   defaultModel: string | null
   modelOptions: readonly string[]
+  permissionRules: PermissionRules | null
   saved: ReadonlyArray<{ sessionPath: string; title: string; cwd: string; modifiedAt: number; messageCount: number }>
   onClose: () => void
   onUpsertProvider: (input: { name: string; baseUrl: string; api: string; models: string[]; apiKey?: string }) => Promise<boolean>
   onRemoveProvider: (name: string) => Promise<boolean>
   onSelectDefaultModel: (value: string | null) => void
   onTestProvider: (name: string) => Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }>
+  onSavePermissionRules: (rules: PermissionRules) => Promise<boolean>
+  /** 进入权限分区时拉取规则（hub 文件面无推送，打开即读） */
+  onShowPermissions: () => void
   onOpenSaved: (sessionPath: string) => void
   onRefreshSaved: () => void
   onSaveKey: (provider: string, apiKey: string) => Promise<boolean>
@@ -36,23 +41,35 @@ function SettingsScreen({
   credentials,
   defaultModel,
   modelOptions,
+  permissionRules,
   saved,
   onClose,
   onUpsertProvider,
   onRemoveProvider,
   onSelectDefaultModel,
   onTestProvider,
+  onSavePermissionRules,
+  onShowPermissions,
   onOpenSaved,
   onRefreshSaved,
   onSaveKey,
   onRemoveKey,
   onRefreshKeys,
 }: SettingsScreenProps) {
-  const [section, setSection] = React.useState<'providers' | 'keys' | 'history'>('providers');
+  const [section, setSection] = React.useState<'providers' | 'keys' | 'permissions' | 'history'>('providers');
   if (!open) return null;
   const navItems = [
     { id: 'providers', label: copy.settings.providersTitle, selected: section === 'providers', onSelect: () => setSection('providers') },
     { id: 'keys', label: copy.settings.keysTitle, selected: section === 'keys', onSelect: () => setSection('keys') },
+    {
+      id: 'permissions',
+      label: copy.settings.permissionsTitle,
+      selected: section === 'permissions',
+      onSelect: () => {
+        onShowPermissions();
+        setSection('permissions');
+      },
+    },
     { id: 'history', label: copy.settings.historyTitle, selected: section === 'history', onSelect: () => setSection('history') },
   ];
   return (
@@ -82,6 +99,8 @@ function SettingsScreen({
                 />
               ) : section === 'keys' ? (
                 <KeysSection credentials={credentials} onSaveKey={onSaveKey} onRemoveKey={onRemoveKey} onRefresh={onRefreshKeys} />
+              ) : section === 'permissions' ? (
+                <PermissionsSection rules={permissionRules} onSave={onSavePermissionRules} />
               ) : (
                 <HistorySection saved={saved} onOpenSaved={onOpenSaved} onRefreshSaved={onRefreshSaved} />
               )}

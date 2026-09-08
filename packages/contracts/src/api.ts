@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { PermissionRulesSchema } from './permissions';
 import { DiffFileViewSchema, SessionViewSchema } from './ui-events';
 
 /**
@@ -156,12 +157,13 @@ export const ApiSchemas = {
         cwd: z.string().min(1),
         provider: z.string().optional(),
         modelId: z.string().optional(),
+        trusted: z.boolean().optional(),
       })
       .strict(),
     result: SessionViewSchema,
   },
   'session/resume': {
-    params: z.object({ sessionPath: z.string().min(1) }).strict(),
+    params: z.object({ sessionPath: z.string().min(1), trusted: z.boolean().optional() }).strict(),
     result: SessionViewSchema,
   },
   'session/stop': {
@@ -264,6 +266,15 @@ export const ApiSchemas = {
   'command/list': {
     params: z.object({ threadId: z.string().min(1) }).strict(),
     result: z.array(CommandViewSchema),
+  },
+  /** 全局权限规则（agentDir/permission-rules.json，hub 热读）。 */
+  'permission/read': {
+    params: empty,
+    result: PermissionRulesSchema,
+  },
+  'permission/write': {
+    params: z.object({ rules: PermissionRulesSchema }).strict(),
+    result: PermissionRulesSchema,
   },
   'provider/upsert': {
     params: z

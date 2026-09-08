@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { createApiRoutes } from '../api-routes';
+import { createAgentDirFiles } from '../agent-dir-files';
 import { createFileSettings, type ProviderKeyStore } from '../file-settings';
 import { createPaiRuntime, type PaiRuntime } from '../pai-runtime';
 
@@ -58,7 +59,7 @@ describe('pai-runtime + api-routes × 真 pai-cli（opt-in）', () => {
       emit: (event) => eventTypes.push(event.type),
     });
     const settings = createFileSettings(join(work, 'settings.json'), keyStore);
-    const routes = createApiRoutes({ runtime, settings, keyStore });
+    const routes = createApiRoutes({ runtime, settings, keyStore, agentDirFiles: createAgentDirFiles(join(work, 'agent')) });
 
     await runtime.start();
     expect(runtime.host.phase).toBe('ready');

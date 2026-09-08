@@ -1,4 +1,4 @@
-import type { PreferencesView, UiEvent } from '@paiapp/contracts';
+import type { PermissionRules, PreferencesView, UiEvent } from '@paiapp/contracts';
 
 import type { BridgeClient } from './client-invoke';
 import type { LiveStore } from './store';
@@ -20,8 +20,10 @@ export interface LiveController {
   /** 发送：成功返回 null，失败返回原因（调用方转用户可见提示）。 */
   readonly submitDraft: (threadId: string, message: string) => Promise<string | null>;
   readonly stopActiveTurn: (threadId: string) => Promise<void>;
-  readonly createSession: (cwd: string, model?: { provider: string; modelId: string }) => Promise<boolean>;
-  readonly openSavedSession: (sessionPath: string) => Promise<boolean>;
+  readonly createSession: (cwd: string, model?: { provider: string; modelId: string }, trusted?: boolean) => Promise<boolean>;
+  readonly openSavedSession: (sessionPath: string, trusted?: boolean) => Promise<boolean>;
+  /** 会话信任切换 = stop(await) → 同文件 resume(trusted) → 激活新 threadId；stop 失败即中止不动原会话。 */
+  readonly reloadSessionTrusted: (threadId: string, trusted: boolean) => Promise<boolean>;
   readonly closeSession: (threadId: string) => Promise<void>;
   readonly renameSession: (threadId: string, name: string) => Promise<boolean>;
   readonly respondDialog: (requestId: string, payload: Record<string, unknown>) => Promise<void>;
@@ -33,6 +35,10 @@ export interface LiveController {
   readonly refreshSaved: () => Promise<void>;
   /** 模型目录刷新（provider 保存触发 host 重启后向导/设置页手动补拉）。 */
   readonly refreshModels: () => Promise<void>;
+  /** 全局权限规则读取（写入 agentDir/permission-rules.json 的视图；失败返回 null）。 */
+  readonly refreshPermissionRules: () => Promise<PermissionRules | null>;
+  /** 全局权限规则写入（原子写，hub 热读即时生效）；成功返回 null，失败返回原因。 */
+  readonly writePermissionRules: (rules: PermissionRules) => Promise<string | null>;
   /** hub 凭据目录刷新（auth/list，永不含 key 本身）。 */
   readonly refreshCredentials: () => Promise<void>;
   /** 写入官方 provider key（hub 侧 auth.json）；成功返回 null，失败返回原因。 */
@@ -191,20 +197,27 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       store.getState().stopIntent(threadId);
       await client.invoke('session/abort', { threadId });
     },
-    async createSession(cwd: string, model?: { provider: string; modelId: string }): Promise<boolean> {
-      const outcome = await client.invoke('session/start', { cwd, provider: model?.provider, modelId: model?.modelId });
+    async createSession(cwd: string, model?: { provider: string; modelId: string }, trusted?: boolean): Promise<boolean> {
+      const outcome = await client.invoke('session/start', { cwd, provider: model?.provider, modelId: model?.modelId, trusted });
       if (!outcome.ok) return false;
       store.getState().setActiveThread(outcome.data.threadId);
       await hydrateFull(outcome.data.threadId).catch(() => undefined);
       return true;
     },
-    async openSavedSession(sessionPath: string): Promise<boolean> {
-      const outcome = await client.invoke('session/resume', { sessionPath });
+    async openSavedSession(sessionPath: string, trusted?: boolean): Promise<boolean> {
+      const outcome = await client.invoke('session/resume', { sessionPath, trusted });
       if (!outcome.ok) return false;
       store.getState().setActiveThread(outcome.data.threadId);
       await hydrateFull(outcome.data.threadId).catch(() => undefined);
       await this.refreshSaved();
       return true;
+    },
+    async reloadSessionTrusted(threadId: string, trusted: boolean): Promise<boolean> {
+      const sessionPath = store.getState().sessions[threadId]?.sessionPath ?? null;
+      if (sessionPath === null || sessionPath.length === 0) return false;
+      const stop = await client.invoke('session/stop', { threadId });
+      if (!stop.ok) return false;
+      return this.openSavedSession(sessionPath, trusted);
     },
     async closeSession(threadId: string): Promise<void> {
       await client.invoke('session/stop', { threadId });
@@ -243,6 +256,18 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     async refreshModels(): Promise<void> {
       const outcome = await client.invoke('model/list', {});
       if (outcome.ok) store.setState({ models: outcome.data });
+    },
+    async refreshPermissionRules(): Promise<PermissionRules | null> {
+      const outcome = await client.invoke('permission/read', {});
+      if (!outcome.ok) return null;
+      store.setState({ permissionRules: outcome.data });
+      return outcome.data;
+    },
+    async writePermissionRules(rules: PermissionRules): Promise<string | null> {
+      const outcome = await client.invoke('permission/write', { rules });
+      if (!outcome.ok) return outcome.reason;
+      store.setState({ permissionRules: outcome.data });
+      return null;
     },
     async refreshCredentials(): Promise<void> {
       const outcome = await client.invoke('auth/list', {});
