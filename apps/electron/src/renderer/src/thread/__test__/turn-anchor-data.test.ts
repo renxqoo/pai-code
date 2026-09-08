@@ -1,0 +1,108 @@
+import { describe, expect, test } from 'bun:test';
+
+import { truncateAnchorSummary, turnAnchorSummary } from '../turn-anchor-data';
+import type { TurnBlock } from '../thread-model';
+
+function text(id: string, value: string): TurnBlock {
+  return { kind: 'text', id, text: value };
+}
+
+/** 全空白子代理夹具（名称/摘要降级链路的垃圾输入形态） */
+const blankAgent = {
+  id: 's1', name: '', agentType: 'Explore', model: 'm', effort: 'low',
+  tokens: null, toolCount: 0, status: 'done' as const, startedAt: 0, endedAt: 1, tools: [],
+};
+
+describe('turnAnchorSummary（历史轮锚点 tooltip 摘要）', () => {
+  test('取最后一条非空文本块的首行，中间文本与思考不参与', () => {
+    const turn = {
+      blocks: [
+        text('a', '先说明一下背景'),
+        { kind: 'thinking', id: 'b', text: '推理过程' },
+        text('c', '最终结论\n\n第二段补充'),
+      ],
+    };
+    expect(turnAnchorSummary(turn)).toBe('最终结论');
+  });
+
+  test('最后一个文本块整块为空白时，回退到更早的非空文本块', () => {
+    const turn = { blocks: [text('a', '有效回答'), text('b', '   \n  ')] };
+    expect(turnAnchorSummary(turn)).toBe('有效回答');
+  });
+
+  test('首行内的连续空白折叠为单空格', () => {
+    const turn = { blocks: [text('a', '  修复  了\t滚动  边界 \n后续行')] };
+    expect(turnAnchorSummary(turn)).toBe('修复 了 滚动 边界');
+  });
+
+  test('无文本块 → 首个工具调用（名称 + 参数摘要）', () => {
+    const turn = {
+      blocks: [
+        {
+          kind: 'tools',
+          id: 't',
+          calls: [
+            { id: 'c1', name: 'Bash', argsPreview: 'bun run lint', output: '', exitCode: 0, durationMs: 12, status: 'ok' },
+            { id: 'c2', name: 'Read', argsPreview: 'src/a.ts', output: '', exitCode: 0, durationMs: 3, status: 'ok' },
+          ],
+        },
+      ],
+    };
+    expect(turnAnchorSummary(turn)).toBe('Bash bun run lint');
+  });
+
+  test('无文本无工具 → 首个子代理的报告摘要；摘要为空退工具名', () => {
+    const agent = {
+      id: 's1', name: 'explore', agentType: 'Explore', model: 'm', effort: 'low',
+      tokens: 10, toolCount: 2, status: 'done' as const, startedAt: 0, endedAt: 1, tools: [],
+    };
+    const withSummary = { blocks: [{ kind: 'subagents', id: 's', agents: [{ ...agent, summary: '扫描完成' }] }] };
+    expect(turnAnchorSummary(withSummary)).toBe('扫描完成');
+    const nameOnly = { blocks: [{ kind: 'subagents', id: 's', agents: [{ ...agent, summary: '' }] }] };
+    expect(turnAnchorSummary(nameOnly)).toBe('explore');
+  });
+
+  test('异常终态轮 → 终态提示文本', () => {
+    const turn = { blocks: [{ kind: 'turnFailure', id: 'f', stopReason: 'error', message: '401 invalid api key' }] };
+    expect(turnAnchorSummary(turn)).toBe('401 invalid api key');
+  });
+
+  test('全部块缺失内容 → 降级空串（组件只展示时刻）', () => {
+    expect(turnAnchorSummary({ blocks: [] })).toBe('');
+    expect(turnAnchorSummary({ blocks: [text('a', '  ')] })).toBe('');
+    expect(turnAnchorSummary({ blocks: [{ kind: 'thinking', id: 'b', text: '推理' }] })).toBe('');
+  });
+
+  test('症状回归：工具/子代理条目存在但名称与摘要全空白，继续向后降级而不是误报空行', () => {
+    const turn = {
+      blocks: [
+        {
+          kind: 'tools',
+          id: 't',
+          calls: [{ id: 'c1', name: '', argsPreview: ' ', output: '', exitCode: null, durationMs: null, status: 'running' }],
+        },
+        { kind: 'subagents', id: 's', agents: [{ ...blankAgent, summary: ' ' }] },
+        { kind: 'turnFailure', id: 'f', stopReason: 'aborted', message: null },
+      ],
+    };
+    expect(turnAnchorSummary(turn)).toBe('');
+  });
+});
+
+describe('truncateAnchorSummary（按码点截断）', () => {
+  test('未超长原样返回；超长截断补省略号', () => {
+    expect(truncateAnchorSummary('短文本', 10)).toBe('短文本');
+    expect(truncateAnchorSummary('abcdefgh', 3)).toBe('abc…');
+  });
+
+  test('上限按码点计：emoji 不被劈开', () => {
+    const emoji = '👍'.repeat(5);
+    expect(truncateAnchorSummary(emoji, 3)).toBe('👍👍👍…');
+    expect(Array.from(truncateAnchorSummary('a👍b👍c', 3))).toHaveLength(4);
+  });
+
+  test('垃圾上限降级为空串', () => {
+    expect(truncateAnchorSummary('abc', 0)).toBe('');
+    expect(truncateAnchorSummary('abc', Number.NaN)).toBe('');
+  });
+});

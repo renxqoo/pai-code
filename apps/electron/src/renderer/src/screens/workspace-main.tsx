@@ -10,6 +10,7 @@ import { formatRelativeAge } from '@/lib/relative-age';
 import { isWindowsPlatform } from '@/lib/platform';
 import { projectDirsOf } from '@/lib/project-dirs';
 import { useSidebarResize } from '@/hooks/use-sidebar-resize';
+import { useObservedHeight } from '@/hooks/use-observed-height';
 import { NoticeStrip } from '@/notices/notice-strip';
 import { SettingsScreen } from '@/settings/settings-screen';
 import { HostDownBanner } from '@/screens/host-down-banner';
@@ -48,7 +49,6 @@ const uiState = {
   sidebarCollapsed: false,
   settingsOpen: false,
 };
-const CONTENT_HORIZONTAL_PADDING = 56;
 
 /** 尚未接线/不适用当前会话的动作统一落到空实现，接线点保持稳定。 */
 function noop(): void {}
@@ -84,6 +84,11 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   /** Usage 总览页（I2；侧栏 footer 入口） */
   const [usageOpen, setUsageOpen] = React.useState(false);
   const [panel, setPanel] = React.useState<SidePanel>(null);
+  /** 输入浮层实际高度：消息流底部避让（贴底内容完整可见，上翻内容滑入浮层后面）。 */
+  const [bottomInset, setBottomInset] = React.useState(160);
+  const composerLayerRef = useObservedHeight<HTMLDivElement>((height) => {
+    setBottomInset(Math.round(height) + 24);
+  });
   React.useEffect(() => {
     if (usageOpen) workspace.actions.refreshAllStats();
     // eslint 不在此项目；actions 引用不稳，依赖 usageOpen 单轴即可
@@ -305,7 +310,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         onCloseSession={workspace.actions.closeSession}
         onRenameSession={onRenameSession}
       />
-      <div className="relative flex min-w-0 flex-1 flex-col">
+      <div className="relative flex min-w-0 flex-1 flex-col px-[40px]">
         {sidebarCollapsed ? null : (
           <SidebarSeparator
             width={width}
@@ -350,6 +355,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
           thread={workspace.activeThread}
           now={workspace.now}
           loading={workspace.executing}
+          bottomInset={bottomInset}
           emptyTitle={copy.thread.emptyTitle}
           emptyHint={copy.thread.emptyHint}
           onOpenAgents={openAgents}
@@ -357,13 +363,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
           onEditUserMessage={editUserMessage}
           onForkUserMessage={forkUserMessage}
         />
-        <div
-          className="shrink-0 overflow-hidden pb-[18px]"
-          style={{
-            paddingLeft: CONTENT_HORIZONTAL_PADDING,
-            paddingRight: CONTENT_HORIZONTAL_PADDING,
-          }}
-        >
+        <div ref={composerLayerRef} className="absolute inset-x-0 bottom-0 z-10 bg-background px-[40px] pb-[18px]">
           {confirmStop ? (
             <StopConfirmBar
               onConfirm={() => {

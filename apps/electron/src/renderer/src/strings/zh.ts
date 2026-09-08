@@ -75,6 +75,8 @@ export const zh: typeof en = {
     /** 思考单元收起态标签（运行中显 思考中） */
     thought: '已思考',
     turnStoppedSummary: (elapsed: string): string => `已停止 · ${elapsed}`,
+    /** 历史轮左缘锚点（无障碍名） */
+    turnAnchorAria: (time: string): string => `查看 ${time} 结束的轮次`,
     thinking: '思考中',
     queued: (count: number): string => (count === 1 ? '1 条排队消息' : `${count} 条排队消息`),
     retrying: (attempt: number, maxAttempts: number): string => `重试中（${attempt}/${maxAttempts}）`,

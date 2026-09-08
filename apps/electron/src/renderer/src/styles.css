@@ -180,8 +180,8 @@
 
 /* 全局滚动条：细拇指 + 全透明轨道/交角（消灭系统默认的白底描边框），亮暗随主题变量 */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 12px;
+  height: 12px;
 }
 
 ::-webkit-scrollbar-track,
@@ -191,7 +191,7 @@
 
 ::-webkit-scrollbar-thumb {
   background: var(--border);
-  border: 3px solid transparent;
+  border: 3.5px solid transparent;
   background-clip: content-box;
   border-radius: 8px;
 }

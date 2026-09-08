@@ -79,6 +79,8 @@ export const en = {
     thought: 'Thought',
     /** 中断轮次的状态行：Stopped · 8m 0s */
     turnStoppedSummary: (elapsed: string): string => `Stopped · ${elapsed}`,
+    /** 历史轮左缘锚点（无障碍名）：View the turn finished at 10:46 AM */
+    turnAnchorAria: (time: string): string => `View the turn finished at ${time}`,
     thinking: 'Thinking',
     queued: (count: number): string => (count === 1 ? '1 queued message' : `${count} queued messages`),
     retrying: (attempt: number, maxAttempts: number): string => `Retrying (${attempt}/${maxAttempts})`,
