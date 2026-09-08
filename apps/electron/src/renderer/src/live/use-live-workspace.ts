@@ -161,14 +161,15 @@ export function useLiveWorkspace(): LiveWorkspaceView {
    * 清除面由折叠层保证（settle / worker 死亡 / 宿主重启均已就地终态）；
    * 后台子代理跨轮运行不并入（父轮已结算，明细归 Agents 面板）。 */
   const executing = generating || bashRunning || compacting;
+  const agentsActive = summarizeAgents(activeThread.agents).workingCount > 0;
 
-  // 走表 tick 只随活跃线程执行中存在（后台线程活动不驱动任何渲染）；
-  // 已结束轮 elapsed 冻结于 endedAt，不依赖 tick
+  // 走表 tick 随「活跃线程执行中或有 working 子代理」（子代理面板计时走表依赖 now 前进；
+  // 后台线程活动仍不驱动任何渲染）；已结束轮 elapsed 冻结于 endedAt，不依赖 tick
   React.useEffect(() => {
-    if (!executing) return;
+    if (!executing && !agentsActive) return;
     const handle = window.setInterval(() => setNow(Date.now()), 1_000);
     return () => window.clearInterval(handle);
-  }, [executing]);
+  }, [executing, agentsActive]);
 
   const activeSession = sessions[activeThreadId];
   const queue = threadState?.queue;
@@ -190,7 +191,7 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     activeCwd: activeSession?.cwd ?? '',
     generating,
     executing,
-    agentsActive: summarizeAgents(activeThread.agents).workingCount > 0,
+    agentsActive,
     queueCount: queueItems.steering.length + queueItems.followUp.length,
     queueItems,
     crashed: threadState?.crashed ?? false,

@@ -1,5 +1,5 @@
 # 渲染层数据流重构与 Markdown 渲染替换 方案
-> 状态：实施中
+> 状态：已实施（三批提交 + 对抗审查偏差处置完毕，收口核销中）
 > 级别：高（含并发/状态机/安全面，实施后过独立会话对抗审查）
 >
 > 需求：① 渲染层数据流全部重构（订阅模型 / tick / delta 合并 / actions 稳定化 + 管道治理）；
@@ -80,6 +80,13 @@
 2. **批2 markdown**：依赖安装 + styles 接线（@source/样式引入）→ MarkdownText 重写 + TextBlock 接线 + 链接安全 → 删自研四件套与旧测试 → 冒烟与单测 → 四门 → 提交。
 3. **批3 治理**：frame-decoder 游标化 → seenIds/callStarts 封顶 → dialogs 单结构 → AGENTS.md 修正 → 四门 → 提交。
 4. 对抗审查（独立会话：diff + 本文档「有意变更清单」+「并发预算」）→ 偏差处置 → 收口核销。
+
+## 对抗审查偏差处置（独立会话，f16737e..2248ec5）
+
+- **P1（已修复）**：Esc 键在 `!` 直执行 bash 在途时无动作——旧 effect 靠 actions 每渲染重建间接重挂掩盖了 `bashRunning` 依赖缺失；actions 稳定化后闭包陈旧。修复：Esc 语义抽纯函数 `esc-action.ts`（裁决显式化）+ `use-esc-dismiss.ts` hook（全量依赖），带症状回归用例。
+- **P2（已修复）**：AgentPanel 后台子代理计时冻结（V2 门控字面后果、无补偿）→ tick 条件扩为 `executing || agentsActive`；`toggleMaximize` 未稳定化 → useCallback（兑现 V4 宣称）。
+- **P2（知悉，不改）**：非 http(s) 链接降级只显示链接文字不显示 markdown 语法原文（安全语义等价，视觉更干净）；submitDraft 空线程回退值从渲染期捕获变 `''`（同落 sendFailed，仅 reason 文案不同）；noteCallStart 对已存在 key 的「最新」按首插入序近似（仅异常堆积时可达，V7 域内）。
+- 其余九个怀疑方向（actions 搬家语义/selector 遗漏/tick/coalesce 边界/解码游标/dialogs 单结构/封顶除名/markdown 安全面/杂项）逐一对照等价。
 
 ## 验收清单
 

@@ -23,6 +23,8 @@ import { StopConfirmBar } from '@/thread/stop-confirm-bar';
 import { QueuePanel } from '@/thread/queue-panel';
 import { UsageScreen } from '@/screens/usage-screen';
 import { buildUsageEntries } from '@/screens/usage-entries';
+import type { SidePanel } from '@/screens/esc-action';
+import { useEscDismiss } from '@/screens/use-esc-dismiss';
 import { ThreadBanner } from '@/thread/thread-banner';
 import { AgentPanel } from '@/agent-panel/agent-panel';
 import { DiffPanel } from '@/diff-panel/diff-panel';
@@ -47,9 +49,6 @@ const uiState = {
   settingsOpen: false,
 };
 const CONTENT_HORIZONTAL_PADDING = 56;
-
-/** 右侧面板槽位：Diff / Agents 共用一个槽位，互斥切换。 */
-type SidePanel = 'diff' | 'agents' | null;
 
 /** 尚未接线/不适用当前会话的动作统一落到空实现，接线点保持稳定。 */
 function noop(): void {}
@@ -122,6 +121,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     });
   };
 
+  const closeUsage = React.useCallback(() => setUsageOpen(false), []);
   const openSettings = React.useCallback(() => setSettingsOpen(true), []);
   const closeSettings = React.useCallback(() => setSettingsOpen(false), []);
   const openNewThread = React.useCallback(() => setNewThreadOpen(true), []);
@@ -171,49 +171,33 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     });
   };
 
-  /** Esc 语义：对话框开→交由对话框；设置开→关设置；面板开→收面板；生成中→清队列+停止（api.md 约定） */
-  React.useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      if (workspace.dialogs.length > 0) return;
-      if (usageOpen) {
-        setUsageOpen(false);
-        return;
-      }
-      // 新会话弹窗优先于底层动作：Esc 只关弹窗，不得穿透触发停止/清队列
-      if (newThreadOpen) {
-        setNewThreadOpen(false);
-        return;
-      }
-      if (settingsOpen) {
-        setSettingsOpen(false);
-        return;
-      }
-      if (panel !== null) {
-        setPanel(null);
-        return;
-      }
-      if (workspace.bashRunning) workspace.actions.abortBash();
-      else if (confirmStop) {
-        setConfirmStop(false);
-        workspace.actions.stopActiveTurn();
-      } else if (workspace.generating) {
-        if (workspace.agentsActive) setConfirmStop(true);
-        else workspace.actions.stopActiveTurn();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [panel, settingsOpen, usageOpen, newThreadOpen, confirmStop, workspace.dialogs.length, workspace.generating, workspace.agentsActive, workspace.actions]);
-
   const openAgents = React.useCallback(() => setPanel('agents'), []);
   const openDiff = React.useCallback(() => setPanel('diff'), []);
   const closePanel = React.useCallback(() => setPanel(null), []);
 
+  useEscDismiss({
+    dialogCount: workspace.dialogs.length,
+    usageOpen,
+    newThreadOpen,
+    settingsOpen,
+    panel,
+    bashRunning: workspace.bashRunning,
+    confirmStop,
+    generating: workspace.generating,
+    agentsActive: workspace.agentsActive,
+    abortBash: workspace.actions.abortBash,
+    stopActiveTurn: workspace.actions.stopActiveTurn,
+    onUsageClose: closeUsage,
+    onNewThreadClose: closeNewThread,
+    onSettingsClose: closeSettings,
+    onPanelClose: closePanel,
+    onConfirmStopChange: setConfirmStop,
+  });
+
   /** 浏览器直开（无 preload）时桥不存在，降级为无动作 */
-  const toggleMaximize = () => {
+  const toggleMaximize = React.useCallback(() => {
     void window.pai?.window.toggleMaximize();
-  };
+  }, []);
 
   const refreshSaved = workspace.actions.refreshSaved;
   const refreshAction = React.useMemo(() => ({ label: copy.sidebar.refresh, onSelect: refreshSaved }), [refreshSaved]);
