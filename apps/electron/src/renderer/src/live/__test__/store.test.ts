@@ -219,3 +219,38 @@ describe('pushNotice（通知条单一入口）', () => {
     expect(store.getState().notices.map((notice) => notice.text)).toEqual(['通知4', '通知5', '通知6', '通知7']);
   });
 });
+
+describe('sessionRemoved 同路径后继（换 id 不闪跳）', () => {
+  test('移除的活跃会话存在同文件新 id 时优先回落到新 id', () => {
+    const store = createLiveStore();
+    const oldView = { ...session('t1'), sessionPath: '/w/s/a.jsonl' };
+    const other = { ...session('t2'), sessionPath: '/w/s/b.jsonl' };
+    const successor = { ...session('t9'), sessionPath: '/w/s/a.jsonl' };
+    store.getState().bootstrap({ sessions: [oldView, other, successor], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } });
+    store.getState().setActiveThread('t1');
+
+    store.getState().applyEvent({ type: 'sessionRemoved', threadId: 't1' }, 1);
+
+    expect(store.getState().activeThreadId).toBe('t9');
+  });
+
+  test('无同路径后继时维持既有回退（首个会话）', () => {
+    const store = createLiveStore();
+    store.getState().bootstrap({ sessions: [session('t1'), session('t2')], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } });
+    store.getState().setActiveThread('t1');
+
+    store.getState().applyEvent({ type: 'sessionRemoved', threadId: 't1' }, 1);
+
+    expect(store.getState().activeThreadId).toBe('t2');
+  });
+});
+
+describe('pushNotice 文案去重', () => {
+  test('同文案重投只保留一条（并发唤醒失败不刷屏）', () => {
+    const store = createLiveStore();
+    store.getState().pushNotice('会话恢复失败，请重试。');
+    store.getState().pushNotice('会话恢复失败，请重试。');
+    store.getState().pushNotice('会话恢复失败，请重试。');
+    expect(store.getState().notices.map((notice) => notice.text)).toEqual(['会话恢复失败，请重试。']);
+  });
+});

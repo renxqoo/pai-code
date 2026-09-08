@@ -105,6 +105,22 @@ function flushEvents(runtime: PaiRuntime): void {
   runtime.emitBuffered();
 }
 
+function makeRoutes(work: string, reply: (cmd: PaiCommand) => Reply) {
+  const fixture = makeFixture(work, reply);
+  const settings = createFileSettings(join(work, 's-settings.json'), emptyKeyStore);
+  const routes = createApiRoutes({
+    runtime: fixture.runtime,
+    settings,
+    keyStore: emptyKeyStore,
+    audit: () => undefined,
+    agentDirFiles: createAgentDirFiles(fixture.agentDir),
+    agentDir: fixture.agentDir,
+    revealPath: () => undefined,
+    pickDirectory: () => Promise.resolve(null),
+  });
+  return { ...fixture, routes };
+}
+
 describe('pai-runtime 启动对账（懒恢复，0 resume）', () => {
   test('症状回归：启动只对账渲染占位，不发任何 thread/resume', async () => {
     const work = mkdtempSync(join(tmpdir(), 'pai-reconcile-'));
@@ -196,22 +212,6 @@ describe('pai-runtime 启动对账（懒恢复，0 resume）', () => {
 });
 
 describe('api-routes session/resume（懒恢复通路）', () => {
-  function makeRoutes(work: string, reply: (cmd: PaiCommand) => Reply) {
-    const fixture = makeFixture(work, reply);
-    const settings = createFileSettings(join(work, 's-settings.json'), emptyKeyStore);
-    const routes = createApiRoutes({
-      runtime: fixture.runtime,
-      settings,
-      keyStore: emptyKeyStore,
-      audit: () => undefined,
-      agentDirFiles: createAgentDirFiles(fixture.agentDir),
-      agentDir: fixture.agentDir,
-      revealPath: () => undefined,
-      pickDirectory: () => Promise.resolve(null),
-    });
-    return { ...fixture, routes };
-  }
-
   test('症状回归：恢复已注册会话保留注册表标题（不再抹成 New conversation）', async () => {
     const work = mkdtempSync(join(tmpdir(), 'pai-resume-title-'));
     const sessionPath = join(work, 'agent', 'sessions', 'a.jsonl');
@@ -248,5 +248,104 @@ describe('api-routes session/resume（懒恢复通路）', () => {
     expect(runtime.registry.get('t9')?.sessionPath).toBe(sessionPath);
     expect(events).toContainEqual({ type: 'sessionRemoved', threadId: 't1' });
     expect(runtime.sessions().map((view) => view.threadId)).toEqual(['t9']);
+  });
+});
+
+describe('api-routes 对抗审查修复面（T16 M3）', () => {
+  test('session/stop remove 语义：true 删行 / false 保行摘视图（内部重开链 title/trusted 存续）', async () => {
+    const work = mkdtempSync(join(tmpdir(), 'pai-stop-remove-'));
+    const sessionPath = join(work, 'agent', 'sessions', 'a.jsonl');
+    const { runtime, routes } = makeRoutes(work, (cmd) => {
+      if (cmd.type === 'thread/resume') return { ok: true, data: { threadId: 't1', cwd: '/w/proj', sessionPath } };
+      return { ok: true, data: {} };
+    });
+    await runtime.start();
+    seedRow(runtime, { threadId: 't1', sessionPath, cwd: '/w/proj', title: '项目调试' });
+
+    const kept = (await routes.invoke('session/stop', { threadId: 't1', remove: false })) as { ok: boolean };
+    expect(kept.ok).toBe(true);
+    expect(runtime.registry.get('t1')?.title).toBe('项目调试');
+    expect(runtime.sessions().map((view) => view.threadId)).toEqual([]);
+
+    // 保行重开：resume 路由按注册表行补全 trusted/title（行在，语义自洽）
+    const resumed = (await routes.invoke('session/resume', { sessionPath })) as { ok: boolean; data: { title: string } };
+    expect(resumed.ok).toBe(true);
+    expect(resumed.data.title).toBe('项目调试');
+
+    const closed = (await routes.invoke('session/stop', { threadId: 't1', remove: true })) as { ok: boolean };
+    expect(closed.ok).toBe(true);
+    expect(runtime.registry.get('t1')).toBeNull();
+  });
+
+  test('对账双证据：list_saved 列举缺失但文件在盘 → 保留占位（防 cwd 编码差异误删）', async () => {
+    const work = mkdtempSync(join(tmpdir(), 'pai-reconcile-proof-'));
+    const { runtime } = makeFixture(work, (cmd) => {
+      if (cmd.type === 'thread/list_saved' && cmd.cwd === '/w/proj') return savedReply([]);
+      return { ok: true, data: {} };
+    });
+    const sessionFile = join(work, 'agent', 'sessions', 'x.jsonl');
+    writeFileSync(sessionFile, '');
+    seedRow(runtime, { threadId: 't1', sessionPath: sessionFile, cwd: '/w/proj', title: '在盘' });
+
+    await runtime.start();
+
+    expect(runtime.registry.get('t1')?.sessionPath).toBe(sessionFile);
+    expect(runtime.sessions().map((view) => view.state)).toEqual(['parked']);
+  });
+
+  test('parked 重命名本地落注册表：不发 hub 命令、恢复标题延续', async () => {
+    const work = mkdtempSync(join(tmpdir(), 'pai-rename-parked-'));
+    const sessionPath = join(work, 'agent', 'sessions', 'a.jsonl');
+    const { runtime, routes, sent } = makeRoutes(work, (cmd) => {
+      if (cmd.type === 'thread/list_saved' && cmd.cwd === '/w/proj') return savedReply([sessionPath]);
+      if (cmd.type === 'thread/resume') return { ok: true, data: { threadId: 't1', cwd: '/w/proj', sessionPath } };
+      return { ok: true, data: {} };
+    });
+    seedRow(runtime, { threadId: 't1', sessionPath, cwd: '/w/proj', title: '旧名' });
+    await runtime.start();
+    expect(runtime.sessions()[0]?.state).toBe('parked');
+
+    const renamed = (await routes.invoke('session/setName', { threadId: 't1', name: '新名' })) as { ok: boolean };
+    expect(renamed.ok).toBe(true);
+    expect(sent.some((cmd) => cmd.type === 'set_session_name')).toBe(false);
+    expect(runtime.registry.get('t1')?.title).toBe('新名');
+
+    const resumed = (await routes.invoke('session/resume', { sessionPath })) as { ok: boolean; data: { title: string } };
+    expect(resumed.data.title).toBe('新名');
+  });
+
+  test('resume not-found（运行中文件被删）→ 删行 + sessionRemoved，占位不再反复失败', async () => {
+    const work = mkdtempSync(join(tmpdir(), 'pai-resume-notfound-'));
+    const sessionPath = join(work, 'agent', 'sessions', 'gone.jsonl');
+    const { runtime, routes, events } = makeRoutes(work, (cmd) => {
+      if (cmd.type === 'thread/resume') return { ok: false, error: 'Session file not found' };
+      return { ok: true, data: {} };
+    });
+    await runtime.start();
+    seedRow(runtime, { threadId: 't1', sessionPath, cwd: '/w/proj', title: '已删' });
+
+    const outcome = (await routes.invoke('session/resume', { sessionPath })) as { ok: boolean; reason?: string };
+
+    expect(outcome.ok).toBe(false);
+    flushEvents(runtime);
+    expect(runtime.registry.get('t1')).toBeNull();
+    expect(events).toContainEqual({ type: 'sessionRemoved', threadId: 't1' });
+  });
+});
+
+describe('对账边界：空 cwd 行', () => {
+  test('cwd 为空串的行不列举不删行，保留占位（resume 由 hub 按会话头 cwd 自愈）', async () => {
+    const work = mkdtempSync(join(tmpdir(), 'pai-reconcile-emptycwd-'));
+    const { runtime, sent } = makeFixture(work, (cmd) => {
+      if (cmd.type === 'thread/list_saved') return savedReply([]);
+      return { ok: true, data: {} };
+    });
+    seedRow(runtime, { threadId: 't1', sessionPath: 'a.jsonl', cwd: '', title: '空目录' });
+
+    await runtime.start();
+
+    expect(sent.some((cmd) => cmd.type === 'thread/list_saved' && (cmd.cwd ?? '') === '')).toBe(false);
+    expect(runtime.registry.get('t1')?.sessionPath).toBe('a.jsonl');
+    expect(runtime.sessions().map((view) => view.state)).toEqual(['parked']);
   });
 });

@@ -113,11 +113,20 @@ export function createLiveStore() {
               return { sessions: { ...state.sessions, [event.threadId]: { ...session, title: event.name ?? session.title } } };
             }
             case 'sessionRemoved': {
-              if (!(event.threadId in state.sessions)) return state;
+              const doomed = state.sessions[event.threadId];
+              if (doomed === undefined) return state;
               const sessions = omitKey(state.sessions, event.threadId);
               const threads = omitKey(state.threads, event.threadId);
               const stats = omitKey(state.stats, event.threadId);
-              const activeThreadId = state.activeThreadId === event.threadId ? firstSessionId(sessions) : state.activeThreadId;
+              let activeThreadId = state.activeThreadId;
+              if (activeThreadId === event.threadId) {
+                // 换 id 整行替换（resume/fork）时优先回落到同会话文件的新 id，避免闪跳到无关会话
+                const successor =
+                  doomed.sessionPath !== null
+                    ? Object.values(sessions).find((session) => session.sessionPath === doomed.sessionPath)
+                    : undefined;
+                activeThreadId = successor?.threadId ?? firstSessionId(sessions);
+              }
               return { sessions, threads, stats, activeThreadId };
             }
             case 'sessionDied': {
@@ -209,7 +218,7 @@ export function createLiveStore() {
         set((state) => ({ threads: { ...state.threads, [threadId]: { ...threadOf(state, threadId), bashRunning: false, bashTail: '' } } }));
       },
       pushNotice(text) {
-        set((state) => ({ notices: [...state.notices.slice(-4), { id: `notice-${(noticeSeq += 1)}`, text }] }));
+        set((state) => ({ notices: [...state.notices.filter((notice) => notice.text !== text).slice(-4), { id: `notice-${(noticeSeq += 1)}`, text }] }));
       },
       dismissNotice(id) {
         set((state) => ({ notices: state.notices.filter((notice) => notice.id !== id) }));

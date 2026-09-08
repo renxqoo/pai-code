@@ -211,7 +211,8 @@ export const ApiSchemas = {
     result: SessionViewSchema,
   },
   'session/stop': {
-    params: threadOnly,
+    // remove：true = 用户关闭（注册表删行）；false = 内部重开链中间步骤（保行，title/trusted 是 resume 补全源）
+    params: z.object({ threadId: z.string().min(1), remove: z.boolean() }).strict(),
     result: z.null(),
   },
   'session/listSaved': {

@@ -193,7 +193,13 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       const trusted = params.trusted ?? known?.trusted ?? false;
       if (params.trusted !== undefined || known?.trusted === true) deps.audit(`session_trusted:resume:${params.sessionPath}:${trusted}`);
       const result = await command({ type: 'thread/resume', sessionPath: params.sessionPath, trusted });
-      if (!result.ok) return fail(result.reason);
+      if (!result.ok) {
+        // 运行中会话文件被删（对账之后失效）：与对账同语义删行，占位不再反复失败
+        if (known !== null && /not found|no such/i.test(result.reason)) {
+          runtime.removeSession(known.threadId);
+        }
+        return fail(result.reason);
+      }
       const data = result.data as { threadId?: string; cwd?: string; sessionPath?: string | null };
       const threadId = data.threadId ?? '';
       if (threadId.length === 0) return fail('malformed_response');
@@ -209,7 +215,9 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     'session/stop': async (params) => {
       const result = await command({ type: 'thread/stop', threadId: params.threadId });
       if (!result.ok) return fail(result.reason);
-      runtime.removeSession(params.threadId);
+      // remove=false：内部重开链（trusted 重载/技能开关）只摘视图，注册表行是随后 resume 的 title/trusted 补全源
+      if (params.remove) runtime.removeSession(params.threadId);
+      else runtime.detachSession(params.threadId);
       return { ok: true as const, data: null };
     },
     'session/listSaved': async (params) => {
@@ -257,6 +265,13 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       return result.ok ? { ok: true as const, data: sessionStatsView(result.data) } : fail(result.reason);
     },
     'session/setName': async (params) => {
+      // parked 占位未进 host（setName 必回 Unknown threadId）：标题直接落注册表，
+      // resume 路由按注册表行保留；hub 会话文件名待下次 live 重命名同步
+      const parked = runtime.sessions().find((session) => session.threadId === params.threadId && session.state === 'parked') !== undefined;
+      if (parked) {
+        runtime.renameSession(params.threadId, params.name);
+        return { ok: true as const, data: null };
+      }
       const result = await command({ type: 'set_session_name', threadId: params.threadId, name: params.name });
       if (!result.ok) return fail(result.reason);
       runtime.renameSession(params.threadId, params.name);

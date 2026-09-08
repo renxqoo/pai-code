@@ -65,6 +65,8 @@ export interface PaiRuntime {
   reconcileSessions(): Promise<void>;
   applyStartOutcome(threadId: string, cwd: string, sessionPath: string | null, title: string, trusted?: boolean): SessionView;
   removeSession(threadId: string): void;
+  /** 仅摘内存视图（sessionRemoved）：内部重开链（trusted 重载/技能开关）的中间步骤，注册表行保留。 */
+  detachSession(threadId: string): void;
   renameSession(threadId: string, name: string): void;
   touchSession(threadId: string, patch: Partial<Pick<SessionView, 'streaming' | 'model' | 'thinkingLevel' | 'state'>>): void;
   autoTitleOnPrompt(threadId: string, message: string): Promise<void>;
@@ -201,8 +203,8 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
         emit({ type: 'sessionRemoved', threadId: row.threadId });
         continue;
       }
-      if (listedCwds.has(row.cwd) && !onDisk.has(row.sessionPath)) {
-        // 该行 cwd 列举成功且盘上无此文件：确认缺失（与 resume 失败 not-found 删行同语义）
+      if (listedCwds.has(row.cwd) && !onDisk.has(row.sessionPath) && !existsSync(row.sessionPath)) {
+        // 双证据删行：list_saved 按 cwd 编码目录推断，existsSync 复核防编码差异（symlink 形态/尾斜杠等）误删恢复依据
         registry.remove(row.threadId);
         sessions.delete(row.threadId);
         emit({ type: 'sessionRemoved', threadId: row.threadId });
@@ -297,6 +299,10 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
     removeSession(threadId: string): void {
       sessions.delete(threadId);
       registry.remove(threadId);
+      emit({ type: 'sessionRemoved', threadId });
+    },
+    detachSession(threadId: string): void {
+      sessions.delete(threadId);
       emit({ type: 'sessionRemoved', threadId });
     },
     renameSession(threadId: string, name: string): void {

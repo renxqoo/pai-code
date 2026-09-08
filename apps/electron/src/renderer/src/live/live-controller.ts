@@ -3,6 +3,7 @@ import type { ImagePayload, PermissionRules, PreferencesView, ProviderModel, Ski
 import { copy } from '@/strings';
 import type { BridgeClient } from './client-invoke';
 import { coalesceEvents } from './coalesce-events';
+import { createLazyResume } from './lazy-resume';
 import type { LiveStore } from './store';
 
 /**
@@ -146,41 +147,9 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     store.getState().hydrate(threadId, { kind: 'hydrate/initial', items: outcome.data.items, cursor: outcome.data.cursor });
   };
 
-  /** 懒恢复登记：sessionPath -> 在途 resume（hub 对同文件重复 resume 回 failure，必须去重）。 */
-  const waking = new Map<string, Promise<string | null>>();
-
-  const resumeByPath = (sessionPath: string, trusted?: boolean): Promise<string | null> => {
-    const pending = waking.get(sessionPath);
-    if (pending !== undefined) return pending;
-    const attempt = client
-      .invoke('session/resume', { sessionPath, trusted })
-      .then((outcome) => (outcome.ok ? outcome.data.threadId : null))
-      .catch(() => null)
-      .finally(() => {
-        waking.delete(sessionPath);
-      });
-    waking.set(sessionPath, attempt);
-    return attempt;
-  };
-
-  const ensureLiveSession = async (threadId: string): Promise<string | null> => {
-    const session = store.getState().sessions[threadId];
-    // 未知 id：原样返回，交下游命令暴露真实错误；live/dead：hub 侧自愈（dead 下条命令自动恢复）
-    if (session?.state !== 'parked') return threadId;
-    if (session.sessionPath === null) return null;
-    return resumeByPath(session.sessionPath);
-  };
-
-  const wakeAndActivate = (threadId: string): void => {
-    void ensureLiveSession(threadId).then((liveId) => {
-      if (disposed) return;
-      if (liveId === null) {
-        store.getState().pushNotice(copy.flow.resumeFailed);
-        return;
-      }
-      store.getState().setActiveThread(liveId);
-    });
-  };
+  /** 懒恢复机制（在途去重/乐观登记/选择意图）独立模块。 */
+  const lazy = createLazyResume(client, store, () => disposed);
+  const { resumeByPath, ensureLiveSession, wakeAndActivate, activate } = lazy;
 
   /** 对话框兜底定时器登记：结算/dispose 时清理，避免滞留句柄。 */
   const dialogTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -205,6 +174,11 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
   const onEvent = (event: UiEvent): void => {
     const state = store.getState();
     state.applyEvent(event, now());
+    if (event.type === 'host' && (event.phase === 'restarting' || event.phase === 'failed')) {
+      // host 进程消亡：乐观登记的「已恢复」随 worker 全灭失效（对账会重发 parked 视图）
+      lazy.invalidate();
+      return;
+    }
     if (event.type === 'sessionUpdated' && event.session.state === 'parked' && state.activeThreadId === event.session.threadId) {
       // host 重启后对账回落 parked 的活跃会话：窗口正在看着它，自动唤回
       wakeAndActivate(event.session.threadId);
@@ -289,11 +263,14 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     ): Promise<string | null> {
       const text = message.trim();
       if (text.length === 0) return 'empty_message';
+      const session = store.getState().sessions[threadId];
+      if (session?.state === 'parked' && !client.available) return 'bridge_unavailable';
       // 懒恢复兜底：目标会话还是 parked 占位（启动对账/重启回落）时先唤活再投递；
       // 非 parked 原样返回（dead 由 hub 下条命令自动恢复）
       const liveId = await ensureLiveSession(threadId);
       if (liveId === null) return 'resume_failed';
-      if (liveId !== threadId) store.getState().setActiveThread(liveId);
+      // 换 id 时同步激活（旧占位由主进程 sessionRemoved 清出）；唤醒在途已被切走则只投递不劫持
+      if (liveId !== threadId && store.getState().activeThreadId === threadId) activate(liveId);
       const payloads = images === undefined || images.length === 0 ? undefined : [...images];
       const withImages = payloads === undefined ? {} : { images: payloads };
       // 投递裁决交给 hub 的原子语义（prompt+streamingBehavior）：空闲立即发送、
@@ -314,7 +291,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     async createSession(cwd: string, model?: { provider: string; modelId: string }, trusted?: boolean): Promise<string | null> {
       const outcome = await client.invoke('session/start', { cwd, provider: model?.provider, modelId: model?.modelId, trusted });
       if (!outcome.ok) return outcome.reason;
-      store.getState().setActiveThread(outcome.data.threadId);
+      activate(outcome.data.threadId);
       await hydrateFull(outcome.data.threadId).catch(() => undefined);
       return null;
     },
@@ -326,7 +303,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
         store.getState().pushNotice(copy.flow.resumeFailed);
         return false;
       }
-      store.getState().setActiveThread(liveId);
+      activate(liveId);
       await hydrateFull(liveId).catch(() => undefined);
       await this.refreshSaved();
       return true;
@@ -334,23 +311,29 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     async reloadSessionTrusted(threadId: string, trusted: boolean): Promise<boolean> {
       const sessionPath = store.getState().sessions[threadId]?.sessionPath ?? null;
       if (sessionPath === null || sessionPath.length === 0) return false;
+      // 在途懒恢复先结算（trusted 分歧的去重通路会静默降级信任态，必须串行化后再重开）
+      await this.ensureLiveSession(threadId).catch(() => undefined);
       // 记住重开前是否活跃：resume 成功后仅在该会话原本活跃时跟随切换（用户在途切换别会话时不劫持）
       const wasActive = store.getState().activeThreadId === threadId;
-      const stop = await client.invoke('session/stop', { threadId });
+      const stop = await client.invoke('session/stop', { threadId, remove: false });
       if (!stop.ok) return false;
+      lazy.discardResumed(sessionPath);
       const liveId = await resumeByPath(sessionPath, trusted);
       if (liveId === null) {
         // 失败兜底：旧线程已被移除，刷新历史列表让会话可从 History 找回
         await this.refreshSaved();
         return false;
       }
-      if (wasActive) store.getState().setActiveThread(liveId);
+      if (wasActive) activate(liveId);
       await hydrateFull(liveId).catch(() => undefined);
       await this.refreshSaved();
       return true;
     },
     async closeSession(threadId: string): Promise<void> {
-      await client.invoke('session/stop', { threadId });
+      // 用户关闭：stop(dispose) + 注册表删行（remove 路由语义）
+      const sessionPath = store.getState().sessions[threadId]?.sessionPath ?? null;
+      await client.invoke('session/stop', { threadId, remove: true });
+      if (sessionPath !== null) lazy.discardResumed(sessionPath);
     },
     async renameSession(threadId: string, name: string): Promise<boolean> {
       const trimmed = name.trim();
@@ -472,14 +455,15 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       const sessionPath = store.getState().sessions[threadId]?.sessionPath ?? null;
       if (sessionPath === null || sessionPath.length === 0) return false;
       const wasActive = store.getState().activeThreadId === threadId;
-      const stop = await client.invoke('session/stop', { threadId });
+      const stop = await client.invoke('session/stop', { threadId, remove: false });
       if (!stop.ok) return false;
+      lazy.discardResumed(sessionPath);
       const liveId = await resumeByPath(sessionPath);
       if (liveId === null) {
         await this.refreshSaved();
         return false;
       }
-      if (wasActive) store.getState().setActiveThread(liveId);
+      if (wasActive) activate(liveId);
       await hydrateFull(liveId).catch(() => undefined);
       await this.refreshSaved();
       return true;
@@ -505,7 +489,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     async forkSession(threadId: string, entryId: string): Promise<string | null> {
       const outcome = await client.invoke('session/fork', { threadId, entryId, position: 'before' });
       if (!outcome.ok) return null;
-      store.getState().setActiveThread(outcome.data.threadId);
+      activate(outcome.data.threadId);
       await hydrateFull(outcome.data.threadId).catch(() => undefined);
       return outcome.data.threadId;
     },
@@ -577,7 +561,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
         wakeAndActivate(threadId);
         return;
       }
-      store.getState().setActiveThread(threadId);
+      activate(threadId);
     },
   };
 
