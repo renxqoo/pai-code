@@ -112,6 +112,16 @@ export const CommandViewSchema = z.object({
 });
 export type CommandView = z.infer<typeof CommandViewSchema>;
 
+/** agent 定义条目（agents/list 收窄；project 级仅受信会话可见）。 */
+export const AgentViewSchema = z.object({
+  name: z.string(),
+  description: z.string(),
+  source: z.enum(['user', 'project']),
+  tools: z.array(z.string()).nullable(),
+  model: z.string().nullable(),
+});
+export type AgentView = z.infer<typeof AgentViewSchema>;
+
 export const ProviderConfigViewSchema = z.object({
   name: z.string(),
   baseUrl: z.string(),
@@ -266,6 +276,11 @@ export const ApiSchemas = {
   'command/list': {
     params: z.object({ threadId: z.string().min(1) }).strict(),
     result: z.array(CommandViewSchema),
+  },
+  /** agent 定义枚举（host 级；带 threadId 时含该会话受信可见的项目级）。 */
+  'agent/list': {
+    params: z.object({ threadId: z.string().min(1).optional() }).strict(),
+    result: z.array(AgentViewSchema),
   },
   /** 全局权限规则（agentDir/permission-rules.json，hub 热读）。 */
   'permission/read': {

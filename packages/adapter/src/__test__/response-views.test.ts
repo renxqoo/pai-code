@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { sessionCommands } from '../response-views';
+import { agentViews, sessionCommands } from '../response-views';
 
 /** get_commands 收窄回归：三源透传、垃圾降级。 */
 
@@ -42,4 +42,35 @@ test('混合垃圾条目中合法条目保留', () => {
     commands: [{ name: '/ok', source: 'prompt' }, { name: 1, source: 'prompt' }, 'junk'],
   });
   expect(kept).toEqual([{ name: '/ok', description: null, source: 'prompt' }]);
+});
+
+test('agents/list 收窄：两源透传，tools/model 缺失收窄 null', () => {
+  const raw = {
+    agents: [
+      { name: 'reviewer', description: 'Code review', source: 'user', tools: ['read', 'grep'] },
+      { name: 'deployer', description: 'Deploys', source: 'project', model: 'glm/glm-4.7' },
+    ],
+  };
+  expect(agentViews(raw)).toEqual([
+    { name: 'reviewer', description: 'Code review', source: 'user', tools: ['read', 'grep'], model: null },
+    { name: 'deployer', description: 'Deploys', source: 'project', tools: null, model: 'glm/glm-4.7' },
+  ]);
+});
+
+test('agents/list 垃圾降级：缺名/source 词表外/非对象丢弃，非字符串 tools 项过滤', () => {
+  const kept = agentViews({
+    agents: [
+      { description: 'x', source: 'user' },
+      { name: 'a', source: 'mcp' },
+      'junk',
+      42,
+      { name: 'ok', description: '', source: 'user', tools: ['read', 7, null] },
+    ],
+  });
+  expect(kept).toEqual([{ name: 'ok', description: '', source: 'user', tools: ['read'], model: null }]);
+});
+
+test('agents/list 顶层非对象/非数组 → 空数组', () => {
+  expect(agentViews({ agents: 'x' })).toEqual([]);
+  expect(agentViews(null)).toEqual([]);
 });

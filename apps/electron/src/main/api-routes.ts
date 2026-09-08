@@ -1,7 +1,7 @@
 import { realpathSync } from 'node:fs';
 import { basename as baseName, dirname as dirnamePath, join as joinPaths, resolve as resolvePath, sep as pathSep } from 'node:path';
 
-import { mapEntries, modelInfos, savedSessions, sessionCommands, sessionStatsView, threadStateView, thinkingLevels } from '@paiapp/adapter';
+import { agentViews, mapEntries, modelInfos, savedSessions, sessionCommands, sessionStatsView, threadStateView, thinkingLevels } from '@paiapp/adapter';
 import { envVarNameForProvider } from './models-config';
 import { createProviderProbe } from './provider-probe';
 import type { AgentDirFiles } from './agent-dir-files';
@@ -284,6 +284,10 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     'command/list': async (params) => {
       const result = await command({ type: 'get_commands', threadId: params.threadId });
       return result.ok ? { ok: true as const, data: sessionCommands(result.data) } : fail(result.reason);
+    },
+    'agent/list': async (params) => {
+      const result = await command({ type: 'agents/list', threadId: params.threadId });
+      return result.ok ? { ok: true as const, data: agentViews(result.data) } : fail(result.reason);
     },
     'permission/read': () => {
       const parsed = PermissionRulesSchema.safeParse(deps.agentDirFiles.readJson('permission-rules.json'));

@@ -1,4 +1,5 @@
 import type {
+  AgentView,
   CommandView,
   ModelInfoView,
   SavedSessionView,
@@ -155,6 +156,23 @@ export function sessionCommands(data: unknown): CommandView[] {
     const source = c.source;
     if (source !== 'extension' && source !== 'prompt' && source !== 'skill') continue;
     out.push({ name, description: optStr(c.description), source });
+  }
+  return out;
+}
+
+/** agents/list 响应 → agent 视图（缺名丢弃；source 词表外丢弃；tools/model 缺失收窄 null）。 */
+export function agentViews(data: unknown): AgentView[] {
+  const agents = recordOf(data)['agents'];
+  if (!Array.isArray(agents)) return [];
+  const out: AgentView[] = [];
+  for (const item of agents) {
+    const a = recordOf(item);
+    const name = str(a.name);
+    if (name.length === 0) continue;
+    const source = a.source;
+    if (source !== 'user' && source !== 'project') continue;
+    const tools = Array.isArray(a.tools) ? a.tools.filter((tool): tool is string => typeof tool === 'string') : null;
+    out.push({ name, description: str(a.description), source, tools, model: optStr(a.model) });
   }
   return out;
 }

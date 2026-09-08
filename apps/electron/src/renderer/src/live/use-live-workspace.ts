@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import type { CommandView, CredentialView, PermissionRules, PreferencesView, SessionView } from '@paiapp/contracts';
+import type { AgentView, CommandView, CredentialView, PermissionRules, PreferencesView, SessionView } from '@paiapp/contracts';
 import { useStore } from 'zustand';
 
 import { collectThreadDiff } from '@/diff-panel/collect-thread-diff';
@@ -71,6 +71,8 @@ export type LiveWorkspaceView = {
   credentials: readonly CredentialView[];
   /** 当前会话的斜杠命令/技能目录（补全数据源）。 */
   commands: readonly CommandView[];
+  /** agent 定义目录（进 Agents 分区时拉取）。 */
+  agents: readonly AgentView[];
   preferences: PreferencesView;
   /** 全局权限规则（null = 未加载）。 */
   permissionRules: PermissionRules | null;
@@ -96,6 +98,7 @@ export type LiveWorkspaceView = {
     readonly completeOnboarding: () => void;
     readonly refreshPermissionRules: () => void;
     readonly writePermissionRules: (rules: PermissionRules) => Promise<boolean>;
+    readonly refreshAgents: () => void;
     readonly reloadSessionTrusted: (threadId: string, trusted: boolean) => void;
     readonly testProvider: (name: string) => Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }>;
     readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: string[]; apiKey?: string }) => Promise<boolean>;
@@ -210,6 +213,7 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     providers: state.providers,
     credentials: state.credentials,
     commands,
+    agents: state.agents,
     preferences: state.preferences,
     permissionRules: state.permissionRules,
     thinkingLevels: effortLevels,
@@ -281,6 +285,9 @@ export function useLiveWorkspace(): LiveWorkspaceView {
         void controller.reloadSessionTrusted(threadId, trusted).then((ok) => {
           if (!ok) pushNotice(copy.thread.reloadTrustFailed);
         });
+      },
+      refreshAgents: () => {
+        void controller.refreshAgents(activeThreadId.length > 0 ? activeThreadId : null);
       },
       upsertProvider: (input) => controller.upsertProvider(input),
       removeProvider: (name) => controller.removeProvider(name),

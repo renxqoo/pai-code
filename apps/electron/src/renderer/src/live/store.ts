@@ -1,6 +1,7 @@
 import { createStore } from 'zustand/vanilla';
 
 import type {
+  AgentView,
   ApiData,
   CredentialView,
   ModelInfoView,
@@ -48,6 +49,8 @@ export interface LiveStoreState {
   preferences: PreferencesView;
   /** 全局权限规则（null = 未加载；设置页打开时拉取）。 */
   permissionRules: PermissionRules | null;
+  /** agent 定义目录（进 Agents 分区时拉取）。 */
+  agents: readonly AgentView[];
   threads: Readonly<Record<string, LiveThreadState>>;
   dialogs: Readonly<Record<string, PendingDialog>>;
   dialogOrder: readonly string[];
@@ -227,6 +230,7 @@ function initialStoreState(): LiveStoreState {
     models: [],
     providers: [],
     credentials: [],
+    agents: [],
     preferences: { defaultModel: null, onboarded: false },
     permissionRules: null,
     threads: {},

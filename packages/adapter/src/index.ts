@@ -13,6 +13,7 @@ export {
   sessionStatsView,
   thinkingLevels,
   sessionCommands,
+  agentViews,
   type SessionViewInput,
 } from './response-views';
 export { isFileMutatingTool, diffFromPatch, diffFromWriteArgs } from './diff-extract';

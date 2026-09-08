@@ -39,6 +39,8 @@ export interface LiveController {
   readonly refreshPermissionRules: () => Promise<PermissionRules | null>;
   /** 全局权限规则写入（原子写，hub 热读即时生效）；成功返回 null，失败返回原因。 */
   readonly writePermissionRules: (rules: PermissionRules) => Promise<string | null>;
+  /** agent 定义目录刷新（带 threadId 时含受信可见的项目级；失败静默保持旧值）。 */
+  readonly refreshAgents: (threadId: string | null) => Promise<void>;
   /** hub 凭据目录刷新（auth/list，永不含 key 本身）。 */
   readonly refreshCredentials: () => Promise<void>;
   /** 写入官方 provider key（hub 侧 auth.json）；成功返回 null，失败返回原因。 */
@@ -268,6 +270,10 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       if (!outcome.ok) return outcome.reason;
       store.setState({ permissionRules: outcome.data });
       return null;
+    },
+    async refreshAgents(threadId: string | null): Promise<void> {
+      const outcome = await client.invoke('agent/list', threadId === null ? {} : { threadId });
+      if (outcome.ok) store.setState({ agents: outcome.data });
     },
     async refreshCredentials(): Promise<void> {
       const outcome = await client.invoke('auth/list', {});

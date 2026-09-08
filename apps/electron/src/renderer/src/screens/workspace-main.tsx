@@ -113,6 +113,13 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const refreshAction = React.useMemo(() => ({ label: copy.sidebar.refresh, onSelect: refreshSaved }), [refreshSaved]);
   const projects = React.useMemo(() => [...new Set(sessions.map((session) => session.projectName))], [sessions]);
   const visibleSessions = React.useMemo(() => filterSessions(sessions, sidebarQuery), [sessions, sidebarQuery]);
+  const sessionSkills = React.useMemo(
+    () =>
+      workspace.commands
+        .filter((command) => command.source === 'skill')
+        .map((command) => ({ name: command.name.replace(/^skill:/, ''), description: command.description })),
+    [workspace.commands],
+  );
   const ages = React.useMemo(() => {
     const table: Record<string, string> = {};
     for (const session of sessions) {
@@ -291,6 +298,8 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         defaultModel={workspace.preferences.defaultModel}
         modelOptions={workspace.composer.modelOptions}
         permissionRules={workspace.permissionRules}
+        agents={workspace.agents}
+        skills={sessionSkills}
         saved={workspace.saved}
         onClose={closeSettings}
         onUpsertProvider={workspace.actions.upsertProvider}
@@ -299,6 +308,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         onTestProvider={workspace.actions.testProvider}
         onSavePermissionRules={workspace.actions.writePermissionRules}
         onShowPermissions={workspace.actions.refreshPermissionRules}
+        onShowAgents={workspace.actions.refreshAgents}
         onOpenSaved={(sessionPath) => {
           void workspace.actions.openSavedSession(sessionPath);
           setSettingsOpen(false);
