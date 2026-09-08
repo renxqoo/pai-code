@@ -108,6 +108,8 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       onboarded: settings.onboarded,
       projectModels: { ...settings.projectModels },
       pinnedSessions: [...settings.pinnedSessions],
+      trustedDefault: settings.trustedDefault,
+      hubDev: { ...settings.hubDev },
     };
   };
 
@@ -404,12 +406,30 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       const outcome = await probe.probe(params.name);
       return outcome.ok ? { ok: true as const, data: { latencyMs: outcome.latencyMs } } : fail(outcome.reason);
     },
+    'app/diagnostics': () => {
+      const diag = runtime.host.diagnostics();
+      return Promise.resolve({
+        ok: true as const,
+        data: {
+          hostPhase: runtime.host.phase,
+          stderrTail: diag.stderrTail,
+          registrySessions: runtime.registry.list().length,
+        },
+      });
+    },
+    'app/restartHost': () => {
+      deps.audit('restart_host:manual');
+      void runtime.host.restart('manual').catch(() => undefined);
+      return Promise.resolve({ ok: true as const, data: null });
+    },
     'app/setPreference': (params) => {
-      const patch: { defaultModel?: string | null; onboarded?: boolean; projectModels?: Record<string, string>; pinnedSessions?: string[] } = {};
+      const patch: { defaultModel?: string | null; onboarded?: boolean; projectModels?: Record<string, string>; pinnedSessions?: string[]; trustedDefault?: boolean; hubDev?: { bunPath: string | null; hubEntry: string | null } } = {};
       if (params.defaultModel !== undefined) patch.defaultModel = params.defaultModel;
       if (params.onboarded !== undefined) patch.onboarded = params.onboarded;
       if (params.projectModels !== undefined) patch.projectModels = { ...params.projectModels };
       if (params.pinnedSessions !== undefined) patch.pinnedSessions = [...params.pinnedSessions];
+      if (params.trustedDefault !== undefined) patch.trustedDefault = params.trustedDefault;
+      if (params.hubDev !== undefined) patch.hubDev = { ...params.hubDev };
       deps.settings.patch(patch);
       return Promise.resolve({ ok: true as const, data: preferencesView() });
     },

@@ -15,9 +15,11 @@ import { NoticeStrip } from '@/notices/notice-strip';
 import { SettingsScreen } from '@/settings/settings-screen';
 import { Sidebar } from '@/sidebar/sidebar';
 import { filterSessions } from '@/sidebar/filter-sessions';
+import { changeLocale, getLocale, type Locale } from '@/strings';
 import type { SessionCardModel } from '@/sidebar/session-card-model';
 import { MessageList } from '@/thread/message-list';
 import { QueuePanel } from '@/thread/queue-panel';
+import { UsageScreen } from '@/screens/usage-screen';
 import { ThreadBanner } from '@/thread/thread-banner';
 import { ThreadHeader } from '@/thread/thread-header';
 import type { ImagePayload } from '@paiapp/contracts';
@@ -52,6 +54,10 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const [queueOpen, setQueueOpen] = React.useState(false);
   /** 停止确认（H2：存在在途子代理时二次确认，不可恢复） */
   const [confirmStop, setConfirmStop] = React.useState(false);
+  /** Usage 总览页（I2；侧栏 footer 入口） */
+  const [usageOpen, setUsageOpen] = React.useState(false);
+  /** 界面语言镜像（changeLocale 广播后 app 根重挂载；此 state 驱动设置分区即时刷新） */
+  const [language, setLanguage] = React.useState<Locale>(getLocale());
   const [newThreadOpen, setNewThreadOpen] = React.useState(false);
   /** 编辑重发：回填草稿后聚焦输入框 */
   const composerTextRef = React.useRef<HTMLTextAreaElement | null>(null);
@@ -175,6 +181,21 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
       })),
     [visibleSessions, collapsedGroups],
   );
+  const usageEntries = React.useMemo(
+    () =>
+      workspace.sessions.map((session) => {
+        const stats = workspace.statsById[session.id];
+        return {
+          title: session.title,
+          projectName: session.projectName,
+          model: session.version,
+          tokensTotal: stats?.tokensTotal ?? 0,
+          cost: stats?.cost ?? 0,
+          messageCount: (stats?.userMessages ?? 0) + (stats?.assistantMessages ?? 0),
+        };
+      }),
+    [workspace.sessions, workspace.statsById],
+  );
   const pinnedSessions = React.useMemo(() => new Set(workspace.preferences.pinnedSessions), [workspace.preferences.pinnedSessions]);
   const savedProjects = React.useMemo(() => [...new Set(workspace.saved.map((session) => session.cwd))], [workspace.saved]);
   const sessionSkills = React.useMemo(
@@ -219,7 +240,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         footerActions={[
           { label: copy.sidebar.settings, onSelect: openSettings },
           { label: copy.sidebar.workflows, onSelect: noop },
-          { label: copy.sidebar.usage, onSelect: noop },
+          { label: copy.sidebar.usage, onSelect: () => setUsageOpen(true) },
         ]}
         refreshAction={refreshAction}
         onNewThread={openNewThread}
@@ -362,6 +383,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
             slashAriaLabel={copy.composer.slashAria}
             fileAriaLabel={copy.composer.fileAria}
             onSearchFiles={workspace.actions.searchFiles}
+            stats={workspace.activeStats}
             noModelsLabel={copy.composer.noModels}
             effortUnavailableLabel={copy.composer.effortUnavailable}
             generating={workspace.generating}
@@ -377,6 +399,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
           />
         </div>
       </div>
+      {usageOpen ? <UsageScreen entries={usageEntries} onClose={() => setUsageOpen(false)} /> : null}
       {panel === 'agents' ? (
         <AgentPanel agents={workspace.activeThread.agents} now={workspace.now} onClose={closePanel} onSteer={workspace.actions.steerSubagent} />
       ) : null}
@@ -414,6 +437,17 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         sessionRules={workspace.sessionRules}
         onSaveSessionRules={workspace.actions.writeSessionRules}
         onLoadSessionRules={workspace.actions.readSessionRules}
+        trustedDefault={workspace.preferences.trustedDefault}
+        hubDev={workspace.preferences.hubDev}
+        language={language}
+        onSaveGeneral={workspace.actions.saveGeneralPreferences}
+        onLanguageChange={(next) => {
+          changeLocale(next);
+          setLanguage(getLocale());
+        }}
+        diagnostics={workspace.diagnostics}
+        onShowDiagnostics={workspace.actions.fetchDiagnostics}
+        onRestartHost={workspace.actions.restartHost}
         onShowAgents={workspace.actions.refreshAgents}
         onOpenSaved={(sessionPath) => {
           void workspace.actions.openSavedSession(sessionPath);

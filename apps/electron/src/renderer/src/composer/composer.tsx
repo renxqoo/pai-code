@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { AutocompleteList } from '@paiapp/ui';
-import type { CommandView, ImagePayload } from '@paiapp/contracts';
+import type { CommandView, ImagePayload, SessionStatsView } from '@paiapp/contracts';
 
 import { ComposerActionsRow } from '@/composer/composer-actions-row';
 import { ComposerContextBar } from '@/composer/composer-context-bar';
@@ -35,6 +35,8 @@ type ComposerProps = {
   fileAriaLabel: string
   /** @ 文件引用的目录搜索（失败返回 null，弹层按空结果呈现） */
   onSearchFiles: (query: string) => Promise<string[] | null>
+  /** 用量明细（I1）。 */
+  stats: SessionStatsView | null
   /** 无可选模型时的引导文案（点击触发 onOpenSettings） */
   noModelsLabel: string
   /** 思考档不可用时的禁用原因文案 */
@@ -76,6 +78,7 @@ function Composer({
   slashAriaLabel,
   fileAriaLabel,
   onSearchFiles,
+  stats,
   noModelsLabel,
   effortUnavailableLabel,
   generating,
@@ -354,6 +357,7 @@ function Composer({
           onSelectEffort={onSelectEffort}
           sendMode={generating ? sendMode : null}
           onSendModeChange={setSendMode}
+          stats={stats}
           onAttach={() => fileInputRef.current?.click()}
           onCompact={onCompact}
           onOpenSettings={onOpenSettings}

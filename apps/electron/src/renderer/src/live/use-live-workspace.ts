@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import type { AgentView, CommandView, CredentialView, ImagePayload, PermissionRules, PreferencesView, SessionView } from '@paiapp/contracts';
+import type { AgentView, CommandView, CredentialView, ImagePayload, PermissionRules, PreferencesView, SessionStatsView, SessionView } from '@paiapp/contracts';
 import { useStore } from 'zustand';
 
 import { collectThreadDiff } from '@/diff-panel/collect-thread-diff';
@@ -67,6 +67,12 @@ export type LiveWorkspaceView = {
   now: number;
   hasActivity: boolean;
   threadDiff: ReturnType<typeof collectThreadDiff>;
+  /** 当前会话用量明细（I1 popover 数据源）。 */
+  activeStats: SessionStatsView | null;
+  /** 各会话用量快照（I2 聚合数据源）。 */
+  statsById: Readonly<Record<string, SessionStatsView>>;
+  /** 运行时诊断（M1 分区数据源；null = 未拉取）。 */
+  diagnostics: { hostPhase: 'starting' | 'ready' | 'restarting' | 'failed' | null; stderrTail: string; registrySessions: number } | null;
   composer: ComposerSelection;
   dialogs: readonly PendingDialog[];
   notices: readonly { id: string; text: string }[];
@@ -118,6 +124,10 @@ export type LiveWorkspaceView = {
     readonly submitDraftAs: (message: string, mode: 'steer' | 'followUp') => Promise<string | null>;
     readonly reloadSessionTrusted: (threadId: string, trusted: boolean) => void;
     readonly steerSubagent: (subagentId: string, message: string) => void;
+    readonly fetchDiagnostics: () => void;
+    readonly restartHost: () => void;
+    /** J2 通用偏好保存（trustedDefault / 宿主路径）。 */
+    readonly saveGeneralPreferences: (patch: { trustedDefault?: boolean; hubDev?: { bunPath: string | null; hubEntry: string | null } }) => Promise<boolean>;
     readonly testProvider: (name: string) => Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }>;
     readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: string[]; apiKey?: string }) => Promise<boolean>;
     readonly removeProvider: (name: string) => Promise<boolean>;
@@ -148,6 +158,7 @@ export function useLiveWorkspace(): LiveWorkspaceView {
   const [now, setNow] = React.useState(() => Date.now());
   const [effortLevels, setEffortLevels] = React.useState<readonly string[]>([]);
   const [commands, setCommands] = React.useState<readonly CommandView[]>([]);
+  const [diagnostics, setDiagnostics] = React.useState<{ hostPhase: 'starting' | 'ready' | 'restarting' | 'failed' | null; stderrTail: string; registrySessions: number } | null>(null);
 
   React.useEffect(() => {
     void controller.start();
@@ -223,6 +234,9 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     now,
     hasActivity,
     threadDiff: React.useMemo(() => collectThreadDiff(activeThread), [activeThread]),
+    activeStats: state.stats[activeThreadId] ?? null,
+    diagnostics,
+    statsById: state.stats,
     composer,
     dialogs: state.dialogOrder.map((id) => state.dialogs[id]).filter((dialog): dialog is PendingDialog => dialog !== undefined),
     notices: state.notices,
@@ -334,6 +348,18 @@ export function useLiveWorkspace(): LiveWorkspaceView {
         if (reason !== null) pushNotice(copy.settings.permissionSaveFailed);
         return reason === null;
       },
+      fetchDiagnostics: () => {
+        void controller.fetchDiagnostics().then((data) => setDiagnostics(data));
+      },
+      saveGeneralPreferences: async (patch) => {
+        const next = await controller.updatePreferences(patch);
+        if (next === null) {
+          pushNotice(copy.settings.generalSaveFailed);
+          return false;
+        }
+        return true;
+      },
+      restartHost: () => controller.restartHost(),
       steerSubagent: (subagentId, message) => {
         void controller.steerSubagent(activeThreadId, subagentId, message).then((reason) => {
           if (reason !== null) pushNotice(copy.flow.steerFailed(reason));

@@ -50,6 +50,9 @@ export interface LiveController {
   readonly writeSessionRules: (threadId: string, rules: PermissionRules | null) => Promise<string | null>;
   /** 向运行中子代理注入 steer（非 running 一律失败，原因透传）。 */
   readonly steerSubagent: (threadId: string, subagentId: string, message: string) => Promise<string | null>;
+  /** 运行时诊断（M1）。 */
+  readonly fetchDiagnostics: () => Promise<{ hostPhase: 'starting' | 'ready' | 'restarting' | 'failed' | null; stderrTail: string; registrySessions: number } | null>;
+  readonly restartHost: () => void;
   /** agent 定义目录刷新（带 threadId 时含受信可见的项目级；失败静默保持旧值）。 */
   readonly refreshAgents: (threadId: string | null) => Promise<void>;
   /** 项目文件搜索（@ 引用；cwd 门禁在主进程，失败返回 null）。 */
@@ -63,7 +66,7 @@ export interface LiveController {
   readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: string[]; apiKey?: string }) => Promise<boolean>;
   readonly removeProvider: (name: string) => Promise<boolean>;
   /** 应用偏好部分写（返回写后视图；失败返回 null，原因走通知条）。 */
-  readonly updatePreferences: (patch: { defaultModel?: string | null; onboarded?: boolean; projectModels?: Record<string, string>; pinnedSessions?: string[] }) => Promise<PreferencesView | null>;
+  readonly updatePreferences: (patch: { defaultModel?: string | null; onboarded?: boolean; projectModels?: Record<string, string>; pinnedSessions?: string[]; trustedDefault?: boolean; hubDev?: { bunPath: string | null; hubEntry: string | null } }) => Promise<PreferencesView | null>;
   /** provider 连接探活（主进程直发；结果原样透传给调用方做内联展示）。 */
   readonly testProvider: (name: string) => Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }>;
   /** 直执行 bash（`!` 前缀）：成功返回 null；权威条目经对账进入对话流。 */
@@ -325,6 +328,13 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       const outcome = await client.invoke('permission/sessionWrite', { threadId, rules });
       return outcome.ok ? null : outcome.reason;
     },
+    async fetchDiagnostics(): Promise<{ hostPhase: 'starting' | 'ready' | 'restarting' | 'failed' | null; stderrTail: string; registrySessions: number } | null> {
+      const outcome = await client.invoke('app/diagnostics', {});
+      return outcome.ok ? outcome.data : null;
+    },
+    restartHost(): void {
+      void client.invoke('app/restartHost', {}).then(() => undefined);
+    },
     async steerSubagent(threadId: string, subagentId: string, message: string): Promise<string | null> {
       const text = message.trim();
       if (text.length === 0) return 'empty_message';
@@ -402,7 +412,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       if (models.ok) store.setState({ models: models.data });
       return true;
     },
-    async updatePreferences(patch: { defaultModel?: string | null; onboarded?: boolean; projectModels?: Record<string, string>; pinnedSessions?: string[] }): Promise<PreferencesView | null> {
+    async updatePreferences(patch: { defaultModel?: string | null; onboarded?: boolean; projectModels?: Record<string, string>; pinnedSessions?: string[]; trustedDefault?: boolean; hubDev?: { bunPath: string | null; hubEntry: string | null } }): Promise<PreferencesView | null> {
       const outcome = await client.invoke('app/setPreference', patch);
       if (!outcome.ok) return null;
       store.setState({ preferences: outcome.data });
@@ -414,13 +424,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     },
     async refreshStats(threadId: string): Promise<void> {
       const outcome = await client.invoke('session/stats', { threadId });
-      if (outcome.ok) {
-        const stats = outcome.data as { contextUsage?: number | null; tokensTotal?: number } | null;
-        store.getState().updateStats(threadId, {
-          contextUsage: typeof stats?.contextUsage === 'number' ? stats.contextUsage : null,
-          tokensTotal: typeof stats?.tokensTotal === 'number' ? stats.tokensTotal : 0,
-        });
-      }
+      if (outcome.ok) store.getState().updateStats(threadId, outcome.data);
     },
     async ensureHydrated(threadId: string): Promise<void> {
       const thread = store.getState().threads[threadId];

@@ -2,6 +2,7 @@ import { createStore } from 'zustand/vanilla';
 
 import type {
   AgentView,
+  SessionStatsView,
   ApiData,
   CredentialView,
   ModelInfoView,
@@ -57,7 +58,7 @@ export interface LiveStoreState {
   dialogs: Readonly<Record<string, PendingDialog>>;
   dialogOrder: readonly string[];
   activeThreadId: string | null;
-  stats: Readonly<Record<string, { contextUsage: number | null; tokensTotal: number }>>;
+  stats: Readonly<Record<string, SessionStatsView>>;
   /** 通知条（notify/setStatus 类对话框的瞬时呈现）。 */
   notices: readonly { id: string; text: string }[];
 }
@@ -69,7 +70,7 @@ export interface LiveStoreActions {
   bootstrap(data: ApiData<'app/bootstrap'>): void;
   bootstrapFailed(reason: string): void;
   setActiveThread(threadId: string | null): void;
-  updateStats(threadId: string, stats: { contextUsage: number | null; tokensTotal: number }): void;
+  updateStats(threadId: string, stats: SessionStatsView): void;
   /** 直执行 bash 开始/结束（流式尾部经 bashOutput 事件折叠）。 */
   bashStarted(threadId: string): void;
   bashSettled(threadId: string): void;
@@ -246,7 +247,7 @@ function initialStoreState(): LiveStoreState {
     providers: [],
     credentials: [],
     agents: [],
-    preferences: { defaultModel: null, onboarded: false, projectModels: {}, pinnedSessions: [] },
+    preferences: { defaultModel: null, onboarded: false, projectModels: {}, pinnedSessions: [], trustedDefault: false, hubDev: { bunPath: null, hubEntry: null } },
     permissionRules: null,
     sessionRules: null,
     threads: {},

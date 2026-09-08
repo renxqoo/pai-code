@@ -1,4 +1,7 @@
+import * as React from 'react';
 import { ChevronDown, FoldVertical, Paperclip, ArrowUp } from 'lucide-react';
+
+import { UsageDetails } from './usage-details';
 
 import { IconButton, MenuButton, SparkMark, UsageRing } from '@paiapp/ui';
 
@@ -29,6 +32,8 @@ type ComposerActionsRowProps = {
   /** 生成中显示投递方式切换（null = 隐藏） */
   sendMode: 'steer' | 'followUp' | null
   onSendModeChange: (value: 'steer' | 'followUp') => void
+  /** 用量明细（I1）；null = 未拉取，环不可点。 */
+  stats: { contextUsage: number | null; tokensTotal: number; cost: number; userMessages: number; assistantMessages: number; toolCalls: number } | null
   /** 无可选模型时点击引导跳设置 */
   onOpenSettings?: () => void
   onStop: () => void
@@ -64,9 +69,11 @@ function ComposerActionsRow({
   onAttach,
   sendMode,
   onSendModeChange,
+  stats,
   onOpenSettings,
   onStop,
 }: ComposerActionsRowProps) {
+  const [usageOpen, setUsageOpen] = React.useState(false);
   return (
     <div className="flex items-center gap-[7px] px-4 pt-1 pb-[13px]">
       {modelOptions.length === 0 && onOpenSettings !== undefined ? (
@@ -123,8 +130,24 @@ function ComposerActionsRow({
         <IconButton label={attachLabel} size="sm" onClick={onAttach} className="text-muted-foreground/90">
           <Paperclip strokeWidth={1.75} />
         </IconButton>
-        <span title={contextUsageLabel} className="flex items-center">
-          <UsageRing value={contextUsed} size={17} className="text-muted-foreground/70" />
+        <span className="relative flex items-center">
+          {usageOpen && stats !== null ? <UsageDetails stats={stats} /> : null}
+          {stats === null ? (
+            <span title={contextUsageLabel}>
+              <UsageRing value={contextUsed} size={17} className="text-muted-foreground/70" />
+            </span>
+          ) : (
+            <button
+              type="button"
+              title={contextUsageLabel}
+              aria-label={contextUsageLabel}
+              aria-expanded={usageOpen}
+              onClick={() => setUsageOpen((open) => !open)}
+              className="cursor-pointer rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              <UsageRing value={contextUsed} size={17} className="text-muted-foreground/70" />
+            </button>
+          )}
         </span>
         {generating ? (
           <button

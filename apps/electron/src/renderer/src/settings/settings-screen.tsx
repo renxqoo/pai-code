@@ -2,6 +2,8 @@ import * as React from 'react';
 
 import { copy } from '@/strings';
 import { AgentsSection } from './agents-section';
+import { DiagnosticsSection } from './diagnostics-section';
+import { GeneralSection } from './general-section';
 import { HistorySection } from './history-section';
 import { KeysSection } from './keys-section';
 import { PermissionsSection } from './permissions-section';
@@ -35,6 +37,14 @@ type SettingsScreenProps = {
   sessionRules: { rules: PermissionRules; source: 'thread' | 'global' } | null
   onSaveSessionRules: (rules: PermissionRules | null) => Promise<boolean>
   onLoadSessionRules: () => void
+  trustedDefault: boolean
+  hubDev: { bunPath: string | null; hubEntry: string | null }
+  language: 'zh' | 'en'
+  onSaveGeneral: (patch: { trustedDefault?: boolean; hubDev?: { bunPath: string | null; hubEntry: string | null } }) => Promise<boolean>
+  onLanguageChange: (language: 'zh' | 'en') => void
+  diagnostics: { hostPhase: 'starting' | 'ready' | 'restarting' | 'failed' | null; stderrTail: string; registrySessions: number } | null
+  onShowDiagnostics: () => void
+  onRestartHost: () => void
   /** 进入 Agents 分区时拉取（host 级枚举无推送） */
   onShowAgents: () => void
   onOpenSaved: (sessionPath: string) => void
@@ -73,19 +83,28 @@ function SettingsScreen({
   onSaveSessionRules,
   onLoadSessionRules,
   onShowAgents,
+  trustedDefault,
+  hubDev,
+  language,
+  onSaveGeneral,
+  onLanguageChange,
+  diagnostics,
+  onShowDiagnostics,
+  onRestartHost,
   onOpenSaved,
   onRefreshSaved,
   onSaveKey,
   onRemoveKey,
   onRefreshKeys,
 }: SettingsScreenProps) {
-  const [section, setSection] = React.useState<'providers' | 'keys' | 'permissions' | 'agents' | 'skills' | 'history'>('providers');
+  const [section, setSection] = React.useState<'general' | 'providers' | 'keys' | 'permissions' | 'agents' | 'skills' | 'diagnostics' | 'history'>('providers');
   // 每次打开回到首分区：重进分区会重触发 onShow*（权限/agents 目录无推送，按开即读）
   React.useEffect(() => {
     if (open) setSection('providers');
   }, [open]);
   if (!open) return null;
   const navItems = [
+    { id: 'general', label: copy.settings.generalTitle, selected: section === 'general', onSelect: () => setSection('general') },
     { id: 'providers', label: copy.settings.providersTitle, selected: section === 'providers', onSelect: () => setSection('providers') },
     { id: 'keys', label: copy.settings.keysTitle, selected: section === 'keys', onSelect: () => setSection('keys') },
     {
@@ -107,6 +126,15 @@ function SettingsScreen({
       },
     },
     { id: 'skills', label: copy.settings.skillsTitle, selected: section === 'skills', onSelect: () => setSection('skills') },
+    {
+      id: 'diagnostics',
+      label: copy.settings.diagnosticsTitle,
+      selected: section === 'diagnostics',
+      onSelect: () => {
+        onShowDiagnostics();
+        setSection('diagnostics');
+      },
+    },
     { id: 'history', label: copy.settings.historyTitle, selected: section === 'history', onSelect: () => setSection('history') },
   ];
   return (
@@ -124,7 +152,15 @@ function SettingsScreen({
           </div>
           <div className="min-w-0 flex-1 overflow-y-auto">
             <div className="mx-auto w-full max-w-[720px] px-[28px] pb-[32px]">
-              {section === 'providers' ? (
+              {section === 'general' ? (
+                <GeneralSection
+                  trustedDefault={trustedDefault}
+                  hubDev={hubDev}
+                  language={language}
+                  onSave={onSaveGeneral}
+                  onLanguageChange={onLanguageChange}
+                />
+              ) : section === 'providers' ? (
                 <ProvidersSection
                   providers={providers}
                   defaultModel={defaultModel}
@@ -148,6 +184,8 @@ function SettingsScreen({
                 <AgentsSection agents={agents} onRefresh={onShowAgents} />
               ) : section === 'skills' ? (
                 <SkillsSection skills={skills} />
+              ) : section === 'diagnostics' ? (
+                <DiagnosticsSection data={diagnostics} onRefresh={onShowDiagnostics} onRestart={onRestartHost} />
               ) : (
                 <HistorySection
                   saved={saved}

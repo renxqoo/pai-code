@@ -45,6 +45,8 @@ function ProvidersSection({
 }: ProvidersSectionProps) {
   const [editing, setEditing] = React.useState<string | null>(null);
   const selectedDefault = defaultModel ?? copy.settings.defaultModelNone;
+  // 1c 挂账核销：默认模型已不在目录（provider 被删/改名）→ 内联失效提示
+  const defaultModelInvalid = defaultModel !== null && !modelOptions.includes(defaultModel);
   const editingProvider = editing === null ? undefined : providers.find((provider) => provider.name === editing);
   return (
     <section>
@@ -68,6 +70,9 @@ function ProvidersSection({
           }
         />
       </div>
+      {defaultModelInvalid ? (
+        <p className="pb-[6px] text-[11px] leading-[15px] text-muted-foreground/80">{copy.settings.generalDefaultModelInvalid}</p>
+      ) : null}
       {providers.length === 0 ? <p className="pb-[10px] text-[12.5px] text-muted-foreground">{copy.settings.providersEmpty}</p> : null}
       {providers.map((provider) => (
         <ProviderRow

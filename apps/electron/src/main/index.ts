@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, Notification, shell } from 'electron';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 
@@ -72,6 +72,7 @@ void app.whenReady().then(async () => {
     target.webContents.send('pai:event', batch);
   };
   const emitToRenderer = (event: UiEvent): void => {
+    notifyIfBlurred(event);
     pendingEvents.push(event);
     if (pendingEvents.length >= 128) {
       if (flushTimer !== null) clearTimeout(flushTimer);
@@ -79,6 +80,18 @@ void app.whenReady().then(async () => {
       return;
     }
     flushTimer ??= setTimeout(flushEvents, 50);
+  };
+
+  /** K1 系统通知：窗口失焦时的权限弹窗与 host 失败（任务通知走应用内通知条）。 */
+  const notifyIfBlurred = (event: UiEvent): void => {
+    if (!Notification.isSupported()) return;
+    const win = mainWindow;
+    if (win !== null && !win.isDestroyed() && win.isFocused()) return;
+    if (event.type === 'dialogRequest' && event.method !== 'notify' && event.method !== 'setStatus') {
+      new Notification({ title: 'pai', body: event.title ?? 'Action required' }).show();
+    } else if (event.type === 'host' && event.phase === 'failed') {
+      new Notification({ title: 'pai', body: 'Agent host failed to start.' }).show();
+    }
   };
 
   // 装配段整体兜底：任何一步失败都继续开窗（渲染层经 bootstrap 失败态进设置引导），绝不静默悬挂

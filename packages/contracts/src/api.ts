@@ -138,6 +138,8 @@ export const PreferencesViewSchema = z.object({
   onboarded: z.boolean(),
   projectModels: z.record(z.string(), z.string()),
   pinnedSessions: z.array(z.string()),
+  trustedDefault: z.boolean(),
+  hubDev: z.object({ bunPath: z.string().nullable(), hubEntry: z.string().nullable() }).strict(),
 });
 export type PreferencesView = z.infer<typeof PreferencesViewSchema>;
 
@@ -363,6 +365,22 @@ export const ApiSchemas = {
     params: z.object({ name: z.string().min(1) }).strict(),
     result: z.object({ latencyMs: z.number().int().nonnegative() }).strict(),
   },
+  /** 运行时诊断（M1）：host 相位/stderr 尾部/注册表会话数。 */
+  'app/diagnostics': {
+    params: empty,
+    result: z
+      .object({
+        hostPhase: z.enum(['starting', 'ready', 'restarting', 'failed']).nullable(),
+        stderrTail: z.string(),
+        registrySessions: z.number().int().nonnegative(),
+      })
+      .strict(),
+  },
+  /** 手动重启 host（走既有 restart 链路；审计落账）。 */
+  'app/restartHost': {
+    params: empty,
+    result: z.null(),
+  },
   /** 应用偏好部分写（至少一个字段；结果为写后的完整偏好视图）。 */
   'app/setPreference': {
     params: z
@@ -371,6 +389,8 @@ export const ApiSchemas = {
         onboarded: z.boolean().optional(),
         projectModels: z.record(z.string(), z.string()).optional(),
         pinnedSessions: z.array(z.string()).optional(),
+        trustedDefault: z.boolean().optional(),
+        hubDev: z.object({ bunPath: z.string().nullable(), hubEntry: z.string().nullable() }).strict().optional(),
       })
       .strict()
       .refine(
@@ -378,7 +398,9 @@ export const ApiSchemas = {
           value.defaultModel !== undefined ||
           value.onboarded !== undefined ||
           value.projectModels !== undefined ||
-          value.pinnedSessions !== undefined,
+          value.pinnedSessions !== undefined ||
+          value.trustedDefault !== undefined ||
+          value.hubDev !== undefined,
         { message: 'empty_preference' },
       ),
     result: PreferencesViewSchema,
