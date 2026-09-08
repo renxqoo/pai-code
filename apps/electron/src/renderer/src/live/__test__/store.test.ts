@@ -49,17 +49,17 @@ describe('live store（对话框/通知/bootstrap 合并）', () => {
 
   test('bootstrap 合并在途线程状态（不重置已折叠的流式现场）', () => {
     const store = createLiveStore();
-    store.getState().bootstrap({ sessions: [session('t1')], saved: [], models: [], providers: [], preferences: { defaultModel: 'glm/glm-4.7', onboarded: true } });
+    store.getState().bootstrap({ sessions: [session('t1')], saved: [], models: [], providers: [], preferences: { defaultModel: 'glm/glm-4.7', onboarded: true, projectModels: {}, pinnedSessions: [] } });
     // 偏好随 bootstrap 快照折叠（defaultModel 透传，供 createSession 回落与向导判定）
-    expect(store.getState().preferences).toEqual({ defaultModel: 'glm/glm-4.7', onboarded: true });
+    expect(store.getState().preferences).toEqual({ defaultModel: 'glm/glm-4.7', onboarded: true, projectModels: {}, pinnedSessions: [] });
     store.getState().applyEvent({ type: 'turnStarted', threadId: 't1', at: 5 }, 5);
     // 二次 bootstrap（StrictMode/重入）不得清掉流式状态
-    store.getState().bootstrap({ sessions: [session('t1'), session('t2')], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true } });
+    store.getState().bootstrap({ sessions: [session('t1'), session('t2')], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } });
     expect(store.getState().threads['t1']?.streaming).toBe(true);
     expect(store.getState().threads['t1']?.items.length).toBe(1);
     expect(store.getState().threads['t2']).toBeDefined();
     // 滞后快照不清在途会话（B-P5/P7 合并语义）：t1 保留，由 sessionRemoved 显式清理
-    store.getState().bootstrap({ sessions: [session('t2')], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true } });
+    store.getState().bootstrap({ sessions: [session('t2')], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } });
     expect(store.getState().threads['t1']).toBeDefined();
     expect(store.getState().sessions['t1']).toBeDefined();
     store.getState().applyEvent({ type: 'sessionRemoved', threadId: 't1' }, 9);
@@ -68,7 +68,7 @@ describe('live store（对话框/通知/bootstrap 合并）', () => {
 
   test('sessionRemoved 清线程与活跃指针', () => {
     const store = createLiveStore();
-    store.getState().bootstrap({ sessions: [session('t1'), session('t2')], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true } });
+    store.getState().bootstrap({ sessions: [session('t1'), session('t2')], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } });
     store.getState().setActiveThread('t1');
     store.getState().applyEvent({ type: 'sessionRemoved', threadId: 't1' }, 1);
     expect(store.getState().activeThreadId).not.toBe('t1');
@@ -77,7 +77,7 @@ describe('live store（对话框/通知/bootstrap 合并）', () => {
 
   test('host/sessionUpdated/sessionRenamed 会话表维护 + sessionDied 线程标记', () => {
     const store = createLiveStore();
-    store.getState().bootstrap({ sessions: [session('t1')], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true } });
+    store.getState().bootstrap({ sessions: [session('t1')], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } });
     store.getState().applyEvent({ type: 'host', phase: 'restarting' }, 1);
     expect(store.getState().hostPhase).toBe('restarting');
     store.getState().applyEvent({ type: 'sessionUpdated', session: { ...session('t1'), streaming: true } }, 2);
@@ -95,7 +95,7 @@ describe('live store（对话框/通知/bootstrap 合并）', () => {
 
   test('hydrate/stopIntent/updateStats/reset 动作', () => {
     const store = createLiveStore();
-    store.getState().bootstrap({ sessions: [session('t1')], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true } });
+    store.getState().bootstrap({ sessions: [session('t1')], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } });
     store.getState().hydrate('t1', {
       kind: 'hydrate/initial',
       items: [{ kind: 'user', id: 'e1', text: 'hi', origin: 'user', at: 1 }],

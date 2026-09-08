@@ -41,7 +41,7 @@ function makeRoutes(work: string) {
     emit: () => undefined,
   });
   const audits: string[] = [];
-  const routes = createApiRoutes({ runtime, settings, keyStore, audit: (m) => audits.push(m), agentDirFiles: createAgentDirFiles(agentDir) });
+  const routes = createApiRoutes({ runtime, settings, keyStore, audit: (m) => audits.push(m), agentDirFiles: createAgentDirFiles(agentDir), revealPath: () => undefined });
   return { routes, audits, agentDir };
 }
 

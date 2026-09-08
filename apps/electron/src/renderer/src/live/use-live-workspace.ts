@@ -108,6 +108,8 @@ export type LiveWorkspaceView = {
     readonly runBash: (command: string) => Promise<string | null>;
     readonly abortBash: () => void;
     readonly clearQueue: () => void;
+    readonly revealSession: (sessionPath: string) => void;
+    readonly togglePinnedSession: (sessionPath: string) => void;
     readonly forkFromEntry: (entryId: string) => Promise<boolean>;
     readonly submitDraftAs: (message: string, mode: 'steer' | 'followUp') => Promise<string | null>;
     readonly reloadSessionTrusted: (threadId: string, trusted: boolean) => void;
@@ -253,7 +255,8 @@ export function useLiveWorkspace(): LiveWorkspaceView {
         store.getState().setActiveThread(threadId);
       },
       createSession: (cwd, trusted) => {
-        const selected = pickSessionModel(state.models, state.preferences.defaultModel, composer.model);
+        // 项目默认模型记忆优先（A4）→ 全局默认 → 当前选择 → 首个可用
+        const selected = pickSessionModel(state.models, state.preferences.projectModels[cwd] ?? state.preferences.defaultModel, composer.model);
         return controller.createSession(cwd, selected, trusted).then((ok) => {
           if (!ok) pushNotice(copy.newThread.createFailed);
           return ok;
@@ -263,7 +266,14 @@ export function useLiveWorkspace(): LiveWorkspaceView {
       closeSession: (threadId) => void controller.closeSession(threadId),
       selectModel: (value) => {
         const model = state.models.find((entry) => `${entry.provider}/${entry.modelId}` === value);
-        if (model !== undefined) void controller.selectModel(activeThreadId, model.provider, model.modelId);
+        if (model === undefined) return;
+        void controller.selectModel(activeThreadId, model.provider, model.modelId);
+        // 项目默认模型记忆（A4）：该 cwd 下次新建会话预选
+        const cwd = activeSession?.cwd;
+        if (cwd !== undefined && cwd.length > 0) {
+          const projectModels = { ...state.preferences.projectModels, [cwd]: value };
+          void controller.updatePreferences({ projectModels });
+        }
       },
       selectEffort: (value) => {
         const level = Object.entries(EFFORT_LABELS).find(([, label]) => label === value)?.[0];
@@ -320,6 +330,16 @@ export function useLiveWorkspace(): LiveWorkspaceView {
       },
       abortBash: () => void controller.abortBash(activeThreadId),
       clearQueue: () => void controller.clearQueue(activeThreadId),
+      revealSession: (sessionPath) => void controller.revealSession(sessionPath),
+      togglePinnedSession: (sessionPath) => {
+        const current = state.preferences.pinnedSessions;
+        const pinnedSessions = current.includes(sessionPath)
+          ? current.filter((path) => path !== sessionPath)
+          : [...current, sessionPath];
+        void controller.updatePreferences({ pinnedSessions }).then((next) => {
+          if (next === null) pushNotice(copy.settings.preferenceSaveFailed);
+        });
+      },
       forkFromEntry: async (entryId) => {
         const ok = await controller.forkSession(activeThreadId, entryId);
         if (!ok) pushNotice(copy.flow.forkFailed);

@@ -33,12 +33,16 @@ test('patch 部分写：只动目标字段，其余保留；落盘可再读', ()
   settings.patch({ trustedDefault: true });
   settings.patch({ onboarded: true, defaultModel: 'glm/glm-4.7' });
 
+  settings.patch({ projectModels: { '/w': 'glm/glm-4.7' }, pinnedSessions: ['/a.jsonl'] });
+
   expect(settings.get()).toEqual({
     hubDev: { bunPath: null, hubEntry: null },
     providers: [],
     trustedDefault: true,
     defaultModel: 'glm/glm-4.7',
     onboarded: true,
+    projectModels: { '/w': 'glm/glm-4.7' },
+    pinnedSessions: ['/a.jsonl'],
   });
 
   // 新实例从盘读回（缓存不背书）

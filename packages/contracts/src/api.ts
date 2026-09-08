@@ -136,6 +136,8 @@ export type ProviderConfigView = z.infer<typeof ProviderConfigViewSchema>;
 export const PreferencesViewSchema = z.object({
   defaultModel: z.string().nullable(),
   onboarded: z.boolean(),
+  projectModels: z.record(z.string(), z.string()),
+  pinnedSessions: z.array(z.string()),
 });
 export type PreferencesView = z.infer<typeof PreferencesViewSchema>;
 
@@ -302,6 +304,11 @@ export const ApiSchemas = {
     params: z.object({ threadId: z.string().min(1), entryId: z.string().min(1), position: z.enum(['before', 'at']).optional() }).strict(),
     result: SessionViewSchema,
   },
+  /** 在系统文件管理器中显示会话文件（路径白名单同 resume）。 */
+  'session/reveal': {
+    params: z.object({ sessionPath: z.string().min(1) }).strict(),
+    result: z.null(),
+  },
   /** 清空排队消息（协议仅全清，无单条操作）。 */
   'session/clearQueue': {
     params: threadOnly,
@@ -353,9 +360,18 @@ export const ApiSchemas = {
       .object({
         defaultModel: z.string().nullable().optional(),
         onboarded: z.boolean().optional(),
+        projectModels: z.record(z.string(), z.string()).optional(),
+        pinnedSessions: z.array(z.string()).optional(),
       })
       .strict()
-      .refine((value) => value.defaultModel !== undefined || value.onboarded !== undefined, { message: 'empty_preference' }),
+      .refine(
+        (value) =>
+          value.defaultModel !== undefined ||
+          value.onboarded !== undefined ||
+          value.projectModels !== undefined ||
+          value.pinnedSessions !== undefined,
+        { message: 'empty_preference' },
+      ),
     result: PreferencesViewSchema,
   },
 } as const;

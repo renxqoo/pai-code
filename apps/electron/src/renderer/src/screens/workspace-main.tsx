@@ -15,6 +15,7 @@ import { NoticeStrip } from '@/notices/notice-strip';
 import { SettingsScreen } from '@/settings/settings-screen';
 import { Sidebar } from '@/sidebar/sidebar';
 import { filterSessions } from '@/sidebar/filter-sessions';
+import type { SessionCardModel } from '@/sidebar/session-card-model';
 import { MessageList } from '@/thread/message-list';
 import { QueuePanel } from '@/thread/queue-panel';
 import { ThreadBanner } from '@/thread/thread-banner';
@@ -42,6 +43,8 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
   /** 侧栏会话过滤查询（A3）：按标题/项目名过滤 */
   const [sidebarQuery, setSidebarQuery] = React.useState('');
+  /** 折叠的项目分组名集合（A4） */
+  const [collapsedGroups, setCollapsedGroups] = React.useState<ReadonlySet<string>>(new Set());
   /** 面板开合挂在会话之上：切换会话不丢失 */
   const [panel, setPanel] = React.useState<SidePanel>(null);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
@@ -142,6 +145,30 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const refreshAction = React.useMemo(() => ({ label: copy.sidebar.refresh, onSelect: refreshSaved }), [refreshSaved]);
   const projects = React.useMemo(() => [...new Set(sessions.map((session) => session.projectName))], [sessions]);
   const visibleSessions = React.useMemo(() => filterSessions(sessions, sidebarQuery), [sessions, sidebarQuery]);
+  const sessionGroups = React.useMemo(
+    () =>
+      [...visibleSessions.reduce((map, session) => {
+        const list: SessionCardModel[] = map.get(session.projectName) ?? [];
+        list.push(session);
+        map.set(session.projectName, list);
+        return map;
+      }, new Map<string, SessionCardModel[]>())].map(([projectName, list]) => ({
+        key: projectName,
+        projectName,
+        sessions: list,
+        collapsed: collapsedGroups.has(projectName),
+        onToggle: () =>
+          setCollapsedGroups((current) => {
+            const next = new Set(current);
+            if (next.has(projectName)) next.delete(projectName);
+            else next.add(projectName);
+            return next;
+          }),
+      })),
+    [visibleSessions, collapsedGroups],
+  );
+  const pinnedSessions = React.useMemo(() => new Set(workspace.preferences.pinnedSessions), [workspace.preferences.pinnedSessions]);
+  const savedProjects = React.useMemo(() => [...new Set(workspace.saved.map((session) => session.cwd))], [workspace.saved]);
   const sessionSkills = React.useMemo(
     () =>
       workspace.commands
@@ -173,7 +200,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
           refresh: copy.sidebar.refresh,
           clearSearch: copy.sidebar.clearSearch,
         }}
-        sessions={visibleSessions}
+        groups={sessionGroups}
         ages={ages}
         activeSessionId={activeThreadId}
         projects={projects}
@@ -342,6 +369,10 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         agents={workspace.agents}
         skills={sessionSkills}
         saved={workspace.saved}
+        pinnedSessions={pinnedSessions}
+        savedProjects={savedProjects}
+        onTogglePin={workspace.actions.togglePinnedSession}
+        onRevealSession={workspace.actions.revealSession}
         onClose={closeSettings}
         onUpsertProvider={workspace.actions.upsertProvider}
         onRemoveProvider={workspace.actions.removeProvider}

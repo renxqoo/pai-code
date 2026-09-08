@@ -57,7 +57,7 @@ export interface LiveController {
   readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: string[]; apiKey?: string }) => Promise<boolean>;
   readonly removeProvider: (name: string) => Promise<boolean>;
   /** 应用偏好部分写（返回写后视图；失败返回 null，原因走通知条）。 */
-  readonly updatePreferences: (patch: { defaultModel?: string | null; onboarded?: boolean }) => Promise<PreferencesView | null>;
+  readonly updatePreferences: (patch: { defaultModel?: string | null; onboarded?: boolean; projectModels?: Record<string, string>; pinnedSessions?: string[] }) => Promise<PreferencesView | null>;
   /** provider 连接探活（主进程直发；结果原样透传给调用方做内联展示）。 */
   readonly testProvider: (name: string) => Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }>;
   /** 直执行 bash（`!` 前缀）：成功返回 null；权威条目经对账进入对话流。 */
@@ -65,6 +65,8 @@ export interface LiveController {
   readonly abortBash: (threadId: string) => Promise<void>;
   /** 清空排队消息（全清语义）。 */
   readonly clearQueue: (threadId: string) => Promise<void>;
+  /** 在系统文件管理器中显示会话文件（主进程白名单校验）。 */
+  readonly revealSession: (sessionPath: string) => Promise<void>;
   /** 从历史条目分叉（position=before）→ 激活新会话。 */
   readonly forkSession: (threadId: string, entryId: string) => Promise<boolean>;
   readonly refreshStats: (threadId: string) => Promise<void>;
@@ -329,6 +331,9 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     async clearQueue(threadId: string): Promise<void> {
       await client.invoke('session/clearQueue', { threadId });
     },
+    async revealSession(sessionPath: string): Promise<void> {
+      await client.invoke('session/reveal', { sessionPath });
+    },
     async forkSession(threadId: string, entryId: string): Promise<boolean> {
       const outcome = await client.invoke('session/fork', { threadId, entryId, position: 'before' });
       if (!outcome.ok) return false;
@@ -375,7 +380,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       if (models.ok) store.setState({ models: models.data });
       return true;
     },
-    async updatePreferences(patch: { defaultModel?: string | null; onboarded?: boolean }): Promise<PreferencesView | null> {
+    async updatePreferences(patch: { defaultModel?: string | null; onboarded?: boolean; projectModels?: Record<string, string>; pinnedSessions?: string[] }): Promise<PreferencesView | null> {
       const outcome = await client.invoke('app/setPreference', patch);
       if (!outcome.ok) return null;
       store.setState({ preferences: outcome.data });

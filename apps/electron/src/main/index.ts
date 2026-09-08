@@ -102,6 +102,7 @@ void app.whenReady().then(async () => {
       keyStore,
       audit: (message) => logger.log(`audit:${message}`),
       agentDirFiles: createAgentDirFiles(paths.agentDir),
+      revealPath: (path) => shell.showItemInFolder(path),
     });
     await runtime.start();
   } catch (error) {

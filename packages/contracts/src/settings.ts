@@ -29,6 +29,10 @@ export const SettingsSchema = z
     defaultModel: z.string().nullable().default(null),
     /** 首次引导完成标志（跳过也算完成；与 provider 配置解耦）。 */
     onboarded: z.boolean().default(false),
+    /** 每项目默认模型记忆（cwd → "provider/modelId"；切换模型时写入）。 */
+    projectModels: z.record(z.string(), z.string()).default({}),
+    /** 置顶的历史会话文件（sessionPath 集合的数组形态）。 */
+    pinnedSessions: z.array(z.string()).default([]),
   })
   .strict();
 

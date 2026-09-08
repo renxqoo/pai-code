@@ -86,7 +86,7 @@ test('reloadSessionTrusted：stop → resume(trusted) → 激活新会话', asyn
     saved: [],
     models: [],
     providers: [],
-    preferences: { defaultModel: null, onboarded: true },
+    preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] },
   });
   expect(await createLiveController(client, store).reloadSessionTrusted('t1', true)).toBe(true);
   const order = client.calls.map((call) => call.method);
@@ -104,13 +104,13 @@ test('reloadSessionTrusted：stop 失败即中止（不发 resume）；无会话
     saved: [],
     models: [],
     providers: [],
-    preferences: { defaultModel: null, onboarded: true },
+    preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] },
   });
   expect(await createLiveController(client, store).reloadSessionTrusted('t1', true)).toBe(false);
   expect(client.calls.some((call) => call.method === 'session/resume')).toBe(false);
 
   const noPathStore = createLiveStore();
-  noPathStore.getState().bootstrap({ sessions: [], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true } });
+  noPathStore.getState().bootstrap({ sessions: [], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } });
   const noPathClient = makeClient({});
   expect(await createLiveController(noPathClient, noPathStore).reloadSessionTrusted('ghost', true)).toBe(false);
   expect(noPathClient.calls).toEqual([]);
@@ -124,7 +124,7 @@ test('reloadSessionTrusted：stop 成功但 resume 失败——返回 false 且�
     saved: [],
     models: [],
     providers: [],
-    preferences: { defaultModel: null, onboarded: true },
+    preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] },
   });
   expect(await createLiveController(client, store).reloadSessionTrusted('t1', true)).toBe(false);
   expect(client.calls.some((call) => call.method === 'session/listSaved')).toBe(true);
@@ -144,7 +144,7 @@ test('reloadSessionTrusted：重开前非活跃会话——成功后不劫持 ac
     saved: [],
     models: [],
     providers: [],
-    preferences: { defaultModel: null, onboarded: true },
+    preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] },
   });
   store.getState().setActiveThread('t2');
   expect(await createLiveController(client, store).reloadSessionTrusted('t1', true)).toBe(true);

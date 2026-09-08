@@ -28,6 +28,8 @@ export interface ApiRouteDeps {
   audit: (message: string) => void;
   /** agentDir 受控文件面（固定文件名白名单，原子写）。 */
   agentDirFiles: AgentDirFiles;
+  /** 在系统文件管理器中显示文件（装配层注入 Electron shell；缺省 no-op 保可测性）。 */
+  revealPath: (path: string) => void;
 }
 
 type Outcome<M extends ApiMethod> = Promise<ApiOutcome<M>>;
@@ -99,9 +101,14 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       hasKey: deps.keyStore.getKey(provider.name) !== null,
     }));
 
-  const preferencesView = (): { defaultModel: string | null; onboarded: boolean } => {
+  const preferencesView = () => {
     const settings = deps.settings.get();
-    return { defaultModel: settings.defaultModel, onboarded: settings.onboarded };
+    return {
+      defaultModel: settings.defaultModel,
+      onboarded: settings.onboarded,
+      projectModels: { ...settings.projectModels },
+      pinnedSessions: [...settings.pinnedSessions],
+    };
   };
 
   /** 连接探活（主进程直发，不经 hub；key 不进日志）。 */
@@ -303,6 +310,11 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       fillSessionMeta(threadId);
       return { ok: true as const, data: view };
     },
+    'session/reveal': (params) => {
+      if (!insideSessionsRoot(params.sessionPath)) return Promise.resolve(fail('session_path_forbidden'));
+      deps.revealPath(params.sessionPath);
+      return Promise.resolve({ ok: true as const, data: null });
+    },
     'session/clearQueue': async (params) => {
       const result = await command({ type: 'clear_queue', threadId: params.threadId });
       return result.ok ? { ok: true as const, data: null } : fail(result.reason);
@@ -378,11 +390,13 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       return outcome.ok ? { ok: true as const, data: { latencyMs: outcome.latencyMs } } : fail(outcome.reason);
     },
     'app/setPreference': (params) => {
-      const patch: { defaultModel?: string | null; onboarded?: boolean } = {};
+      const patch: { defaultModel?: string | null; onboarded?: boolean; projectModels?: Record<string, string>; pinnedSessions?: string[] } = {};
       if (params.defaultModel !== undefined) patch.defaultModel = params.defaultModel;
       if (params.onboarded !== undefined) patch.onboarded = params.onboarded;
-      const next = deps.settings.patch(patch);
-      return Promise.resolve({ ok: true as const, data: { defaultModel: next.defaultModel, onboarded: next.onboarded } });
+      if (params.projectModels !== undefined) patch.projectModels = { ...params.projectModels };
+      if (params.pinnedSessions !== undefined) patch.pinnedSessions = [...params.pinnedSessions];
+      deps.settings.patch(patch);
+      return Promise.resolve({ ok: true as const, data: preferencesView() });
     },
   };
 

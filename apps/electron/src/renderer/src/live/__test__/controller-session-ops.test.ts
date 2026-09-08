@@ -71,7 +71,7 @@ test('submitDraft 携带 images 透传（prompt 与 followUp 两路径）', asyn
   const images = [{ type: 'image' as const, data: 'aGk=', mimeType: 'image/png' }];
   const streamingClient = makeClient({});
   const streamingStore = createLiveStore();
-  streamingStore.getState().bootstrap({ sessions: [], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true } });
+  streamingStore.getState().bootstrap({ sessions: [], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } });
   // streaming 状态经 foldThreadEvent 设置太重：直接走非流式路径断言 prompt 透传
   const idle = createLiveController(streamingClient, streamingStore);
   expect(await idle.submitDraft('t1', 'hello', images)).toBeNull();
@@ -90,7 +90,7 @@ test('runBash：置位/清位 bashRunning、发出命令、随后对账拉取', 
   const client = makeClient({});
   const store = createLiveStore();
   const controller = createLiveController(client, store);
-  store.getState().bootstrap({ sessions: [], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true } });
+  store.getState().bootstrap({ sessions: [], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } });
   const seen: boolean[] = [];
   const unsubscribe = store.subscribe((state) => {
     seen.push(Object.values(state.threads)[0]?.bashRunning ?? false);
@@ -116,7 +116,7 @@ test('submitDraft 生成中显式 steer 模式走 session/steer', async () => {
   const client = makeClient({});
   const store = createLiveStore();
   const controller = createLiveController(client, store);
-  store.getState().bootstrap({ sessions: [], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true } });
+  store.getState().bootstrap({ sessions: [], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } });
   store.getState().applyEvent({ type: 'turnStarted', threadId: 't1', at: 1 }, 1);
   expect(await controller.submitDraft('t1', '改需求', undefined, 'steer')).toBeNull();
   expect(client.calls.find((call) => call.method === 'session/steer')?.params).toMatchObject({ threadId: 't1', message: '改需求' });

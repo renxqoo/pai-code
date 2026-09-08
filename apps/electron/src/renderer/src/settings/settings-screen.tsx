@@ -20,6 +20,10 @@ type SettingsScreenProps = {
   agents: readonly AgentView[]
   skills: ReadonlyArray<{ name: string; description: string | null }>
   saved: ReadonlyArray<{ sessionPath: string; title: string; cwd: string; modifiedAt: number; messageCount: number }>
+  pinnedSessions: ReadonlySet<string>
+  savedProjects: readonly string[]
+  onTogglePin: (sessionPath: string) => void
+  onRevealSession: (sessionPath: string) => void
   onClose: () => void
   onUpsertProvider: (input: { name: string; baseUrl: string; api: string; models: string[]; apiKey?: string }) => Promise<boolean>
   onRemoveProvider: (name: string) => Promise<boolean>
@@ -51,6 +55,10 @@ function SettingsScreen({
   agents,
   skills,
   saved,
+  pinnedSessions,
+  savedProjects,
+  onTogglePin,
+  onRevealSession,
   onClose,
   onUpsertProvider,
   onRemoveProvider,
@@ -129,7 +137,15 @@ function SettingsScreen({
               ) : section === 'skills' ? (
                 <SkillsSection skills={skills} />
               ) : (
-                <HistorySection saved={saved} onOpenSaved={onOpenSaved} onRefreshSaved={onRefreshSaved} />
+                <HistorySection
+                  saved={saved}
+                  pinned={pinnedSessions}
+                  projects={savedProjects}
+                  onTogglePin={onTogglePin}
+                  onReveal={onRevealSession}
+                  onOpenSaved={onOpenSaved}
+                  onRefreshSaved={onRefreshSaved}
+                />
               )}
             </div>
           </div>
