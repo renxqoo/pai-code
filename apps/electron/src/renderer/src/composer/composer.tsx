@@ -7,7 +7,7 @@ import { ComposerActionsRow } from '@/composer/composer-actions-row';
 import { ComposerContextBar } from '@/composer/composer-context-bar';
 import { AttachmentChips } from '@/composer/attachment-chips';
 import { imagePayloadOf, readImageFile, type PendingImage } from '@/composer/read-image-file';
-import { activeSlashQuery, applySlashSelection, filterSlashItems } from '@/composer/slash-trigger';
+import { activeTokenQuery, applyTokenSelection, filterTokenItems, type TokenTrigger } from '@/composer/token-trigger';
 import { copy } from '@/strings';
 
 type ComposerProps = {
@@ -30,8 +30,11 @@ type ComposerProps = {
   checkoutOptions: readonly string[]
   /** 会话内斜杠命令/技能目录（补全数据源） */
   commands: readonly CommandView[]
-  /** 补全弹层的无障碍名 */
+  /** 补全弹层的无障碍名（命令 / 文件） */
   slashAriaLabel: string
+  fileAriaLabel: string
+  /** @ 文件引用的目录搜索（失败返回 null，弹层按空结果呈现） */
+  onSearchFiles: (query: string) => Promise<string[] | null>
   /** 无可选模型时的引导文案（点击触发 onOpenSettings） */
   noModelsLabel: string
   /** 思考档不可用时的禁用原因文案 */
@@ -71,6 +74,8 @@ function Composer({
   checkoutOptions,
   commands,
   slashAriaLabel,
+  fileAriaLabel,
+  onSearchFiles,
   noModelsLabel,
   effortUnavailableLabel,
   generating,
@@ -156,18 +161,54 @@ function Composer({
   /** 用户事件产出的最新 value：外部回填（编辑重发/切会话草稿）时重置交互态防幽灵弹层 */
   const userValueRef = React.useRef(value);
 
-  const query = activeSlashQuery(value, caret);
+  /** 双触发：`/` 命令（同步过滤）与 `@` 文件（去抖异步搜索，序号守卫） */
+  const slashQuery = activeTokenQuery(value, caret, '/');
+  const atQuery = activeTokenQuery(value, caret, '@');
+  const trigger: TokenTrigger | null = slashQuery !== null ? '/' : atQuery !== null ? '@' : null;
+  const query = trigger === null ? null : (trigger === '/' ? slashQuery : atQuery);
+  const [fileItems, setFileItems] = React.useState<readonly string[]>([]);
+  const fileSeqRef = React.useRef(0);
+  const lastFileQueryRef = React.useRef<string | null>(null);
+
   const slashItems = React.useMemo(
-    () => (query === null ? [] : filterSlashItems(commands, query)),
-    [commands, query],
+    () => (slashQuery === null ? [] : filterTokenItems(commands, slashQuery)),
+    [commands, slashQuery],
   );
-  const slashActive = query !== null && query !== dismissedQuery && slashItems.length > 0;
-  const activeItem = slashActive ? slashItems[activeIndex % slashItems.length] : undefined;
-  const itemId = (command: { source: string; name: string }): string => `${command.source}:${command.name}`;
+  const atItems = React.useMemo(
+    () => (atQuery === null ? [] : filterTokenItems(fileItems.map((path) => ({ name: path })), atQuery)),
+    [fileItems, atQuery],
+  );
+  const items = trigger === '/'
+    ? slashItems.map((command) => ({ id: `${command.source}:${command.name}`, label: command.name, description: command.description }))
+    : trigger === '@'
+      ? atItems.map((file) => ({ id: `@:${file.name}`, label: file.name, description: null }))
+      : [];
+  const dismissedKey = trigger === null || query === null ? null : `${trigger}:${query}`;
+  const autocompleteActive = trigger !== null && dismissedKey !== dismissedQuery && items.length > 0;
+  const activeItemIndex = autocompleteActive ? activeIndex % items.length : -1;
 
   React.useEffect(() => {
     setActiveIndex(0);
-  }, [query]);
+  }, [dismissedKey]);
+
+  // @ 触发：200ms 去抖搜索；序号守卫丢弃过期响应；同 query 不重复拉取
+  React.useEffect(() => {
+    if (atQuery === null) {
+      lastFileQueryRef.current = null;
+      return;
+    }
+    if (lastFileQueryRef.current === atQuery) return;
+    const handle = window.setTimeout(() => {
+      fileSeqRef.current += 1;
+      const seq = fileSeqRef.current;
+      lastFileQueryRef.current = atQuery;
+      void onSearchFiles(atQuery).then((paths) => {
+        if (seq !== fileSeqRef.current) return;
+        setFileItems(paths ?? []);
+      });
+    }, 200);
+    return () => window.clearTimeout(handle);
+  }, [atQuery, onSearchFiles]);
 
   React.useEffect(() => {
     if (value === userValueRef.current) return;
@@ -187,8 +228,9 @@ function Composer({
     setPendingCaret(null);
   }, [pendingCaret, textareaRef]);
 
-  const acceptSlash = (name: string): void => {
-    const next = applySlashSelection(value, caret, name);
+  const acceptToken = (label: string): void => {
+    if (trigger === null) return;
+    const next = applyTokenSelection(value, caret, trigger, label);
     onChange(next.text);
     setPendingCaret(next.caret);
     setDismissedQuery(null);
@@ -213,20 +255,20 @@ function Composer({
         className="rounded-[20px] border border-border bg-background shadow-[0_14px_22px_-16px_rgba(24,24,28,0.22)] transition-colors duration-150 focus-within:border-foreground/15"
       >
         <div className="relative">
-          {slashActive ? (
+          {autocompleteActive ? (
             <div className="absolute bottom-full left-4 z-10 mb-[4px]">
               <AutocompleteList
-                items={slashItems.map((command) => ({ id: itemId(command), label: command.name, description: command.description }))}
-                activeId={activeItem === undefined ? null : itemId(activeItem)}
+                items={items}
+                activeId={items[activeItemIndex]?.id ?? null}
                 onSelect={(id) => {
-                  const item = slashItems.find((command) => itemId(command) === id);
-                  if (item !== undefined) acceptSlash(item.name);
+                  const item = items.find((entry) => entry.id === id);
+                  if (item !== undefined) acceptToken(item.label);
                 }}
                 onHover={(id) => {
-                  const index = slashItems.findIndex((command) => itemId(command) === id);
+                  const index = items.findIndex((entry) => entry.id === id);
                   if (index >= 0) setActiveIndex(index);
                 }}
-                ariaLabel={slashAriaLabel}
+                ariaLabel={trigger === '/' ? slashAriaLabel : fileAriaLabel}
               />
             </div>
           ) : null}
@@ -251,7 +293,7 @@ function Composer({
               addFiles(files);
             }}
             onKeyDown={(event) => {
-              if (slashActive && !event.nativeEvent.isComposing) {
+              if (autocompleteActive && !event.nativeEvent.isComposing) {
                 if (event.key === 'ArrowDown') {
                   event.preventDefault();
                   setActiveIndex((index) => (index + 1) % slashItems.length);
@@ -265,13 +307,14 @@ function Composer({
                 if (event.key === 'Enter' || event.key === 'Tab') {
                   // 采纳补全：Enter 不再走提交语义
                   event.preventDefault();
-                  if (activeItem !== undefined) acceptSlash(activeItem.name);
+                  const picked = items[activeItemIndex];
+                  if (picked !== undefined) acceptToken(picked.label);
                   return;
                 }
                 if (event.key === 'Escape') {
                   // 只关补全层，不外溢全局停止语义
                   event.stopPropagation();
-                  setDismissedQuery(query);
+                  setDismissedQuery(dismissedKey);
                   return;
                 }
               }

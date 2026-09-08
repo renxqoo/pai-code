@@ -99,6 +99,7 @@ export type LiveWorkspaceView = {
     readonly refreshPermissionRules: () => void;
     readonly writePermissionRules: (rules: PermissionRules) => Promise<boolean>;
     readonly refreshAgents: () => void;
+    readonly searchFiles: (query: string) => Promise<string[] | null>;
     readonly reloadSessionTrusted: (threadId: string, trusted: boolean) => void;
     readonly testProvider: (name: string) => Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }>;
     readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: string[]; apiKey?: string }) => Promise<boolean>;
@@ -291,6 +292,7 @@ export function useLiveWorkspace(): LiveWorkspaceView {
       refreshAgents: () => {
         void controller.refreshAgents(activeThreadId.length > 0 ? activeThreadId : null);
       },
+      searchFiles: (query) => controller.searchFiles(activeSession?.cwd ?? '', query),
       upsertProvider: (input) => controller.upsertProvider(input),
       removeProvider: (name) => controller.removeProvider(name),
       renameSession: async (threadId, name) => {

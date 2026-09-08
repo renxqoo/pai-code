@@ -118,6 +118,7 @@ export const copy = {
     noModels: 'No models yet — open Settings',
     effortUnavailable: 'Thinking unavailable',
     slashAria: 'Command suggestions',
+    fileAria: 'File suggestions',
     imageUnsupported: 'Only images up to 8 MB can be attached.',
     removeImage: 'Remove image',
     localCheckout: 'Local checkout',

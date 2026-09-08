@@ -266,6 +266,8 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
             checkoutOptions={workspace.composer.checkoutOptions}
             commands={workspace.commands}
             slashAriaLabel={copy.composer.slashAria}
+            fileAriaLabel={copy.composer.fileAria}
+            onSearchFiles={workspace.actions.searchFiles}
             noModelsLabel={copy.composer.noModels}
             effortUnavailableLabel={copy.composer.effortUnavailable}
             generating={workspace.generating}

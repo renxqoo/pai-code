@@ -41,6 +41,8 @@ export interface LiveController {
   readonly writePermissionRules: (rules: PermissionRules) => Promise<string | null>;
   /** agent 定义目录刷新（带 threadId 时含受信可见的项目级；失败静默保持旧值）。 */
   readonly refreshAgents: (threadId: string | null) => Promise<void>;
+  /** 项目文件搜索（@ 引用；cwd 门禁在主进程，失败返回 null）。 */
+  readonly searchFiles: (cwd: string, query: string) => Promise<string[] | null>;
   /** hub 凭据目录刷新（auth/list，永不含 key 本身）。 */
   readonly refreshCredentials: () => Promise<void>;
   /** 写入官方 provider key（hub 侧 auth.json）；成功返回 null，失败返回原因。 */
@@ -290,6 +292,11 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       // 判活：请求发出后会话已切换则丢弃（防陈旧目录覆盖新会话视角）
       if (threadId !== null && store.getState().activeThreadId !== threadId) return;
       store.setState({ agents: outcome.data });
+    },
+    async searchFiles(cwd: string, query: string): Promise<string[] | null> {
+      if (cwd.length === 0) return null;
+      const outcome = await client.invoke('file/search', { cwd, query });
+      return outcome.ok ? outcome.data : null;
     },
     async refreshCredentials(): Promise<void> {
       const outcome = await client.invoke('auth/list', {});

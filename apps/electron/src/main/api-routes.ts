@@ -4,6 +4,7 @@ import { basename as baseName, dirname as dirnamePath, join as joinPaths, resolv
 import { agentViews, mapEntries, modelInfos, savedSessions, sessionCommands, sessionStatsView, threadStateView, thinkingLevels } from '@paiapp/adapter';
 import { envVarNameForProvider } from './models-config';
 import { createProviderProbe } from './provider-probe';
+import { searchProjectFiles } from './file-search';
 import type { AgentDirFiles } from './agent-dir-files';
 import { defaultPermissionRules, parsePermissionRules } from '@paiapp/contracts';
 import { ApiSchemas, type ApiMethod, type ApiOutcome, type ApiParams } from '@paiapp/contracts';
@@ -291,6 +292,26 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     'agent/list': async (params) => {
       const result = await command({ type: 'agents/list', threadId: params.threadId });
       return result.ok ? { ok: true as const, data: agentViews(result.data) } : fail(result.reason);
+    },
+    'file/search': (params) => {
+      // 目录门禁：只允许扫描本应用已知会话目录（活跃会话 + 注册表），防被攻陷渲染层任意枚举
+      const root = resolvePath(params.cwd);
+      let rootReal = root;
+      try {
+        rootReal = realpathSync(root);
+      } catch {
+        // 目录不存在：保留 resolve 形态（扫描侧按空结果降级）
+      }
+      const allowed = knownCwds().some((known) => {
+        try {
+          const base = realpathSync(known);
+          return base === rootReal || rootReal.startsWith(`${base}${pathSep}`);
+        } catch {
+          return resolvePath(known) === root;
+        }
+      });
+      if (!allowed) return Promise.resolve(fail('cwd_forbidden'));
+      return Promise.resolve({ ok: true as const, data: searchProjectFiles(params.cwd, params.query) });
     },
     'permission/read': () => {
       // 宽容解析镜像 hub 热读语义（字段可省/未知键忽略），部分规则完整呈现不清档

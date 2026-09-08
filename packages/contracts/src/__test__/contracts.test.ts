@@ -177,6 +177,12 @@ describe('API schema：每方法合法/非法样本', () => {
     ).toThrow();
   });
 
+  test('file/search 合法样本与拒绝', () => {
+    expect(ApiSchemas['file/search'].params.parse({ cwd: '/w', query: 'ap' })).toEqual({ cwd: '/w', query: 'ap' });
+    expect(() => ApiSchemas['file/search'].params.parse({ cwd: '', query: '' })).toThrow();
+    expect(() => ApiSchemas['file/search'].params.parse({ cwd: '/w' })).toThrow();
+  });
+
   test('agent/list 合法样本：带与不带 threadId', () => {
     expect(ApiSchemas['agent/list'].params.parse({})).toEqual({});
     expect(ApiSchemas['agent/list'].params.parse({ threadId: 't1' })).toEqual({ threadId: 't1' });

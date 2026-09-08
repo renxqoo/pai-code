@@ -292,6 +292,11 @@ export const ApiSchemas = {
     params: z.object({ threadId: z.string().min(1).optional() }).strict(),
     result: z.array(AgentViewSchema),
   },
+  /** 项目文件搜索（@ 引用数据源；cwd 必须是本应用已知会话目录）。 */
+  'file/search': {
+    params: z.object({ cwd: z.string().min(1), query: z.string() }).strict(),
+    result: z.array(z.string()),
+  },
   /** 全局权限规则（agentDir/permission-rules.json，hub 热读）。 */
   'permission/read': {
     params: empty,
