@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { CONVERSATION_COLUMN_CLASS } from '@/thread/conversation-column';
 import { AutocompleteList } from '@paiapp/ui';
 import type { CommandView, ImagePayload, PermissionRules, SessionStatsView } from '@paiapp/contracts';
 
@@ -240,7 +241,7 @@ function Composer({
   };
 
   return (
-    <div className="mx-auto w-full max-w-[700px]">
+    <div className={CONVERSATION_COLUMN_CLASS}>
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -323,7 +324,7 @@ function Composer({
               event.currentTarget.form?.requestSubmit();
             }}
             rows={2}
-            className="block min-h-[84px] w-full resize-none bg-transparent px-4 pt-[17px] pb-1 text-[12.5px] leading-[19px] text-foreground outline-none placeholder:text-muted-foreground/85 field-sizing-content"
+            className="block min-h-[84px] max-h-[280px] w-full resize-none bg-transparent px-4 pt-[17px] pb-1 text-[12.5px] leading-[19px] text-foreground outline-none placeholder:text-muted-foreground/85 field-sizing-content"
           />
         </div>
         {attachments.length > 0 ? (

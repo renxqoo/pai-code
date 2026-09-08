@@ -61,13 +61,13 @@ function ThreadHeader({
 }: ThreadHeaderProps) {
   return (
     <header
-      className="flex h-[46px] shrink-0 items-center gap-3 pl-[27px] transition-[padding] duration-200 motion-reduce:transition-none"
+      className="app-drag flex h-[46px] shrink-0 items-center gap-3 pl-[27px] transition-[padding] duration-200 motion-reduce:transition-none"
       style={{
         paddingLeft: sidebarCollapsed ? 'calc(var(--titlebar-left-w, 190px) + 14px)' : undefined,
         paddingRight: WINDOWS_CAPTION_WIDTH + 18,
       }}
     >
-      <div className="flex min-w-0 items-center gap-2">
+      <div className="app-no-drag flex min-w-0 items-center gap-2">
         <Folder className="size-3 shrink-0 text-muted-foreground/80" strokeWidth={1.75} />
         <button
           type="button"
@@ -81,7 +81,7 @@ function ThreadHeader({
         </span>
         <h1 className="truncate text-[12.5px] leading-none font-medium text-foreground">{sessionTitle}</h1>
       </div>
-      <div className="ml-auto flex shrink-0 items-center gap-[10px]">
+      <div className="app-no-drag ml-auto flex shrink-0 items-center gap-[10px]">
         <Button
           variant="outline"
           onClick={onAddAction}
@@ -105,10 +105,10 @@ function ThreadHeader({
           onMenuSelect={onCommitMenuSelect}
         />
       </div>
-      <div className="ml-[18px] flex shrink-0 items-center">
+      <div className="app-no-drag ml-[18px] flex shrink-0 items-center">
         <ThreadTabs addLabel={tabs.addLabel} onAdd={tabs.onAdd} />
       </div>
-      <div className="ml-auto flex shrink-0 items-center gap-[10px]">
+      <div className="app-no-drag ml-auto flex shrink-0 items-center gap-[10px]">
         <IconButton label={labels.toggleMaximize} size="sm" onClick={onToggleMaximize}>
           <Maximize2 strokeWidth={1.75} />
         </IconButton>

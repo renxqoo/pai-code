@@ -177,23 +177,107 @@
     -webkit-app-region: no-drag;
   }
 }
+
+/* 全局滚动条：细拇指 + 全透明轨道/交角（消灭系统默认的白底描边框），亮暗随主题变量 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 8px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklab, var(--muted-foreground) 45%, transparent);
+  background-clip: content-box;
+}
 /*
  * 对话正文 markdown（chat-markdown，见 markdown-text.tsx）外观校准：
  * 代码块/行内代码/标题映射应用 token（--surface-subtle/--border）并回到对话排版尺度。
  * 非层叠规则优先于 streamdown 写进 utilities 层的默认类，亮暗两态经变量自动跟随。
  * 链接样式由 components.a 覆写组件（streamdown-link.tsx）内联提供，不在此处。
+ *
+ * 垂直节奏（正文 12.5px/21px）：兄弟块基础间距 10px（markdown-text 的 space-y-[10px]，
+ * 作用于 streamdown 根下的每个顶层元素；相邻兄弟纵向 margin 折叠取 max，故各块只声明
+ * 一侧间距即成节奏）——标题开启新章节，h1/h2 前 20px（约一行空行）、h3-h6 前 16px，
+ * 标题之后回落基础间距 10px；代码块/表格/引用两侧均为基础间距（抵消 streamdown 的
+ * my-4 与标题的 mb-2）。首尾元素由边界守卫清零，不在消息气泡内产生悬空空隙。
  */
+.chat-markdown > :first-child {
+  margin-block-start: 0 !important;
+}
+.chat-markdown > :last-child {
+  margin-block-end: 0 !important;
+}
+.chat-markdown [data-streamdown='heading-1'] {
+  margin-block: 20px 10px;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
+}
+.chat-markdown [data-streamdown='heading-2'] {
+  margin-block: 20px 10px;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+}
+.chat-markdown [data-streamdown='heading-3'] {
+  margin-block: 16px 10px;
+  font-size: 13px;
+  line-height: 19px;
+  font-weight: 600;
+}
+.chat-markdown [data-streamdown='heading-4'],
+.chat-markdown [data-streamdown='heading-5'],
+.chat-markdown [data-streamdown='heading-6'] {
+  margin-block: 16px 10px;
+  font-size: 12.5px;
+  line-height: 18px;
+  font-weight: 600;
+}
 .chat-markdown [data-streamdown='code-block'] {
-  margin-block: 0;
+  margin-block: 0 10px;
   gap: 6px;
   border-radius: 10px;
   border-color: var(--border);
   background-color: var(--surface-subtle);
   padding: 4px 6px 6px;
 }
+.chat-markdown [data-streamdown='table-wrapper'] {
+  margin-block: 0 10px;
+}
+.chat-markdown blockquote {
+  margin-block: 0 10px;
+}
+/*
+ * 代码块头部：header 行 24px（语言标签 10.5px），操作浮层按同几何叠回该行。
+ * streamdown 浮层约定 margin-top = -(容器顶内边距 + header 高)（默认 p-2 + h-8 → -mt-10），
+ * 这里保持同式：-(4px + 24px) = -28px，浮层与 header 精确同行，不越出容器被
+ * content-visibility 的 paint containment 裁切。
+ */
 .chat-markdown [data-streamdown='code-block-header'] {
-  height: 20px;
+  height: 24px;
   font-size: 10.5px;
+}
+.chat-markdown [data-streamdown='code-block'] > div:has(> [data-streamdown='code-block-actions']) {
+  height: 24px;
+  margin-top: -28px;
+}
+.chat-markdown [data-streamdown='code-block-actions'] {
+  gap: 2px;
+  padding: 2px 4px;
+}
+.chat-markdown [data-streamdown='code-block-actions'] button {
+  padding: 2px;
 }
 .chat-markdown [data-streamdown='code-block-body'] {
   border: 0;
@@ -215,32 +299,6 @@
   font-size: 11px;
   line-height: 16px;
   color: color-mix(in oklab, var(--foreground) 85%, transparent);
-}
-.chat-markdown [data-streamdown='heading-1'] {
-  margin: 4px 0 0;
-  font-size: 15px;
-  line-height: 22px;
-  font-weight: 600;
-}
-.chat-markdown [data-streamdown='heading-2'] {
-  margin: 4px 0 0;
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 600;
-}
-.chat-markdown [data-streamdown='heading-3'] {
-  margin: 2px 0 0;
-  font-size: 13px;
-  line-height: 19px;
-  font-weight: 600;
-}
-.chat-markdown [data-streamdown='heading-4'],
-.chat-markdown [data-streamdown='heading-5'],
-.chat-markdown [data-streamdown='heading-6'] {
-  margin: 2px 0 0;
-  font-size: 12.5px;
-  line-height: 18px;
-  font-weight: 600;
 }
 
 /* 显式内容源：禁用自动探测（monorepo 下必漏），新增目录在此登记 */

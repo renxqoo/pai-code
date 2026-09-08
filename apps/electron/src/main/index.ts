@@ -172,6 +172,9 @@ void app.whenReady().then(async () => {
     const win = new BrowserWindow({
       width: 1200,
       height: 800,
+      // 会话主列随窗口自适应收缩，最小窗口宽保证列内容（含 Composer）不被压垮
+      minWidth: 900,
+      minHeight: 560,
       show: false,
       // macOS 红绿灯内嵌；Windows 隐藏标题栏（保留系统边框可 resize），caption 由渲染层自绘
       titleBarStyle: isDarwin ? 'hiddenInset' : 'hidden',

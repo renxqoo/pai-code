@@ -24,6 +24,8 @@ function MarkdownText({ text, className }: MarkdownTextProps) {
       plugins={plugins}
       components={{ a: StreamdownLink, img: StreamdownImage }}
       translations={streamdownTranslations()}
+      /* 正文代码仅供阅读/复制，不出下载入口；表格/图示/图片控件保持 streamdown 默认 */
+      controls={{ code: { download: false } }}
       linkSafety={{ enabled: false }}
       lineNumbers={false}
     >

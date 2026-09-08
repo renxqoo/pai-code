@@ -1,3 +1,4 @@
+import { CONVERSATION_COLUMN_CLASS } from '@/thread/conversation-column';
 import { copy } from '@/strings';
 import { QueueRow } from './queue-row';
 
@@ -11,7 +12,7 @@ type QueuePanelProps = {
 function QueuePanel({ steering, followUp, onClear }: QueuePanelProps) {
   const empty = steering.length === 0 && followUp.length === 0;
   return (
-    <div className="mx-auto mb-[8px] w-full max-w-[700px] rounded-[12px] border border-border bg-background px-[14px] py-[10px] shadow-[0_10px_24px_-14px_rgba(24,24,28,0.3)]">
+    <div className={`${CONVERSATION_COLUMN_CLASS} mb-[8px] rounded-[12px] border border-border bg-background px-[14px] py-[10px] shadow-[0_10px_24px_-14px_rgba(24,24,28,0.3)]`}>
       <div className="flex items-center justify-between pb-[8px]">
         <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">{copy.flow.queuePanelTitle}</p>
         <button type="button" onClick={onClear} className="text-[11.5px] text-muted-foreground hover:text-foreground">

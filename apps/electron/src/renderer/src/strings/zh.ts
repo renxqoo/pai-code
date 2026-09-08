@@ -335,7 +335,6 @@ export const zh: typeof en = {
   },
   markdown: {
     copyCode: '复制代码',
-    downloadFile: '下载文件',
     downloadDiagram: '下载图示',
     downloadDiagramSvg: '下载图示为 SVG',
     downloadDiagramPng: '下载图示为 PNG',

@@ -2,8 +2,8 @@ import type { StreamdownTranslations } from 'streamdown';
 
 import { copy } from '@/strings';
 
-/** strings 表（copy.markdown）→ streamdown 自带控件文案映射；返回全新对象，随 locale 经应用重挂载刷新 */
-function streamdownTranslations(): StreamdownTranslations {
+/** strings 表（copy.markdown）→ streamdown 自带控件文案映射（Partial，缺键回退英文默认）；返回全新对象，随 locale 经应用重挂载刷新 */
+function streamdownTranslations(): Partial<StreamdownTranslations> {
   const labels = copy.markdown;
   return {
     close: labels.close,
@@ -18,7 +18,6 @@ function streamdownTranslations(): StreamdownTranslations {
     downloadDiagramAsMmd: labels.downloadDiagramMmd,
     downloadDiagramAsPng: labels.downloadDiagramPng,
     downloadDiagramAsSvg: labels.downloadDiagramSvg,
-    downloadFile: labels.downloadFile,
     downloadImage: labels.downloadImage,
     downloadTable: labels.downloadTable,
     downloadTableAsCsv: labels.downloadTableCsv,

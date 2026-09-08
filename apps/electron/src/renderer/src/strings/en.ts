@@ -345,7 +345,6 @@ export const en = {
   /** markdown 渲染器（streamdown）自带控件：代码块/表格/图示/图片的操作标签 */
   markdown: {
     copyCode: 'Copy code',
-    downloadFile: 'Download file',
     downloadDiagram: 'Download diagram',
     downloadDiagramSvg: 'Download diagram as SVG',
     downloadDiagramPng: 'Download diagram as PNG',

@@ -358,7 +358,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
           onForkUserMessage={forkUserMessage}
         />
         <div
-          className="shrink-0 pb-[18px]"
+          className="shrink-0 overflow-hidden pb-[18px]"
           style={{
             paddingLeft: CONTENT_HORIZONTAL_PADDING,
             paddingRight: CONTENT_HORIZONTAL_PADDING,

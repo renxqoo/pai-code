@@ -48,6 +48,12 @@ describe('MarkdownText 渲染冒烟', () => {
     expect(html).toContain('click ');
   });
 
+  test('代码块头部只有复制控件，无下载入口', () => {
+    const html = renderToStaticMarkup(<MarkdownText text={'```ts\nconst a = 1;\n```'} />);
+    expect(html).toContain('data-streamdown="code-block-copy-button"');
+    expect(html).not.toContain('data-streamdown="code-block-download-button"');
+  });
+
   test('流式未闭合围栏不抛错（remend 修补）', () => {
     const html = renderToStaticMarkup(<MarkdownText text={'before\n\n```ts\nconst a = 1;'} />);
     expect(html).toContain('data-streamdown="code-block"');

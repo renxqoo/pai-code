@@ -8,6 +8,7 @@ import { TurnGroup } from '@/thread/turn-group';
 import { TurnLoadingRow } from '@/thread/turn-loading-row';
 import { useStickToBottom } from '@/thread/use-stick-to-bottom';
 import { SystemMessageRow } from '@/thread/system-message-row';
+import { CONVERSATION_COLUMN_CLASS } from '@/thread/conversation-column';
 import { UserMessageRow } from '@/thread/user-message-row';
 
 import type { ThreadItem, ThreadModel } from '@/thread/thread-model';
@@ -51,7 +52,7 @@ function MessageList({ thread, now, loading, emptyTitle, emptyHint, onOpenAgents
       <div className="relative min-h-0 flex-1">
         <div className="h-full overflow-y-auto">
           {loading ? (
-            <div className="mx-auto flex w-full max-w-[700px] flex-col pt-6 pb-10">
+            <div className={`${CONVERSATION_COLUMN_CLASS} flex flex-col pt-6 pb-10`}>
               <TurnLoadingRow label={copy.flow.executing} />
             </div>
           ) : (
@@ -64,8 +65,8 @@ function MessageList({ thread, now, loading, emptyTitle, emptyHint, onOpenAgents
 
   return (
     <div className="relative min-h-0 flex-1">
-      <div ref={containerRef} onScroll={onScroll} className="h-full overflow-y-auto">
-        <div className="mx-auto flex w-full max-w-[700px] flex-col pt-6 pb-10">
+      <div ref={containerRef} onScroll={onScroll} className="h-full overflow-y-auto overflow-x-hidden">
+        <div className={`${CONVERSATION_COLUMN_CLASS} flex flex-col pb-[64px] pt-6`}>
           {thread.items.map((item, index) => (
             <div key={item.kind === 'message' ? item.message.id : item.turn.id} className={cn(itemTopMargin(index, item))}>
               {item.kind === 'message' ? (

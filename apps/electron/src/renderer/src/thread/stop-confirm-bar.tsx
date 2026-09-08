@@ -1,3 +1,4 @@
+import { CONVERSATION_COLUMN_CLASS } from '@/thread/conversation-column';
 import { copy } from '@/strings';
 
 type StopConfirmBarProps = {
@@ -8,7 +9,7 @@ type StopConfirmBarProps = {
 /** 停止二次确认条（存在在途子代理时）：确认才中断（不可恢复），取消回到输入态。 */
 function StopConfirmBar({ onConfirm, onCancel }: StopConfirmBarProps) {
   return (
-    <div className="mx-auto mb-[8px] flex w-full max-w-[700px] items-center gap-[12px] rounded-[12px] border border-border bg-background px-[14px] py-[10px]">
+    <div className={`${CONVERSATION_COLUMN_CLASS} mb-[8px] flex items-center gap-[12px] rounded-[12px] border border-border bg-background px-[14px] py-[10px]`}>
       <div className="min-w-0 flex-1">
         <p className="text-[12.5px] font-medium text-foreground">{copy.flow.stopConfirmTitle}</p>
         <p className="text-[11.5px] leading-[16px] text-muted-foreground">{copy.flow.stopConfirmHint}</p>
