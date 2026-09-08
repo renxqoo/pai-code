@@ -23,15 +23,17 @@ export function activeSlashQuery(text: string, caret: number): string | null {
   return start === null ? null : text.slice(start + 1, Math.min(caret, text.length));
 }
 
-/** 采纳命令：把 caret 前的 `/` token 替换为 `/name `（name 缺前导斜杠时补上，caret 后的文本保留）。 */
+/** 采纳命令：把 caret 前的 `/` token 替换为 `/name `（name 缺前导斜杠时补上，caret 后的文本保留）。
+ * 无激活 token（caret 与状态脱节的兜底路径）时原样返回，绝不盲插。 */
 export function applySlashSelection(text: string, caret: number, name: string): { text: string; caret: number } {
+  const at = Math.min(caret, text.length);
   const start = slashTokenStart(text, caret);
-  const at = start ?? Math.min(caret, text.length);
+  if (start === null) return { text, caret: at };
   const normalized = name.startsWith('/') ? name : `/${name}`;
   const inserted = `${normalized} `;
   return {
-    text: text.slice(0, at) + inserted + text.slice(Math.min(caret, text.length)),
-    caret: at + inserted.length,
+    text: text.slice(0, start) + inserted + text.slice(at),
+    caret: start + inserted.length,
   };
 }
 

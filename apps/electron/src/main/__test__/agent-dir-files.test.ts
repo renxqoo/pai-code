@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from 'bun:test';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -45,4 +45,13 @@ test('缺文件与坏 JSON 读降级 null（不抛）', () => {
   expect(files.readJson('permission-rules.json')).toBeNull();
   writeFileSync(join(dir, 'permission-rules.json'), '{truncated', 'utf8');
   expect(files.readJson('permission-rules.json')).toBeNull();
+});
+
+test('tmp 文件随机名 + 独占创建：预置固定名符号链接不构成写穿面', () => {
+  const dir = tempAgentDir();
+  const files = createAgentDirFiles(dir);
+  // 即便目录内预置了恶意符号链接，固定名 tmp 已不存在（随机名 + wx）
+  expect(files.writeJsonAtomic('permission-rules.json', { mode: 'ask' })).toBe(true);
+  const leftovers = readdirSync(dir).filter((name) => name.endsWith('.tmp'));
+  expect(leftovers).toEqual([]);
 });

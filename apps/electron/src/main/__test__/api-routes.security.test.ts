@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -114,5 +114,49 @@ describe('api-routes 安全面（C-S2/C-S8/C-S4）', () => {
     await routes.invoke('dialog/respond', { requestId: 'r2', payload: { cancelled: true } });
     expect(audits).toContain('dialog_respond:r1:confirmed');
     expect(audits).toContain('dialog_respond:r2:cancelled');
+  });
+});
+
+describe('api-routes 权限面（2d 对抗审查补）', () => {
+  test('permission/write 畸形规则 → invalid_params；合法写入落盘且审计', async () => {
+    const work = mkdtempSync(join(tmpdir(), 'pai-sec-perm-'));
+    const { routes, audits, agentDir } = makeRoutes(work);
+    const bad = (await routes.invoke('permission/write', { rules: { mode: 'yolo' } })) as { ok: boolean; reason?: string };
+    expect(bad.ok).toBe(false);
+    expect(bad.reason).toBe('invalid_params');
+
+    const rules = {
+      mode: 'block-all',
+      bash: { allowPatterns: [], blockPatterns: ['sudo *'] },
+      write: { allowPatterns: [], blockPatterns: [] },
+      edit: { allowPatterns: [], blockPatterns: [] },
+    };
+    const ok = (await routes.invoke('permission/write', { rules })) as { ok: boolean; data: { mode: string } };
+    expect(ok.ok).toBe(true);
+    expect(ok.data.mode).toBe('block-all');
+    expect(audits.some((line) => line.startsWith('permission_write:block-all'))).toBe(true);
+    const onDisk = JSON.parse(readFileSync(join(agentDir, 'permission-rules.json'), 'utf8')) as { mode: string };
+    expect(onDisk.mode).toBe('block-all');
+  });
+
+  test('permission/read：缺文件降级默认；部分文件宽容呈现（不清档）', async () => {
+    const work = mkdtempSync(join(tmpdir(), 'pai-sec-perm-'));
+    const { routes, agentDir } = makeRoutes(work);
+    const empty = (await routes.invoke('permission/read', {})) as { ok: boolean; data: { mode: string; bash: { blockPatterns: string[] } } };
+    expect(empty.data.mode).toBe('ask');
+    expect(empty.data.bash.blockPatterns).toEqual([]);
+
+    writeFileSync(join(agentDir, 'permission-rules.json'), JSON.stringify({ bash: { blockPatterns: ['sudo *'] } }), 'utf8');
+    const partial = (await routes.invoke('permission/read', {})) as { ok: boolean; data: { mode: string; bash: { blockPatterns: string[] } } };
+    expect(partial.data.mode).toBe('ask');
+    expect(partial.data.bash.blockPatterns).toEqual(['sudo *']);
+  });
+
+  test('session/start 带 trusted 落审计（host 未启动 → ok:false 但审计先行）', async () => {
+    const work = mkdtempSync(join(tmpdir(), 'pai-sec-trust-'));
+    const { routes, audits } = makeRoutes(work);
+    const outcome = (await routes.invoke('session/start', { cwd: '/w', trusted: true })) as { ok: boolean };
+    expect(outcome.ok).toBe(false);
+    expect(audits.some((line) => line.startsWith('session_trusted:start:/w:true'))).toBe(true);
   });
 });

@@ -131,7 +131,11 @@ export function createLiveStore() {
         });
       },
       hydrate(threadId, action) {
-        set((state) => ({ threads: { ...state.threads, [threadId]: foldHydrate(threadOf(state, threadId), action) } }));
+        set((state) => {
+          // 幽灵守卫：会话已移除（重开/停止后迟到的对账定时器）不再在 threads 表复活条目
+          if (threadId !== state.activeThreadId && !(threadId in state.sessions)) return state;
+          return { threads: { ...state.threads, [threadId]: foldHydrate(threadOf(state, threadId), action) } };
+        });
       },
       stopIntent(threadId) {
         set((state) => ({ threads: { ...state.threads, [threadId]: foldStopIntent(threadOf(state, threadId)) } }));

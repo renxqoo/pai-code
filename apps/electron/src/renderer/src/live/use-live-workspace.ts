@@ -141,16 +141,18 @@ export function useLiveWorkspace(): LiveWorkspaceView {
   const threadState = state.threads[activeThreadId];
 
   React.useEffect(() => {
-    if (activeThreadId.length === 0) return;
-    // 切会话先清档位/命令目录再拉取，避免上一会话的能力列表残留到新会话
+    // 切会话（或最后一个会话被移除）先清会话级派生态，避免上一会话残留到新会话
     setEffortLevels([]);
     setCommands([]);
+    store.setState({ agents: [] });
+    if (activeThreadId.length === 0) return;
     void controller.ensureHydrated(activeThreadId);
-    // 思考档位随会话拉取（模型能力差异）
+    // 思考档位随会话拉取（模型能力差异；响应回来时会话已切换则丢弃）
     void bridgeClient.invoke('session/thinkingLevels', { threadId: activeThreadId }).then((outcome) => {
+      if (store.getState().activeThreadId !== activeThreadId) return;
       if (outcome.ok) setEffortLevels(outcome.data.allowed);
     });
-    // 斜杠命令目录随会话拉取（thread 级；响应回来时会话已切换则丢弃——以 store 真相判活）
+    // 斜杠命令目录随会话拉取（thread 级；同上判活）
     void bridgeClient.invoke('command/list', { threadId: activeThreadId }).then((outcome) => {
       if (store.getState().activeThreadId !== activeThreadId) return;
       if (outcome.ok) setCommands(outcome.data);

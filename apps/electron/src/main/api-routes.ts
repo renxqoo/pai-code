@@ -5,7 +5,7 @@ import { agentViews, mapEntries, modelInfos, savedSessions, sessionCommands, ses
 import { envVarNameForProvider } from './models-config';
 import { createProviderProbe } from './provider-probe';
 import type { AgentDirFiles } from './agent-dir-files';
-import { defaultPermissionRules, PermissionRulesSchema } from '@paiapp/contracts';
+import { defaultPermissionRules, parsePermissionRules } from '@paiapp/contracts';
 import { ApiSchemas, type ApiMethod, type ApiOutcome, type ApiParams } from '@paiapp/contracts';
 
 import type { PaiRuntime } from './pai-runtime';
@@ -142,6 +142,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       return { ok: true as const, data: outcome };
     },
     'session/start': async (params) => {
+      if (params.trusted !== undefined) deps.audit(`session_trusted:start:${params.cwd}:${params.trusted}`);
       const result = await command({ type: 'thread/start', cwd: params.cwd, provider: params.provider, modelId: params.modelId, trusted: params.trusted });
       if (!result.ok) return fail(result.reason);
       const data = result.data as { threadId?: string; cwd?: string; sessionPath?: string | null };
@@ -154,6 +155,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     'session/resume': async (params) => {
       // 路径白名单：只允许恢复本应用 agentDir/sessions 下的会话文件（防被攻陷渲染层任意读）
       if (!insideSessionsRoot(params.sessionPath)) return fail('session_path_forbidden');
+      if (params.trusted !== undefined) deps.audit(`session_trusted:resume:${params.sessionPath}:${params.trusted}`);
       const result = await command({ type: 'thread/resume', sessionPath: params.sessionPath, trusted: params.trusted });
       if (!result.ok) return fail(result.reason);
       const data = result.data as { threadId?: string; cwd?: string; sessionPath?: string | null };
@@ -290,11 +292,13 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       return result.ok ? { ok: true as const, data: agentViews(result.data) } : fail(result.reason);
     },
     'permission/read': () => {
-      const parsed = PermissionRulesSchema.safeParse(deps.agentDirFiles.readJson('permission-rules.json'));
-      // 缺文件/坏 JSON/形状不符 → 与 hub 热读一致的 ask 降级
-      return Promise.resolve({ ok: true as const, data: parsed.success ? parsed.data : defaultPermissionRules() });
+      // 宽容解析镜像 hub 热读语义（字段可省/未知键忽略），部分规则完整呈现不清档
+      const raw = deps.agentDirFiles.readJson('permission-rules.json');
+      const rules = raw === null ? defaultPermissionRules() : parsePermissionRules(raw);
+      return Promise.resolve({ ok: true as const, data: rules });
     },
     'permission/write': (params) => {
+      deps.audit(`permission_write:${params.rules.mode}`);
       const written = deps.agentDirFiles.writeJsonAtomic('permission-rules.json', params.rules);
       return Promise.resolve(written ? { ok: true as const, data: params.rules } : fail('write_failed'));
     },

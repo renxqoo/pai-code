@@ -59,7 +59,7 @@ describe('pai-runtime + api-routes × 真 pai-cli（opt-in）', () => {
       emit: (event) => eventTypes.push(event.type),
     });
     const settings = createFileSettings(join(work, 'settings.json'), keyStore);
-    const routes = createApiRoutes({ runtime, settings, keyStore, agentDirFiles: createAgentDirFiles(join(work, 'agent')) });
+    const routes = createApiRoutes({ runtime, settings, keyStore, audit: () => undefined, agentDirFiles: createAgentDirFiles(join(work, 'agent')) });
 
     await runtime.start();
     expect(runtime.host.phase).toBe('ready');

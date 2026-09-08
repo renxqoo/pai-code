@@ -115,3 +115,51 @@ test('reloadSessionTrusted：stop 失败即中止（不发 resume）；无会话
   expect(await createLiveController(noPathClient, noPathStore).reloadSessionTrusted('ghost', true)).toBe(false);
   expect(noPathClient.calls).toEqual([]);
 });
+
+test('reloadSessionTrusted：stop 成功但 resume 失败——返回 false 且刷新 saved（History 可找回）', async () => {
+  const client = makeClient({ 'session/resume': { ok: false, reason: 'hub_busy' } });
+  const store = createLiveStore();
+  store.getState().bootstrap({
+    sessions: [{ threadId: 't1', cwd: '/w', sessionPath: '/a.jsonl', state: 'live', streaming: false, title: '旧', model: null, thinkingLevel: null, lastActivityAt: 0 }],
+    saved: [],
+    models: [],
+    providers: [],
+    preferences: { defaultModel: null, onboarded: true },
+  });
+  expect(await createLiveController(client, store).reloadSessionTrusted('t1', true)).toBe(false);
+  expect(client.calls.some((call) => call.method === 'session/listSaved')).toBe(true);
+});
+
+test('reloadSessionTrusted：重开前非活跃会话——成功后不劫持 activeThread', async () => {
+  const client = makeClient({
+    'session/resume': { ok: true, data: { threadId: 't9', cwd: '/w', sessionPath: '/a.jsonl', state: 'live', streaming: false, title: 'x', model: null, thinkingLevel: null, lastActivityAt: 0 } },
+    'session/listSaved': { ok: true, data: [] },
+  });
+  const store = createLiveStore();
+  store.getState().bootstrap({
+    sessions: [
+      { threadId: 't1', cwd: '/w', sessionPath: '/a.jsonl', state: 'live', streaming: false, title: '旧', model: null, thinkingLevel: null, lastActivityAt: 0 },
+      { threadId: 't2', cwd: '/w2', sessionPath: '/b.jsonl', state: 'live', streaming: false, title: '别', model: null, thinkingLevel: null, lastActivityAt: 0 },
+    ],
+    saved: [],
+    models: [],
+    providers: [],
+    preferences: { defaultModel: null, onboarded: true },
+  });
+  store.getState().setActiveThread('t2');
+  expect(await createLiveController(client, store).reloadSessionTrusted('t1', true)).toBe(true);
+  expect(store.getState().activeThreadId).toBe('t2');
+});
+
+test('refreshAgents 判活：请求发出后会话已切换则丢弃响应', async () => {
+  const client = makeClient({
+    'agent/list': { ok: true, data: [{ name: 'reviewer', description: '', source: 'user', tools: null, model: null }] },
+  });
+  const store = createLiveStore();
+  const controller = createLiveController(client, store);
+  const pending = controller.refreshAgents('t1');
+  // 响应到达前切走
+  store.getState().setActiveThread('t2');
+  await pending;
+  expect(store.getState().agents).toEqual([]);
+});

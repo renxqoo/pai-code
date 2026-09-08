@@ -84,11 +84,15 @@ function Composer({
 }: ComposerProps) {
   const canSend = value.trim().length > 0;
 
-  /** 斜杠补全交互态：caret 跟踪 + 键盘高亮 + Esc 抑制（query 变化后自动复弹） */
+  /** 斜杠补全交互态：caret 跟踪 + 键盘高亮 + Esc 抑制（query 变化后自动复弹）。
+   * dismissedQuery 是单槽记忆：只记住最近一次被 Esc 关闭的 query 值——
+   * 「Esc 后再输入新字符会复弹；删回到已关闭的旧值也可能复弹」为既定取舍。 */
   const [caret, setCaret] = React.useState(0);
   const [activeIndex, setActiveIndex] = React.useState(0);
   const [dismissedQuery, setDismissedQuery] = React.useState<string | null>(null);
   const [pendingCaret, setPendingCaret] = React.useState<number | null>(null);
+  /** 用户事件产出的最新 value：外部回填（编辑重发/切会话草稿）时重置交互态防幽灵弹层 */
+  const userValueRef = React.useRef(value);
 
   const query = activeSlashQuery(value, caret);
   const slashItems = React.useMemo(
@@ -97,10 +101,19 @@ function Composer({
   );
   const slashActive = query !== null && query !== dismissedQuery && slashItems.length > 0;
   const activeItem = slashActive ? slashItems[activeIndex % slashItems.length] : undefined;
+  const itemId = (command: { source: string; name: string }): string => `${command.source}:${command.name}`;
 
   React.useEffect(() => {
     setActiveIndex(0);
   }, [query]);
+
+  React.useEffect(() => {
+    if (value === userValueRef.current) return;
+    // 外部回填：caret 置末尾并清抑制态（弹层随 query 重算自然关闭/重开）
+    userValueRef.current = value;
+    setCaret(value.length);
+    setDismissedQuery(null);
+  }, [value]);
 
   React.useEffect(() => {
     if (pendingCaret === null) return;
@@ -120,6 +133,7 @@ function Composer({
   };
 
   const syncCaret = (element: HTMLTextAreaElement): void => {
+    userValueRef.current = element.value;
     setCaret(element.selectionStart ?? 0);
   };
 
@@ -138,11 +152,14 @@ function Composer({
           {slashActive ? (
             <div className="absolute bottom-full left-4 z-10 mb-[4px]">
               <AutocompleteList
-                items={slashItems.map((command) => ({ id: command.name, label: command.name, description: command.description }))}
-                activeId={activeItem?.name ?? null}
-                onSelect={acceptSlash}
+                items={slashItems.map((command) => ({ id: itemId(command), label: command.name, description: command.description }))}
+                activeId={activeItem === undefined ? null : itemId(activeItem)}
+                onSelect={(id) => {
+                  const item = slashItems.find((command) => itemId(command) === id);
+                  if (item !== undefined) acceptSlash(item.name);
+                }}
                 onHover={(id) => {
-                  const index = slashItems.findIndex((command) => command.name === id);
+                  const index = slashItems.findIndex((command) => itemId(command) === id);
                   if (index >= 0) setActiveIndex(index);
                 }}
                 ariaLabel={slashAriaLabel}
@@ -161,7 +178,7 @@ function Composer({
             onClick={(event) => syncCaret(event.currentTarget)}
             onFocus={(event) => syncCaret(event.currentTarget)}
             onKeyDown={(event) => {
-              if (slashActive) {
+              if (slashActive && !event.nativeEvent.isComposing) {
                 if (event.key === 'ArrowDown') {
                   event.preventDefault();
                   setActiveIndex((index) => (index + 1) % slashItems.length);
@@ -172,7 +189,7 @@ function Composer({
                   setActiveIndex((index) => (index - 1 + slashItems.length) % slashItems.length);
                   return;
                 }
-                if ((event.key === 'Enter' || event.key === 'Tab') && !event.nativeEvent.isComposing) {
+                if (event.key === 'Enter' || event.key === 'Tab') {
                   // 采纳补全：Enter 不再走提交语义
                   event.preventDefault();
                   if (activeItem !== undefined) acceptSlash(activeItem.name);

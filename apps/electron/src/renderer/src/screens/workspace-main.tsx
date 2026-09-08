@@ -206,7 +206,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
             onAdd: noop,
           }}
           activePanel={panel}
-          openMenu={[copy.thread.reloadTrusted, copy.thread.reloadUntrusted, ...copy.thread.openMenu]}
+          openMenu={[...(workspace.generating ? [] : [copy.thread.reloadTrusted, copy.thread.reloadUntrusted]), ...copy.thread.openMenu]}
           commitMenu={copy.thread.commitMenu}
           onAddAction={noop}
           onOpen={noop}

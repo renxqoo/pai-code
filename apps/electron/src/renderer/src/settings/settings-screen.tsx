@@ -66,6 +66,10 @@ function SettingsScreen({
   onRefreshKeys,
 }: SettingsScreenProps) {
   const [section, setSection] = React.useState<'providers' | 'keys' | 'permissions' | 'agents' | 'skills' | 'history'>('providers');
+  // 每次打开回到首分区：重进分区会重触发 onShow*（权限/agents 目录无推送，按开即读）
+  React.useEffect(() => {
+    if (open) setSection('providers');
+  }, [open]);
   if (!open) return null;
   const navItems = [
     { id: 'providers', label: copy.settings.providersTitle, selected: section === 'providers', onSelect: () => setSection('providers') },

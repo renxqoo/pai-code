@@ -217,9 +217,20 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     async reloadSessionTrusted(threadId: string, trusted: boolean): Promise<boolean> {
       const sessionPath = store.getState().sessions[threadId]?.sessionPath ?? null;
       if (sessionPath === null || sessionPath.length === 0) return false;
+      // 记住重开前是否活跃：resume 成功后仅在该会话原本活跃时跟随切换（用户在途切换别会话时不劫持）
+      const wasActive = store.getState().activeThreadId === threadId;
       const stop = await client.invoke('session/stop', { threadId });
       if (!stop.ok) return false;
-      return this.openSavedSession(sessionPath, trusted);
+      const outcome = await client.invoke('session/resume', { sessionPath, trusted });
+      if (!outcome.ok) {
+        // 失败兜底：旧线程已被移除，刷新历史列表让会话可从 History 找回
+        await this.refreshSaved();
+        return false;
+      }
+      if (wasActive) store.getState().setActiveThread(outcome.data.threadId);
+      await hydrateFull(outcome.data.threadId).catch(() => undefined);
+      await this.refreshSaved();
+      return true;
     },
     async closeSession(threadId: string): Promise<void> {
       await client.invoke('session/stop', { threadId });
@@ -273,7 +284,10 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     },
     async refreshAgents(threadId: string | null): Promise<void> {
       const outcome = await client.invoke('agent/list', threadId === null ? {} : { threadId });
-      if (outcome.ok) store.setState({ agents: outcome.data });
+      if (!outcome.ok) return;
+      // 判活：请求发出后会话已切换则丢弃（防陈旧目录覆盖新会话视角）
+      if (threadId !== null && store.getState().activeThreadId !== threadId) return;
+      store.setState({ agents: outcome.data });
     },
     async refreshCredentials(): Promise<void> {
       const outcome = await client.invoke('auth/list', {});
