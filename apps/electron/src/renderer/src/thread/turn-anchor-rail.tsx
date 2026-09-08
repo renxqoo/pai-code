@@ -10,15 +10,15 @@ type TurnAnchorRailProps = {
 }
 
 /**
- * 历史轮锚点带：主区左缘栏沟（侧边栏右侧的安全间隙）里的垂直短条列——
- * 水平固定贴主区左缘（不随会话列居中漂移），垂直吸附在滚动视口竖直居中处，
- * 刻痕 20px 等距节距。挂在消息流滚动容器上。
+ * 历史轮锚点带：侧边栏右侧安全间隙（主区 px-40）里的垂直短条列——
+ * 距侧栏右缘 24px（= 40px 间隙内偏移 -16px），挂在消息流区域根（固定高、
+ * 无横向裁剪），锚点列整体垂直居中恒定于视口；刻痕 20px 等距节距。
  */
 function TurnAnchorRail({ anchors, onJump }: TurnAnchorRailProps) {
   if (anchors.length === 0) return null;
   return (
-    <nav aria-label={copy.flow.turnAnchorRailAria} className="absolute inset-y-0 left-[9px] w-[22px]">
-      <div className="sticky top-1/2 flex -translate-y-1/2 flex-col">
+    <nav aria-label={copy.flow.turnAnchorRailAria} className="absolute inset-y-0 -left-[16px] flex w-[22px] items-center">
+      <div className="flex flex-col">
         {anchors.map((anchor) => (
           <TurnAnchor
             key={anchor.id}

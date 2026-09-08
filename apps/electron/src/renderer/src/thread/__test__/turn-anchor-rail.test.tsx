@@ -23,10 +23,11 @@ describe('TurnAnchorRail 渲染', () => {
     expect(html).toBe('');
   });
 
-  test('定位：贴主区左缘栏沟（left-[9px]），不设视口断点（栏沟固定 40px 恒可容纳）', () => {
+  test('定位：距侧栏 24px（40px 间隙内 -16px 偏移），锚点列垂直居中无 sticky（挂点为固定高区域根）', () => {
     const html = renderToStaticMarkup(<TurnAnchorRail anchors={anchors} onJump={() => undefined} />);
-    expect(html).toContain('left-[9px]');
+    expect(html).toContain('-left-[16px]');
+    expect(html).toContain('items-center');
+    expect(html).not.toContain('sticky');
     expect(html).not.toContain('min-[1280px]');
-    expect(html).not.toMatch(/class="[^"]*(?:^|\s)hidden(?:\s|")/);
   });
 });
