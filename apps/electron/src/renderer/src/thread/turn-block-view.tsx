@@ -27,7 +27,7 @@ function TurnBlockView({ block, onOpenAgents, onOpenDiff }: TurnBlockViewProps) 
     return (
       <p
         title={block.message ?? label}
-        className={`text-[11.5px] leading-[16px] break-all ${block.stopReason === 'error' ? 'text-red-600' : 'text-muted-foreground'}`}
+        className={`text-[11px] leading-[16px] break-all ${block.stopReason === 'error' ? 'text-red-600' : 'text-muted-foreground'}`}
       >
         {block.message !== null && block.message.length > 0 ? `${label} · ${block.message}` : label}
       </p>

@@ -14,7 +14,7 @@ type TurnStatusLineProps = {
  */
 function TurnStatusLine({ label, expandable, open, onToggle }: TurnStatusLineProps) {
   if (!expandable) {
-    return <p className="text-[13px] leading-[20px] text-muted-foreground">{label}</p>;
+    return <p className="text-[13.5px] leading-[21px] text-muted-foreground">{label}</p>;
   }
   return (
     <button
@@ -23,7 +23,7 @@ function TurnStatusLine({ label, expandable, open, onToggle }: TurnStatusLinePro
       aria-expanded={open}
       className="-mx-[4px] flex cursor-pointer items-center gap-[6px] rounded-md px-[4px] py-[2px] text-left outline-none select-none hover:bg-accent/60 focus-visible:ring-3 focus-visible:ring-ring/50"
     >
-      <span className="text-[13px] leading-[20px] text-muted-foreground">{label}</span>
+      <span className="text-[13.5px] leading-[21px] text-muted-foreground">{label}</span>
       <ChevronToggle open={open} variant="disclose" className="opacity-70" />
     </button>
   );

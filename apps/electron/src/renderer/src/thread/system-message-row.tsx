@@ -18,7 +18,7 @@ function SystemMessageRow({ message }: SystemMessageRowProps) {
         <BellRing className="size-[13px]" strokeWidth={1.75} />
         <span className="text-[11px] font-medium uppercase tracking-[0.06em]">{copy.flow.systemMessageLabel}</span>
       </div>
-      <p className="w-full whitespace-pre-wrap break-words text-center text-[12.5px] leading-[20px] text-foreground/80">
+      <p className="w-full whitespace-pre-wrap break-words text-center text-[13.5px] leading-[22px] text-foreground/80">
         {message.text}
       </p>
     </div>

@@ -20,10 +20,10 @@ function DiffBlock({ diff, onOpenDiff }: DiffBlockProps) {
         <span className="shrink-0 text-[12.5px] leading-none font-medium text-foreground">
           {copy.flow.changedFiles(diff.changedFiles)}
         </span>
-        <span className="shrink-0 font-mono text-[12px] leading-none tabular-nums text-diff-add">
+        <span className="shrink-0 font-mono text-[11px] leading-none tabular-nums text-diff-add">
           {formatDiffDelta('add', diff.additions)}
         </span>
-        <span className="shrink-0 font-mono text-[12px] leading-none tabular-nums text-diff-del">
+        <span className="shrink-0 font-mono text-[11px] leading-none tabular-nums text-diff-del">
           {formatDiffDelta('del', diff.deletions)}
         </span>
         <div className="ml-auto flex shrink-0 items-center">

@@ -47,7 +47,7 @@ function ThinkingBlock({ text, running }: ThinkingBlockProps) {
             />
           ) : null}
           {open ? null : (
-            <span className="min-w-0 flex-1 truncate text-[12px] leading-[20px] text-meta-faint">
+            <span className="min-w-0 flex-1 truncate text-[12.5px] leading-[20px] text-meta-faint">
               {previewLine(text)}
             </span>
           )}

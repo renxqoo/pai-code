@@ -58,18 +58,18 @@ function ToolCallRow({ call }: ToolCallRowProps) {
         title={call.argsPreview}
         className={cn(
           'min-w-0 flex-1 truncate',
-          toolPreviewMono(kind) ? 'font-mono text-[11.5px]' : 'text-[12.5px]',
+          toolPreviewMono(kind) ? 'font-mono text-[12.5px]' : 'text-[12.5px]',
           failed ? 'text-diff-del' : 'text-muted-foreground',
         )}
       >
         {call.argsPreview}
       </span>
       {call.status === 'failed' ? (
-        <span className="shrink-0 font-mono text-[10.5px] leading-none tabular-nums text-diff-del">
+        <span className="shrink-0 font-mono text-[11px] leading-none tabular-nums text-diff-del">
           {copy.flow.toolFailed(call.exitCode ?? 1)}
         </span>
       ) : call.status === 'stopped' ? (
-        <span className="shrink-0 text-[10.5px] leading-none text-muted-foreground/70">{copy.flow.toolStopped}</span>
+        <span className="shrink-0 text-[11px] leading-none text-muted-foreground/70">{copy.flow.toolStopped}</span>
       ) : call.status === 'ok' && call.durationMs !== null ? (
         <DurationTag>{formatElapsed(call.durationMs)}</DurationTag>
       ) : null}

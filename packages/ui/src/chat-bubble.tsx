@@ -12,7 +12,7 @@ function ChatBubble({ children, className }: ChatBubbleProps) {
   return (
     <div
       className={cn(
-        'w-fit max-w-full rounded-[15px] bg-muted px-[10px] py-[12px] text-[12.5px] leading-[19px] tracking-[0.01em] text-foreground whitespace-pre-wrap',
+        'w-fit max-w-full rounded-[15px] bg-muted px-[10px] py-[12px] text-[13.5px] leading-[22px] tracking-[0.01em] text-foreground whitespace-pre-wrap',
         className,
       )}
     >
