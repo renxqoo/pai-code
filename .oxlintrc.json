@@ -1,0 +1,64 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oxc-project/oxc/main/npm/oxlint/configuration_schema.json",
+
+  // ══════════════════════════════════════════════════════════════════
+  // 宪法纪律：每条规则要么 error 且当前零违规，要么不进本文件；
+  // 豁免必须点名规则并写明原因（unicorn/no-abusive-eslint-disable 强制）。
+  // 修改规则 = 修宪法：pai/* 与 oxlint-plugins/pai/rules/ 就近测试同步修订。
+  // 注：eslint 内置规则由默认插件集提供；pai/* 为本仓插件。
+  // ══════════════════════════════════════════════════════════════════
+
+  "jsPlugins": ["./oxlint-plugins/pai/index.ts", "./oxlint-plugins/ui/index.ts"],
+
+  "rules": {
+    // ═══ 架构宪法（本仓插件：依赖白名单矩阵 + 环境面纪律）═══
+    // electron 只在宿主层（apps/electron main/preload）；renderer 走 preload 桥
+    "pai/no-electron-outside-host": "error",
+    // workspace 包间依赖只准按矩阵向下（contracts ← core ← infra ← api；ui/testkit 只认 contracts）
+    "pai/no-cross-package-imports": "error",
+    // contracts/ui/renderer 环境无关：禁 node/bun 内建，系统能力一律走 Port
+    "pai/no-node-in-browser-code": "error",
+
+    // ═══ UI 纪律（本仓插件）═══
+    // 一 .tsx 一组件/hook；嵌套定义组件/hook 禁止（每次渲染重建）
+    "ui/no-multi-component": "error",
+
+    // ═══ 封死糊弄类型系统的路（any/!/裸 ignore/动态 delete）═══
+    "typescript/no-explicit-any": "error",
+    "typescript/no-non-null-assertion": "error",
+    "typescript/no-confusing-non-null-assertion": "error",
+    "typescript/ban-ts-comment": "error",
+    "typescript/no-dynamic-delete": "error",
+    "typescript/consistent-type-imports": "error",
+    "typescript/no-require-imports": "error",
+    "typescript/prefer-nullish-coalescing": "error",
+    "typescript/prefer-optional-chain": "error",
+
+    // ═══ 异步与错误的真 bug 捕手 ═══
+    "typescript/require-await": "error",
+    "eslint/no-promise-executor-return": "error",
+    "eslint/no-template-curly-in-string": "error",
+    "promise/no-return-in-finally": "error",
+    "promise/no-multiple-resolved": "error",
+    "unicorn/error-message": "error",
+
+    // ═══ 防 AI slop 与规模棘轮 ═══
+    "unicorn/filename-case": ["error", { "case": "kebabCase" }],
+    "unicorn/no-abusive-eslint-disable": "error",
+    "eslint/no-implicit-globals": "error",
+    "eslint/no-console": "error",
+    "eslint/max-lines": ["error", { "max": 500, "skipComments": true, "skipBlankLines": true }]
+  },
+
+  "overrides": [
+    {
+      // CLI 脚本：console 就是输出手段
+      "files": ["scripts/**"],
+      "rules": {
+        "eslint/no-console": "off"
+      }
+    }
+  ],
+
+  "ignorePatterns": ["**/out/**", "**/dist/**", "**/coverage/**"]
+}

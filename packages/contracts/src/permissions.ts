@@ -37,6 +37,16 @@ export function defaultPermissionRules(): PermissionRules {
   };
 }
 
+/** 深拷贝（数组引用全新）：写路径持有的规则不得与 store/草稿共享引用。 */
+export function clonePermissionRules(rules: PermissionRules): PermissionRules {
+  return {
+    mode: rules.mode,
+    bash: { allowPatterns: [...rules.bash.allowPatterns], blockPatterns: [...rules.bash.blockPatterns] },
+    write: { allowPatterns: [...rules.write.allowPatterns], blockPatterns: [...rules.write.blockPatterns] },
+    edit: { allowPatterns: [...rules.edit.allowPatterns], blockPatterns: [...rules.edit.blockPatterns] },
+  };
+}
+
 function stringsOf(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 }

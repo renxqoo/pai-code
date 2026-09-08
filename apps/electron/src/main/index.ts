@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Notification, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Notification, shell } from 'electron';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 
@@ -7,6 +7,7 @@ import { ApiSchemas, type UiEvent } from '@paiapp/contracts';
 import { createApiRoutes } from './api-routes';
 import { createAgentDirFiles } from './agent-dir-files';
 import { createFileLogger, createFileSettings } from './file-settings';
+import { resolveHubPaths } from './hub-paths';
 import { resolveAppPaths } from './paths';
 import { createPaiRuntime } from './pai-runtime';
 import { createProviderKeyStore } from './provider-key-store';
@@ -36,8 +37,8 @@ void app.whenReady().then(async () => {
 
   let settingsRef: ReturnType<typeof createFileSettings> | null = null;
 
-  /** 宿主路径解析：设置覆盖 > 环境变量（开发）> 打包产物缺省。 */
-  const resolveHubPaths = (): { bunPath: string; hubEntry: string } | null => {
+  /** 宿主路径解析：设置覆盖 > 环境变量（开发）> dev 同级探测 > 打包产物缺省（链在 hub-paths.ts）。 */
+  const resolveHubPathsForRuntime = (): { bunPath: string; hubEntry: string } | null => {
     const fromSettings = (() => {
       try {
         const hubDev = settingsRef?.get().hubDev;
@@ -55,7 +56,14 @@ void app.whenReady().then(async () => {
     const resources = process.resourcesPath ?? paths.userDataDir;
     const packagedEntry = join(resources, 'pai-cli', 'cli.js');
     const fromPackaged = existsSync(packagedEntry) ? { bunPath: join(resources, 'bun', 'bun'), hubEntry: packagedEntry } : null;
-    return fromSettings ?? fromEnv ?? fromPackaged;
+    return resolveHubPaths({
+      fromSettings,
+      fromEnv,
+      fromPackaged,
+      devRepoRoot: app.isPackaged ? null : join(__dirname, '..', '..', '..', '..'),
+      packaged: app.isPackaged,
+      exists: existsSync,
+    });
   };
 
   let mainWindow: BrowserWindow | null = null;
@@ -101,6 +109,8 @@ void app.whenReady().then(async () => {
   // 装配段整体兜底：任何一步失败都继续开窗（渲染层经 bootstrap 失败态进设置引导），绝不静默悬挂
   let runtime: ReturnType<typeof createPaiRuntime> | null = null;
   let routes: ReturnType<typeof createApiRoutes> | null = null;
+  // 目录选择对话框单飞标志（createApiRoutes 注入面闭包引用）
+  let directoryPickerInFlight = false;
   try {
     const keyStore = createProviderKeyStore(paths.providerKeysFile);
     const settings = createFileSettings(paths.settingsFile, keyStore);
@@ -109,7 +119,7 @@ void app.whenReady().then(async () => {
       paths,
       keyStore,
       providers: () => settings.listProviders(),
-      hubPaths: resolveHubPaths,
+      hubPaths: resolveHubPathsForRuntime,
       logger,
       emit: emitToRenderer,
     });
@@ -119,7 +129,25 @@ void app.whenReady().then(async () => {
       keyStore,
       audit: (message) => logger.log(`audit:${message}`),
       agentDirFiles: createAgentDirFiles(paths.agentDir),
+      agentDir: paths.agentDir,
       revealPath: (path) => shell.showItemInFolder(path),
+      // 对话框单飞：在途时再调用直接按取消返回（防被攻陷渲染层并发叠弹多个模态面板）
+      pickDirectory: async (defaultPath) => {
+        if (directoryPickerInFlight) return null;
+        directoryPickerInFlight = true;
+        try {
+          const options = {
+            properties: ['openDirectory', 'createDirectory'] as Array<'openDirectory' | 'createDirectory'>,
+            ...(defaultPath !== null ? { defaultPath } : {}),
+          };
+          // attach 到主窗口（模态）；窗口尚未创建时退化为应用级对话框
+          const target = mainWindow !== null && !mainWindow.isDestroyed() ? mainWindow : undefined;
+          const picked = target !== undefined ? await dialog.showOpenDialog(target, options) : await dialog.showOpenDialog(options);
+          return picked.canceled ? null : (picked.filePaths[0] ?? null);
+        } finally {
+          directoryPickerInFlight = false;
+        }
+      },
     });
     await runtime.start();
   } catch (error) {

@@ -9,6 +9,8 @@ export type SessionMessage = {
   id: string;
   role: 'user' | 'assistant' | 'system';
   text: string;
+  /** 用户消息的图片附件（data 为无前缀 base64，data URL 渲染）。 */
+  images: ReadonlyArray<{ data: string; mimeType: string }>;
 };
 
 export type TurnStatus = 'running' | 'completed' | 'stopped';
@@ -71,7 +73,9 @@ export type TurnBlock =
   | { kind: 'thinking'; id: string; text: string }
   | { kind: 'tools'; id: string; calls: readonly ToolCallModel[] }
   | { kind: 'subagents'; id: string; agents: readonly SubagentModel[] }
-  | { kind: 'diff'; id: string; diff: DiffSummaryModel };
+  | { kind: 'diff'; id: string; diff: DiffSummaryModel }
+  /** 轮次异常终态（上游报错/中止）：收起态也保持可见的一行提示。 */
+  | { kind: 'turnFailure'; id: string; stopReason: 'error' | 'aborted'; message: string | null };
 
 export type TurnModel = {
   id: string;
@@ -89,6 +93,6 @@ export type ThreadItem =
 export type ThreadModel = {
   sessionId: string;
   items: readonly ThreadItem[];
-  /** 本会话全部直接派生的子代理（面板列表与流内简略行的同一数据源） */
+  /** 本会话全部直接派生的子代理（面板列表与流内子代理条的同一数据源） */
   agents: readonly SubagentModel[];
 };

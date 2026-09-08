@@ -10,7 +10,7 @@ function makeHarness() {
   const calls: Array<{ url: string; body: unknown }> = [];
   const responders: Responder[] = [];
   const providers = new Map<string, { baseUrl: string; models: string[] }>([
-    ['glm', { baseUrl: 'https://api.example.com/v1/', models: ['glm-4.7'] }],
+    ['glm', { baseUrl: 'https://api.example.com/v1/', models: [{ id: 'glm-4.7', reasoning: true }] }],
     ['nokey', { baseUrl: 'https://api.example.com/v1', models: ['m'] }],
     ['weird', { baseUrl: 'https://api.example.com/v1/?x=1#frag', models: ['m'] }],
   ]);

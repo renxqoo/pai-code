@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, truncateSync, statSync, appendFileSync, renameSync } from 'node:fs';
 import { dirname } from 'node:path';
 
-import { SettingsSchema, type ProviderConfig, type Settings } from '@paiapp/contracts';
+import { parseSettings, SettingsSchema, type ProviderConfig, type Settings } from '@paiapp/contracts';
 
 /**
  * 设置读写：settings.json（无 key）+ provider-keys.json（safeStorage 加密）。
@@ -29,7 +29,8 @@ export function createFileSettings(settingsFile: string, keyStore: ProviderKeySt
     } catch {
       parsed = {};
     }
-    cached = SettingsSchema.parse(parsed);
+    // 宽容读取：旧形态（models 为 string[]）升级、坏形状整体降级默认值
+    cached = parseSettings(parsed);
     return cached;
   };
 
@@ -59,7 +60,13 @@ export function createFileSettings(settingsFile: string, keyStore: ProviderKeySt
       const current = read();
       const providers = [
         ...current.providers.filter((provider) => provider.name !== input.name),
-        { name: input.name, baseUrl: input.baseUrl, api: input.api, models: input.models },
+        {
+          name: input.name,
+          baseUrl: input.baseUrl,
+          api: input.api,
+          models: input.models.map((model) => ({ id: model.id, reasoning: model.reasoning, vision: model.vision })),
+          thinkingFormat: input.thinkingFormat,
+        },
       ].sort((a, b) => a.name.localeCompare(b.name));
       write({ ...current, providers });
       if (input.apiKey !== undefined) keyStore.setKey(input.name, input.apiKey.length > 0 ? input.apiKey : null);

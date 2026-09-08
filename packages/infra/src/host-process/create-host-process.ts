@@ -151,6 +151,9 @@ export function createHostProcess(deps: HostProcessDeps): HostProcessPort {
 
     proc.stdout?.setEncoding('utf8');
     const decoder = createFrameDecoder((frame) => {
+      // 代际守卫：重启/换进程后旧 stdout 的滞留帧一律丢弃——父进程阻塞窗口排队的
+      // data 事件可能在 restarting 相位之后派发，迟到帧会把渲染层已终态的镜像写回
+      if (child !== proc) return;
       if (frame.type === 'response') {
         const responseId = frame.id;
         if (responseId === undefined) return;

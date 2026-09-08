@@ -78,7 +78,7 @@ function OnboardingScreen({
                       <p className="truncate text-[12.5px] font-medium">{provider.name}</p>
                       <p className="truncate text-[11.5px] text-muted-foreground">{provider.baseUrl}</p>
                       <p className="truncate text-[11px] text-muted-foreground">
-                        {provider.models.join(', ')} · {provider.hasKey ? copy.settings.keyPresent : copy.settings.keyMissing}
+                        {provider.models.map((model) => model.id).join(', ')} · {provider.hasKey ? copy.settings.keyPresent : copy.settings.keyMissing}
                       </p>
                     </div>
                   ))}

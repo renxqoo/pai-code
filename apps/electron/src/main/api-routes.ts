@@ -1,12 +1,14 @@
 import { realpathSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { basename as baseName, dirname as dirnamePath, join as joinPaths, resolve as resolvePath, sep as pathSep } from 'node:path';
 
 import { agentViews, mapEntries, modelInfos, savedSessions, sessionCommands, sessionStatsView, threadStateView, thinkingLevels } from '@paiapp/adapter';
 import { envVarNameForProvider } from './models-config';
 import { createProviderProbe } from './provider-probe';
 import { searchProjectFiles } from './file-search';
+import { buildSkillInventory, parseSkillPatterns, toggleSkillPatterns } from './skills-inventory';
 import type { AgentDirFiles } from './agent-dir-files';
-import { defaultPermissionRules, parsePermissionRules } from '@paiapp/contracts';
+import { defaultPermissionRules, parsePermissionRules, type ThinkingFormat } from '@paiapp/contracts';
 import { ApiSchemas, type ApiMethod, type ApiOutcome, type ApiParams } from '@paiapp/contracts';
 
 import type { PaiRuntime } from './pai-runtime';
@@ -28,8 +30,14 @@ export interface ApiRouteDeps {
   audit: (message: string) => void;
   /** agentDir 受控文件面（固定文件名白名单，原子写）。 */
   agentDirFiles: AgentDirFiles;
+  /** agentDir 根（skills 目录解析）。 */
+  agentDir: string;
+  /** 用户级技能目录源（默认 agentDir/skills + ~/.agents/skills；测试注入替身）。 */
+  skillSources?: () => ReadonlyArray<{ origin: 'agent' | 'agents'; dir: string }>;
   /** 在系统文件管理器中显示文件（装配层注入 Electron shell；缺省 no-op 保可测性）。 */
   revealPath: (path: string) => void;
+  /** 系统目录选择对话框（装配层注入 Electron dialog；缺省返回「不可用」）。 */
+  pickDirectory: (defaultPath: string | null) => Promise<string | null>;
 }
 
 type Outcome<M extends ApiMethod> = Promise<ApiOutcome<M>>;
@@ -72,6 +80,9 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     }
   };
 
+  /** 按会话文件路径找注册表行（resume 缺省 trusted 的补全源）。 */
+  const findRegistryRowByPath = (sessionPath: string) => runtime.registry.list().find((row) => row.sessionPath === sessionPath) ?? null;
+
   /** 已知工作目录集合：活跃会话 + 注册表（list_saved 按目录过滤，需逐目录聚合）。 */
   const knownCwds = (): string[] => {
     const cwds = new Set<string>(runtime.sessions().map((session) => session.cwd));
@@ -92,12 +103,13 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     return [...merged.values()].sort((a, b) => b.modifiedAt - a.modifiedAt);
   };
 
-  const providersView = (): Array<{ name: string; baseUrl: string; api: string; models: string[]; hasKey: boolean }> =>
+  const providersView = (): Array<{ name: string; baseUrl: string; api: string; models: { id: string; reasoning: boolean; vision: boolean }[]; thinkingFormat: ThinkingFormat; hasKey: boolean }> =>
     deps.settings.listProviders().map((provider) => ({
       name: provider.name,
       baseUrl: provider.baseUrl,
       api: provider.api,
-      models: [...provider.models],
+      models: provider.models.map((model) => ({ id: model.id, reasoning: model.reasoning, vision: model.vision })),
+      thinkingFormat: provider.thinkingFormat,
       hasKey: deps.keyStore.getKey(provider.name) !== null,
     }));
 
@@ -118,19 +130,30 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     getKey: (name) => deps.keyStore.getKey(name),
   });
 
-  /** provider 配置变更：重生成 models.json；若 host 未热加载则重启恢复链路（host 未启动则待下次启动生效）。 */
+  /** 用户级技能目录两处（pi 语义：agent = agentDir/skills；agents = ~/.agents/skills）。 */
+  const resolveSkillSources = deps.skillSources ?? (() => [
+    { origin: 'agent' as const, dir: joinPaths(deps.agentDir, 'skills') },
+    { origin: 'agents' as const, dir: joinPaths(homedir(), '.agents', 'skills') },
+  ]);
+
+  /** pi settings.json 宽容读取（白名单文件面；坏/缺按 {} 起步）。 */
+  const readPiSettings = (): Record<string, unknown> => {
+    const raw = deps.agentDirFiles.readJson('settings.json');
+    return typeof raw === 'object' && raw !== null && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+  };
+
+  const skillsView = () => buildSkillInventory(resolveSkillSources(), parseSkillPatterns(readPiSettings()));
+
+  /**
+   * provider 配置变更 → 重启 host 恢复链路：hub 的 ModelConfig 只在启动时读入 models.json，
+   * 且 key 经 spawn env 注入——模型能力（reasoning/compat）或 key 的任何变化都必须重 spawn 才生效。
+   * host 未启动则配置已落盘，下次启动时生效。
+   */
   const applyProviderChange = async (): Promise<void> => {
-    const providers = deps.settings.listProviders();
     try {
-      const models = await runtime.host.request({ type: 'get_models' });
-      if (models.ok) {
-        const known = new Set(modelInfos(models.data).map((model) => model.provider));
-        const missing = providers.some((provider) => !known.has(provider.name));
-        if (!missing) return;
-      }
       await runtime.host.restart('providers_changed');
     } catch {
-      // host 未启动/未配置：配置已落盘，下次启动时 buildEnv 重生成生效
+      // host 未构建/未启动：落盘即完成，待下次启动时生效
     }
   };
 
@@ -146,6 +169,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
         models: models.ok ? modelInfos(models.data) : [],
         providers: providersView(),
         preferences: preferencesView(),
+        hostPhase: runtime.hostPhase(),
       };
       runtime.emitBuffered();
       return { ok: true as const, data: outcome };
@@ -157,20 +181,23 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       const data = result.data as { threadId?: string; cwd?: string; sessionPath?: string | null };
       const threadId = data.threadId ?? '';
       if (threadId.length === 0) return fail('malformed_response');
-      const view = runtime.applyStartOutcome(threadId, data.cwd ?? params.cwd, data.sessionPath ?? null, runtime.defaultTitle);
+      const view = runtime.applyStartOutcome(threadId, data.cwd ?? params.cwd, data.sessionPath ?? null, runtime.defaultTitle, params.trusted ?? false);
       fillSessionMeta(threadId);
       return { ok: true as const, data: view };
     },
     'session/resume': async (params) => {
       // 路径白名单：只允许恢复本应用 agentDir/sessions 下的会话文件（防被攻陷渲染层任意读）
       if (!insideSessionsRoot(params.sessionPath)) return fail('session_path_forbidden');
-      if (params.trusted !== undefined) deps.audit(`session_trusted:resume:${params.sessionPath}:${params.trusted}`);
-      const result = await command({ type: 'thread/resume', sessionPath: params.sessionPath, trusted: params.trusted });
+      // hub 协议 resume 缺省 trusted=false：不传时按注册表记录补全（同文件重开保持既有信任态）
+      const known = findRegistryRowByPath(params.sessionPath);
+      const trusted = params.trusted ?? known?.trusted ?? false;
+      if (params.trusted !== undefined || known?.trusted === true) deps.audit(`session_trusted:resume:${params.sessionPath}:${trusted}`);
+      const result = await command({ type: 'thread/resume', sessionPath: params.sessionPath, trusted });
       if (!result.ok) return fail(result.reason);
       const data = result.data as { threadId?: string; cwd?: string; sessionPath?: string | null };
       const threadId = data.threadId ?? '';
       if (threadId.length === 0) return fail('malformed_response');
-      const view = runtime.applyStartOutcome(threadId, data.cwd ?? '', data.sessionPath ?? params.sessionPath, runtime.defaultTitle);
+      const view = runtime.applyStartOutcome(threadId, data.cwd ?? '', data.sessionPath ?? params.sessionPath, runtime.defaultTitle, trusted);
       fillSessionMeta(threadId);
       return { ok: true as const, data: view };
     },
@@ -194,14 +221,6 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       if (!result.ok) return fail(result.reason);
       void runtime.autoTitleOnPrompt(params.threadId, params.message);
       return { ok: true as const, data: null };
-    },
-    'session/steer': async (params) => {
-      const result = await command({ type: 'steer', threadId: params.threadId, message: params.message });
-      return result.ok ? { ok: true as const, data: null } : fail(result.reason);
-    },
-    'session/followUp': async (params) => {
-      const result = await command({ type: 'follow_up', threadId: params.threadId, message: params.message, images: params.images });
-      return result.ok ? { ok: true as const, data: null } : fail(result.reason);
     },
     'session/abort': async (params) => {
       // Esc/停止语义 = 清队列 + 停止当前轮（api.md 客户端约定）
@@ -293,6 +312,10 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       const result = await command({ type: 'ui_response', requestId: params.requestId, payload: params.payload });
       return result.ok ? { ok: true as const, data: null } : fail(result.reason);
     },
+    'subagent/steer': async (params) => {
+      const result = await command({ type: 'subagent/steer', threadId: params.threadId, subagentId: params.subagentId, message: params.message });
+      return result.ok ? { ok: true as const, data: null } : fail(result.reason);
+    },
     'command/list': async (params) => {
       const result = await command({ type: 'get_commands', threadId: params.threadId });
       return result.ok ? { ok: true as const, data: sessionCommands(result.data) } : fail(result.reason);
@@ -315,6 +338,26 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       if (!insideSessionsRoot(params.sessionPath)) return Promise.resolve(fail('session_path_forbidden'));
       deps.revealPath(params.sessionPath);
       return Promise.resolve({ ok: true as const, data: null });
+    },
+    'dialog/pickDirectory': (params) =>
+      deps
+        .pickDirectory(params.defaultPath ?? null)
+        .then((directory) => ({ ok: true as const, data: directory }))
+        .catch(() => fail('dialog_unavailable')),
+    'skills/list': () => Promise.resolve({ ok: true as const, data: skillsView() }),
+    'skills/setEnabled': (params) => {
+      // 同步读-改-写（无 yield 点，invoke 天然串行不交错）
+      const current = skillsView();
+      if (!current.some((skill) => skill.name === params.name)) return Promise.resolve(fail('skill_not_found'));
+      try {
+        const piSettings = readPiSettings();
+        const next = toggleSkillPatterns(parseSkillPatterns(piSettings), params.name, params.enabled);
+        const written = deps.agentDirFiles.writeJsonAtomic('settings.json', { ...piSettings, skills: next });
+        if (!written) return Promise.resolve(fail('write_failed'));
+        return Promise.resolve({ ok: true as const, data: skillsView() });
+      } catch {
+        return Promise.resolve(fail('write_failed'));
+      }
     },
     'session/clearQueue': async (params) => {
       const result = await command({ type: 'clear_queue', threadId: params.threadId });
@@ -375,10 +418,6 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       const written = deps.agentDirFiles.writeJsonAtomic('permission-rules.json', params.rules);
       return Promise.resolve(written ? { ok: true as const, data: params.rules } : fail('write_failed'));
     },
-    'subagent/steer': async (params) => {
-      const result = await command({ type: 'subagent/steer', threadId: params.threadId, subagentId: params.subagentId, message: params.message });
-      return result.ok ? { ok: true as const, data: null } : fail(result.reason);
-    },
     'provider/upsert': async (params) => {
       // env 变量名碰撞防护：不同名字 sanitize 后同名会导致 key 互串（a-b 与 a_b 同映射 PAI_KEY_A_B）
       const envName = envVarNameForProvider(params.name);
@@ -390,7 +429,8 @@ export function createApiRoutes(deps: ApiRouteDeps) {
         name: params.name,
         baseUrl: params.baseUrl,
         api: params.api,
-        models: [...params.models],
+        models: params.models.map((model) => ({ id: model.id, reasoning: model.reasoning, vision: model.vision })),
+        thinkingFormat: params.thinkingFormat ?? 'default',
         apiKey: params.apiKey,
       });
       await applyProviderChange();
@@ -406,18 +446,19 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       return outcome.ok ? { ok: true as const, data: { latencyMs: outcome.latencyMs } } : fail(outcome.reason);
     },
     'app/diagnostics': () => {
-      const diag = runtime.host.diagnostics();
+      // host 从未构建（路径未解析）时安全返回 null 相位，不 internal_error
       return Promise.resolve({
         ok: true as const,
         data: {
-          hostPhase: runtime.host.phase,
-          stderrTail: diag.stderrTail,
+          hostPhase: runtime.hostPhase(),
+          stderrTail: runtime.hostStderrTail(),
           registrySessions: runtime.registry.list().length,
         },
       });
     },
     'app/restartHost': () => {
       deps.audit('restart_host:manual');
+      if (runtime.hostPhase() === null) return Promise.resolve(fail('host_unavailable'));
       void runtime.host.restart('manual').catch(() => undefined);
       return Promise.resolve({ ok: true as const, data: null });
     },

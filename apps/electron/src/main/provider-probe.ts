@@ -7,7 +7,7 @@
 export type ProbeOutcome = { ok: true; latencyMs: number } | { ok: false; reason: string };
 
 export interface ProviderProbeDeps {
-  getProvider(name: string): { baseUrl: string; models: readonly string[] } | undefined;
+  getProvider(name: string): { baseUrl: string; models: readonly { id: string }[] } | undefined;
   getKey(name: string): string | null;
   /** 注入点：测试替身用；缺省全局 fetch。 */
   fetchFn?: typeof fetch;
@@ -41,7 +41,7 @@ export function createProviderProbe(deps: ProviderProbeDeps) {
       const response = await (deps.fetchFn ?? fetch)(target, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
-        body: JSON.stringify({ model: provider.models[0], max_tokens: 1, messages: [{ role: 'user', content: 'ping' }] }),
+        body: JSON.stringify({ model: provider.models[0]?.id, max_tokens: 1, messages: [{ role: 'user', content: 'ping' }] }),
         signal: (deps.timeoutSignal ?? defaultTimeoutSignal)(PROBE_TIMEOUT_MS),
       });
       // 成败两路径都排空响应体，避免错误响应占住连接池 socket

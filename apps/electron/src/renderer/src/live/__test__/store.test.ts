@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
+import { defaultPermissionRules } from '@paiapp/contracts';
 import { createLiveStore } from '../store';
 import type { SessionView, UiEvent } from '@paiapp/contracts';
 
@@ -75,6 +76,19 @@ describe('live store（对话框/通知/bootstrap 合并）', () => {
     expect('t1' in store.getState().sessions).toBe(false);
   });
 
+  test('症状回归：setActiveThread 切换同步清空 sessionRules（防旧会话权限模式残留一帧）；同值重设不清', () => {
+    const store = createLiveStore();
+    store.getState().bootstrap({ sessions: [session('t1'), session('t2')], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } });
+    const rules = { rules: defaultPermissionRules(), source: 'global' as const };
+    store.setState({ sessionRules: rules });
+    store.getState().setActiveThread('t2');
+    expect(store.getState().sessionRules).toBeNull();
+    // 同值重设不失效：切会话 effect 以 activeThreadId 为 deps，同值不重拉
+    store.setState({ sessionRules: rules });
+    store.getState().setActiveThread('t2');
+    expect(store.getState().sessionRules).toBe(rules);
+  });
+
   test('host/sessionUpdated/sessionRenamed 会话表维护 + sessionDied 线程标记', () => {
     const store = createLiveStore();
     store.getState().bootstrap({ sessions: [session('t1')], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } });
@@ -93,12 +107,51 @@ describe('live store（对话框/通知/bootstrap 合并）', () => {
     expect(store.getState().threads['ghost']?.queue.followUp).toEqual(['m']);
   });
 
+  test('症状回归：host restarting/failed 就地终态全部线程在途面（宿主死亡后空闲会话新消息不再进排队）', () => {
+    const store = createLiveStore();
+    store.getState().bootstrap({ sessions: [session('t1'), session('t2')], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } });
+    store.getState().applyEvent({ type: 'turnStarted', threadId: 't1', at: 2 }, 2);
+    store.getState().applyEvent({ type: 'queueChanged', threadId: 't1', steering: [], followUp: ['等轮末'] }, 3);
+    store.getState().applyEvent({ type: 'queueChanged', threadId: 't2', steering: ['插入'], followUp: [] }, 4);
+    // 宿主挂死重启：全部线程的运行面随进程消亡（不会有 settle/queue_update）
+    store.getState().applyEvent({ type: 'host', phase: 'restarting' }, 5);
+    expect(store.getState().threads['t1']?.streaming).toBe(false);
+    expect(store.getState().threads['t1']?.queue).toEqual({ steering: [], followUp: [] });
+    expect(store.getState().threads['t2']?.queue).toEqual({ steering: [], followUp: [] });
+    const turn = store.getState().threads['t1']?.items[0];
+    expect(turn).toMatchObject({ kind: 'turn', turn: { status: 'completed', endedAt: 5 } });
+    // ready 不再有额外清理动作（重启后空闲，状态由后续事件重建）
+    store.getState().applyEvent({ type: 'host', phase: 'ready' }, 6);
+    expect(store.getState().hostPhase).toBe('ready');
+    // failed 同样终态（重启失败时在途面早已消亡）
+    store.getState().applyEvent({ type: 'turnStarted', threadId: 't2', at: 7 }, 7);
+    store.getState().applyEvent({ type: 'host', phase: 'failed' }, 8);
+    expect(store.getState().threads['t2']?.streaming).toBe(false);
+    // 挂起对话框随宿主进程消亡：立即收起（不等 5 分钟兜底超时）；线程标记 crashed 供横幅提示中断
+    store.setState({ dialogs: { r1: { requestId: 'r1', threadId: 't1', method: 'confirm' } }, dialogOrder: ['r1'] });
+    store.getState().applyEvent({ type: 'host', phase: 'restarting' }, 9);
+    expect(store.getState().dialogs).toEqual({});
+    expect(store.getState().dialogOrder).toEqual([]);
+    expect(store.getState().threads['t1']?.crashed).toBe(true);
+  });
+
+  test('症状回归：sessionDied 立即收起该会话挂起对话框（其余会话弹窗不受影响）', () => {
+    const store = createLiveStore();
+    store.getState().bootstrap({ sessions: [session('t1'), session('t2')], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } });
+    store.getState().applyEvent({ type: 'dialogRequest', threadId: 't1', requestId: 'r1', method: 'confirm', title: '允许执行？' }, 1);
+    store.getState().applyEvent({ type: 'dialogRequest', threadId: 't2', requestId: 'r2', method: 'confirm', title: '另一个会话' }, 2);
+    store.getState().applyEvent({ type: 'sessionDied', threadId: 't1', reason: 'crash' }, 3);
+    expect(Object.keys(store.getState().dialogs)).toEqual(['r2']);
+    expect(store.getState().dialogOrder).toEqual(['r2']);
+    expect(store.getState().threads['t1']?.crashed).toBe(true);
+  });
+
   test('hydrate/stopIntent/updateStats/reset 动作', () => {
     const store = createLiveStore();
     store.getState().bootstrap({ sessions: [session('t1')], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } });
     store.getState().hydrate('t1', {
       kind: 'hydrate/initial',
-      items: [{ kind: 'user', id: 'e1', text: 'hi', origin: 'user', at: 1 }],
+      items: [{ kind: 'user', id: 'e1', text: 'hi', origin: 'user', images: [], at: 1 }],
       cursor: 'e1',
     });
     expect(store.getState().threads['t1']?.items.length).toBe(1);
@@ -109,5 +162,18 @@ describe('live store（对话框/通知/bootstrap 合并）', () => {
     expect(store.getState().stats['t1']).toEqual({ contextUsage: 0.5, tokensTotal: 100 });
     store.getState().reset();
     expect(store.getState().bootstrapLoaded).toBe(false);
+  });
+
+  test('症状回归：host 从未启动时 bootstrap 落 hostPhase=null（宿主未连接，非「没有模型」）', () => {
+    const store = createLiveStore();
+    store.getState().bootstrap({ sessions: [], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] }, hostPhase: null });
+    expect(store.getState().hostPhase).toBeNull();
+  });
+
+  test('症状回归：bootstrap 快照不回滚先到的 host 事件（滞后合并语义）', () => {
+    const store = createLiveStore();
+    store.getState().applyEvent({ type: 'host', phase: 'failed' }, 1);
+    store.getState().bootstrap({ sessions: [], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] }, hostPhase: 'ready' });
+    expect(store.getState().hostPhase).toBe('failed');
   });
 });

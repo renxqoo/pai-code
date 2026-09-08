@@ -41,7 +41,8 @@ function makeRoutes(work: string) {
     emit: () => undefined,
   });
   const audits: string[] = [];
-  const routes = createApiRoutes({ runtime, settings, keyStore, audit: (m) => audits.push(m), agentDirFiles: createAgentDirFiles(agentDir), revealPath: () => undefined });
+  const routes = createApiRoutes({ runtime, settings, keyStore, audit: (m) => audits.push(m), agentDirFiles: createAgentDirFiles(agentDir), revealPath: () => undefined,
+    pickDirectory: () => Promise.resolve(null) });
   return { routes, audits, agentDir };
 }
 
@@ -76,14 +77,14 @@ describe('api-routes 安全面（C-S2/C-S8/C-S4）', () => {
       name: 'a-b',
       baseUrl: 'https://a.example.com',
       api: 'openai-completions',
-      models: ['m'],
+      models: [{ id: 'm', reasoning: false, vision: false }],
     })) as { ok: boolean };
     expect(first.ok).toBe(true);
     const collide = (await routes.invoke('provider/upsert', {
       name: 'a_b',
       baseUrl: 'https://b.example.com',
       api: 'openai-completions',
-      models: ['m'],
+      models: [{ id: 'm', reasoning: false, vision: false }],
     })) as { ok: boolean; reason?: string };
     expect(collide).toEqual({ ok: false, reason: 'provider_name_conflict' });
     // 同名更新自身合法
@@ -91,7 +92,7 @@ describe('api-routes 安全面（C-S2/C-S8/C-S4）', () => {
       name: 'a-b',
       baseUrl: 'https://a2.example.com',
       api: 'openai-completions',
-      models: ['m2'],
+      models: [{ id: 'm2', reasoning: true, vision: false }],
     })) as { ok: boolean };
     expect(self.ok).toBe(true);
   });
@@ -100,7 +101,7 @@ describe('api-routes 安全面（C-S2/C-S8/C-S4）', () => {
     const work = mkdtempSync(join(tmpdir(), 'pai-sec-contract-'));
     const { routes } = makeRoutes(work);
     await expect(
-      routes.invoke('provider/upsert', { name: 'glm', baseUrl: 'https://x.example.com', api: 'openai-completions', models: ['m'] }),
+      routes.invoke('provider/upsert', { name: 'glm', baseUrl: 'https://x.example.com', api: 'openai-completions', models: [{ id: 'm', reasoning: false, vision: false }] }),
     ).resolves.toMatchObject({ ok: true });
     const bootstrap = (await routes.invoke('app/bootstrap', {})) as { ok: boolean; data: unknown };
     expect(bootstrap.ok).toBe(true);

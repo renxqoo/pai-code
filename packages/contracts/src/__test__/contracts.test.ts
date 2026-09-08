@@ -88,7 +88,7 @@ describe('Settings zod：round-trip 与拒绝表', () => {
   test('全量字段 round-trip', () => {
     const input = {
       hubDev: { bunPath: '/usr/local/bin/bun', hubEntry: '/Users/x/pi/app/dist/cli.js' },
-      providers: [{ name: 'glm', baseUrl: 'https://api.example.com', api: 'openai-completions', models: ['glm-5.3'] }],
+      providers: [{ name: 'glm', baseUrl: 'https://api.example.com', api: 'openai-completions', models: [{ id: 'glm-5.3', reasoning: true, vision: true }], thinkingFormat: 'zai' }],
       trustedDefault: true,
       defaultModel: 'glm/glm-5.3',
       onboarded: true,
@@ -125,7 +125,7 @@ describe('SessionView / HistoryItem schema', () => {
 
   test('HistoryItem 三形态样本', () => {
     const items = [
-      { kind: 'user', id: 'm1', text: 'hi', origin: 'user', at: 1 },
+      { kind: 'user', id: 'm1', text: 'hi', origin: 'user', images: [{ type: 'image', data: 'aGk=', mimeType: 'image/png' }], at: 1 },
       {
         kind: 'assistant',
         id: 'm2',
@@ -134,10 +134,19 @@ describe('SessionView / HistoryItem schema', () => {
         thinking: '',
         toolCalls: [{ id: 'tc1', name: 'bash', argsPreview: 'ls', output: 'a\nb', isError: false, diff: null }],
         usage: { input: 10, output: 5 },
+        stopReason: null,
+        errorMessage: null,
       },
       { kind: 'bash', id: 'm3', command: 'git status', output: 'ok', exitCode: 0, cancelled: false, at: 3 },
     ] as const;
     for (const item of items) expect(HistoryItemSchema.parse(item)).toEqual(item);
+  });
+
+  test('HistoryItem assistant 异常终态：stopReason 仅收窄词表、error 可带原始信息', () => {
+    const base = { kind: 'assistant', id: 'm2', at: 2, text: '', thinking: '', toolCalls: [], usage: null } as const;
+    expect(HistoryItemSchema.parse({ ...base, stopReason: 'error', errorMessage: '401 invalid api key' })).toMatchObject({ stopReason: 'error', errorMessage: '401 invalid api key' });
+    expect(HistoryItemSchema.parse({ ...base, stopReason: 'aborted', errorMessage: null })).toMatchObject({ stopReason: 'aborted' });
+    expect(() => HistoryItemSchema.parse({ ...base, stopReason: 'stop', errorMessage: null })).toThrow();
   });
 
   test('HistoryItem 拒绝未知 origin', () => {
@@ -217,8 +226,24 @@ describe('API schema：每方法合法/非法样本', () => {
     ['session/prompt 空消息', 'session/prompt', { threadId: 't', message: '' }],
     ['session/prompt 非法 streamingBehavior', 'session/prompt', { threadId: 't', message: 'hi', streamingBehavior: 'queue' }],
     ['provider/upsert 空 models', 'provider/upsert', { name: 'p', baseUrl: 'u', api: 'openai-completions', models: [] }],
+    ['provider/upsert 旧形态 string models', 'provider/upsert', { name: 'p', baseUrl: 'u', api: 'openai-completions', models: ['m'] }],
+    ['provider/upsert 非法思考形态', 'provider/upsert', { name: 'p', baseUrl: 'u', api: 'openai-completions', models: [{ id: 'm', reasoning: true }], thinkingFormat: 'chat-template' }],
+    ['dialog/pickDirectory 未知键', 'dialog/pickDirectory', { defaultPath: '/w', extra: 1 }],
+    ['dialog/pickDirectory 空 defaultPath', 'dialog/pickDirectory', { defaultPath: '' }],
   ])('拒绝：%s', (_name: string, method: string, bad: unknown) => {
     expect(() => ApiSchemas[method as keyof typeof ApiSchemas].params.parse(bad)).toThrow();
+  });
+});
+
+describe('dialog/pickDirectory 契约（新会话目录选择）', () => {
+  test.each([
+    ['空对象', {}],
+    ['带 defaultPath', { defaultPath: '/w/proj' }],
+  ])('合法：%s → result 为 string|null', (_name: string, params: unknown) => {
+    const parsed = ApiSchemas['dialog/pickDirectory'].params.parse(params);
+    expect(parsed).toEqual(params);
+    expect(ApiSchemas['dialog/pickDirectory'].result.nullable().parse(null)).toBeNull();
+    expect(ApiSchemas['dialog/pickDirectory'].result.parse('/w/proj')).toBe('/w/proj');
   });
 });
 

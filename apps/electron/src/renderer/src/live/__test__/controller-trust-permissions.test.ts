@@ -171,6 +171,7 @@ test('会话级规则读取/写入/清除透传（sidecar）', async () => {
     'permission/sessionWrite': { ok: true, data: null },
   });
   const store = createLiveStore();
+  store.getState().setActiveThread('t1');
   const controller = createLiveController(client, store);
   const read = await controller.readSessionRules('t1');
   expect(read).toEqual({ rules: effective, source: 'thread' });
@@ -180,6 +181,61 @@ test('会话级规则读取/写入/清除透传（sidecar）', async () => {
   expect(client.calls).toContainEqual({ method: 'permission/sessionWrite', params: { threadId: 't1', rules: effective } });
   expect(await controller.writeSessionRules('t1', null)).toBeNull();
   expect(client.calls).toContainEqual({ method: 'permission/sessionWrite', params: { threadId: 't1', rules: null } });
+});
+
+test('症状回归：readSessionRules 引用幂等——内容相同不换引用（防草稿重置循环击穿模式切换）', async () => {
+  const effective = { mode: 'ask' as const, bash: { allowPatterns: [], blockPatterns: [] }, write: { allowPatterns: [], blockPatterns: [] }, edit: { allowPatterns: [], blockPatterns: [] } };
+  let reads = 0;
+  const client = makeClient({
+    'permission/sessionRead': { ok: true, data: { rules: effective, source: 'thread' } },
+  });
+  // makeClient 的 data 为固定引用；包一层计数透传
+  const baseInvoke = client.invoke.bind(client);
+  client.invoke = async (method: string, params: unknown) => {
+    if (method === 'permission/sessionRead') reads += 1;
+    return baseInvoke(method, params);
+  };
+  const store = createLiveStore();
+  store.getState().setActiveThread('t1');
+  const controller = createLiveController(client, store);
+  const first = await controller.readSessionRules('t1');
+  const firstRef = store.getState().sessionRules;
+  const second = await controller.readSessionRules('t1');
+  expect(reads).toBe(2);
+  expect(second).toBe(first);
+  expect(store.getState().sessionRules).toBe(firstRef);
+});
+
+test('症状回归：readSessionRules 判活——响应落地前会话已切换则丢弃（防旧会话规则覆盖新会话视图）', async () => {
+  const staleRules = { mode: 'allow-all' as const, bash: { allowPatterns: [], blockPatterns: [] }, write: { allowPatterns: [], blockPatterns: [] }, edit: { allowPatterns: [], blockPatterns: [] } };
+  const client = makeClient({
+    'permission/sessionRead': { ok: true, data: { rules: staleRules, source: 'thread' } },
+  });
+  const store = createLiveStore();
+  store.getState().setActiveThread('t1');
+  const controller = createLiveController(client, store);
+  const pending = controller.readSessionRules('t1');
+  // 响应落地前切走
+  store.getState().setActiveThread('t2');
+  await pending;
+  expect(store.getState().sessionRules).toBeNull();
+});
+
+test('症状回归：全局规则写入/刷新后同步刷新活跃会话生效视图（防操作栏以陈旧全局为基线切模式丢 patterns）', async () => {
+  const globalRules = { mode: 'allow-all' as const, bash: { allowPatterns: ['git *'], blockPatterns: [] }, write: { allowPatterns: [], blockPatterns: [] }, edit: { allowPatterns: [], blockPatterns: [] } };
+  const client = makeClient({
+    'permission/read': { ok: true, data: globalRules },
+    'permission/write': { ok: true, data: globalRules },
+    'permission/sessionRead': { ok: true, data: { rules: globalRules, source: 'global' } },
+  });
+  const store = createLiveStore();
+  store.getState().setActiveThread('t1');
+  const controller = createLiveController(client, store);
+  expect(await controller.writePermissionRules(globalRules)).toBeNull();
+  expect(store.getState().sessionRules).toEqual({ rules: globalRules, source: 'global' });
+  store.setState({ sessionRules: null });
+  expect(await controller.refreshPermissionRules()).toEqual(globalRules);
+  expect(store.getState().sessionRules).toEqual({ rules: globalRules, source: 'global' });
 });
 
 test('steerSubagent：trim 校验 + 命令透传 + 失败原因', async () => {

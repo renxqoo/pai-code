@@ -21,7 +21,19 @@ type UserMessageRowProps = {
 function UserMessageRow({ message, onEdit, onEditRerun, onRetry }: UserMessageRowProps) {
   return (
     <div className="group flex flex-col items-end">
-      <ChatBubble>{message.text}</ChatBubble>
+      {message.images.length > 0 ? (
+        <div className="flex max-w-full flex-wrap justify-end gap-[6px] pb-[6px]">
+          {message.images.map((image, index) => (
+            <img
+              key={`${message.id}:${index}`}
+              src={`data:${image.mimeType};base64,${image.data}`}
+              alt=""
+              className="size-[120px] rounded-[10px] border border-border object-cover"
+            />
+          ))}
+        </div>
+      ) : null}
+      {message.text.length > 0 ? <ChatBubble>{message.text}</ChatBubble> : null}
       <div className="flex items-center gap-[6px] pt-[4px] opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100 motion-reduce:transition-none">
         <CopyButton
           label={copy.flow.copyMessage}

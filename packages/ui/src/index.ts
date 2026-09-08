@@ -11,5 +11,6 @@ export { MetaLine, type MetaLineProps } from './meta-line';
 export { SparkMark } from './spark-mark';
 export { SplitButton, type SplitButtonProps } from './split-button';
 export { StatusDot, type StatusDotProps, type StatusDotTone } from './status-dot';
+export { ToggleSwitch, type ToggleSwitchProps } from './switch';
 export { TypePill, type TypePillProps } from './type-pill';
 export { UsageRing, type UsageRingProps } from './usage-ring';

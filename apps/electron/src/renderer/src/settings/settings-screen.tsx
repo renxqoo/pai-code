@@ -10,7 +10,7 @@ import { PermissionsSection } from './permissions-section';
 import { ProvidersSection } from './providers-section';
 import { SettingsSectionNav } from './settings-section-nav';
 import { SkillsSection } from './skills-section';
-import type { AgentView, CredentialView, PermissionRules, ProviderConfigView } from '@paiapp/contracts';
+import type { AgentView, CredentialView, PermissionRules, ProviderConfigView, ProviderModel, SkillView, ThinkingFormat } from '@paiapp/contracts';
 
 type SettingsScreenProps = {
   open: boolean
@@ -20,14 +20,16 @@ type SettingsScreenProps = {
   modelOptions: readonly string[]
   permissionRules: PermissionRules | null
   agents: readonly AgentView[]
-  skills: ReadonlyArray<{ name: string; description: string | null }>
+  skills: readonly SkillView[]
+  /** 技能启停（写 pi settings + 重开活跃会话生效）。 */
+  onToggleSkill: (name: string, enabled: boolean) => Promise<boolean>
   saved: ReadonlyArray<{ sessionPath: string; title: string; cwd: string; modifiedAt: number; messageCount: number }>
   pinnedSessions: ReadonlySet<string>
   savedProjects: readonly string[]
   onTogglePin: (sessionPath: string) => void
   onRevealSession: (sessionPath: string) => void
   onClose: () => void
-  onUpsertProvider: (input: { name: string; baseUrl: string; api: string; models: string[]; apiKey?: string }) => Promise<boolean>
+  onUpsertProvider: (input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; thinkingFormat: ThinkingFormat; apiKey?: string }) => Promise<boolean>
   onRemoveProvider: (name: string) => Promise<boolean>
   onSelectDefaultModel: (value: string | null) => void
   onTestProvider: (name: string) => Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }>
@@ -46,6 +48,8 @@ type SettingsScreenProps = {
   onRestartHost: () => void
   /** 进入 Agents 分区时拉取（host 级枚举无推送） */
   onShowAgents: () => void
+  /** 进技能分区时拉取目录（含禁用态全集）。 */
+  onShowSkills: () => void
   onOpenSaved: (sessionPath: string) => void
   onRefreshSaved: () => void
   onSaveKey: (provider: string, apiKey: string) => Promise<boolean>
@@ -82,6 +86,8 @@ function SettingsScreen({
   onSaveSessionRules,
   onLoadSessionRules,
   onShowAgents,
+  onShowSkills,
+  onToggleSkill,
   trustedDefault,
   language,
   onSaveGeneral,
@@ -123,7 +129,15 @@ function SettingsScreen({
         setSection('agents');
       },
     },
-    { id: 'skills', label: copy.settings.skillsTitle, selected: section === 'skills', onSelect: () => setSection('skills') },
+    {
+      id: 'skills',
+      label: copy.settings.skillsTitle,
+      selected: section === 'skills',
+      onSelect: () => {
+        onShowSkills();
+        setSection('skills');
+      },
+    },
     {
       id: 'diagnostics',
       label: copy.settings.diagnosticsTitle,
@@ -180,7 +194,7 @@ function SettingsScreen({
               ) : section === 'agents' ? (
                 <AgentsSection agents={agents} onRefresh={onShowAgents} />
               ) : section === 'skills' ? (
-                <SkillsSection skills={skills} />
+                <SkillsSection skills={skills} onRefresh={onShowSkills} onToggle={onToggleSkill} />
               ) : section === 'diagnostics' ? (
                 <DiagnosticsSection data={diagnostics} onRefresh={onShowDiagnostics} onRestart={onRestartHost} />
               ) : (

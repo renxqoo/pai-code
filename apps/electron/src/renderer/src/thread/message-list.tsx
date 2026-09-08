@@ -1,9 +1,11 @@
 import * as React from 'react';
 import { cn } from '@/lib/utils';
+import { copy } from '@/strings';
 import { EmptyThread } from '@/thread/empty-thread';
 import { ScrollToBottomButton } from '@/thread/scroll-to-bottom-button';
 import { TextBlock } from '@/thread/text-block';
 import { TurnGroup } from '@/thread/turn-group';
+import { TurnLoadingRow } from '@/thread/turn-loading-row';
 import { useStickToBottom } from '@/thread/use-stick-to-bottom';
 import { SystemMessageRow } from '@/thread/system-message-row';
 import { UserMessageRow } from '@/thread/user-message-row';
@@ -13,6 +15,8 @@ import type { ThreadItem, ThreadModel } from '@/thread/thread-model';
 type MessageListProps = {
   thread: ThreadModel
   now: number
+  /** 会话在途（轮次流式/直执行命令/压缩）：消息流尾部显示执行中指示 */
+  loading: boolean
   emptyTitle: string
   emptyHint: string
   onOpenAgents: () => void
@@ -32,7 +36,7 @@ function itemTopMargin(index: number, item: ThreadItem): string {
 }
 
 /** 消息流：用户气泡右对齐、轮次组左对齐，轮与轮之间落时间戳行；离开底部时右下浮出回到底部浮标。 */
-function MessageList({ thread, now, emptyTitle, emptyHint, onOpenAgents, onOpenDiff, onEditUserMessage, onForkUserMessage }: MessageListProps) {
+function MessageList({ thread, now, loading, emptyTitle, emptyHint, onOpenAgents, onOpenDiff, onEditUserMessage, onForkUserMessage }: MessageListProps) {
   const { containerRef, onScroll, atBottom, scrollToBottom } = useStickToBottom();
 
   const jumpButton = atBottom ? null : (
@@ -42,10 +46,17 @@ function MessageList({ thread, now, emptyTitle, emptyHint, onOpenAgents, onOpenD
   );
 
   if (thread.items.length === 0) {
+    // 首轮事件到达前的空窗（如直执行命令）：留执行中指示，不闪空态引导
     return (
       <div className="relative min-h-0 flex-1">
         <div className="h-full overflow-y-auto">
-          <EmptyThread title={emptyTitle} hint={emptyHint} />
+          {loading ? (
+            <div className="mx-auto flex w-full max-w-[700px] flex-col pt-6 pb-10">
+              <TurnLoadingRow label={copy.flow.executing} />
+            </div>
+          ) : (
+            <EmptyThread title={emptyTitle} hint={emptyHint} />
+          )}
         </div>
       </div>
     );
@@ -83,6 +94,7 @@ function MessageList({ thread, now, emptyTitle, emptyHint, onOpenAgents, onOpenD
               )}
             </div>
           ))}
+          {loading ? <TurnLoadingRow label={copy.flow.executing} /> : null}
         </div>
       </div>
       {jumpButton}
@@ -92,6 +104,6 @@ function MessageList({ thread, now, emptyTitle, emptyHint, onOpenAgents, onOpenD
 
 const MessageListMemo = React.memo(
   MessageList,
-  (prev, next) => prev.thread === next.thread && prev.now === next.now && prev.emptyTitle === next.emptyTitle && prev.emptyHint === next.emptyHint,
+  (prev, next) => prev.thread === next.thread && prev.now === next.now && prev.loading === next.loading && prev.emptyTitle === next.emptyTitle && prev.emptyHint === next.emptyHint,
 );
 export { MessageListMemo as MessageList };

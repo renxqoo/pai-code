@@ -10,8 +10,8 @@ import { dirname, join } from 'node:path';
  * 坏/缺文件由读取侧降级，不让主进程崩溃。
  */
 
-/** 既定文件集合：新增文件面 = 功能面变化，须同步方案文档。 */
-const ALLOWED_FILES: ReadonlySet<string> = new Set(['permission-rules.json']);
+/** 既定文件集合：新增文件面 = 功能面变化，须同步方案文档（T13 增 settings.json：pi 全局设置，Pai 唯一写入者、hub 每会话读）。 */
+const ALLOWED_FILES: ReadonlySet<string> = new Set(['permission-rules.json', 'settings.json']);
 
 export function createAgentDirFiles(agentDir: string) {
   const resolveAllowed = (relPath: string): string | null =>

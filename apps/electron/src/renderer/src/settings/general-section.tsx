@@ -12,7 +12,8 @@ type GeneralSectionProps = {
 /**
  * 通用分区（J2）：界面语言（即时生效，根级重挂载）+ 新项目受信缺省。
  * 宿主路径（hubDev）不提供 UI 编辑：该字段控制主进程 spawn 目标，
- * 仅允许 settings.json 文件与环境变量两条通路（第三波审查 P0 处置）。
+ * 用户可写通路只有 settings.json 文件与环境变量；开发态另有同级 hub 检出自动探测
+ * （hub-paths.ts 解析链），不构成用户输入面（第三波审查 P0 处置延续）。
  */
 function GeneralSection({ trustedDefault, language, onSave, onLanguageChange }: GeneralSectionProps) {
   const [draftTrusted, setDraftTrusted] = React.useState(trustedDefault);

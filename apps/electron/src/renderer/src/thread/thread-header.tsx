@@ -9,13 +9,7 @@ import { WINDOWS_CAPTION_WIDTH } from '@/lib/platform';
 import { ThreadTabs } from '@/thread/thread-tabs';
 
 type ThreadTabsState = {
-  diffLabel: string
-  diffHint: string
-  agentsLabel: string
   addLabel: string
-  agentsActive: boolean
-  onDiff: () => void
-  onAgents: () => void
   onAdd: () => void
 }
 
@@ -112,18 +106,7 @@ function ThreadHeader({
         />
       </div>
       <div className="ml-[18px] flex shrink-0 items-center">
-        <ThreadTabs
-          diffLabel={tabs.diffLabel}
-          diffHint={tabs.diffHint}
-          agentsLabel={tabs.agentsLabel}
-          addLabel={tabs.addLabel}
-          agentsActive={tabs.agentsActive}
-          diffExpanded={activePanel === 'diff'}
-          agentsExpanded={activePanel === 'agents'}
-          onDiff={tabs.onDiff}
-          onAgents={tabs.onAgents}
-          onAdd={tabs.onAdd}
-        />
+        <ThreadTabs addLabel={tabs.addLabel} onAdd={tabs.onAdd} />
       </div>
       <div className="ml-auto flex shrink-0 items-center gap-[10px]">
         <IconButton label={labels.toggleMaximize} size="sm" onClick={onToggleMaximize}>

@@ -53,7 +53,7 @@ describe('pai-runtime + api-routes × 真 pai-cli（opt-in）', () => {
         logFile: join(work, 'main.log'),
       },
       keyStore,
-      providers: () => [{ name: 'glm', baseUrl: glmBaseUrl, api: 'openai-completions', models: [glmModel] }],
+      providers: () => [{ name: 'glm', baseUrl: glmBaseUrl, api: 'openai-completions', models: [{ id: glmModel, reasoning: true }], thinkingFormat: 'zai' }],
       hubPaths: () => ({ bunPath, hubEntry }),
       logger: { log: () => undefined },
       emit: (event) => eventTypes.push(event.type),

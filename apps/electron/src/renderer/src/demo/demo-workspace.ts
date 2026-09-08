@@ -81,12 +81,13 @@ function session(id: string, title: string, ageInDays: number): SessionCardModel
     projectName: 'bun-koa',
     title,
     version: 'v1.0.0',
+    cwd: '/demo/bun-koa',
     lastActivityAt: now - ageInDays * DAY,
   };
 }
 
-const userGreeting: SessionMessage = { id: 'm1', role: 'user', text: '帮我梳理一下当前仓库的工程化配置' };
-const analyzeRequest: SessionMessage = { id: 'm2', role: 'user', text: '深度分析当前项目' };
+const userGreeting: SessionMessage = { id: 'm1', role: 'user', text: '帮我梳理一下当前仓库的工程化配置', images: [] };
+const analyzeRequest: SessionMessage = { id: 'm2', role: 'user', text: '深度分析当前项目', images: [] };
 
 export const demoWorkspace: WorkspaceDemo = {
   sessions: [session('session-1', '打个招呼', 3), session('session-2', '你好', 2)],

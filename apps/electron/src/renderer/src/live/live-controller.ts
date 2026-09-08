@@ -1,4 +1,4 @@
-import type { ImagePayload, PermissionRules, PreferencesView, UiEvent } from '@paiapp/contracts';
+import type { ImagePayload, PermissionRules, PreferencesView, ProviderModel, SkillView, ThinkingFormat, UiEvent } from '@paiapp/contracts';
 
 import type { BridgeClient } from './client-invoke';
 import type { LiveStore } from './store';
@@ -25,7 +25,7 @@ export interface LiveController {
     mode?: 'auto' | 'steer' | 'followUp',
   ) => Promise<string | null>;
   readonly stopActiveTurn: (threadId: string) => Promise<void>;
-  readonly createSession: (cwd: string, model?: { provider: string; modelId: string }, trusted?: boolean) => Promise<boolean>;
+  readonly createSession: (cwd: string, model?: { provider: string; modelId: string }, trusted?: boolean) => Promise<string | null>;
   readonly openSavedSession: (sessionPath: string, trusted?: boolean) => Promise<boolean>;
   /** 会话信任切换 = stop(await) → 同文件 resume(trusted) → 激活新 threadId；stop 失败即中止不动原会话。 */
   readonly reloadSessionTrusted: (threadId: string, trusted: boolean) => Promise<boolean>;
@@ -40,21 +40,29 @@ export interface LiveController {
   readonly refreshSaved: () => Promise<void>;
   /** 模型目录刷新（provider 保存触发 host 重启后向导/设置页手动补拉）。 */
   readonly refreshModels: () => Promise<void>;
-  /** 全局权限规则读取（写入 agentDir/permission-rules.json 的视图；失败返回 null）。 */
+  /** 全局权限规则读取（agentDir/permission-rules.json 视图；成功后同步刷新活跃会话生效视图；失败返回 null）。 */
   readonly refreshPermissionRules: () => Promise<PermissionRules | null>;
-  /** 全局权限规则写入（原子写，hub 热读即时生效）；成功返回 null，失败返回原因。 */
+  /** 全局权限规则写入（原子写，hub 热读即时生效；成功后同步刷新活跃会话生效视图）；成功返回 null，失败返回原因。 */
   readonly writePermissionRules: (rules: PermissionRules) => Promise<string | null>;
+  /** 向运行中子代理注入 steer（非 running 一律失败，原因透传）。 */
+  readonly steerSubagent: (threadId: string, subagentId: string, message: string) => Promise<string | null>;
   /** 会话级规则（sidecar）读取；source=thread 表示存在独立规则。 */
   readonly readSessionRules: (threadId: string) => Promise<{ rules: PermissionRules; source: 'thread' | 'global' } | null>;
   /** 会话级规则写入（null = 删除 sidecar 回退全局）；成功返回 null。 */
   readonly writeSessionRules: (threadId: string, rules: PermissionRules | null) => Promise<string | null>;
-  /** 向运行中子代理注入 steer（非 running 一律失败，原因透传）。 */
-  readonly steerSubagent: (threadId: string, subagentId: string, message: string) => Promise<string | null>;
   /** 运行时诊断（M1）。 */
   readonly fetchDiagnostics: () => Promise<{ hostPhase: 'starting' | 'ready' | 'restarting' | 'failed' | null; stderrTail: string; registrySessions: number } | null>;
   readonly restartHost: () => void;
   /** agent 定义目录刷新（带 threadId 时含受信可见的项目级；失败静默保持旧值）。 */
   readonly refreshAgents: (threadId: string | null) => Promise<void>;
+  /** 用户级技能目录刷新（含启用态）。 */
+  readonly refreshSkills: () => Promise<void>;
+  /** 技能启停：写 pi settings skills overrides；返回写后清单（失败 null + 原因）。 */
+  readonly setSkillEnabled: (name: string, enabled: boolean) => Promise<{ ok: true; data: SkillView[] } | { ok: false; reason: string }>;
+  /** 技能开关完整编排：写 + 串行重开全部 live 会话（链式排队，交错不叠加）；失败返回重开失败数。 */
+  readonly applySkillToggle: (name: string, enabled: boolean) => Promise<{ ok: true; reopenFailures: number } | { ok: false; reason: string }>;
+  /** 同文件重开会话（不指定 trusted，保持既有信任态）：技能/资源开关生效通路。 */
+  readonly reopenSession: (threadId: string) => Promise<boolean>;
   /** 项目文件搜索（@ 引用；cwd 门禁在主进程，失败返回 null）。 */
   readonly searchFiles: (cwd: string, query: string) => Promise<string[] | null>;
   /** hub 凭据目录刷新（auth/list，永不含 key 本身）。 */
@@ -63,7 +71,7 @@ export interface LiveController {
   readonly setProviderKey: (provider: string, apiKey: string) => Promise<string | null>;
   /** 移除官方 provider key（OAuth 类凭据受 hub 保护拒绝）；成功返回 null。 */
   readonly removeProviderKey: (provider: string) => Promise<string | null>;
-  readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: string[]; apiKey?: string }) => Promise<boolean>;
+  readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; thinkingFormat?: ThinkingFormat; apiKey?: string }) => Promise<boolean>;
   readonly removeProvider: (name: string) => Promise<boolean>;
   /** 应用偏好部分写（返回写后视图；失败返回 null，原因走通知条）。 */
   readonly updatePreferences: (patch: { defaultModel?: string | null; onboarded?: boolean; projectModels?: Record<string, string>; pinnedSessions?: string[]; trustedDefault?: boolean; hubDev?: { bunPath: string | null; hubEntry: string | null } }) => Promise<PreferencesView | null>;
@@ -85,6 +93,8 @@ export interface LiveController {
 export function createLiveController(client: BridgeClient, store: LiveStore): LiveController {
   let unsubscribe: (() => void) | null = null;
   let disposed = true;
+  /** 技能开关编排链（串行化，防多次开关的重开循环交错） */
+  let skillToggleChain: Promise<void> = Promise.resolve();
   /** 对账在途标记（每线程一个），防止重复拉取。 */
   const reconciling = new Set<string>();
 
@@ -129,6 +139,13 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
 
   /** 对话框兜底定时器登记：结算/dispose 时清理，避免滞留句柄。 */
   const dialogTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  /** 全局规则真相更新后刷新活跃会话的生效视图（source=global 时 rules 即全局内容，不得滞留旧值）。 */
+  const refreshActiveSessionRules = async (): Promise<void> => {
+    const active = store.getState().activeThreadId;
+    if (active === null) return;
+    await controller.readSessionRules(active).catch(() => undefined);
+  };
 
   /** 对话框本地结算：ui_response 只有 ack 无事件回执，宿主侧超时/未知 id 均静默——弹窗关闭由客户端自治。 */
   const settleDialog = (requestId: string): void => {
@@ -217,30 +234,27 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       if (text.length === 0) return 'empty_message';
       const payloads = images === undefined || images.length === 0 ? undefined : [...images];
       const withImages = payloads === undefined ? {} : { images: payloads };
-      const streaming = store.getState().threads[threadId]?.streaming ?? false;
-      // 生成中按显式模式投递（默认轮后排队）；非生成中一律走 prompt
-      const send = streaming
-        ? mode === 'steer'
-          ? client.invoke('session/steer', { threadId, message: text, ...withImages })
-          : client.invoke('session/followUp', { threadId, message: text, ...withImages })
-        : client.invoke('session/prompt', { threadId, message: text, ...withImages });
-      let outcome = await send;
-      // TOCTOU 兜底：读取 streaming 与 invoke 之间轮次边界翻转时，按对侧路径回落一次
-      if (!outcome.ok && !streaming && /stream/i.test(outcome.reason)) {
-        outcome = await client.invoke('session/followUp', { threadId, message: text, ...withImages });
-      }
+      // 投递裁决交给 hub 的原子语义（prompt+streamingBehavior）：空闲立即发送、
+      // 流式中按模式入队并在轮末自动消费。不得以本地 streaming 镜像选路——
+      // 镜像滞留 true 时会把空闲会话的消息投进永远不会被消费的队列。
+      const outcome = await client.invoke('session/prompt', {
+        threadId,
+        message: text,
+        streamingBehavior: mode === 'steer' ? 'steer' : 'followUp',
+        ...withImages,
+      });
       return outcome.ok ? null : outcome.reason;
     },
     async stopActiveTurn(threadId: string): Promise<void> {
       store.getState().stopIntent(threadId);
       await client.invoke('session/abort', { threadId });
     },
-    async createSession(cwd: string, model?: { provider: string; modelId: string }, trusted?: boolean): Promise<boolean> {
+    async createSession(cwd: string, model?: { provider: string; modelId: string }, trusted?: boolean): Promise<string | null> {
       const outcome = await client.invoke('session/start', { cwd, provider: model?.provider, modelId: model?.modelId, trusted });
-      if (!outcome.ok) return false;
+      if (!outcome.ok) return outcome.reason;
       store.getState().setActiveThread(outcome.data.threadId);
       await hydrateFull(outcome.data.threadId).catch(() => undefined);
-      return true;
+      return null;
     },
     async openSavedSession(sessionPath: string, trusted?: boolean): Promise<boolean> {
       const outcome = await client.invoke('session/resume', { sessionPath, trusted });
@@ -310,22 +324,37 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       const outcome = await client.invoke('permission/read', {});
       if (!outcome.ok) return null;
       store.setState({ permissionRules: outcome.data });
+      await refreshActiveSessionRules();
       return outcome.data;
     },
     async writePermissionRules(rules: PermissionRules): Promise<string | null> {
       const outcome = await client.invoke('permission/write', { rules });
       if (!outcome.ok) return outcome.reason;
       store.setState({ permissionRules: outcome.data });
+      await refreshActiveSessionRules();
       return null;
     },
     async readSessionRules(threadId: string): Promise<{ rules: PermissionRules; source: 'thread' | 'global' } | null> {
       const outcome = await client.invoke('permission/sessionRead', { threadId });
       if (!outcome.ok) return null;
+      // 判活：请求在途期间活跃会话已切换则丢弃（防旧会话规则覆盖新会话视图；与 refreshAgents 同型）
+      if (store.getState().activeThreadId !== threadId) return null;
+      // 引用幂等：内容相同不换引用（下游草稿重置 effect 依赖引用，防刷新循环击穿用户编辑）
+      const current = store.getState().sessionRules;
+      if (current !== null && current.source === outcome.data.source && JSON.stringify(current.rules) === JSON.stringify(outcome.data.rules)) {
+        return current;
+      }
       store.setState({ sessionRules: outcome.data });
       return outcome.data;
     },
     async writeSessionRules(threadId: string, rules: PermissionRules | null): Promise<string | null> {
       const outcome = await client.invoke('permission/sessionWrite', { threadId, rules });
+      return outcome.ok ? null : outcome.reason;
+    },
+    async steerSubagent(threadId: string, subagentId: string, message: string): Promise<string | null> {
+      const text = message.trim();
+      if (text.length === 0) return 'empty_message';
+      const outcome = await client.invoke('subagent/steer', { threadId, subagentId, message: text });
       return outcome.ok ? null : outcome.reason;
     },
     async fetchDiagnostics(): Promise<{ hostPhase: 'starting' | 'ready' | 'restarting' | 'failed' | null; stderrTail: string; registrySessions: number } | null> {
@@ -335,18 +364,58 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     restartHost(): void {
       void client.invoke('app/restartHost', {}).then(() => undefined);
     },
-    async steerSubagent(threadId: string, subagentId: string, message: string): Promise<string | null> {
-      const text = message.trim();
-      if (text.length === 0) return 'empty_message';
-      const outcome = await client.invoke('subagent/steer', { threadId, subagentId, message: text });
-      return outcome.ok ? null : outcome.reason;
-    },
     async refreshAgents(threadId: string | null): Promise<void> {
       const outcome = await client.invoke('agent/list', threadId === null ? {} : { threadId });
       if (!outcome.ok) return;
       // 判活：请求发出后会话已切换则丢弃（防陈旧目录覆盖新会话视角）
       if (threadId !== null && store.getState().activeThreadId !== threadId) return;
       store.setState({ agents: outcome.data });
+    },
+    async refreshSkills(): Promise<void> {
+      const outcome = await client.invoke('skills/list', {});
+      if (outcome.ok) store.setState({ skills: outcome.data });
+    },
+    async setSkillEnabled(name: string, enabled: boolean): Promise<{ ok: true; data: SkillView[] } | { ok: false; reason: string }> {
+      const outcome = await client.invoke('skills/setEnabled', { name, enabled });
+      if (!outcome.ok) return { ok: false, reason: outcome.reason };
+      store.setState({ skills: outcome.data });
+      return { ok: true, data: outcome.data };
+    },
+    async applySkillToggle(name: string, enabled: boolean): Promise<{ ok: true; reopenFailures: number } | { ok: false; reason: string }> {
+      // 链式排队：重开链在途时后续开关追加到队尾（持有新快照，不与在途循环交错）
+      const run = async (): Promise<{ ok: true; reopenFailures: number } | { ok: false; reason: string }> => {
+        const outcome = await this.setSkillEnabled(name, enabled);
+        if (!outcome.ok) return { ok: false, reason: outcome.reason };
+        let reopenFailures = 0;
+        for (const session of Object.values(store.getState().sessions)) {
+          if (session.state !== 'live') continue;
+          const reopened = await this.reopenSession(session.threadId);
+          if (!reopened) reopenFailures += 1;
+        }
+        return { ok: true, reopenFailures };
+      };
+      const chained = skillToggleChain.then(run, run);
+      skillToggleChain = chained.then(
+        () => undefined,
+        () => undefined,
+      );
+      return chained;
+    },
+    async reopenSession(threadId: string): Promise<boolean> {
+      const sessionPath = store.getState().sessions[threadId]?.sessionPath ?? null;
+      if (sessionPath === null || sessionPath.length === 0) return false;
+      const wasActive = store.getState().activeThreadId === threadId;
+      const stop = await client.invoke('session/stop', { threadId });
+      if (!stop.ok) return false;
+      const outcome = await client.invoke('session/resume', { sessionPath });
+      if (!outcome.ok) {
+        await this.refreshSaved();
+        return false;
+      }
+      if (wasActive) store.getState().setActiveThread(outcome.data.threadId);
+      await hydrateFull(outcome.data.threadId).catch(() => undefined);
+      await this.refreshSaved();
+      return true;
     },
     async runBash(threadId: string, command: string): Promise<string | null> {
       const text = command.trim();
@@ -396,7 +465,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       await this.refreshCredentials();
       return null;
     },
-    async upsertProvider(input: { name: string; baseUrl: string; api: string; models: string[]; apiKey?: string }): Promise<boolean> {
+    async upsertProvider(input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; thinkingFormat?: ThinkingFormat; apiKey?: string }): Promise<boolean> {
       const outcome = await client.invoke('provider/upsert', input);
       if (!outcome.ok) return false;
       store.setState({ providers: outcome.data });

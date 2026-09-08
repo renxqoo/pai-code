@@ -1,14 +1,16 @@
 import * as React from 'react';
 
-import type { AgentView, CommandView, CredentialView, ImagePayload, PermissionRules, PreferencesView, SessionStatsView, SessionView } from '@paiapp/contracts';
+import type { AgentView, CommandView, CredentialView, ImagePayload, PermissionRules, PreferencesView, ProviderModel, SessionStatsView, SessionView, SkillView, ThinkingFormat } from '@paiapp/contracts';
 import { useStore } from 'zustand';
 
-import { collectThreadDiff } from '@/diff-panel/collect-thread-diff';
 import type { SessionCardModel } from '@/sidebar/session-card-model';
 import type { ThreadModel } from '@/thread/thread-model';
+import { collectThreadDiff } from '@/diff-panel/collect-thread-diff';
 import { summarizeAgents } from '@/thread/panel-summary';
 import { copy } from '@/strings';
 import { pickSessionModel } from './pick-session-model';
+import { nextSessionRulesForMode } from './permission-mode';
+import { baseNameOf } from '@/lib/project-dirs';
 
 import { createBridgeClient } from './client-invoke';
 import { createLiveController, type LiveController } from './live-controller';
@@ -53,6 +55,8 @@ export type LiveWorkspaceView = {
   /** 当前会话工作目录（新会话缺省值）。 */
   activeCwd: string;
   generating: boolean;
+  /** 对话执行中（streaming/直执行命令/压缩）：消息流尾部 loading 数据源。 */
+  executing: boolean;
   agentsActive: boolean;
   queueCount: number;
   /** 排队消息分组视图（A7 面板数据源）。 */
@@ -84,6 +88,8 @@ export type LiveWorkspaceView = {
   commands: readonly CommandView[];
   /** agent 定义目录（进 Agents 分区时拉取）。 */
   agents: readonly AgentView[];
+  /** 用户级技能目录（含启用态；进技能分区时拉取）。 */
+  skills: readonly SkillView[];
   preferences: PreferencesView;
   /** 全局权限规则（null = 未加载）。 */
   permissionRules: PermissionRules | null;
@@ -113,15 +119,22 @@ export type LiveWorkspaceView = {
     readonly writePermissionRules: (rules: PermissionRules) => Promise<boolean>;
     readonly readSessionRules: () => void;
     readonly writeSessionRules: (rules: PermissionRules | null) => Promise<boolean>;
+    /** 操作栏会话权限模式切换：当前生效规则为基线只改 mode；同模式无操作不写。 */
+    readonly setSessionPermissionMode: (mode: PermissionRules['mode']) => Promise<boolean>;
     readonly refreshAgents: () => void;
+    /** 技能目录刷新（设置页技能分区进入时）。 */
+    readonly refreshSkills: () => void;
+    /** 技能启停：落盘后重开全部活跃会话使新设置生效（失败 notice）。 */
+    readonly setSkillEnabled: (name: string, enabled: boolean) => Promise<boolean>;
     readonly searchFiles: (query: string) => Promise<string[] | null>;
     readonly runBash: (command: string) => Promise<string | null>;
     readonly abortBash: () => void;
     readonly clearQueue: () => void;
     readonly revealSession: (sessionPath: string) => void;
+    /** 系统目录选择对话框；null = 取消（新会话弹窗浏览入口）。 */
+    readonly pickDirectory: (defaultPath: string | null) => Promise<string | null>;
     readonly togglePinnedSession: (sessionPath: string) => void;
     readonly forkFromEntry: (entryId: string) => Promise<string | null>;
-    readonly submitDraftAs: (message: string, mode: 'steer' | 'followUp') => Promise<string | null>;
     readonly reloadSessionTrusted: (threadId: string, trusted: boolean) => void;
     readonly steerSubagent: (subagentId: string, message: string) => void;
     readonly fetchDiagnostics: () => void;
@@ -133,7 +146,7 @@ export type LiveWorkspaceView = {
     /** J2 通用偏好保存（trustedDefault / 宿主路径）。 */
     readonly saveGeneralPreferences: (patch: { trustedDefault?: boolean }) => Promise<boolean>;
     readonly testProvider: (name: string) => Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }>;
-    readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: string[]; apiKey?: string }) => Promise<boolean>;
+    readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; thinkingFormat?: ThinkingFormat; apiKey?: string }) => Promise<boolean>;
     readonly removeProvider: (name: string) => Promise<boolean>;
     readonly renameSession: (threadId: string, name: string) => Promise<boolean>;
     readonly compact: () => void;
@@ -157,6 +170,9 @@ function pushNotice(text: string): void {
   store.setState({ notices: [...store.getState().notices.slice(-4), { id: `notice-${noticeSeq}`, text }] });
 }
 
+/** 会话规则写链：写 + 回读成对串行排队，防并发写后回读乱序覆盖生效视图（与 controller.skillToggleChain 同型）。 */
+let sessionRulesWriteChain: Promise<void> = Promise.resolve();
+
 export function useLiveWorkspace(): LiveWorkspaceView {
   const state = useStore(store);
   const [now, setNow] = React.useState(() => Date.now());
@@ -175,9 +191,10 @@ export function useLiveWorkspace(): LiveWorkspaceView {
 
   React.useEffect(() => {
     // 切会话（或最后一个会话被移除）先清会话级派生态，避免上一会话残留到新会话
+    // （sessionRules 的清空在 store.setActiveThread 内同步完成，防渲染帧残留一帧）
     setEffortLevels([]);
     setCommands([]);
-    store.setState({ agents: [], sessionRules: null });
+    store.setState({ agents: [] });
     if (activeThreadId.length === 0) return;
     void controller.ensureHydrated(activeThreadId);
     // 思考档位随会话拉取（模型能力差异；响应回来时会话已切换则丢弃）
@@ -190,10 +207,18 @@ export function useLiveWorkspace(): LiveWorkspaceView {
       if (store.getState().activeThreadId !== activeThreadId) return;
       if (outcome.ok) setCommands(outcome.data);
     });
+    // 会话权限规则随会话拉取（操作栏模式控件数据源；判活在 controller.readSessionRules 内）
+    void controller.readSessionRules(activeThreadId);
     void controller.refreshStats(activeThreadId);
   }, [activeThreadId]);
 
   const generating = threadState?.streaming ?? false;
+  const bashRunning = threadState?.bashRunning ?? false;
+  const compacting = threadState?.compacting ?? false;
+  /** 对话执行中（消息流尾部 loading 数据源）：轮次流式/直执行命令/压缩三种在途。
+   * 清除面由折叠层保证（settle / worker 死亡 / 宿主重启均已就地终态）；
+   * 后台子代理跨轮运行不并入（父轮已结算，明细归 Agents 面板）。 */
+  const executing = generating || bashRunning || compacting;
   const hasActivity = React.useMemo(
     () =>
       Object.values(state.threads).some(
@@ -208,6 +233,42 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     return () => window.clearInterval(handle);
   }, [hasActivity]);
 
+  // 引用稳定（进依赖数组的 effect 用）：读 store 真相的活跃会话，不闭包旧 threadId
+  const stableReadSessionRules = React.useCallback((): void => {
+    const threadId = store.getState().activeThreadId ?? '';
+    if (threadId.length === 0) return;
+    void controller.readSessionRules(threadId);
+  }, []);
+  const stableWriteSessionRules = React.useCallback(async (rules: PermissionRules | null): Promise<boolean> => {
+    const threadId = store.getState().activeThreadId ?? '';
+    if (threadId.length === 0) return false;
+    // threadId 捕获于入队时刻（sidecar 是按线程寻址，不是按活跃会话相对寻址）
+    const run = async (): Promise<boolean> => {
+      const reason = await controller.writeSessionRules(threadId, rules);
+      if (reason !== null) {
+        pushNotice(copy.settings.permissionSaveFailed);
+        return false;
+      }
+      await controller.readSessionRules(threadId);
+      return true;
+    };
+    const chained = sessionRulesWriteChain.then(run, run);
+    sessionRulesWriteChain = chained.then(
+      () => undefined,
+      () => undefined,
+    );
+    return chained;
+  }, []);
+  const stableSetSessionPermissionMode = React.useCallback(async (mode: PermissionRules['mode']): Promise<boolean> => {
+    const threadId = store.getState().activeThreadId ?? '';
+    if (threadId.length === 0) return false;
+    const current = store.getState().sessionRules ?? (await controller.readSessionRules(threadId));
+    // 未加载即无入口（控件隐藏），静默失败即可
+    if (current === null) return false;
+    const next = nextSessionRulesForMode(current.rules, mode);
+    if (next === null) return true;
+    return stableWriteSessionRules(next);
+  }, [stableWriteSessionRules]);
   const activeSession = state.sessions[activeThreadId];
   /** @ 文件搜索回调：引用稳定（仅随 cwd 变化），防 composer 去抖 effect 被高频重置 */
   const activeCwdValue = activeSession?.cwd ?? '';
@@ -230,12 +291,13 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     activeThread,
     activeCwd: activeSession?.cwd ?? '',
     generating,
+    executing,
     agentsActive: summarizeAgents(activeThread.agents).workingCount > 0,
     queueCount: (threadState?.queue.steering.length ?? 0) + (threadState?.queue.followUp.length ?? 0),
     queueItems: { steering: threadState?.queue.steering ?? [], followUp: threadState?.queue.followUp ?? [] },
     crashed: threadState?.crashed ?? false,
-    compacting: threadState?.compacting ?? false,
-    bashRunning: threadState?.bashRunning ?? false,
+    compacting,
+    bashRunning,
     bashTail: threadState?.bashTail ?? '',
     retrying: threadState?.retrying ?? null,
     hydrateFailed: threadState?.hydrateFailed ?? false,
@@ -248,17 +310,22 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     composer,
     dialogs: state.dialogOrder.map((id) => state.dialogs[id]).filter((dialog): dialog is PendingDialog => dialog !== undefined),
     notices: state.notices,
-    saved: state.saved.map((session) => ({
-      sessionPath: session.sessionPath,
-      title: session.name ?? session.firstMessage.slice(0, 40),
-      cwd: session.cwd,
-      modifiedAt: session.modifiedAt,
-      messageCount: session.messageCount,
-    })),
+    saved: React.useMemo(
+      () =>
+        state.saved.map((session) => ({
+          sessionPath: session.sessionPath,
+          title: session.name ?? session.firstMessage.slice(0, 40),
+          cwd: session.cwd,
+          modifiedAt: session.modifiedAt,
+          messageCount: session.messageCount,
+        })),
+      [state.saved],
+    ),
     providers: state.providers,
     credentials: state.credentials,
     commands,
     agents: state.agents,
+    skills: state.skills,
     preferences: state.preferences,
     permissionRules: state.permissionRules,
     sessionRules: state.sessionRules,
@@ -273,14 +340,6 @@ export function useLiveWorkspace(): LiveWorkspaceView {
         }
         return reason;
       },
-      submitDraftAs: async (message, mode) => {
-        const threadId = store.getState().activeThreadId ?? activeThreadId;
-        const reason = await controller.submitDraft(threadId, message, undefined, mode);
-        if (reason !== null && reason !== 'bridge_unavailable') {
-          pushNotice(copy.flow.sendFailed(reason));
-        }
-        return reason;
-      },
       stopActiveTurn: () => void controller.stopActiveTurn(activeThreadId),
       selectSession: (threadId) => {
         store.getState().setActiveThread(threadId);
@@ -288,13 +347,17 @@ export function useLiveWorkspace(): LiveWorkspaceView {
       createSession: (cwd, trusted) => {
         // 项目默认模型记忆优先（A4）→ 全局默认 → 当前选择 → 首个可用
         const selected = pickSessionModel(state.models, state.preferences.projectModels[cwd] ?? state.preferences.defaultModel, composer.model);
-        return controller.createSession(cwd, selected, trusted).then((ok) => {
-          if (!ok) pushNotice(copy.newThread.createFailed);
-          return ok;
+        return controller.createSession(cwd, selected, trusted).then((reason) => {
+          if (reason !== null) pushNotice(copy.newThread.createFailed(reason));
+          return reason === null;
         });
       },
       openSavedSession: (sessionPath) => controller.openSavedSession(sessionPath),
       closeSession: (threadId) => void controller.closeSession(threadId),
+      selectEffort: (value: string) => {
+        const level = Object.entries(EFFORT_LABELS).find(([, label]) => label === value)?.[0];
+        if (level !== undefined) void controller.selectThinking(activeThreadId, level);
+      },
       selectModel: (value) => {
         const model = state.models.find((entry) => `${entry.provider}/${entry.modelId}` === value);
         if (model === undefined) return;
@@ -307,10 +370,6 @@ export function useLiveWorkspace(): LiveWorkspaceView {
           const projectModels = Object.fromEntries(entries.slice(Math.max(0, entries.length - 50)));
           void controller.updatePreferences({ projectModels });
         }
-      },
-      selectEffort: (value) => {
-        const level = Object.entries(EFFORT_LABELS).find(([, label]) => label === value)?.[0];
-        if (level !== undefined) void controller.selectThinking(activeThreadId, level);
       },
       respondDialog: (requestId, payload) => void controller.respondDialog(requestId, payload),
       cancelDialog: (requestId) => void controller.cancelDialog(requestId),
@@ -342,20 +401,9 @@ export function useLiveWorkspace(): LiveWorkspaceView {
       refreshPermissionRules: () => {
         void controller.refreshPermissionRules();
       },
-      readSessionRules: () => {
-        if (activeThreadId.length === 0) return;
-        void controller.readSessionRules(activeThreadId);
-      },
-      writeSessionRules: async (rules) => {
-        if (activeThreadId.length === 0) return false;
-        const reason = await controller.writeSessionRules(activeThreadId, rules);
-        if (reason !== null) {
-          pushNotice(copy.settings.permissionSaveFailed);
-          return false;
-        }
-        void controller.readSessionRules(activeThreadId);
-        return true;
-      },
+      readSessionRules: stableReadSessionRules,
+      writeSessionRules: stableWriteSessionRules,
+      setSessionPermissionMode: stableSetSessionPermissionMode,
       writePermissionRules: async (rules) => {
         const reason = await controller.writePermissionRules(rules);
         if (reason !== null) pushNotice(copy.settings.permissionSaveFailed);
@@ -381,11 +429,6 @@ export function useLiveWorkspace(): LiveWorkspaceView {
         return true;
       },
       restartHost: () => controller.restartHost(),
-      steerSubagent: (subagentId, message) => {
-        void controller.steerSubagent(activeThreadId, subagentId, message).then((reason) => {
-          if (reason !== null) pushNotice(copy.flow.steerFailed(reason));
-        });
-      },
       reloadSessionTrusted: (threadId, trusted) => {
         void controller.reloadSessionTrusted(threadId, trusted).then((ok) => {
           if (!ok) pushNotice(copy.thread.reloadTrustFailed);
@@ -393,6 +436,19 @@ export function useLiveWorkspace(): LiveWorkspaceView {
       },
       refreshAgents: () => {
         void controller.refreshAgents(activeThreadId.length > 0 ? activeThreadId : null);
+      },
+      refreshSkills: () => {
+        void controller.refreshSkills();
+      },
+      setSkillEnabled: async (name, enabled) => {
+        // 生效编排走 controller 排队链：写 pi settings + 串行重开全部 live 会话（信任态由注册表补全）
+        const outcome = await controller.applySkillToggle(name, enabled);
+        if (!outcome.ok && outcome.reason !== 'skill_not_found') {
+          pushNotice(copy.settings.skillToggleFailed);
+          return false;
+        }
+        if (outcome.ok && outcome.reopenFailures > 0) pushNotice(copy.settings.skillReopenFailed);
+        return outcome.ok;
       },
       searchFiles,
       runBash: async (command) => {
@@ -403,6 +459,15 @@ export function useLiveWorkspace(): LiveWorkspaceView {
       abortBash: () => void controller.abortBash(activeThreadId),
       clearQueue: () => void controller.clearQueue(activeThreadId),
       revealSession: (sessionPath) => void controller.revealSession(sessionPath),
+      pickDirectory: async (defaultPath) => {
+        const outcome = await bridgeClient.invoke('dialog/pickDirectory', defaultPath !== null ? { defaultPath } : {});
+        if (!outcome.ok) {
+          // 失败与取消区分：取消静默，失败要给用户反馈（通知条层级高于弹窗）
+          pushNotice(copy.newThread.pickFailed);
+          return null;
+        }
+        return outcome.data;
+      },
       togglePinnedSession: (sessionPath) => {
         const current = state.preferences.pinnedSessions;
         const pinnedSessions = current.includes(sessionPath)
@@ -429,6 +494,11 @@ export function useLiveWorkspace(): LiveWorkspaceView {
           if (reason !== null) pushNotice(copy.flow.compactFailed(reason));
         });
       },
+      steerSubagent: (subagentId, message) => {
+        void controller.steerSubagent(activeThreadId, subagentId, message).then((reason) => {
+          if (reason !== null) pushNotice(copy.flow.steerFailed(reason));
+        });
+      },
     },
   };
 }
@@ -442,12 +512,11 @@ function buildComposer(
   const modelOptions = state.models.map((model) => `${model.provider}/${model.modelId}`);
   const currentModel = session?.model ?? modelOptions[0] ?? '';
   // 思考档以模型能力列表为真相：拉取前/不支持时为空，composer 侧禁用并给原因（不臆造默认档）
-  const levels = effortLevels;
-  const levelLabels = levels.map((level) => EFFORT_LABELS[level] ?? level);
+  const levelLabels = effortLevels.map((level) => EFFORT_LABELS[level] ?? level);
   const currentLabel = session?.thinkingLevel !== undefined && session?.thinkingLevel !== null ? EFFORT_LABELS[session.thinkingLevel] : undefined;
   // 未知档位回落到第一个可选档；无可选档时留空（触发禁用态）
   const effort = currentLabel ?? levelLabels[0] ?? '';
-  const cwdBase = basename(session?.cwd ?? '');
+  const cwdBase = baseNameOf(session?.cwd ?? '');
   return {
     model: currentModel,
     modelOptions,
@@ -465,14 +534,10 @@ function toCards(sessions: Readonly<Record<string, SessionView>>): readonly Sess
     .map((session) => ({
       id: session.threadId,
       conversationId: session.threadId,
-      projectName: basename(session.cwd) || session.cwd,
+      projectName: baseNameOf(session.cwd) || session.cwd,
       title: session.title,
       version: session.model ?? '',
+      cwd: session.cwd,
       lastActivityAt: session.lastActivityAt,
     }));
-}
-
-function basename(path: string): string {
-  const parts = path.split('/').filter((part) => part.length > 0);
-  return parts[parts.length - 1] ?? '';
 }

@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { foldHydrate, foldStopIntent, foldThreadEvent } from '../fold-events';
 import { initialThreadState } from '../live-thread-state';
 import type { HistoryItem, UiEvent } from '@paiapp/contracts';
-import type { ThreadItem } from '@/thread/thread-model';
+import type { ThreadItem, TurnBlock } from '@/thread/thread-model';
 
 const T = 1_000;
 const tick = (n: number): number => T + n;
@@ -13,8 +13,8 @@ function ev(event: UiEvent): UiEvent {
 }
 
 function history(partial: Partial<HistoryItem> & Pick<HistoryItem, 'id' | 'kind'>): HistoryItem {
-  if (partial.kind === 'user') return { text: '', origin: 'user', at: T, ...partial } as HistoryItem;
-  if (partial.kind === 'assistant') return { text: '', thinking: '', toolCalls: [], usage: null, at: T, ...partial } as HistoryItem;
+  if (partial.kind === 'user') return { text: '', origin: 'user', images: [], at: T, ...partial } as HistoryItem;
+  if (partial.kind === 'assistant') return { text: '', thinking: '', toolCalls: [], usage: null, stopReason: null, errorMessage: null, at: T, ...partial } as HistoryItem;
   return { command: '', output: '', exitCode: 0, cancelled: false, at: T, ...partial } as HistoryItem;
 }
 
@@ -316,11 +316,132 @@ describe('foldEvents · 队列/压缩/崩溃', () => {
     expect(s.crashed).toBe(false);
   });
 
+  test('症状回归：worker 死亡就地终态全部在途面（streaming 滞留不再把空闲会话新消息判成生成中）', () => {
+    let s: typeof initialThreadState = {
+      ...initialThreadState,
+      streaming: true,
+      stopping: true,
+      compacting: true,
+      retrying: { attempt: 1, maxAttempts: 3, errorMessage: 'x' },
+      bashRunning: true,
+      bashTail: 'partial',
+      queue: { steering: ['插入'], followUp: ['下一条'] },
+    };
+    s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(0) }), tick(0));
+    s = foldThreadEvent(s, ev({ type: 'subagentStarted', threadId: 't', subagentId: 's1', agent: 'explore', task: '扫描' }), tick(1));
+    s = foldThreadEvent(s, ev({ type: 'sessionDied', threadId: 't', reason: 'worker_crash' }), tick(5));
+    expect(s.streaming).toBe(false);
+    expect(s.stopping).toBe(false);
+    expect(s.compacting).toBe(false);
+    expect(s.retrying).toBeNull();
+    expect(s.bashRunning).toBe(false);
+    expect(s.bashTail).toBe('');
+    expect(s.queue).toEqual({ steering: [], followUp: [] });
+    expect(s.crashed).toBe(true);
+    expect(s.agents[0]).toMatchObject({ id: 's1', status: 'done', endedAt: tick(5) });
+    // running 轮不会再有 settle：冻结为 completed（与错过 settle 的遗留轮一致）
+    const turn = liveTurn(s);
+    if (turn?.kind !== 'turn') throw new Error('expected turn');
+    expect(turn.turn.status).toBe('completed');
+    expect(turn.turn.endedAt).toBe(tick(5));
+  });
+
   test('host/dialog 等事件在 thread 层为无操作；bashOutput 折叠尾部', () => {
     const s = initialThreadState;
     expect(foldThreadEvent(s, ev({ type: 'host', phase: 'ready' }), T)).toBe(s);
     expect(foldThreadEvent(s, ev({ type: 'dialogRequest', threadId: 't', requestId: 'r', method: 'confirm' }), T)).toBe(s);
     expect(foldThreadEvent(s, ev({ type: 'bashOutput', threadId: 't', id: 'b', delta: 'x' }), T).bashTail).toBe('x');
+  });
+});
+
+describe('foldEvents · 子代理流内条（会话级简略条）', () => {
+  type SubagentsBlock = Extract<TurnBlock, { kind: 'subagents' }>;
+
+  function subagentsBlocksOf(state: { items: readonly ThreadItem[] }): SubagentsBlock[] {
+    const out: SubagentsBlock[] = [];
+    for (const item of state.items) {
+      if (item.kind !== 'turn') continue;
+      for (const block of item.turn.blocks) {
+        if (block.kind === 'subagents') out.push(block);
+      }
+    }
+    return out;
+  }
+
+  test('subagentStarted 在 live 轮生成条，后续事件同源刷新（面板同一数据源）', () => {
+    let s = initialThreadState;
+    s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(0) }), tick(0));
+    s = foldThreadEvent(s, ev({ type: 'subagentStarted', threadId: 't', subagentId: 's1', agent: 'explore', task: '扫描' }), tick(1));
+    let blocks = subagentsBlocksOf(s);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]?.agents).toMatchObject([{ id: 's1', agentType: 'explore', status: 'working' }]);
+    // live 轮内持有（对话尾部）
+    const turn = liveTurn(s);
+    if (turn?.kind !== 'turn') throw new Error('expected turn');
+    expect(turn.turn.blocks.some((block) => block.kind === 'subagents')).toBe(true);
+    // 后续事件刷新条内条目
+    s = foldThreadEvent(s, ev({ type: 'subagentDelta', threadId: 't', subagentId: 's1', delta: '发现 3 个文件' }), tick(2));
+    blocks = subagentsBlocksOf(s);
+    expect(blocks[0]?.agents[0]?.summary).toBe('发现 3 个文件');
+    // 第二个代理并入同一条（会话级）
+    s = foldThreadEvent(s, ev({ type: 'subagentStarted', threadId: 't', subagentId: 's2', agent: 'general-purpose', task: '写报告' }), tick(3));
+    blocks = subagentsBlocksOf(s);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]?.agents.map((agent) => agent.id)).toEqual(['s1', 's2']);
+  });
+
+  test('轮边界迁移：新轮开始条随新 live 轮（旧轮退役不丢条）', () => {
+    let s = initialThreadState;
+    s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(0) }), tick(0));
+    s = foldThreadEvent(s, ev({ type: 'subagentStarted', threadId: 't', subagentId: 's1', agent: 'explore', task: '扫描' }), tick(1));
+    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', usage: null }), tick(2));
+    s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(10) }), tick(10));
+    const blocks = subagentsBlocksOf(s);
+    expect(blocks).toHaveLength(1);
+    const turn = liveTurn(s);
+    if (turn?.kind !== 'turn') throw new Error('expected turn');
+    expect(turn.turn.id).toBe(s.liveTurnId);
+    expect(turn.turn.blocks.some((block) => block.kind === 'subagents')).toBe(true);
+  });
+
+  test('settle 重建：条随转写尾部轮存续；无 live 轮的后台事件原位刷新', () => {
+    let s = initialThreadState;
+    s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(0) }), tick(0));
+    s = foldThreadEvent(s, ev({ type: 'subagentStarted', threadId: 't', subagentId: 's1', agent: 'explore', task: '扫描' }), tick(1));
+    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', usage: null }), tick(2));
+    s = foldHydrate(s, {
+      kind: 'hydrate/rebuild',
+      items: [history({ kind: 'user', id: 'e1', text: '去扫描' }), history({ kind: 'assistant', id: 'a1', text: '派出子代理' })],
+      cursor: 'a1',
+    });
+    expect(s.liveTurnId).toBeNull();
+    let blocks = subagentsBlocksOf(s);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]?.agents).toMatchObject([{ id: 's1', status: 'working' }]);
+    // 挂在转写尾部轮上
+    const lastTurn = [...s.items].reverse().find((item) => item.kind === 'turn');
+    expect(lastTurn?.kind).toBe('turn');
+    if (lastTurn?.kind !== 'turn') throw new Error('expected turn');
+    expect(lastTurn.turn.blocks.some((block) => block.kind === 'subagents')).toBe(true);
+    // 后台代理跨轮收尾：无 live 轮时事件原位刷新条
+    s = foldThreadEvent(s, ev({ type: 'subagentSettled', threadId: 't', subagentId: 's1' }), tick(50));
+    blocks = subagentsBlocksOf(s);
+    expect(blocks[0]?.agents).toMatchObject([{ id: 's1', status: 'done' }]);
+  });
+
+  test('停止与死亡终态同步到条内条目', () => {
+    let s = initialThreadState;
+    s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(0) }), tick(0));
+    s = foldThreadEvent(s, ev({ type: 'subagentStarted', threadId: 't', subagentId: 's1', agent: 'explore', task: '扫描' }), tick(1));
+    s = foldStopIntent(s);
+    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', usage: null }), tick(2));
+    expect(subagentsBlocksOf(s)[0]?.agents).toMatchObject([{ id: 's1', status: 'done' }]);
+    // worker 死亡：条内 working 条目就地终态
+    s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(10) }), tick(10));
+    s = foldThreadEvent(s, ev({ type: 'subagentStarted', threadId: 't', subagentId: 's2', agent: 'explore', task: '再扫' }), tick(11));
+    s = foldThreadEvent(s, ev({ type: 'sessionDied', threadId: 't', reason: 'crash' }), tick(12));
+    const blocks = subagentsBlocksOf(s);
+    expect(blocks[0]?.agents.every((agent) => agent.status === 'done')).toBe(true);
   });
 });
 

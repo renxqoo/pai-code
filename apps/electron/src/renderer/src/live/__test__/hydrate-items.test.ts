@@ -6,11 +6,11 @@ import type { HistoryItem } from '@paiapp/contracts';
 const at = (n: number): number => 1_000 + n;
 
 function user(id: string, text: string, origin: 'user' | 'system' = 'user'): HistoryItem {
-  return { kind: 'user', id, text, origin, at: at(1) };
+  return { kind: 'user', id, text, origin, images: [], at: at(1) };
 }
 
 function assistant(id: string, patch: Partial<Extract<HistoryItem, { kind: 'assistant' }>> = {}): HistoryItem {
-  return { kind: 'assistant', id, text: '', thinking: '', toolCalls: [], usage: null, at: at(2), ...patch };
+  return { kind: 'assistant', id, text: '', thinking: '', toolCalls: [], usage: null, stopReason: null, errorMessage: null, at: at(2), ...patch };
 }
 
 function bash(id: string, command: string): HistoryItem {
@@ -49,9 +49,41 @@ describe('hydrateItems · 分组语义', () => {
     expect(tools).toMatchObject({ kind: 'tools', calls: [{ name: 'bash', argsPreview: 'npm t', exitCode: 1, status: 'failed' }] });
   });
 
-  test('全空中止 assistant 组不产生空轮次', () => {
+  test('全空且正常结束的 assistant 组不产生空轮次', () => {
     const items = hydrateItems([user('u1', 'x'), assistant('a1'), assistant('a2')]);
     expect(items.length).toBe(1);
+  });
+
+  test('症状回归：error/aborted 的空 assistant 不再整轮消失——产生带 turnFailure 提示的轮次', () => {
+    const errored = hydrateItems([user('u1', '图片有什么'), assistant('a1', { stopReason: 'error', errorMessage: '401 {"type":"error"}' })]);
+    expect(errored.length).toBe(2);
+    const errorTurn = errored[1];
+    if (errorTurn?.kind !== 'turn') throw new Error('expected turn');
+    expect(errorTurn.turn.blocks).toEqual([{ kind: 'turnFailure', id: 'fail-a1', stopReason: 'error', message: '401 {"type":"error"}' }]);
+    expect(errorTurn.turn.status).toBe('completed');
+
+    const aborted = hydrateItems([user('u1', 'x'), assistant('a2', { stopReason: 'aborted' })]);
+    const abortTurn = aborted[1];
+    if (abortTurn?.kind !== 'turn') throw new Error('expected turn');
+    expect(abortTurn.turn.blocks).toEqual([{ kind: 'turnFailure', id: 'fail-a2', stopReason: 'aborted', message: null }]);
+    expect(abortTurn.turn.status).toBe('stopped');
+  });
+
+  test('有正文的轮次末异常也追加提示块；组内取最后一个 assistant 的终态', () => {
+    const items = hydrateItems([
+      user('u1', '问'),
+      assistant('a1', { text: '部分回答' }),
+      assistant('a2', { text: '续写被截断', stopReason: 'aborted' }),
+    ]);
+    const turn = items[1];
+    if (turn?.kind !== 'turn') throw new Error('expected turn');
+    expect(turn.turn.blocks[turn.turn.blocks.length - 1]).toMatchObject({ kind: 'turnFailure', stopReason: 'aborted' });
+    expect(turn.turn.status).toBe('stopped');
+    // 中间条目带异常终态但组以正常条目收尾 → 无提示块
+    const normal = hydrateItems([assistant('a3', { text: '先错', stopReason: 'error' }), assistant('a4', { text: '后成功' })]);
+    const normalTurn = normal[0];
+    if (normalTurn?.kind !== 'turn') throw new Error('expected turn');
+    expect(normalTurn.turn.blocks.some((block) => block.kind === 'turnFailure')).toBe(false);
   });
 
   test('系统信封 user 渲染为 system 角色', () => {

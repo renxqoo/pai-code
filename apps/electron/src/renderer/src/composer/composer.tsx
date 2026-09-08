@@ -1,12 +1,12 @@
 import * as React from 'react';
 
 import { AutocompleteList } from '@paiapp/ui';
-import type { CommandView, ImagePayload, SessionStatsView } from '@paiapp/contracts';
+import type { CommandView, ImagePayload, PermissionRules, SessionStatsView } from '@paiapp/contracts';
 
 import { ComposerActionsRow } from '@/composer/composer-actions-row';
 import { ComposerContextBar } from '@/composer/composer-context-bar';
 import { AttachmentChips } from '@/composer/attachment-chips';
-import { imagePayloadOf, readImageFile, type PendingImage } from '@/composer/read-image-file';
+import { imagePayloadOf, imageDataUrl, readImageFile, type PendingImage } from '@/composer/read-image-file';
 import { activeTokenQuery, applyTokenSelection, filterTokenItems, type TokenTrigger } from '@/composer/token-trigger';
 import { copy } from '@/strings';
 
@@ -28,6 +28,10 @@ type ComposerProps = {
   modelOptions: readonly string[]
   effortOptions: readonly string[]
   checkoutOptions: readonly string[]
+  /** 会话权限模式（当前生效；null = 未加载/无会话，操作栏控件不渲染） */
+  permissionMode: PermissionRules['mode'] | null
+  /** true = 生效规则来自全局文件（无会话 sidecar） */
+  permissionFollowsGlobal: boolean
   /** 会话内斜杠命令/技能目录（补全数据源） */
   commands: readonly CommandView[]
   /** 补全弹层的无障碍名（命令 / 文件） */
@@ -56,6 +60,8 @@ type ComposerProps = {
   onSelectModel: (value: string) => void
   onSelectEffort: (value: string) => void
   onSelectCheckout: (value: string) => void
+  onSelectPermissionMode: (mode: PermissionRules['mode']) => void
+  onFollowPermissionGlobal: () => void
 }
 
 /** 输入卡：多行输入 + 操作行 + 本地检出条，底部锚定于主区。 */
@@ -76,6 +82,8 @@ function Composer({
   modelOptions,
   effortOptions,
   checkoutOptions,
+  permissionMode,
+  permissionFollowsGlobal,
   commands,
   slashAriaLabel,
   fileAriaLabel,
@@ -94,36 +102,19 @@ function Composer({
   onSelectModel,
   onSelectEffort,
   onSelectCheckout,
+  onSelectPermissionMode,
+  onFollowPermissionGlobal,
 }: ComposerProps) {
   const canSend = value.trim().length > 0;
 
-  /** 图片附件态：对象 URL 创建/回收与读取都在本组件（提交成功才清空）。 */
-  type Attachment = { id: number; name: string; previewUrl: string; payload: PendingImage };
+  /** 图片附件态：读取与持有都在本组件（提交成功才清空）；预览用 data URL，无对象 URL 生命周期。 */
+  type Attachment = { id: number; name: string; payload: PendingImage };
   const [attachments, setAttachments] = React.useState<readonly Attachment[]>([]);
   const [attachError, setAttachError] = React.useState<string | null>(null);
   /** 生成中的投递方式（A7 显式选择；非生成中不生效） */
   const [sendMode, setSendMode] = React.useState<'steer' | 'followUp'>('followUp');
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const attachSeqRef = React.useRef(0);
-  const attachUrlRef = React.useRef<ReadonlySet<string>>(new Set());
-
-  React.useEffect(() => {
-    const urls = attachUrlRef.current;
-    return () => {
-      for (const url of urls) URL.revokeObjectURL(url);
-    };
-  }, []);
-
-  const trackUrl = (url: string): string => {
-    attachUrlRef.current = new Set([...attachUrlRef.current, url]);
-    return url;
-  };
-  const untrackUrl = (url: string): void => {
-    const next = new Set(attachUrlRef.current);
-    next.delete(url);
-    attachUrlRef.current = next;
-    URL.revokeObjectURL(url);
-  };
 
   const addFiles = (files: readonly File[]): void => {
     setAttachError(null);
@@ -135,39 +126,26 @@ function Composer({
           continue;
         }
         attachSeqRef.current += 1;
-        added.push({
-          id: attachSeqRef.current,
-          name: result.file.name,
-          previewUrl: trackUrl(URL.createObjectURL(result.file)),
-          payload: result.image,
-        });
+        added.push({ id: attachSeqRef.current, name: result.file.name, payload: result.image });
       }
       if (added.length > 0) setAttachments((current) => [...current, ...added]);
     });
   };
 
   const removeAttachment = (id: number): void => {
-    setAttachments((current) => {
-      const target = current.find((item) => item.id === id);
-      if (target !== undefined) untrackUrl(target.previewUrl);
-      return current.filter((item) => item.id !== id);
-    });
+    setAttachments((current) => current.filter((item) => item.id !== id));
   };
 
-  // 切会话清空附件并回收对象 URL（文本草稿按会话隔离，附件同样不得串扰）
+  // 切会话清空附件（文本草稿按会话隔离，附件同样不得串扰）
   const prevThreadRef = React.useRef(threadId);
   React.useEffect(() => {
     if (prevThreadRef.current === threadId) return;
     prevThreadRef.current = threadId;
-    setAttachments((current) => {
-      for (const item of current) untrackUrl(item.previewUrl);
-      return [];
-    });
+    setAttachments([]);
     setAttachError(null);
   }, [threadId]);
 
   const clearAttachments = (): void => {
-    for (const item of attachments) untrackUrl(item.previewUrl);
     setAttachments([]);
   };
 
@@ -349,7 +327,11 @@ function Composer({
           />
         </div>
         {attachments.length > 0 ? (
-          <AttachmentChips items={attachments} removeLabel={copy.composer.removeImage} onRemove={removeAttachment} />
+          <AttachmentChips
+            items={attachments.map((item) => ({ id: item.id, name: item.name, preview: imageDataUrl(item.payload) }))}
+            removeLabel={copy.composer.removeImage}
+            onRemove={removeAttachment}
+          />
         ) : null}
         {attachError !== null ? <p className="px-4 pt-[6px] text-[11px] text-red-600">{attachError}</p> : null}
         <ComposerActionsRow
@@ -370,6 +352,10 @@ function Composer({
           effortUnavailableLabel={effortUnavailableLabel}
           onSelectModel={onSelectModel}
           onSelectEffort={onSelectEffort}
+          permissionMode={permissionMode}
+          permissionFollowsGlobal={permissionFollowsGlobal}
+          onSelectPermissionMode={onSelectPermissionMode}
+          onFollowPermissionGlobal={onFollowPermissionGlobal}
           sendMode={generating ? sendMode : null}
           onSendModeChange={setSendMode}
           stats={stats}

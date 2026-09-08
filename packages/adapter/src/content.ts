@@ -30,6 +30,21 @@ export function flattenUserText(content: unknown): string {
   return parts.join('\n');
 }
 
+/** user 消息图片块：提取 data/mimeType（缺字段/空串的垃圾块丢弃）。 */
+export function userImages(content: unknown): Array<{ type: 'image'; data: string; mimeType: string }> {
+  if (!Array.isArray(content)) return [];
+  const images: Array<{ type: 'image'; data: string; mimeType: string }> = [];
+  for (const block of content) {
+    if (typeof block !== 'object' || block === null || (block as Block).type !== 'image') continue;
+    const data = (block as Block)['data'];
+    const mimeType = (block as Block)['mimeType'];
+    if (typeof data === 'string' && data.length > 0 && typeof mimeType === 'string' && mimeType.length > 0) {
+      images.push({ type: 'image', data, mimeType });
+    }
+  }
+  return images;
+}
+
 /** assistant 正文：拼全部 text 块（thinking 与 toolCall 不混入）。 */
 export function assistantText(content: unknown): string {
   if (!Array.isArray(content)) return '';

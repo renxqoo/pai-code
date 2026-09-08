@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { defaultPermissionRules, parsePermissionRules, PermissionRulesSchema } from '../permissions';
+import { clonePermissionRules, defaultPermissionRules, parsePermissionRules, PermissionRulesSchema } from '../permissions';
 
 /** hub 权限规则 v2 镜像回归：round-trip、拒绝表、降级形态。 */
 
@@ -57,4 +57,23 @@ test('宽容解析：非对象/数组/null 整体降级默认', () => {
   expect(parsePermissionRules('nope')).toEqual(defaultPermissionRules());
   expect(parsePermissionRules([1])).toEqual(defaultPermissionRules());
   expect(parsePermissionRules(null)).toEqual(defaultPermissionRules());
+});
+
+test('深拷贝（clonePermissionRules）：全字段相等、组与数组引用全新、改副本不影响原', () => {
+  const source = {
+    mode: 'ask' as const,
+    bash: { allowPatterns: ['git status'], blockPatterns: ['sudo *'] },
+    write: { allowPatterns: ['/proj/*'], blockPatterns: ['*/.env'] },
+    edit: { allowPatterns: [], blockPatterns: ['*/.env*'] },
+  };
+  const copy = clonePermissionRules(source);
+  expect(copy).toEqual(source);
+  expect(copy).not.toBe(source);
+  for (const tool of ['bash', 'write', 'edit'] as const) {
+    expect(copy[tool]).not.toBe(source[tool]);
+    expect(copy[tool].allowPatterns).not.toBe(source[tool].allowPatterns);
+    expect(copy[tool].blockPatterns).not.toBe(source[tool].blockPatterns);
+    copy[tool].allowPatterns.push('mutated');
+    expect(source[tool].allowPatterns).not.toContain('mutated');
+  }
 });

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { isTurnRunning, turnElapsedMs } from '../turn-state';
+import { isTurnRunning, turnElapsedMs, visibleTurnBlocks } from '../turn-state';
 import { turnTextContent } from '../turn-text';
 
 describe('turnElapsedMs', () => {
@@ -29,6 +29,39 @@ describe('isTurnRunning', () => {
   test('状态判别', () => {
     expect(isTurnRunning({ status: 'running' })).toBe(true);
     expect(isTurnRunning({ status: 'stopped' })).toBe(false);
+  });
+});
+
+describe('visibleTurnBlocks（症状回归：过程整体收起只留最后一条文本输出）', () => {
+  const blocks = [
+    { kind: 'text' as const, id: 'a', text: '中间说明' },
+    { kind: 'thinking' as const, id: 'b', text: '推理' },
+    { kind: 'tools' as const, id: 'c', calls: [] },
+    { kind: 'text' as const, id: 'd', text: '最终回答' },
+  ];
+
+  test('收起：过程（思考/工具/中间文本）整体隐藏，只保留最后一条文本', () => {
+    expect(visibleTurnBlocks(blocks, false)).toEqual([{ kind: 'text', id: 'd', text: '最终回答' }]);
+  });
+
+  test('展开：全部块按原顺序可见', () => {
+    expect(visibleTurnBlocks(blocks, true)).toBe(blocks);
+  });
+
+  test('收起时无文本块 → 空列表；只有一条文本时收起仍保留它', () => {
+    expect(visibleTurnBlocks([{ kind: 'thinking', id: 'x', text: 't' }], false)).toEqual([]);
+    const single = [{ kind: 'text' as const, id: 'only', text: '答' }];
+    expect(visibleTurnBlocks(single, false)).toEqual(single);
+  });
+
+  test('症状回归：异常终态提示（报错/中止）收起时也可见，跟在最后一条文本之后', () => {
+    const failure = { kind: 'turnFailure' as const, id: 'f', stopReason: 'error' as const, message: '401 invalid api key' };
+    expect(visibleTurnBlocks([{ kind: 'text' as const, id: 'd', text: '最终回答' }, failure], false)).toEqual([
+      { kind: 'text', id: 'd', text: '最终回答' },
+      failure,
+    ]);
+    // 无文本的空失败轮：收起也不能把提示藏掉
+    expect(visibleTurnBlocks([failure], false)).toEqual([failure]);
   });
 });
 

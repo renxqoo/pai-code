@@ -33,7 +33,14 @@ function ProviderRow({ provider, onRemove, onEdit, onTest }: ProviderRowProps) {
         <p className="truncate text-[12.5px] font-medium">{provider.name}</p>
         <p className="truncate text-[11.5px] text-muted-foreground">{provider.baseUrl}</p>
         <p className="truncate text-[11px] text-muted-foreground">
-          {provider.models.join(', ')} · {provider.hasKey ? copy.settings.keyPresent : copy.settings.keyMissing}
+          {provider.models
+            .map((model) => {
+              const marks = [model.reasoning ? copy.settings.modelThinkingMark : null, model.vision ? copy.settings.modelVisionMark : null].filter((mark): mark is string => mark !== null);
+              return marks.length > 0 ? `${model.id} · ${marks.join('/')}` : model.id;
+            })
+            .join(', ')}
+          {provider.thinkingFormat !== 'default' ? ` · ${copy.settings.thinkingFormatOptions[provider.thinkingFormat]}` : ''} ·{' '}
+          {provider.hasKey ? copy.settings.keyPresent : copy.settings.keyMissing}
         </p>
         {testResult !== null ? (
           <p className={testResult.ok ? 'pt-[2px] text-[11px] text-muted-foreground' : 'pt-[2px] text-[11px] text-red-600'}>

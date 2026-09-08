@@ -1,8 +1,10 @@
 import type { UiEvent } from '@paiapp/contracts';
-import type { SubagentModel, ThreadItem, ToolCallModel, TurnBlock, TurnModel } from '@/thread/thread-model';
+import type { ThreadItem, ToolCallModel, TurnBlock, TurnModel } from '@/thread/thread-model';
 
+import { attachTailSubagents, onSubagentEvent, syncSubagentsBlock } from './fold-subagents';
 import { hydrateItems, hydrateNewItems, mergeDiffFile } from './hydrate-items';
 import { initialThreadState, type HydrateAction, type LiveThreadState } from './live-thread-state';
+import { clip, findTurn, updateTurn } from './turn-ops';
 
 /**
  * 事件折叠状态机（纯函数）：UiEvent + 对账动作 → 视图状态。
@@ -27,6 +29,8 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
           id: `msg-${event.message.id}`,
           role: event.message.origin === 'system' ? 'system' : 'user',
           text: event.message.text.slice(0, MAX_LIVE_CHARS),
+          // 事件不带图片；带图消息经条目对账（turnStarted 拉取）到达
+          images: [],
         },
       };
       return {
@@ -73,9 +77,9 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
         state.stopping && state.agents.some((agent) => agent.status === 'working')
           ? state.agents.map((agent) => (agent.status === 'working' ? { ...agent, status: 'done' as const, endedAt: now } : agent))
           : state.agents;
-      if (state.liveTurnId === null) return { ...state, streaming: false, retrying: null, stopping: false, agents };
+      if (state.liveTurnId === null) return syncSubagentsBlock({ ...state, streaming: false, retrying: null, stopping: false, agents });
       const stopped = state.stopping;
-      return {
+      return syncSubagentsBlock({
         ...state,
         streaming: false,
         stopping: false,
@@ -87,7 +91,7 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
             ? { kind: 'turn', turn: { ...item.turn, status: stopped ? 'stopped' : 'completed', endedAt: now } }
             : item,
         ),
-      };
+      });
     }
     case 'queueChanged':
       return { ...state, queue: { steering: [...event.steering], followUp: [...event.followUp] } };
@@ -99,32 +103,15 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
         retrying: { attempt: event.attempt, maxAttempts: event.maxAttempts, errorMessage: event.errorMessage },
       };
     case 'subagentStarted':
-      return upsertAgent(state, event.subagentId, now, (agent) => ({
-        ...agent,
-        name: event.agent,
-        agentType: event.agent,
-        startedAt: now,
-      }));
     case 'subagentDelta':
-      return upsertAgent(state, event.subagentId, now, (agent) => ({ ...agent, summary: clip(agent.summary + event.delta) }));
     case 'subagentText':
-      return upsertAgent(state, event.subagentId, now, (agent) => ({ ...agent, summary: clip(event.text) }));
     case 'subagentTool':
-      return onSubagentTool(state, event, now);
     case 'subagentSettled':
-      return upsertAgent(state, event.subagentId, now, (agent) => ({ ...agent, status: 'done', endedAt: now }));
     case 'subagentMessage':
-      return upsertAgent(state, event.subagentId, now, (agent) => ({
-        ...agent,
-        summary: agent.summary.length > 0 ? `${agent.summary}\n${event.text}` : event.text,
-      }));
+      return onSubagentEvent(state, event, now);
     case 'sessionDied':
       // worker 死亡时全部在途子代理随进程自灭且无 settle 通知（api.md U2）：就地终态
-      return {
-        ...state,
-        crashed: true,
-        agents: state.agents.map((agent) => (agent.status === 'working' ? { ...agent, status: 'done' as const, endedAt: now } : agent)),
-      };
+      return { ...foldDeath(state, now), crashed: true };
     case 'bashOutput':
       // 直执行 bash 流式输出：只留尾部 2000 字符（横幅预览；权威条目经对账到达）
       return { ...state, bashTail: (state.bashTail + event.delta).slice(-2000) };
@@ -187,7 +174,9 @@ export function foldHydrate(state: LiveThreadState, action: HydrateAction): Live
           }
         }
       }
-      return { ...state, items, cursor: action.cursor, seenIds: new Set(action.items.map((item) => item.id)), liveTurnId: null, liveMessageId: null, hydrateFailed: false };
+      // 转写条目无子代理形态：会话级子代理条随对话尾部重建（面板同一数据源，后台代理跨轮可见）
+      const withSubagents = attachTailSubagents(items, state.agents);
+      return { ...state, items: withSubagents, cursor: action.cursor, seenIds: new Set(action.items.map((item) => item.id)), liveTurnId: null, liveMessageId: null, hydrateFailed: false };
     }
     case 'hydrate/failed':
       return { ...state, hydrateFailed: true };
@@ -201,6 +190,33 @@ export function foldStopIntent(state: LiveThreadState): LiveThreadState {
   const turn = findTurn(state, state.liveTurnId);
   if (turn?.status !== 'running') return state;
   return { ...state, stopping: true };
+}
+
+/** 会话运行面随宿主/worker 死亡就地终态：此后不会再有任何事件（settle/queue_update/compaction_end），
+ * 滞留的 streaming 会把空闲会话的新消息判成生成中投递进永不消费的队列，队列/压缩/bash 同随进程消亡。
+ * running 轮冻结为 completed（与 onTurnStarted 对错过 settle 轮的处理一致，权威内容由下次对账替换）。 */
+export function foldDeath(state: LiveThreadState, now: number): LiveThreadState {
+  const items: readonly ThreadItem[] =
+    state.liveTurnId === null
+      ? state.items
+      : state.items.map((item): ThreadItem =>
+          item.kind === 'turn' && item.turn.id === state.liveTurnId && item.turn.status === 'running'
+            ? { kind: 'turn', turn: { ...item.turn, status: 'completed', endedAt: now } }
+            : item,
+        );
+  return syncSubagentsBlock({
+    ...state,
+    items,
+    agents: state.agents.map((agent) => (agent.status === 'working' ? { ...agent, status: 'done' as const, endedAt: now } : agent)),
+    queue: { steering: [], followUp: [] },
+    streaming: false,
+    compacting: false,
+    retrying: null,
+    stopping: false,
+    bashRunning: false,
+    bashTail: '',
+    liveMessageId: null,
+  });
 }
 
 function onTurnStarted(state: LiveThreadState, at: number): LiveThreadState {
@@ -222,7 +238,8 @@ function onTurnStarted(state: LiveThreadState, at: number): LiveThreadState {
     endedAt: null,
     blocks: [],
   };
-  return {
+  // 退役旧 live 轮会带走轮内的子代理条：sync 把条迁入新 live 轮（代理存在期间条不消失）
+  return syncSubagentsBlock({
     ...state,
     items: [...items, { kind: 'turn', turn }],
     liveTurnId: turn.id,
@@ -230,7 +247,7 @@ function onTurnStarted(state: LiveThreadState, at: number): LiveThreadState {
     streaming: true,
     retrying: null,
     crashed: false,
-  };
+  });
 }
 
 function onToolEnded(
@@ -348,71 +365,6 @@ function ensureLiveTurn(state: LiveThreadState, now: number): LiveThreadState {
   return onTurnStarted({ ...state, streaming: true }, now);
 }
 
-function onSubagentTool(
-  state: LiveThreadState,
-  event: Extract<UiEvent, { type: 'subagentTool' }>,
-  now: number,
-): LiveThreadState {
-  if (event.phase === 'start') {
-    const key = `${event.subagentId}:${event.call.id}`;
-    const withStart = { ...state, callStarts: { ...state.callStarts, [key]: now } };
-    return upsertAgent(withStart, event.subagentId, now, (agent) => ({
-      ...agent,
-      toolCount: agent.toolCount + 1,
-      tools: [
-        ...agent.tools,
-        { id: event.call.id, name: event.call.name, argsPreview: event.call.argsPreview, output: '', exitCode: null, durationMs: null, status: 'running' },
-      ],
-    }));
-  }
-  if (event.phase === 'update') {
-    return upsertAgent(state, event.subagentId, now, (agent) => ({
-      ...agent,
-      tools: agent.tools.map((tool) => (tool.id === event.call.id ? { ...tool, output: clip(event.output ?? tool.output) } : tool)),
-    }));
-  }
-  const startedAt = state.callStarts[`${event.subagentId}:${event.call.id}`];
-  const durationMs = typeof startedAt === 'number' ? Math.max(0, now - startedAt) : null;
-  return upsertAgent(state, event.subagentId, now, (agent) => ({
-    ...agent,
-    tools: agent.tools.map((tool) =>
-      tool.id === event.call.id
-        ? { ...tool, output: clip(event.output ?? tool.output), exitCode: event.isError === true ? 1 : 0, status: event.isError === true ? 'failed' : 'ok', durationMs }
-        : tool,
-    ),
-  }));
-}
-
-function upsertAgent(
-  state: LiveThreadState,
-  subagentId: string,
-  now: number,
-  patch: (agent: SubagentModel) => SubagentModel,
-): LiveThreadState {
-  const existing = state.agents.find((agent) => agent.id === subagentId);
-  if (existing === undefined) {
-    const agent: SubagentModel = {
-      id: subagentId,
-      name: subagentId,
-      agentType: '',
-      model: '',
-      effort: '',
-      tokens: null,
-      toolCount: 0,
-      status: 'working',
-      startedAt: now,
-      endedAt: null,
-      summary: '',
-      tools: [],
-    };
-    return { ...state, agents: [...state.agents, patch(agent)] };
-  }
-  return {
-    ...state,
-    agents: state.agents.map((agent) => (agent.id === subagentId ? { ...patch(agent) } : agent)),
-  };
-}
-
 function mapLiveCall(state: LiveThreadState, callId: string, patch: (call: ToolCallModel) => ToolCallModel): LiveThreadState {
   const turn = findTurn(state, state.liveTurnId);
   if (turn === null) return state;
@@ -440,22 +392,6 @@ function appendToolCall(blocks: readonly TurnBlock[], call: ToolCallModel, turnI
   return next;
 }
 
-function findTurn(state: LiveThreadState, turnId: string | null): TurnModel | null {
-  if (turnId === null) return null;
-  for (let index = state.items.length - 1; index >= 0; index -= 1) {
-    const item = state.items[index];
-    if (item?.kind === 'turn' && item.turn.id === turnId) return item.turn;
-  }
-  return null;
-}
-
-function updateTurn(state: LiveThreadState, turnId: string, patch: (turn: TurnModel) => TurnModel): LiveThreadState {
-  return {
-    ...state,
-    items: state.items.map((item) => (item.kind === 'turn' && item.turn.id === turnId ? { kind: 'turn', turn: patch(item.turn) } : item)),
-  };
-}
-
 function insertBeforeLiveTurn(items: readonly ThreadItem[], item: ThreadItem, liveTurnId: string | null): ThreadItem[] {
   if (liveTurnId === null) return [...items, item];
   // live 轮恒在尾部附近：从尾向前找，避免长会话每次插入从头扫
@@ -466,8 +402,4 @@ function insertBeforeLiveTurn(items: readonly ThreadItem[], item: ThreadItem, li
     }
   }
   return [...items, item];
-}
-
-function clip(text: string): string {
-  return text.length > MAX_LIVE_CHARS ? text.slice(0, MAX_LIVE_CHARS) : text;
 }

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { ChevronDown } from 'lucide-react';
 
-import type { ProviderConfigView } from '@paiapp/contracts';
+import type { ProviderConfigView, ProviderModel, ThinkingFormat } from '@paiapp/contracts';
 import { MenuButton } from '@paiapp/ui';
 
 import { copy } from '@/strings';
@@ -13,7 +13,7 @@ type ProvidersSectionProps = {
   providers: readonly ProviderConfigView[]
   defaultModel: string | null
   modelOptions: readonly string[]  // "provider/modelId" 形态
-  onUpsertProvider: (input: { name: string; baseUrl: string; api: string; models: string[]; apiKey?: string }) => Promise<boolean>
+  onUpsertProvider: (input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; thinkingFormat: ThinkingFormat; apiKey?: string }) => Promise<boolean>
   onRemoveProvider: (name: string) => Promise<boolean>
   onSelectDefaultModel: (value: string | null) => void
   onTestProvider: (name: string) => Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }>
@@ -89,7 +89,12 @@ function ProvidersSection({
         initial={
           editingProvider === undefined
             ? null
-            : { name: editingProvider.name, baseUrl: editingProvider.baseUrl, models: [...editingProvider.models] }
+            : {
+                name: editingProvider.name,
+                baseUrl: editingProvider.baseUrl,
+                models: editingProvider.models.map((model) => ({ id: model.id, reasoning: model.reasoning, vision: model.vision })),
+                thinkingFormat: editingProvider.thinkingFormat,
+              }
         }
         onCancel={editing === null ? undefined : () => setEditing(null)}
       />

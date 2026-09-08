@@ -11,6 +11,7 @@ import {
 import type {
   HostPhase,
   HostProcessPort,
+  ProviderConfig,
   RegistryStorePort,
   SessionView,
   UiEvent,
@@ -34,7 +35,7 @@ const READY_TIMEOUT_MS = 30_000;
 export interface PaiRuntimeDeps {
   paths: AppPaths;
   keyStore: ProviderKeyStore;
-  providers: () => readonly { name: string; baseUrl: string; api: string; models: readonly string[] }[];
+  providers: () => readonly ProviderConfig[];
   hubPaths: () => { bunPath: string; hubEntry: string } | null;
   logger: { log(message: string): void };
   /** 事件出口（装配层接 IPC 推送）。 */
@@ -48,13 +49,17 @@ export interface PaiRuntime {
   readonly sessionsRoot: string;
   start(): Promise<void>;
   stop(): Promise<void>;
+  /** host 相位安全读取（host 未构建返回 null；bootstrap/诊断用，不抛）。 */
+  hostPhase(): HostPhase | null;
+  /** host stderr 尾部安全读取（host 未构建返回空串）。 */
+  hostStderrTail(): string;
   sessions(): SessionView[];
   emitBuffered(): void;
   markBootstrapped(): void;
   registry: RegistryStorePort;
   defaultTitle: string;
   refreshSessionsFromHost(): Promise<void>;
-  applyStartOutcome(threadId: string, cwd: string, sessionPath: string | null, title: string): SessionView;
+  applyStartOutcome(threadId: string, cwd: string, sessionPath: string | null, title: string, trusted?: boolean): SessionView;
   removeSession(threadId: string): void;
   renameSession(threadId: string, name: string): void;
   touchSession(threadId: string, patch: Partial<Pick<SessionView, 'streaming' | 'model' | 'thinkingLevel' | 'state'>>): void;
@@ -86,12 +91,14 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
     emit({ type: 'sessionUpdated', session: view });
   };
 
-  const persistSession = (view: SessionView): void => {
+  const persistSession = (view: SessionView, trusted?: boolean): void => {
     registry.upsert({
       threadId: view.threadId,
       sessionPath: view.sessionPath,
       cwd: view.cwd,
       title: view.title,
+      // 未指定（缺省 resume 等同文件重开）沿用行内记录；显式指定则覆盖
+      trusted: trusted ?? registry.get(view.threadId)?.trusted ?? null,
       createdAt: registry.get(view.threadId)?.createdAt ?? Date.now(),
       updatedAt: Date.now(),
     });
@@ -171,7 +178,7 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
         sessions.delete(row.threadId);
         continue;
       }
-      const outcome = await active.request({ type: 'thread/resume', sessionPath: row.sessionPath });
+      const outcome = await active.request({ type: 'thread/resume', sessionPath: row.sessionPath, trusted: row.trusted ?? false });
       if (!outcome.ok) {
         // 可重试失败（超时/暂时错误）保留行：下次重启/手动仍可恢复；
         // 仅会话文件缺失（不可恢复）才除名
@@ -192,7 +199,7 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
         emit({ type: 'sessionRemoved', threadId: row.threadId });
       }
       upsertSession({ ...view, title: row.title });
-      persistSession({ ...view, title: row.title });
+      persistSession({ ...view, title: row.title }, row.trusted ?? false);
     }
   };
 
@@ -219,8 +226,7 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
         agentDir: deps.paths.agentDir,
         cwd: homedir(),
         // 每次 spawn（含重启）重生成 models.json 并解析最新 key 注入
-        buildEnv: () =>
-          writeModelsConfig(deps.paths.agentDir, deps.providers().map((p) => ({ ...p, models: [...p.models] })), deps.keyStore).env,
+        buildEnv: () => writeModelsConfig(deps.paths.agentDir, deps.providers(), deps.keyStore).env,
       },
       onFrame: handleFrame,
       onPhase: (phase: HostPhase) => {
@@ -257,6 +263,12 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
       await host?.dispose();
       host = null;
       registry.close();
+    },
+    hostPhase(): HostPhase | null {
+      return host?.phase ?? null;
+    },
+    hostStderrTail(): string {
+      return host?.diagnostics().stderrTail ?? '';
     },
     sessions(): SessionView[] {
       return [...sessions.values()].sort((a, b) => b.lastActivityAt - a.lastActivityAt);
@@ -303,7 +315,7 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
       for (const row of registry.list()) {
         if (liveIds.has(row.threadId) || sessions.has(row.threadId)) continue;
         if (row.sessionPath === null) continue;
-        const resumeOutcome = await active.request({ type: 'thread/resume', sessionPath: row.sessionPath });
+        const resumeOutcome = await active.request({ type: 'thread/resume', sessionPath: row.sessionPath, trusted: row.trusted ?? false });
         if (!resumeOutcome.ok) {
           log(`resume_failed:${row.threadId}:${resumeOutcome.error}`);
           continue;
@@ -312,13 +324,13 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
         if (view === null) continue;
         if (view.threadId !== row.threadId) registry.remove(row.threadId);
         upsertSession({ ...view, title: row.title });
-        persistSession({ ...view, title: row.title });
+        persistSession({ ...view, title: row.title }, row.trusted ?? false);
       }
     },
-    applyStartOutcome(threadId: string, cwd: string, sessionPath: string | null, title: string): SessionView {
+    applyStartOutcome(threadId: string, cwd: string, sessionPath: string | null, title: string, trusted?: boolean): SessionView {
       const view = toSessionView({ threadId, cwd, sessionPath, title, lastActivityAt: Date.now() });
       upsertSession(view);
-      persistSession(view);
+      persistSession(view, trusted);
       return view;
     },
     removeSession(threadId: string): void {

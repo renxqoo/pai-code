@@ -1,18 +1,18 @@
 import * as React from 'react';
 
 import { Composer } from '@/composer/composer';
-import { AgentPanel } from '@/agent-panel/agent-panel';
 import { DialogLayer } from '@/dialogs/dialog-layer';
 import { NewThreadModal } from '@/dialogs/new-thread-modal';
-import { DiffPanel } from '@/diff-panel/diff-panel';
 import { SidebarSeparator } from '@/layout/sidebar-separator';
 import { TitleBarLeft } from '@/layout/title-bar-left';
 import { WindowCaptionButtons } from '@/layout/window-caption-buttons';
 import { formatRelativeAge } from '@/lib/relative-age';
 import { isWindowsPlatform } from '@/lib/platform';
+import { projectDirsOf } from '@/lib/project-dirs';
 import { useSidebarResize } from '@/hooks/use-sidebar-resize';
 import { NoticeStrip } from '@/notices/notice-strip';
 import { SettingsScreen } from '@/settings/settings-screen';
+import { HostDownBanner } from '@/screens/host-down-banner';
 import { Sidebar } from '@/sidebar/sidebar';
 import { filterSessions } from '@/sidebar/filter-sessions';
 import { changeLocale, getLocale, type Locale } from '@/strings';
@@ -21,6 +21,8 @@ import { MessageList } from '@/thread/message-list';
 import { QueuePanel } from '@/thread/queue-panel';
 import { UsageScreen } from '@/screens/usage-screen';
 import { ThreadBanner } from '@/thread/thread-banner';
+import { AgentPanel } from '@/agent-panel/agent-panel';
+import { DiffPanel } from '@/diff-panel/diff-panel';
 import { ThreadHeader } from '@/thread/thread-header';
 import type { ImagePayload } from '@paiapp/contracts';
 import type { LiveWorkspaceView } from '@/live/use-live-workspace';
@@ -30,6 +32,8 @@ import { copy } from '@/strings';
 const SIDEBAR_WIDTH = 188;
 const SIDEBAR_MIN_WIDTH = 168;
 const SIDEBAR_MAX_WIDTH = 320;
+/** 新会话已知目录快捷条目上限（更多走系统文件夹选择）。 */
+const KNOWN_DIRS_LIMIT = 6;
 
 /** 语言切换触发根级重挂载时需要存续的 UI 态（会话草稿/侧栏几何/开合）。 */
 const uiState = {
@@ -41,7 +45,7 @@ const uiState = {
 };
 const CONTENT_HORIZONTAL_PADDING = 56;
 
-/** 右侧面板槽位：Diff / Agents 共用一个槽位，互斥切换 */
+/** 右侧面板槽位：Diff / Agents 共用一个槽位，互斥切换。 */
 type SidePanel = 'diff' | 'agents' | null;
 
 /** 尚未接线/不适用当前会话的动作统一落到空实现，接线点保持稳定。 */
@@ -57,7 +61,6 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   /** 折叠的项目分组名集合（A4） */
   const [collapsedGroups, setCollapsedGroups] = React.useState<ReadonlySet<string>>(new Set());
   /** 面板开合挂在会话之上：切换会话不丢失 */
-  const [panel, setPanel] = React.useState<SidePanel>(null);
   const [settingsOpen, setSettingsOpen] = React.useState(uiState.settingsOpen);
   /** 排队消息面板开合（A7；横幅排队行点击切换） */
   const [queueOpen, setQueueOpen] = React.useState(false);
@@ -65,6 +68,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const [confirmStop, setConfirmStop] = React.useState(false);
   /** Usage 总览页（I2；侧栏 footer 入口） */
   const [usageOpen, setUsageOpen] = React.useState(false);
+  const [panel, setPanel] = React.useState<SidePanel>(null);
   React.useEffect(() => {
     if (usageOpen) workspace.actions.refreshAllStats();
     // eslint 不在此项目；actions 引用不稳，依赖 usageOpen 单轴即可
@@ -102,9 +106,6 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     });
   };
 
-  const openAgents = React.useCallback(() => setPanel('agents'), []);
-  const openDiff = React.useCallback(() => setPanel('diff'), []);
-  const closePanel = React.useCallback(() => setPanel(null), []);
   const openSettings = React.useCallback(() => setSettingsOpen(true), []);
   const closeSettings = React.useCallback(() => setSettingsOpen(false), []);
   const openNewThread = React.useCallback(() => setNewThreadOpen(true), []);
@@ -163,6 +164,11 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         setUsageOpen(false);
         return;
       }
+      // 新会话弹窗优先于底层动作：Esc 只关弹窗，不得穿透触发停止/清队列
+      if (newThreadOpen) {
+        setNewThreadOpen(false);
+        return;
+      }
       if (settingsOpen) {
         setSettingsOpen(false);
         return;
@@ -182,7 +188,11 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [panel, settingsOpen, usageOpen, confirmStop, workspace.dialogs.length, workspace.generating, workspace.agentsActive, workspace.actions]);
+  }, [panel, settingsOpen, usageOpen, newThreadOpen, confirmStop, workspace.dialogs.length, workspace.generating, workspace.agentsActive, workspace.actions]);
+
+  const openAgents = React.useCallback(() => setPanel('agents'), []);
+  const openDiff = React.useCallback(() => setPanel('diff'), []);
+  const closePanel = React.useCallback(() => setPanel(null), []);
 
   /** 浏览器直开（无 preload）时桥不存在，降级为无动作 */
   const toggleMaximize = () => {
@@ -191,6 +201,8 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
 
   const refreshSaved = workspace.actions.refreshSaved;
   const refreshAction = React.useMemo(() => ({ label: copy.sidebar.refresh, onSelect: refreshSaved }), [refreshSaved]);
+  /** 宿主掉线（从未构建或 failed）：置顶横幅 + 模型位换「宿主未连接」，不得伪装成「未配置模型」。 */
+  const hostDown = workspace.hostPhase === null || workspace.hostPhase === 'failed';
   const projects = React.useMemo(() => [...new Set(sessions.map((session) => session.projectName))], [sessions]);
   const visibleSessions = React.useMemo(() => filterSessions(sessions, sidebarQuery), [sessions, sidebarQuery]);
   const sessionGroups = React.useMemo(
@@ -232,13 +244,6 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   );
   const pinnedSessions = React.useMemo(() => new Set(workspace.preferences.pinnedSessions), [workspace.preferences.pinnedSessions]);
   const savedProjects = React.useMemo(() => [...new Set(workspace.saved.map((session) => session.cwd))], [workspace.saved]);
-  const sessionSkills = React.useMemo(
-    () =>
-      workspace.commands
-        .filter((command) => command.source === 'skill')
-        .map((command) => ({ name: command.name.replace(/^skill:/, ''), description: command.description })),
-    [workspace.commands],
-  );
   const ages = React.useMemo(() => {
     const table: Record<string, string> = {};
     for (const session of sessions) {
@@ -315,13 +320,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
             toggleMaximize: copy.thread.toggleMaximize,
           }}
           tabs={{
-            diffLabel: copy.thread.tabDiff,
-            diffHint: copy.thread.tabDiffHint,
-            agentsLabel: copy.thread.tabAgents,
             addLabel: copy.thread.tabAdd,
-            agentsActive: workspace.agentsActive,
-            onDiff: openDiff,
-            onAgents: openAgents,
             onAdd: noop,
           }}
           activePanel={panel}
@@ -342,9 +341,11 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
           onToggleSplitView={() => setPanel((current) => (current === 'agents' ? null : 'agents'))}
           onToggleMaximize={toggleMaximize}
         />
+        {hostDown ? <HostDownBanner onOpenSettings={openSettings} /> : null}
         <MessageList
           thread={workspace.activeThread}
           now={workspace.now}
+          loading={workspace.executing}
           emptyTitle={copy.thread.emptyTitle}
           emptyHint={copy.thread.emptyHint}
           onOpenAgents={openAgents}
@@ -413,13 +414,15 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
             modelOptions={workspace.composer.modelOptions}
             effortOptions={workspace.composer.effortOptions}
             checkoutOptions={workspace.composer.checkoutOptions}
+            permissionMode={workspace.sessionRules === null ? null : workspace.sessionRules.rules.mode}
+            permissionFollowsGlobal={workspace.sessionRules?.source !== 'thread'}
             commands={workspace.commands}
             slashAriaLabel={copy.composer.slashAria}
             fileAriaLabel={copy.composer.fileAria}
             onSearchFiles={workspace.actions.searchFiles}
             stats={workspace.activeStats}
             threadId={activeThreadId}
-            noModelsLabel={copy.composer.noModels}
+            noModelsLabel={hostDown ? copy.composer.hostDownModels : copy.composer.noModels}
             effortUnavailableLabel={copy.composer.effortUnavailable}
             generating={workspace.generating}
             compacting={workspace.compacting}
@@ -430,6 +433,12 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
             onOpenSettings={openSettings}
             onSelectModel={workspace.actions.selectModel}
             onSelectEffort={workspace.actions.selectEffort}
+            onSelectPermissionMode={(mode) => {
+              void workspace.actions.setSessionPermissionMode(mode);
+            }}
+            onFollowPermissionGlobal={() => {
+              void workspace.actions.writeSessionRules(null);
+            }}
             onSelectCheckout={noop}
           />
         </div>
@@ -456,7 +465,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         modelOptions={workspace.composer.modelOptions}
         permissionRules={workspace.permissionRules}
         agents={workspace.agents}
-        skills={sessionSkills}
+        skills={workspace.skills}
         saved={workspace.saved}
         pinnedSessions={pinnedSessions}
         savedProjects={savedProjects}
@@ -483,6 +492,8 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         onShowDiagnostics={workspace.actions.fetchDiagnostics}
         onRestartHost={workspace.actions.restartHost}
         onShowAgents={workspace.actions.refreshAgents}
+        onShowSkills={workspace.actions.refreshSkills}
+        onToggleSkill={workspace.actions.setSkillEnabled}
         onOpenSaved={(sessionPath) => {
           void workspace.actions.openSavedSession(sessionPath);
           setSettingsOpen(false);
@@ -494,11 +505,21 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
       />
       <NewThreadModal
         open={newThreadOpen}
-        defaultCwd={workspace.activeCwd.length > 0 ? workspace.activeCwd : ''}
+        defaultCwd={workspace.activeCwd}
+        knownDirs={React.useMemo(
+          () =>
+            projectDirsOf(
+              workspace.sessions.map((session) => ({ cwd: session.cwd, at: session.lastActivityAt })),
+              workspace.saved.map((session) => ({ cwd: session.cwd, at: session.modifiedAt })),
+              KNOWN_DIRS_LIMIT,
+            ),
+          [workspace.sessions, workspace.saved],
+        )}
         trustedLabel={copy.newThread.trustedLabel}
         trustedHint={copy.newThread.trustedHint}
         onClose={closeNewThread}
         onCreate={workspace.actions.createSession}
+        onPickDirectory={workspace.actions.pickDirectory}
       />
       <NoticeStrip notices={workspace.notices} onDismiss={workspace.actions.dismissNotice} />
       <DialogLayer

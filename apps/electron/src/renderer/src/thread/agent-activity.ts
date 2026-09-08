@@ -3,7 +3,7 @@ import type { SubagentModel } from './thread-model';
 /**
  * 子代理在某一时刻的活动：`pause` = 在两段工具之间（推理中），
  * `tool` = 正有工具在跑，`idle` = 尚未出生或已结束。
- * 流内简略行与面板列表项都从这一个判定出发，保证两个视图状态一致。
+ * 面板列表项的状态词从这一个判定出发。
  */
 export type AgentActivity =
   | { kind: 'idle' }
@@ -20,16 +20,6 @@ export function agentActivity(
   const running = agent.tools.find((tool) => tool.status === 'running');
   if (running === undefined) return { kind: 'pause' };
   return { kind: 'tool', toolName: running.name };
-}
-
-/**
- * 流内简略行的状态词：推理中显 Thinking，跑工具时显 Working；
- * 闲置（未出生/已结束）返回 null，简略行整体不展示。
- */
-export function streamStatusLabelKey(activity: AgentActivity): 'thinking' | 'working' | null {
-  if (activity.kind === 'pause') return 'thinking';
-  if (activity.kind === 'tool') return 'working';
-  return null;
 }
 
 /**

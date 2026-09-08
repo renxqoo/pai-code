@@ -15,10 +15,36 @@ describe('mapEntries（转写真相源）', () => {
       messageEntry('e2', { role: 'user', content: [{ type: 'text', text: 'a' }, { type: 'image', data: 'x', mimeType: 'image/png' }, { type: 'text', text: 'b' }], timestamp: 2 }),
     ]);
     expect(items).toEqual([
-      { kind: 'user', id: 'e1', text: 'hello', origin: 'user', at: 1767225600000 },
-      { kind: 'user', id: 'e2', text: 'a\nb', origin: 'user', at: 1767225600000 },
+      { kind: 'user', id: 'e1', text: 'hello', origin: 'user', images: [], at: 1767225600000 },
+      { kind: 'user', id: 'e2', text: 'a\nb', origin: 'user', images: [{ type: 'image', data: 'x', mimeType: 'image/png' }], at: 1767225600000 },
     ]);
     expect(cursor).toBe('e2');
+  });
+
+  test('症状回归：用户消息图片块提取进视图（垃圾图片块丢弃，文本不受影响）', () => {
+    const { items } = mapEntries([
+      messageEntry('e1', {
+        role: 'user',
+        timestamp: 1,
+        content: [
+          { type: 'text', text: '图片有什么' },
+          { type: 'image', data: 'aGk=', mimeType: 'image/png' },
+          { type: 'image', data: '', mimeType: 'image/png' },
+          { type: 'image', data: 'aGk=' },
+          { type: 'image', mimeType: 'image/png' },
+        ],
+      }),
+    ]);
+    expect(items).toEqual([
+      {
+        kind: 'user',
+        id: 'e1',
+        text: '图片有什么',
+        origin: 'user',
+        images: [{ type: 'image', data: 'aGk=', mimeType: 'image/png' }],
+        at: 1767225600000,
+      },
+    ]);
   });
 
   test('task-notification / task-message 信封 → origin system', () => {
@@ -47,7 +73,7 @@ describe('mapEntries（转写真相源）', () => {
       messageEntry('e4', { role: 'assistant', timestamp: 4, content: [{ type: 'text', text: '全绿' }], usage: { input: 30, output: 2, total: 32 } }),
     ]);
     expect(items).toEqual([
-      { kind: 'user', id: 'e1', text: '跑测试', origin: 'user', at: 1767225600000 },
+      { kind: 'user', id: 'e1', text: '跑测试', origin: 'user', images: [], at: 1767225600000 },
       {
         kind: 'assistant',
         id: 'e2',
@@ -56,9 +82,27 @@ describe('mapEntries（转写真相源）', () => {
         thinking: '先跑',
         toolCalls: [{ id: 'tc1', name: 'bash', argsPreview: 'bun test', output: '3 pass', isError: false, diff: null }],
         usage: { input: 10, output: 5 },
+        stopReason: null,
+        errorMessage: null,
       },
-      { kind: 'assistant', id: 'e4', at: 1767225600000, text: '全绿', thinking: '', toolCalls: [], usage: { input: 30, output: 2 } },
+      { kind: 'assistant', id: 'e4', at: 1767225600000, text: '全绿', thinking: '', toolCalls: [], usage: { input: 30, output: 2 }, stopReason: null, errorMessage: null },
     ]);
+  });
+
+  test('症状回归：assistant 异常终态透传——error 带 errorMessage、aborted 不带、正常 stop 归 null', () => {
+    const { items } = mapEntries([
+      messageEntry('e1', { role: 'assistant', timestamp: 1, content: [], stopReason: 'error', errorMessage: '401 {"type":"error"}' }),
+      messageEntry('e2', { role: 'assistant', timestamp: 2, content: [], stopReason: 'aborted', errorMessage: 'Request aborted' }),
+      messageEntry('e3', { role: 'assistant', timestamp: 3, content: [{ type: 'text', text: '正常' }] }),
+      messageEntry('e4', { role: 'assistant', timestamp: 4, content: [], stopReason: 'error' }),
+    ]);
+    const assistants = items.filter((item): item is Extract<typeof item, { kind: 'assistant' }> => item.kind === 'assistant');
+    expect(assistants[0]).toMatchObject({ stopReason: 'error', errorMessage: '401 {"type":"error"}' });
+    // aborted 的原始 errorMessage 不进视图（提示文案由渲染层给）
+    expect(assistants[1]).toMatchObject({ stopReason: 'aborted', errorMessage: null });
+    expect(assistants[2]).toMatchObject({ stopReason: null, errorMessage: null });
+    // error 但缺 errorMessage：stopReason 保留、message 为 null
+    expect(assistants[3]).toMatchObject({ stopReason: 'error', errorMessage: null });
   });
 
   test('toolResult 找不到所属 assistant（异常序）→ 丢弃不抛', () => {
@@ -167,8 +211,8 @@ describe('response-views', () => {
     expect(modelInfos({ models: [{ provider: 'glm', id: 'm1' }, { provider: '', id: 'm2' }, 3] })).toEqual([{ provider: 'glm', modelId: 'm1' }]);
   });
 
-  test('sessionStatsView：contextUsage.percent 直取；垃圾 → null', () => {
-    expect(sessionStatsView({ userMessages: 2, assistantMessages: 3, toolCalls: 4, tokens: { total: 99 }, cost: 0.5, contextUsage: { tokens: 10, contextWindow: 100, percent: 0.1 } })).toEqual({
+  test('sessionStatsView：contextUsage.percent（0-100 刻度）归一为 0-1 比率；垃圾/缺省 → null', () => {
+    expect(sessionStatsView({ userMessages: 2, assistantMessages: 3, toolCalls: 4, tokens: { total: 99 }, cost: 0.5, contextUsage: { tokens: 10, contextWindow: 100, percent: 10 } })).toEqual({
       userMessages: 2,
       assistantMessages: 3,
       toolCalls: 4,
@@ -177,6 +221,11 @@ describe('response-views', () => {
       contextUsage: 0.1,
     });
     expect(sessionStatsView({}).contextUsage).toBeNull();
+    expect(sessionStatsView({ contextUsage: { tokens: 5, contextWindow: 100, percent: -1 } }).contextUsage).toBeNull();
+  });
+
+  test('症状回归：hub percent 9.87（9.87%）曾被当比率 ×100 显示成 987%——归一后视图为 0.0987', () => {
+    expect(sessionStatsView({ contextUsage: { tokens: 22600, contextWindow: 229000, percent: 9.87 } }).contextUsage).toBeCloseTo(0.0987, 10);
   });
 
   test('thinkingLevels：仅 levels（协议无 current 字段，当前值走 get_state）', () => {

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { X } from 'lucide-react';
 
-import { defaultPermissionRules, type PermissionRules } from '@paiapp/contracts';
+import { clonePermissionRules, defaultPermissionRules, type PermissionRules } from '@paiapp/contracts';
 
 import { copy } from '@/strings';
 
@@ -21,19 +21,6 @@ type SaveStatus = 'saved' | 'failed' | null;
 
 const TOOLS: readonly ToolKey[] = ['bash', 'write', 'edit'];
 const PATTERN_KINDS: readonly PatternKind[] = ['allowPatterns', 'blockPatterns'];
-
-
-
-
-/** 深拷贝规则：保存时传给外层，避免草稿与已保存对象共享数组引用。 */
-function cloneRules(rules: PermissionRules): PermissionRules {
-  return {
-    mode: rules.mode,
-    bash: { allowPatterns: [...rules.bash.allowPatterns], blockPatterns: [...rules.bash.blockPatterns] },
-    write: { allowPatterns: [...rules.write.allowPatterns], blockPatterns: [...rules.write.blockPatterns] },
-    edit: { allowPatterns: [...rules.edit.allowPatterns], blockPatterns: [...rules.edit.blockPatterns] },
-  };
-}
 
 function patternsEqual(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((pattern, index) => pattern === b[index]);
@@ -132,9 +119,12 @@ function PermissionsSection({ rules, onSave, sessionRules, onLoadSession, onSave
 };
   /** 作用域：全局规则文件 / 当前会话 sidecar（G2） */
   const [scope, setScope] = React.useState<'global' | 'session'>('global');
+  /** 会话作用域无 sidecar 时，用户点「创建独立规则」进入本地编辑态（保存成功落 sidecar 后自然退出） */
+  const [editingSidecar, setEditingSidecar] = React.useState(false);
   const baseline = scope === 'global' ? rules : sessionRules?.rules ?? null;
   const hasSidecar = sessionRules?.source === 'thread';
-  const [draft, setDraft] = React.useState<PermissionRules | null>(rules === null ? null : cloneRules(rules));
+  const showFollowGlobal = scope === 'session' && !hasSidecar && !editingSidecar;
+  const [draft, setDraft] = React.useState<PermissionRules | null>(rules === null ? null : clonePermissionRules(rules));
   const [inputDrafts, setInputDrafts] = React.useState<Record<string, string>>({});
   const [saving, setSaving] = React.useState(false);
   const [status, setStatus] = React.useState<SaveStatus>(null);
@@ -145,7 +135,7 @@ function PermissionsSection({ rules, onSave, sessionRules, onLoadSession, onSave
 
   // 基线（作用域规则）引用变化：外部刷新/保存回写 → 草稿同步
   React.useEffect(() => {
-    setDraft(baseline === null ? null : cloneRules(baseline));
+    setDraft(baseline === null ? null : clonePermissionRules(baseline));
     setInputDrafts({});
     setStatus(null);
   }, [baseline]);
@@ -169,14 +159,15 @@ function PermissionsSection({ rules, onSave, sessionRules, onLoadSession, onSave
     if (draft === null || saving) return;
     setStatus(null);
     setSaving(true);
-    const ok = scope === 'global' ? await onSave(cloneRules(draft)) : await onSaveSession(cloneRules(draft));
+    const ok = scope === 'global' ? await onSave(clonePermissionRules(draft)) : await onSaveSession(clonePermissionRules(draft));
     setSaving(false);
     setStatus(ok ? 'saved' : 'failed');
   };
 
   /** 会话作用域无 sidecar：从当前生效规则出发创建独立副本 */
   const createSidecar = (): void => {
-    setDraft(cloneRules(sessionRules?.rules ?? rules ?? defaultPermissionRules()));
+    setDraft(clonePermissionRules(sessionRules?.rules ?? rules ?? defaultPermissionRules()));
+    setEditingSidecar(true);
   };
 
   const followGlobal = async (): Promise<void> => {
@@ -185,6 +176,7 @@ function PermissionsSection({ rules, onSave, sessionRules, onLoadSession, onSave
     const ok = await onSaveSession(null);
     setSaving(false);
     setStatus(ok ? 'saved' : 'failed');
+    if (ok) setEditingSidecar(false);
   };
 
   if (baseline === null || draft === null) {
@@ -220,7 +212,7 @@ function PermissionsSection({ rules, onSave, sessionRules, onLoadSession, onSave
           </button>
         ))}
       </div>
-      {scope === 'session' && !hasSidecar ? (
+      {showFollowGlobal ? (
         <div className="flex flex-col gap-[8px] rounded-[10px] border border-dashed border-border px-[12px] py-[12px]">
           <p className="text-[12px] text-muted-foreground">{copy.settings.permissionsFollowGlobal}</p>
           <button
@@ -232,6 +224,7 @@ function PermissionsSection({ rules, onSave, sessionRules, onLoadSession, onSave
           </button>
         </div>
       ) : null}
+      {showFollowGlobal ? null : (
       <div className="flex flex-col gap-[16px]">
         <div className="flex flex-col gap-[6px]">
           <p className="text-[11.5px] text-muted-foreground">{copy.settings.permissionsMode}</p>
@@ -303,6 +296,7 @@ function PermissionsSection({ rules, onSave, sessionRules, onLoadSession, onSave
           {status === 'failed' ? <p className="text-[11.5px] text-red-600">{copy.settings.permissionsSaveFailed}</p> : null}
         </div>
       </div>
+      )}
     </section>
   );
 }

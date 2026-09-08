@@ -48,6 +48,8 @@ export interface SessionRow {
   sessionPath: string | null;
   cwd: string;
   title: string;
+  /** 会话信任态（thread/start|resume 的 trusted 生效值；null = 未记录，按非受信处理）。 */
+  trusted: boolean | null;
   createdAt: number;
   updatedAt: number;
 }

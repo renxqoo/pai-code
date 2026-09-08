@@ -67,17 +67,17 @@ test('renameSession trim 后为空直接拒绝且不发出命令', async () => {
   expect(client.calls.filter((call) => call.method === 'session/setName')).toEqual([]);
 });
 
-test('submitDraft 携带 images 透传（prompt 与 followUp 两路径）', async () => {
+test('submitDraft 携带 images 透传（prompt 单一通路）', async () => {
   const images = [{ type: 'image' as const, data: 'aGk=', mimeType: 'image/png' }];
-  const streamingClient = makeClient({});
-  const streamingStore = createLiveStore();
-  streamingStore.getState().bootstrap({ sessions: [], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } });
-  // streaming 状态经 foldThreadEvent 设置太重：直接走非流式路径断言 prompt 透传
-  const idle = createLiveController(streamingClient, streamingStore);
-  expect(await idle.submitDraft('t1', 'hello', images)).toBeNull();
-  expect(streamingClient.calls.find((call) => call.method === 'session/prompt')?.params).toMatchObject({
+  const client = makeClient({});
+  const store = createLiveStore();
+  store.getState().bootstrap({ sessions: [], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } });
+  const controller = createLiveController(client, store);
+  expect(await controller.submitDraft('t1', 'hello', images)).toBeNull();
+  expect(client.calls.find((call) => call.method === 'session/prompt')?.params).toMatchObject({
     threadId: 't1',
     message: 'hello',
+    streamingBehavior: 'followUp',
     images: [{ type: 'image', data: 'aGk=', mimeType: 'image/png' }],
   });
 
@@ -112,17 +112,38 @@ test('runBash 空命令拒绝且不发命令；abortBash 发出中止', async ()
   expect(client.calls).toContainEqual({ method: 'session/abortBash', params: { threadId: 't1' } });
 });
 
-test('submitDraft 生成中显式 steer 模式走 session/steer', async () => {
+test('submitDraft 显式 steer 模式以 streamingBehavior=steer 投递；默认按 followUp', async () => {
   const client = makeClient({});
   const store = createLiveStore();
   const controller = createLiveController(client, store);
   store.getState().bootstrap({ sessions: [], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } });
   store.getState().applyEvent({ type: 'turnStarted', threadId: 't1', at: 1 }, 1);
   expect(await controller.submitDraft('t1', '改需求', undefined, 'steer')).toBeNull();
-  expect(client.calls.find((call) => call.method === 'session/steer')?.params).toMatchObject({ threadId: 't1', message: '改需求' });
-  // 默认（auto）仍走 followUp
+  expect(client.calls.find((call) => call.method === 'session/prompt')?.params).toMatchObject({
+    threadId: 't1',
+    message: '改需求',
+    streamingBehavior: 'steer',
+  });
   expect(await controller.submitDraft('t1', '排队消息')).toBeNull();
-  expect(client.calls.find((call) => call.method === 'session/followUp')).toBeDefined();
+  expect(
+    client.calls
+      .filter((call) => call.method === 'session/prompt')
+      .map((call) => (call.params as { streamingBehavior?: string }).streamingBehavior),
+  ).toEqual(['steer', 'followUp']);
+});
+
+test('症状回归：对话已结束但 streaming 镜像滞留 true 时，submitDraft 仍走 prompt 立即发送（不投进永不消费的队列）', async () => {
+  const client = makeClient({});
+  const store = createLiveStore();
+  const controller = createLiveController(client, store);
+  store.getState().bootstrap({ sessions: [], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } });
+  // 宿主死亡/漏 settle 场景下镜像滞留：本地 streaming=true 而会话实际空闲
+  store.getState().applyEvent({ type: 'turnStarted', threadId: 't1', at: 1 }, 1);
+  expect(store.getState().threads['t1']?.streaming).toBe(true);
+  expect(await controller.submitDraft('t1', '对话结束后的新消息')).toBeNull();
+  // 选路不依赖本地镜像：唯一通路是 prompt+streamingBehavior（hub 空闲 = 立即发送）
+  expect(client.calls.filter((call) => call.method === 'session/prompt')).toHaveLength(1);
+  expect(client.calls.some((call) => call.method === 'session/followUp' || call.method === 'session/steer')).toBe(false);
 });
 
 test('clearQueue 与 forkSession：命令形状与新会话激活', async () => {

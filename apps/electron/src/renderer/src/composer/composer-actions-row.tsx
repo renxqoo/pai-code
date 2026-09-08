@@ -1,11 +1,15 @@
 import * as React from 'react';
 import { ChevronDown, FoldVertical, Paperclip, ArrowUp } from 'lucide-react';
 
+import type { PermissionRules } from '@paiapp/contracts';
+
 import { UsageDetails } from './usage-details';
 
 import { IconButton, MenuButton, SparkMark, UsageRing } from '@paiapp/ui';
 
 import { SendModeToggle } from './send-mode-toggle';
+import { PermissionModeMenu } from './permission-mode-menu';
+import { menuTriggerClassName } from './menu-trigger-style';
 
 type ComposerActionsRowProps = {
   model: string
@@ -25,8 +29,14 @@ type ComposerActionsRowProps = {
   generating: boolean
   /** 压缩进行中压缩键禁用，防止重复触发 */
   compacting: boolean
+  /** 会话权限模式（当前生效；null = 未加载/无会话，控件不渲染） */
+  permissionMode: PermissionRules['mode'] | null
+  /** true = 生效规则来自全局文件（无会话 sidecar） */
+  permissionFollowsGlobal: boolean
   onSelectModel: (value: string) => void
   onSelectEffort: (value: string) => void
+  onSelectPermissionMode: (mode: PermissionRules['mode']) => void
+  onFollowPermissionGlobal: () => void
   onCompact: () => void
   onAttach: () => void
   /** 生成中显示投递方式切换（null = 隐藏） */
@@ -39,14 +49,11 @@ type ComposerActionsRowProps = {
   onStop: () => void
 }
 
-const menuTriggerClassName =
-  'flex cursor-pointer items-center gap-2 rounded-lg py-1 pr-1 pl-1.5 text-[12px] leading-none text-muted-foreground outline-none select-none hover:bg-accent hover:text-foreground aria-expanded:bg-accent aria-expanded:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 [&_svg]:shrink-0';
-
 function optionItems(options: readonly string[], selected: string) {
   return options.map((option) => ({ kind: 'item' as const, id: option, label: option, selected: option === selected }));
 }
 
-/** 输入框底行：模型 / 推理档位两组下拉，右侧压缩、附件、上下文用量与发送（生成中为停止）。 */
+/** 输入框底行：模型 / 推理档位 / 会话权限模式三组下拉，右侧压缩、附件、上下文用量与发送（生成中为停止）。 */
 function ComposerActionsRow({
   model,
   effort,
@@ -63,8 +70,12 @@ function ComposerActionsRow({
   canSend,
   generating,
   compacting,
+  permissionMode,
+  permissionFollowsGlobal,
   onSelectModel,
   onSelectEffort,
+  onSelectPermissionMode,
+  onFollowPermissionGlobal,
   onCompact,
   onAttach,
   sendMode,
@@ -122,6 +133,17 @@ function ComposerActionsRow({
           }
         />
       )}
+      {permissionMode !== null ? (
+        <>
+          <span aria-hidden="true" className="mx-[6px] h-[13px] w-px shrink-0 bg-border" />
+          <PermissionModeMenu
+            mode={permissionMode}
+            followsGlobal={permissionFollowsGlobal}
+            onSelectMode={onSelectPermissionMode}
+            onFollowGlobal={onFollowPermissionGlobal}
+          />
+        </>
+      ) : null}
       <div className="ml-auto flex items-center gap-[9px]">
         {sendMode !== null ? <SendModeToggle value={sendMode} onChange={onSendModeChange} /> : null}
         <IconButton label={compactLabel} size="sm" onClick={onCompact} disabled={compacting} className="text-muted-foreground/90">

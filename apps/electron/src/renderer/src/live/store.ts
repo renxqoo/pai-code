@@ -3,6 +3,7 @@ import { createStore } from 'zustand/vanilla';
 import type {
   AgentView,
   SessionStatsView,
+  SkillView,
   ApiData,
   CredentialView,
   ModelInfoView,
@@ -15,7 +16,7 @@ import type {
 } from '@paiapp/contracts';
 import type { ThreadModel } from '@/thread/thread-model';
 
-import { foldHydrate, foldStopIntent, foldThreadEvent } from './fold-events';
+import { foldDeath, foldHydrate, foldStopIntent, foldThreadEvent } from './fold-events';
 import { initialThreadState, type HydrateAction, type LiveThreadState } from './live-thread-state';
 
 /**
@@ -54,6 +55,8 @@ export interface LiveStoreState {
   sessionRules: { rules: PermissionRules; source: 'thread' | 'global' } | null;
   /** agent 定义目录（进 Agents 分区时拉取）。 */
   agents: readonly AgentView[];
+  /** 用户级技能目录（进技能分区时拉取；启停真相在 pi settings）。 */
+  skills: readonly SkillView[];
   threads: Readonly<Record<string, LiveThreadState>>;
   dialogs: Readonly<Record<string, PendingDialog>>;
   dialogOrder: readonly string[];
@@ -89,8 +92,17 @@ export function createLiveStore() {
       applyEvent(event, now) {
         set((state) => {
           switch (event.type) {
-            case 'host':
-              return { hostPhase: event.phase };
+            case 'host': {
+              if (event.phase !== 'restarting' && event.phase !== 'failed') return { hostPhase: event.phase };
+              // 宿主进程死亡（挂死重启/启动失败）：全部线程的运行面随进程消亡且不会再有任何事件，
+              // 就地终态防 streaming/queue 镜像滞留（滞留会把空闲会话的新消息投进永不消费的队列）；
+              // 挂起对话框同随进程消亡（ui_response 永无回执，滞留只等 5 分钟兜底超时）
+              const threads: Record<string, LiveThreadState> = {};
+              for (const [threadId, thread] of Object.entries(state.threads)) {
+                threads[threadId] = { ...foldDeath(thread, now), crashed: true };
+              }
+              return { hostPhase: event.phase, threads, dialogs: {}, dialogOrder: [] };
+            }
             case 'sessionUpdated':
               return { sessions: { ...state.sessions, [event.session.threadId]: event.session } };
             case 'sessionRenamed': {
@@ -108,7 +120,13 @@ export function createLiveStore() {
             }
             case 'sessionDied': {
               const thread = threadOf(state, event.threadId);
-              return { threads: { ...state.threads, [event.threadId]: foldThreadEvent(thread, event, now) } };
+              // 该 worker 的挂起对话框随进程消亡：立即收起，不等 5 分钟兜底超时
+              const deadDialogIds = new Set(
+                state.dialogOrder.filter((id) => state.dialogs[id]?.threadId === event.threadId),
+              );
+              const dialogs = deadDialogIds.size === 0 ? state.dialogs : omitKeys(state.dialogs, deadDialogIds);
+              const dialogOrder = deadDialogIds.size === 0 ? state.dialogOrder : state.dialogOrder.filter((id) => !deadDialogIds.has(id));
+              return { threads: { ...state.threads, [event.threadId]: foldThreadEvent(thread, event, now) }, dialogs, dialogOrder };
             }
             case 'dialogRequest': {
               if (event.method === 'notify') {
@@ -171,6 +189,8 @@ export function createLiveStore() {
             // 偏好整体替换：bootstrap 只在启动时发生一次，晚于它写入的偏好不会被回滚；
             // 若未来引入重连 re-bootstrap，需改为字段级合并（滞后快照可能覆盖本地新写值）
             preferences: data.preferences,
+            // 宿主相位滞后合并：缓冲事件先到（如 host failed）不被启动快照回滚
+            hostPhase: state.hostPhase ?? data.hostPhase,
             threads,
             activeThreadId,
           };
@@ -180,7 +200,9 @@ export function createLiveStore() {
         set({ bootstrapLoaded: true, bootstrapError: reason });
       },
       setActiveThread(threadId) {
-        set({ activeThreadId: threadId });
+        // sessionRules 是活跃会话的视图：切换即同步失效（防旧会话模式在操作栏残留一帧；新值由切会话 effect 重拉）。
+        // 同值重设不失效（effect 以 activeThreadId 为 deps，不会重拉）。
+        set((state) => (state.activeThreadId === threadId ? {} : { activeThreadId: threadId, sessionRules: null }));
       },
       updateStats(threadId, stats) {
         set((state) => ({ stats: { ...state.stats, [threadId]: stats } }));
@@ -232,6 +254,14 @@ function omitKey<T>(source: Readonly<Record<string, T>>, key: string): Record<st
   return out;
 }
 
+function omitKeys<T>(source: Readonly<Record<string, T>>, keys: ReadonlySet<string>): Record<string, T> {
+  const out: Record<string, T> = {};
+  for (const [name, value] of Object.entries(source)) {
+    if (!keys.has(name)) out[name] = value;
+  }
+  return out;
+}
+
 function firstSessionId(sessions: Readonly<Record<string, SessionView>>): string | null {
   const ids = Object.keys(sessions);
   return ids.length > 0 ? (ids[0] ?? null) : null;
@@ -248,6 +278,7 @@ function initialStoreState(): LiveStoreState {
     providers: [],
     credentials: [],
     agents: [],
+    skills: [],
     preferences: { defaultModel: null, onboarded: false, projectModels: {}, pinnedSessions: [], trustedDefault: false },
     permissionRules: null,
     sessionRules: null,

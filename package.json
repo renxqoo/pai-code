@@ -1,0 +1,26 @@
+{
+  "name": "pai",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "lint": "oxlint --type-aware .",
+    "fmt": "oxfmt .",
+    "fmt:check": "oxfmt --check .",
+    "typecheck": "bun scripts/typecheck.ts",
+    "build": "bun run --filter '@paiapp/electron' build",
+    "test": "bun test",
+    "ci": "bun run lint && bun run typecheck && bun run build && bun run test"
+  },
+  "devDependencies": {
+    "@oxlint/plugins": "^1.81.0",
+    "@types/node": "26.4.1",
+    "oxlint": "^1.81.0",
+    "oxlint-tsgolint": "^7.0.2001",
+    "oxfmt": "^0.66.0",
+    "typescript": "^7.0.2"
+  }
+}

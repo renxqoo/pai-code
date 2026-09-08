@@ -21,12 +21,15 @@ export function hydrateItems(history: readonly HistoryItem[]): readonly ThreadIt
     const first = assistants[0];
     const last = assistants[assistants.length - 1];
     if (first === undefined || last === undefined) return;
-    const blocks = buildTurnBlocks(assistants);
-    // 中止/出错的空 assistant（无正文无工具）不产生空轮次
+    const blocks = [...buildTurnBlocks(assistants)];
+    // 轮次末异常终态（上游报错/中止）：无论有无正文都追加可见提示；
+    // 真正无内容且正常结束的空 assistant 才不产生轮次
+    const failure = failureOf(assistants);
+    if (failure !== null) blocks.push(failure);
     if (blocks.length === 0) return;
     const turn: TurnModel = {
       id: `turn-${first.id}`,
-      status: 'completed',
+      status: failure?.stopReason === 'aborted' ? 'stopped' : 'completed',
       startedAt: first.kind === 'assistant' ? first.at : 0,
       endedAt: last.kind === 'assistant' ? last.at : 0,
       blocks,
@@ -39,7 +42,12 @@ export function hydrateItems(history: readonly HistoryItem[]): readonly ThreadIt
       flushTurn();
       items.push({
         kind: 'message',
-        message: { id: `msg-${item.id}`, role: item.origin === 'system' ? 'system' : 'user', text: clip(item.text) },
+        message: {
+          id: `msg-${item.id}`,
+          role: item.origin === 'system' ? 'system' : 'user',
+          text: clip(item.text),
+          images: item.images.map(({ data, mimeType }) => ({ data, mimeType })),
+        },
       });
       continue;
     }
@@ -110,6 +118,17 @@ export function hydrateNewItems(history: readonly HistoryItem[]): readonly { ite
   }
   flush();
   return out;
+}
+
+/** 轮次末异常终态：取组内最后一个 assistant 条目的异常 stopReason（正常 stop/toolUse/垃圾值 → null）。 */
+function failureOf(assistants: readonly HistoryItem[]): Extract<TurnBlock, { kind: 'turnFailure' }> | null {
+  for (let index = assistants.length - 1; index >= 0; index -= 1) {
+    const item = assistants[index];
+    if (item?.kind !== 'assistant') continue;
+    if (item.stopReason !== 'error' && item.stopReason !== 'aborted') return null;
+    return { kind: 'turnFailure', id: `fail-${item.id}`, stopReason: item.stopReason, message: item.errorMessage };
+  }
+  return null;
 }
 
 function buildTurnBlocks(assistants: readonly HistoryItem[]): readonly TurnBlock[] {

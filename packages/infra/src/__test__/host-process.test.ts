@@ -290,4 +290,33 @@ describe('createHostProcess（fake-host 集成）', () => {
     expect(typeof stderrTail).toBe('string');
     expect(harness.notes.some((note) => note.startsWith('host_exit'))).toBe(true);
   }, 12_000);
+
+  test('症状回归：重启换进程后旧 stdout 滞留帧被代际丢弃（迟到帧会把已终态的渲染层镜像写回）', async () => {
+    const log: Array<{ kind: 'frame' | 'phase'; type: string }> = [];
+    const harness = makeHarness({
+      config: { bunPath: process.execPath, hubEntry: join(import.meta.dir, 'burst-exit-host.ts'), agentDir, buildEnv: () => ({}) },
+      // 退避窗口拉长：旧进程滞留 data 事件在 restarting 之后、新进程拉起前后派发
+      timing: { ...fastTiming, restartBackoffMs: [600] as unknown as readonly number[] },
+      onFrame: (frame) => log.push({ kind: 'frame', type: frame.type }),
+      onPhase: (phase) => log.push({ kind: 'phase', type: phase }),
+    });
+    const host = launch(harness);
+    await waitFor(() => host.phase === 'ready', 8_000, 'ready');
+    const burst = host.request({ type: 'burst' } as unknown as HubCommand, 4_000);
+    // 同步阻塞主循环：ack 与大流量帧全部滞留在旧进程管道里，崩溃发生在阻塞窗口内
+    const blockedAt = Date.now();
+    while (Date.now() - blockedAt < 500) {
+      /* busy：模拟主进程崩溃瞬间正被同步任务占用 */
+    }
+    // 阻塞解除后、事件循环派发滞留 I/O 之前，同步进入重启（setPhase+killGroup 无 await）
+    void host.restart('manual_backlog');
+    // 滞留 data 事件此刻才派发：旧 decoder 产出的帧必须全部被代际守卫丢弃
+    await sleep(1_500);
+    // 在途 burst 随重启被 failAllPending 拒绝（旧响应帧同样过不了代际守卫）——请求本身不悬挂即可
+    await burst;
+    const restartingAt = log.map((entry) => entry.kind === 'phase' && entry.type === 'restarting').lastIndexOf(true);
+    expect(restartingAt).toBeGreaterThanOrEqual(0);
+    expect(log.slice(restartingAt + 1).filter((entry) => entry.kind === 'frame')).toEqual([]);
+    await host.dispose();
+  }, 20_000);
 });

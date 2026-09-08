@@ -70,13 +70,45 @@ test('空输入落到 schema 默认值（含新增偏好字段）', () => {
   expect(parsed.providers).toEqual([]);
 });
 
-test('upsertProvider 按 name 键替换并落盘', () => {
+test('upsertProvider 按 name 键替换并落盘（模型条目带思考能力 + 思考形态）', () => {
   const dir = tempDir();
   const file = join(dir, 'settings.json');
   const settings = createFileSettings(file, memoryKeyStore);
-  settings.upsertProvider({ name: 'glm', baseUrl: 'https://a', api: 'openai-completions', models: ['m'] });
-  settings.upsertProvider({ name: 'glm', baseUrl: 'https://b', api: 'openai-completions', models: ['m2'] });
-  const onDisk = JSON.parse(readFileSync(file, 'utf8')) as { providers: Array<{ baseUrl: string }> };
+  settings.upsertProvider({ name: 'glm', baseUrl: 'https://a', api: 'openai-completions', models: [{ id: 'm', reasoning: false, vision: false }], thinkingFormat: 'default' });
+  settings.upsertProvider({ name: 'glm', baseUrl: 'https://b', api: 'openai-completions', models: [{ id: 'm2', reasoning: true, vision: true }], thinkingFormat: 'zai' });
+  const onDisk = JSON.parse(readFileSync(file, 'utf8')) as { providers: Array<{ baseUrl: string; models: { id: string; reasoning: boolean }[]; thinkingFormat: string }> };
   expect(onDisk.providers.length).toBe(1);
   expect(onDisk.providers[0]?.baseUrl).toBe('https://b');
+  expect(onDisk.providers[0]?.models).toEqual([{ id: 'm2', reasoning: true, vision: true }]);
+  expect(onDisk.providers[0]?.thinkingFormat).toBe('zai');
+});
+
+test('症状回归：磁盘旧形态（models 为 string[]）读时升级为模型条目，不丢 provider', () => {
+  const dir = tempDir();
+  const file = join(dir, 'settings.json');
+  writeFileSync(
+    file,
+    JSON.stringify({
+      hubDev: { bunPath: null, hubEntry: null },
+      providers: [{ name: 'glm', baseUrl: 'https://a', api: 'openai-completions', models: ['glm-5.3-flash'] }],
+      trustedDefault: false,
+      defaultModel: null,
+      onboarded: true,
+      projectModels: {},
+      pinnedSessions: [],
+    }),
+    'utf8',
+  );
+  const parsed = createFileSettings(file, memoryKeyStore).get();
+  expect(parsed.providers[0]?.models).toEqual([{ id: 'glm-5.3-flash', reasoning: false, vision: false }]);
+  expect(parsed.providers[0]?.thinkingFormat).toBe('default');
+  expect(parsed.onboarded).toBe(true);
+});
+
+test('症状回归：新形状外字段坏值整体降级默认值（不抛、不清盘）', () => {
+  const dir = tempDir();
+  const file = join(dir, 'settings.json');
+  writeFileSync(file, JSON.stringify({ providers: [{ name: 'x' }] }), 'utf8');
+  const parsed = createFileSettings(file, memoryKeyStore).get();
+  expect(parsed.providers).toEqual([]);
 });

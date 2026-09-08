@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { PermissionRulesSchema } from './permissions';
+import { ThinkingFormatSchema } from './settings';
 import { DiffFileViewSchema, SessionViewSchema } from './ui-events';
 
 /**
@@ -13,6 +14,15 @@ import { DiffFileViewSchema, SessionViewSchema } from './ui-events';
 // 视图形状（adapter 从协议响应收窄而来，渲染层唯一认识的形态）
 // ---------------------------------------------------------------------------
 
+/** 图片载荷（发送与历史条目共用形状；data 为无前缀 base64）。 */
+const imagePayload = z
+  .object({
+    type: z.literal('image'),
+    data: z.string().min(1),
+    mimeType: z.string().min(1),
+  })
+  .strict();
+
 /** 历史条目（session/messages 的正规化结果，渲染层水化为对话流）。 */
 export const HistoryItemSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -20,6 +30,8 @@ export const HistoryItemSchema = z.discriminatedUnion('kind', [
     id: z.string(),
     text: z.string(),
     origin: z.enum(['user', 'system']),
+    /** 用户消息携带的图片附件（data URL 渲染缩略图）。 */
+    images: z.array(imagePayload),
     /** 条目时刻（ms）：轮次计时行与排序用。 */
     at: z.number(),
   }),
@@ -41,6 +53,10 @@ export const HistoryItemSchema = z.discriminatedUnion('kind', [
       }),
     ),
     usage: z.object({ input: z.number(), output: z.number() }).nullable(),
+    /** 异常终态（hub stopReason 收窄）；null = 正常结束（stop/toolUse）。 */
+    stopReason: z.enum(['error', 'aborted']).nullable(),
+    /** stopReason=error 时的上游原始错误信息（如 401 文本）；其余 null。 */
+    errorMessage: z.string().nullable(),
   }),
   z.object({
     kind: z.literal('bash'),
@@ -70,7 +86,7 @@ export const SessionStatsViewSchema = z.object({
   toolCalls: z.number().int(),
   tokensTotal: z.number(),
   cost: z.number(),
-  /** null = 上下文占用未知。 */
+  /** 上下文占用（0-1 比率；null = 未知，如压缩后尚未收到新响应）。 */
   contextUsage: z.number().nullable(),
 });
 export type SessionStatsView = z.infer<typeof SessionStatsViewSchema>;
@@ -122,11 +138,25 @@ export const AgentViewSchema = z.object({
 });
 export type AgentView = z.infer<typeof AgentViewSchema>;
 
+/** 用户级技能视图（skills/list 与 skills/setEnabled 共用形态）。 */
+export const SkillViewSchema = z
+  .object({
+    name: z.string(),
+    description: z.string().nullable(),
+    enabled: z.boolean(),
+    /** agent = agentDir/skills；agents = ~/.agents/skills */
+    origin: z.enum(['agent', 'agents']),
+  })
+  .strict();
+export type SkillView = z.infer<typeof SkillViewSchema>;
+
 export const ProviderConfigViewSchema = z.object({
   name: z.string(),
   baseUrl: z.string(),
   api: z.string(),
-  models: z.array(z.string()),
+  models: z.array(z.object({ id: z.string(), reasoning: z.boolean(), vision: z.boolean() }).strict()),
+  /** 思考参数形态（default = 不写 compat）。 */
+  thinkingFormat: ThinkingFormatSchema,
   /** key 永不回传，只回传有无。 */
   hasKey: z.boolean(),
 });
@@ -148,6 +178,8 @@ export const BootstrapViewSchema = z.object({
   models: z.array(ModelInfoViewSchema),
   providers: z.array(ProviderConfigViewSchema),
   preferences: PreferencesViewSchema,
+  /** 启动时 host 相位快照；null = host 从未构建（路径未解析/装配失败），模型与会话能力不可用。 */
+  hostPhase: z.enum(['starting', 'ready', 'restarting', 'failed']).nullable(),
 });
 export type BootstrapView = z.infer<typeof BootstrapViewSchema>;
 
@@ -157,13 +189,6 @@ export type BootstrapView = z.infer<typeof BootstrapViewSchema>;
 
 const empty = z.object({}).strict();
 const threadOnly = z.object({ threadId: z.string().min(1) }).strict();
-const imagePayload = z
-  .object({
-    type: z.literal('image'),
-    data: z.string().min(1),
-    mimeType: z.string().min(1),
-  })
-  .strict();
 
 export const ApiSchemas = {
   'app/bootstrap': {
@@ -201,18 +226,6 @@ export const ApiSchemas = {
         streamingBehavior: z.enum(['steer', 'followUp']).optional(),
         images: z.array(imagePayload).optional(),
       })
-      .strict(),
-    result: z.null(),
-  },
-  'session/steer': {
-    params: z
-      .object({ threadId: z.string().min(1), message: z.string().min(1), images: z.array(imagePayload).optional() })
-      .strict(),
-    result: z.null(),
-  },
-  'session/followUp': {
-    params: z
-      .object({ threadId: z.string().min(1), message: z.string().min(1), images: z.array(imagePayload).optional() })
       .strict(),
     result: z.null(),
   },
@@ -311,6 +324,21 @@ export const ApiSchemas = {
     params: z.object({ sessionPath: z.string().min(1) }).strict(),
     result: z.null(),
   },
+  /** 系统目录选择对话框（单选，可新建）；null = 用户取消。 */
+  'dialog/pickDirectory': {
+    params: z.object({ defaultPath: z.string().min(1).optional() }).strict(),
+    result: z.string().nullable(),
+  },
+  /** 用户级技能目录（含启用态；启停真相 = agentDir/settings.json 的 skills overrides）。 */
+  'skills/list': {
+    params: empty,
+    result: z.array(SkillViewSchema),
+  },
+  /** 技能启用/禁用（写 pi settings skills overrides；结果为写后的完整清单）。 */
+  'skills/setEnabled': {
+    params: z.object({ name: z.string().min(1), enabled: z.boolean() }).strict(),
+    result: z.array(SkillViewSchema),
+  },
   /** 清空排队消息（协议仅全清，无单条操作）。 */
   'session/clearQueue': {
     params: threadOnly,
@@ -349,7 +377,8 @@ export const ApiSchemas = {
         name: z.string().min(1),
         baseUrl: z.string().min(1),
         api: z.string().min(1),
-        models: z.array(z.string().min(1)).min(1),
+        models: z.array(z.object({ id: z.string().min(1), reasoning: z.boolean(), vision: z.boolean() }).strict()).min(1),
+        thinkingFormat: ThinkingFormatSchema.optional(),
         /** 省略 = 保留既有 key。 */
         apiKey: z.string().optional(),
       })

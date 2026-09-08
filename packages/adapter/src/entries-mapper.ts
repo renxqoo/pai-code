@@ -1,6 +1,6 @@
 import type { HistoryItem } from '@paiapp/contracts';
 
-import { assistantText, assistantThinking, assistantToolCalls, flattenUserText, toolResultText } from './content';
+import { assistantText, assistantThinking, assistantToolCalls, flattenUserText, toolResultText, userImages } from './content';
 import { previewArgs } from './args-preview';
 import { diffFromPatch, diffFromWriteArgs } from './diff-extract';
 
@@ -35,7 +35,7 @@ export function mapEntries(entries: unknown): { items: HistoryItem[]; cursor: st
     const role = message.role;
     if (role === 'user') {
       const text = flattenUserText(message.content);
-      items.push({ kind: 'user', id, text, origin: systemOrigin(text) ? 'system' : 'user', at });
+      items.push({ kind: 'user', id, text, origin: systemOrigin(text) ? 'system' : 'user', at, images: userImages(message.content) });
       pendingTools.clear();
       continue;
     }
@@ -83,6 +83,10 @@ export function mapEntries(entries: unknown): { items: HistoryItem[]; cursor: st
         isError: false,
         diff: call.name === 'write' ? writeDiffOf(call.args) : null,
       }));
+      // 异常终态收窄：仅 error/aborted 透传，正常 stop/toolUse 不产生视图噪音
+      const rawStopReason = message.stopReason;
+      const stopReason = rawStopReason === 'error' || rawStopReason === 'aborted' ? rawStopReason : null;
+      const errorMessage = str(message.errorMessage);
       items.push({
         kind: 'assistant',
         id,
@@ -91,6 +95,8 @@ export function mapEntries(entries: unknown): { items: HistoryItem[]; cursor: st
         thinking: assistantThinking(message.content),
         toolCalls: toolCallViews,
         usage: usageOf(message.usage),
+        stopReason,
+        errorMessage: stopReason === 'error' && errorMessage.length > 0 ? errorMessage : null,
       });
       if (toolCallViews.length > 0) {
         for (const call of toolCallViews) pendingTools.set(call.id, toolCallViews);

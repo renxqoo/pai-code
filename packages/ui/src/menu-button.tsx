@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react'
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 
 import { Menu } from '@base-ui/react/menu'
 
@@ -21,6 +21,11 @@ type MenuButtonProps = {
   'aria-label'?: string
 }
 
+/**
+ * 下拉菜单按钮：非模态语义（modal=false，不锁滚动、不 inert 外部内容），
+ * 点击外部由 dismiss 直接收起；窗口失焦（切走应用）同步收起，
+ * 避免回到应用后菜单仍悬挂遮挡。
+ */
 function MenuButton({
   trigger,
   triggerClassName,
@@ -31,8 +36,17 @@ function MenuButton({
   popupMinWidth = 176,
   'aria-label': ariaLabel,
 }: MenuButtonProps) {
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    const close = (): void => setOpen(false)
+    window.addEventListener('blur', close)
+    return () => window.removeEventListener('blur', close)
+  }, [open])
+
   return (
-    <Menu.Root>
+    <Menu.Root open={open} onOpenChange={setOpen} modal={false}>
       <Menu.Trigger aria-label={ariaLabel} className={triggerClassName}>
         {trigger}
       </Menu.Trigger>

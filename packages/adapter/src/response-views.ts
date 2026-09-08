@@ -133,10 +133,13 @@ export function sessionStatsView(data: unknown): SessionStatsView {
     toolCalls: num(d.toolCalls, 0),
     tokensTotal: num(tokens.total, 0),
     cost: num(d.cost, 0),
-    contextUsage: typeof percent === 'number' && percent >= 0 ? percent : null,
+    // hub 侧 percent 是 0-100 刻度（getContextUsage：tokens/contextWindow*100）；
+    // 视图契约是 0-1 比率，此处归一（消费端 ×100 显示、进度环直取比率）
+    contextUsage: typeof percent === 'number' && percent >= 0 ? percent / 100 : null,
   };
 }
 
+/** get_commands 响应 → 命令视图（缺名/非对象/source 词表外丢弃；description 缺失收窄 null）。 */
 export function thinkingLevels(data: unknown): { allowed: string[] } {
   const d = recordOf(data);
   return {
@@ -144,7 +147,6 @@ export function thinkingLevels(data: unknown): { allowed: string[] } {
   };
 }
 
-/** get_commands 响应 → 命令视图（缺名/非对象/source 词表外丢弃；description 缺失收窄 null）。 */
 export function sessionCommands(data: unknown): CommandView[] {
   const commands = recordOf(data)['commands'];
   if (!Array.isArray(commands)) return [];

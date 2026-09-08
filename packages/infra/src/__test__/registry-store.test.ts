@@ -13,10 +13,10 @@ describe('openRegistryStore', () => {
   test('upsert/list/get/remove 往返；按 updatedAt 倒序', () => {
     const db = openRegistryStore(tempStorePath());
     const base = Date.now();
-    db.upsert({ threadId: 't1', sessionPath: '/a.jsonl', cwd: '/w1', title: '一', createdAt: base, updatedAt: base });
-    db.upsert({ threadId: 't2', sessionPath: null, cwd: '/w2', title: '二', createdAt: base + 1, updatedAt: base + 10 });
+    db.upsert({ threadId: 't1', sessionPath: '/a.jsonl', cwd: '/w1', title: '一', trusted: true, createdAt: base, updatedAt: base });
+    db.upsert({ threadId: 't2', sessionPath: null, cwd: '/w2', title: '二', trusted: false, createdAt: base + 1, updatedAt: base + 10 });
     expect(db.list().map((row) => row.threadId)).toEqual(['t2', 't1']);
-    expect(db.get('t1')).toEqual({ threadId: 't1', sessionPath: '/a.jsonl', cwd: '/w1', title: '一', createdAt: base, updatedAt: base });
+    expect(db.get('t1')).toEqual({ threadId: 't1', sessionPath: '/a.jsonl', cwd: '/w1', title: '一', trusted: true, createdAt: base, updatedAt: base });
     expect(db.get('missing')).toBeNull();
     db.remove('t1');
     expect(db.list().map((row) => row.threadId)).toEqual(['t2']);
@@ -25,8 +25,8 @@ describe('openRegistryStore', () => {
 
   test('upsert 同 id 覆盖（sessionPath/title 更新）', () => {
     const db = openRegistryStore(tempStorePath());
-    db.upsert({ threadId: 't', sessionPath: null, cwd: '/w', title: '旧', createdAt: 1, updatedAt: 1 });
-    db.upsert({ threadId: 't', sessionPath: '/s.jsonl', cwd: '/w', title: '新', createdAt: 1, updatedAt: 2 });
+    db.upsert({ threadId: 't', sessionPath: null, cwd: '/w', title: '旧', trusted: false, createdAt: 1, updatedAt: 1 });
+    db.upsert({ threadId: 't', sessionPath: '/s.jsonl', cwd: '/w', title: '新', trusted: false, createdAt: 1, updatedAt: 2 });
     const row = db.get('t');
     expect(row).toMatchObject({ sessionPath: '/s.jsonl', title: '新', updatedAt: 2 });
     db.close();
@@ -36,11 +36,23 @@ describe('openRegistryStore', () => {
     const path = tempStorePath();
     const db = openRegistryStore(path);
     db.remove('ghost');
-    db.upsert({ threadId: 't', sessionPath: null, cwd: '/w', title: '', createdAt: 1, updatedAt: 1 });
+    db.upsert({ threadId: 't', sessionPath: null, cwd: '/w', title: '', trusted: null, createdAt: 1, updatedAt: 1 });
     db.close();
     const reopened = openRegistryStore(path);
     expect(reopened.list().length).toBe(1);
     reopened.close();
     rmSync(join(path, '..'), { recursive: true, force: true });
+  });
+
+  test('T13 信任态回放：trusted COALESCE——后续 upsert 传 null 沿用行内记录', () => {
+    const db = openRegistryStore(tempStorePath());
+    db.upsert({ threadId: 't', sessionPath: '/s.jsonl', cwd: '/w', title: 'x', trusted: true, createdAt: 1, updatedAt: 1 });
+    // 同文件重开等场景不指定信任态：不得清掉已记录的 true
+    db.upsert({ threadId: 't', sessionPath: '/s.jsonl', cwd: '/w', title: 'x', trusted: null, createdAt: 1, updatedAt: 2 });
+    expect(db.get('t')?.trusted).toBe(true);
+    // 显式改传 false 时覆盖
+    db.upsert({ threadId: 't', sessionPath: '/s.jsonl', cwd: '/w', title: 'x', trusted: false, createdAt: 1, updatedAt: 3 });
+    expect(db.get('t')?.trusted).toBe(false);
+    db.close();
   });
 });

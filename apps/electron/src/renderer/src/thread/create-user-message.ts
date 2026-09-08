@@ -8,5 +8,5 @@ export function createUserMessage(draft: string): UserMessageResult {
   if (text.length === 0) {
     return { ok: false, reason: 'blank' };
   }
-  return { ok: true, message: { id: crypto.randomUUID(), role: 'user', text } };
+  return { ok: true, message: { id: crypto.randomUUID(), role: 'user', text, images: [] } };
 }

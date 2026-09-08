@@ -5,5 +5,7 @@ export type SessionCardModel = {
   projectName: string;
   title: string;
   version: string;
+  /** 工作目录（新会话快捷目录等消费方；不再仅是展示位）。 */
+  cwd: string;
   lastActivityAt: number;
 };
