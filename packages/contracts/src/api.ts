@@ -332,6 +332,15 @@ export const ApiSchemas = {
     params: z.object({ rules: PermissionRulesSchema }).strict(),
     result: PermissionRulesSchema,
   },
+  /** 会话级规则（sidecar）：读取返回生效规则与来源；写 null = 删除 sidecar 回退全局。 */
+  'permission/sessionRead': {
+    params: z.object({ threadId: z.string().min(1) }).strict(),
+    result: z.object({ rules: PermissionRulesSchema, source: z.enum(['thread', 'global']) }).strict(),
+  },
+  'permission/sessionWrite': {
+    params: z.object({ threadId: z.string().min(1), rules: PermissionRulesSchema.nullable() }).strict(),
+    result: z.null(),
+  },
   'provider/upsert': {
     params: z
       .object({

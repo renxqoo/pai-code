@@ -44,6 +44,10 @@ export interface LiveController {
   readonly refreshPermissionRules: () => Promise<PermissionRules | null>;
   /** 全局权限规则写入（原子写，hub 热读即时生效）；成功返回 null，失败返回原因。 */
   readonly writePermissionRules: (rules: PermissionRules) => Promise<string | null>;
+  /** 会话级规则（sidecar）读取；source=thread 表示存在独立规则。 */
+  readonly readSessionRules: (threadId: string) => Promise<{ rules: PermissionRules; source: 'thread' | 'global' } | null>;
+  /** 会话级规则写入（null = 删除 sidecar 回退全局）；成功返回 null。 */
+  readonly writeSessionRules: (threadId: string, rules: PermissionRules | null) => Promise<string | null>;
   /** agent 定义目录刷新（带 threadId 时含受信可见的项目级；失败静默保持旧值）。 */
   readonly refreshAgents: (threadId: string | null) => Promise<void>;
   /** 项目文件搜索（@ 引用；cwd 门禁在主进程，失败返回 null）。 */
@@ -308,6 +312,16 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       if (!outcome.ok) return outcome.reason;
       store.setState({ permissionRules: outcome.data });
       return null;
+    },
+    async readSessionRules(threadId: string): Promise<{ rules: PermissionRules; source: 'thread' | 'global' } | null> {
+      const outcome = await client.invoke('permission/sessionRead', { threadId });
+      if (!outcome.ok) return null;
+      store.setState({ sessionRules: outcome.data });
+      return outcome.data;
+    },
+    async writeSessionRules(threadId: string, rules: PermissionRules | null): Promise<string | null> {
+      const outcome = await client.invoke('permission/sessionWrite', { threadId, rules });
+      return outcome.ok ? null : outcome.reason;
     },
     async refreshAgents(threadId: string | null): Promise<void> {
       const outcome = await client.invoke('agent/list', threadId === null ? {} : { threadId });

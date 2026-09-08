@@ -380,6 +380,9 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         onTestProvider={workspace.actions.testProvider}
         onSavePermissionRules={workspace.actions.writePermissionRules}
         onShowPermissions={workspace.actions.refreshPermissionRules}
+        sessionRules={workspace.sessionRules}
+        onSaveSessionRules={workspace.actions.writeSessionRules}
+        onLoadSessionRules={workspace.actions.readSessionRules}
         onShowAgents={workspace.actions.refreshAgents}
         onOpenSaved={(sessionPath) => {
           void workspace.actions.openSavedSession(sessionPath);

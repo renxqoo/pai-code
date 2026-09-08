@@ -1,13 +1,18 @@
 import * as React from 'react';
 import { X } from 'lucide-react';
 
-import type { PermissionRules } from '@paiapp/contracts';
+import { defaultPermissionRules, type PermissionRules } from '@paiapp/contracts';
 
 import { copy } from '@/strings';
 
 type PermissionsSectionProps = {
   rules: PermissionRules | null // null = 未加载（显示轻量加载态）
   onSave: (rules: PermissionRules) => Promise<boolean>
+  /** 会话级规则（sidecar）：source=thread 表示当前会话存在独立规则。 */
+  sessionRules: { rules: PermissionRules; source: 'thread' | 'global' } | null
+  onLoadSession: () => void
+  /** null = 删除 sidecar 回退全局。 */
+  onSaveSession: (rules: PermissionRules | null) => Promise<boolean>
 }
 
 type ToolKey = 'bash' | 'write' | 'edit';
@@ -123,17 +128,26 @@ function patternEditor(config: {
 }
 
 /** Permissions 分区：模式单选卡 + bash/write/edit 各自的 allow/block pattern chips + 保存（草稿未变时禁用）。 */
-function PermissionsSection({ rules, onSave }: PermissionsSectionProps) {
+function PermissionsSection({ rules, onSave, sessionRules, onLoadSession, onSaveSession }: PermissionsSectionProps) {
+  /** 作用域：全局规则文件 / 当前会话 sidecar（G2） */
+  const [scope, setScope] = React.useState<'global' | 'session'>('global');
+  const baseline = scope === 'global' ? rules : sessionRules?.rules ?? null;
+  const hasSidecar = sessionRules?.source === 'thread';
   const [draft, setDraft] = React.useState<PermissionRules | null>(rules === null ? null : cloneRules(rules));
   const [inputDrafts, setInputDrafts] = React.useState<Record<string, string>>({});
   const [saving, setSaving] = React.useState(false);
   const [status, setStatus] = React.useState<SaveStatus>(null);
 
-  // 外部刷新 / 保存成功后 rules 引用变化 → 草稿与输入草稿同步为最新规则
   React.useEffect(() => {
-    setDraft(rules === null ? null : cloneRules(rules));
+    if (scope === 'session') onLoadSession();
+  }, [scope, onLoadSession]);
+
+  // 基线（作用域规则）引用变化：外部刷新/保存回写 → 草稿同步
+  React.useEffect(() => {
+    setDraft(baseline === null ? null : cloneRules(baseline));
     setInputDrafts({});
-  }, [rules]);
+    setStatus(null);
+  }, [baseline]);
 
   const setMode = (mode: PermissionRules['mode']): void => {
     setDraft((prev) => (prev === null ? prev : { ...prev, mode }));
@@ -154,12 +168,25 @@ function PermissionsSection({ rules, onSave }: PermissionsSectionProps) {
     if (draft === null || saving) return;
     setStatus(null);
     setSaving(true);
-    const ok = await onSave(cloneRules(draft));
+    const ok = scope === 'global' ? await onSave(cloneRules(draft)) : await onSaveSession(cloneRules(draft));
     setSaving(false);
     setStatus(ok ? 'saved' : 'failed');
   };
 
-  if (rules === null || draft === null) {
+  /** 会话作用域无 sidecar：从当前生效规则出发创建独立副本 */
+  const createSidecar = (): void => {
+    setDraft(cloneRules(sessionRules?.rules ?? rules ?? defaultPermissionRules()));
+  };
+
+  const followGlobal = async (): Promise<void> => {
+    if (saving) return;
+    setSaving(true);
+    const ok = await onSaveSession(null);
+    setSaving(false);
+    setStatus(ok ? 'saved' : 'failed');
+  };
+
+  if (baseline === null || draft === null) {
     return (
       <section>
         <p className="pb-[10px] text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
@@ -175,6 +202,35 @@ function PermissionsSection({ rules, onSave }: PermissionsSectionProps) {
       <p className="pb-[10px] text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
         {copy.settings.permissionsTitle}
       </p>
+      <div className="flex items-center gap-[8px] pb-[12px]">
+        {(['global', 'session'] as const).map((value) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={scope === value}
+            onClick={() => setScope(value)}
+            className={`cursor-pointer rounded-[8px] border px-[12px] py-[5px] text-[12px] outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
+              scope === value
+                ? 'border-foreground/40 bg-muted/60 text-foreground'
+                : 'border-border text-muted-foreground hover:bg-muted/40 hover:text-foreground'
+            }`}
+          >
+            {value === 'global' ? copy.settings.permissionsScopeGlobal : copy.settings.permissionsScopeSession}
+          </button>
+        ))}
+      </div>
+      {scope === 'session' && !hasSidecar ? (
+        <div className="flex flex-col gap-[8px] rounded-[10px] border border-dashed border-border px-[12px] py-[12px]">
+          <p className="text-[12px] text-muted-foreground">{copy.settings.permissionsFollowGlobal}</p>
+          <button
+            type="button"
+            onClick={createSidecar}
+            className="h-[30px] self-start rounded-[8px] bg-foreground px-[14px] text-[12px] font-medium text-background hover:bg-foreground/90"
+          >
+            {copy.settings.permissionsCreateSession}
+          </button>
+        </div>
+      ) : null}
       <div className="flex flex-col gap-[16px]">
         <div className="flex flex-col gap-[6px]">
           <p className="text-[11.5px] text-muted-foreground">{copy.settings.permissionsMode}</p>
@@ -227,11 +283,21 @@ function PermissionsSection({ rules, onSave }: PermissionsSectionProps) {
           <button
             type="button"
             onClick={() => void submit()}
-            disabled={saving || rulesEqual(draft, rules)}
+            disabled={saving || (baseline !== null && rulesEqual(draft, baseline))}
             className="h-[30px] rounded-[8px] bg-foreground px-[14px] text-[12px] font-medium text-background hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {copy.settings.permissionsSave}
           </button>
+          {scope === 'session' && hasSidecar ? (
+            <button
+              type="button"
+              onClick={() => void followGlobal()}
+              disabled={saving}
+              className="text-[11.5px] text-muted-foreground hover:text-foreground disabled:opacity-60"
+            >
+              {copy.settings.permissionsFollowGlobalAction}
+            </button>
+          ) : null}
           {status === 'saved' ? <p className="text-[11.5px] text-muted-foreground">{copy.settings.permissionsSaved}</p> : null}
           {status === 'failed' ? <p className="text-[11.5px] text-red-600">{copy.settings.permissionsSaveFailed}</p> : null}
         </div>

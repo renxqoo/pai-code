@@ -163,3 +163,21 @@ test('refreshAgents 判活：请求发出后会话已切换则丢弃响应', asy
   await pending;
   expect(store.getState().agents).toEqual([]);
 });
+
+test('会话级规则读取/写入/清除透传（sidecar）', async () => {
+  const effective = { mode: 'ask' as const, bash: { allowPatterns: [], blockPatterns: ['sudo *'] }, write: { allowPatterns: [], blockPatterns: [] }, edit: { allowPatterns: [], blockPatterns: [] } };
+  const client = makeClient({
+    'permission/sessionRead': { ok: true, data: { rules: effective, source: 'thread' } },
+    'permission/sessionWrite': { ok: true, data: null },
+  });
+  const store = createLiveStore();
+  const controller = createLiveController(client, store);
+  const read = await controller.readSessionRules('t1');
+  expect(read).toEqual({ rules: effective, source: 'thread' });
+  expect(store.getState().sessionRules).toEqual({ rules: effective, source: 'thread' });
+
+  expect(await controller.writeSessionRules('t1', effective)).toBeNull();
+  expect(client.calls).toContainEqual({ method: 'permission/sessionWrite', params: { threadId: 't1', rules: effective } });
+  expect(await controller.writeSessionRules('t1', null)).toBeNull();
+  expect(client.calls).toContainEqual({ method: 'permission/sessionWrite', params: { threadId: 't1', rules: null } });
+});

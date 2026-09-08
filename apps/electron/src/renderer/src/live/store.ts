@@ -49,6 +49,8 @@ export interface LiveStoreState {
   preferences: PreferencesView;
   /** 全局权限规则（null = 未加载；设置页打开时拉取）。 */
   permissionRules: PermissionRules | null;
+  /** 会话级规则（null = 未加载）。 */
+  sessionRules: { rules: PermissionRules; source: 'thread' | 'global' } | null;
   /** agent 定义目录（进 Agents 分区时拉取）。 */
   agents: readonly AgentView[];
   threads: Readonly<Record<string, LiveThreadState>>;
@@ -246,6 +248,7 @@ function initialStoreState(): LiveStoreState {
     agents: [],
     preferences: { defaultModel: null, onboarded: false, projectModels: {}, pinnedSessions: [] },
     permissionRules: null,
+    sessionRules: null,
     threads: {},
     dialogs: {},
     dialogOrder: [],

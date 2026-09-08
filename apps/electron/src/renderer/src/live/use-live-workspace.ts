@@ -81,6 +81,8 @@ export type LiveWorkspaceView = {
   preferences: PreferencesView;
   /** 全局权限规则（null = 未加载）。 */
   permissionRules: PermissionRules | null;
+  /** 会话级规则（null = 未加载；source=thread 表示存在 sidecar）。 */
+  sessionRules: { rules: PermissionRules; source: 'thread' | 'global' } | null;
   thinkingLevels: readonly string[];
   actions: {
     readonly submitDraft: (message: string, images?: readonly ImagePayload[], mode?: 'auto' | 'steer' | 'followUp') => Promise<string | null>;
@@ -103,6 +105,8 @@ export type LiveWorkspaceView = {
     readonly completeOnboarding: () => void;
     readonly refreshPermissionRules: () => void;
     readonly writePermissionRules: (rules: PermissionRules) => Promise<boolean>;
+    readonly readSessionRules: () => void;
+    readonly writeSessionRules: (rules: PermissionRules | null) => Promise<boolean>;
     readonly refreshAgents: () => void;
     readonly searchFiles: (query: string) => Promise<string[] | null>;
     readonly runBash: (command: string) => Promise<string | null>;
@@ -234,6 +238,7 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     agents: state.agents,
     preferences: state.preferences,
     permissionRules: state.permissionRules,
+    sessionRules: state.sessionRules,
     thinkingLevels: effortLevels,
     actions: {
       submitDraft: async (message, images, mode) => {
@@ -308,6 +313,20 @@ export function useLiveWorkspace(): LiveWorkspaceView {
       testProvider: (name) => controller.testProvider(name),
       refreshPermissionRules: () => {
         void controller.refreshPermissionRules();
+      },
+      readSessionRules: () => {
+        if (activeThreadId.length === 0) return;
+        void controller.readSessionRules(activeThreadId);
+      },
+      writeSessionRules: async (rules) => {
+        if (activeThreadId.length === 0) return false;
+        const reason = await controller.writeSessionRules(activeThreadId, rules);
+        if (reason !== null) {
+          pushNotice(copy.settings.permissionSaveFailed);
+          return false;
+        }
+        void controller.readSessionRules(activeThreadId);
+        return true;
       },
       writePermissionRules: async (rules) => {
         const reason = await controller.writePermissionRules(rules);

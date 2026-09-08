@@ -32,6 +32,9 @@ type SettingsScreenProps = {
   onSavePermissionRules: (rules: PermissionRules) => Promise<boolean>
   /** 进入权限分区时拉取规则（hub 文件面无推送，打开即读） */
   onShowPermissions: () => void
+  sessionRules: { rules: PermissionRules; source: 'thread' | 'global' } | null
+  onSaveSessionRules: (rules: PermissionRules | null) => Promise<boolean>
+  onLoadSessionRules: () => void
   /** 进入 Agents 分区时拉取（host 级枚举无推送） */
   onShowAgents: () => void
   onOpenSaved: (sessionPath: string) => void
@@ -66,6 +69,9 @@ function SettingsScreen({
   onTestProvider,
   onSavePermissionRules,
   onShowPermissions,
+  sessionRules,
+  onSaveSessionRules,
+  onLoadSessionRules,
   onShowAgents,
   onOpenSaved,
   onRefreshSaved,
@@ -131,7 +137,13 @@ function SettingsScreen({
               ) : section === 'keys' ? (
                 <KeysSection credentials={credentials} onSaveKey={onSaveKey} onRemoveKey={onRemoveKey} onRefresh={onRefreshKeys} />
               ) : section === 'permissions' ? (
-                <PermissionsSection rules={permissionRules} onSave={onSavePermissionRules} />
+                <PermissionsSection
+                  rules={permissionRules}
+                  onSave={onSavePermissionRules}
+                  sessionRules={sessionRules}
+                  onLoadSession={onLoadSessionRules}
+                  onSaveSession={onSaveSessionRules}
+                />
               ) : section === 'agents' ? (
                 <AgentsSection agents={agents} onRefresh={onShowAgents} />
               ) : section === 'skills' ? (

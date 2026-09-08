@@ -354,6 +354,21 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       const rules = raw === null ? defaultPermissionRules() : parsePermissionRules(raw);
       return Promise.resolve({ ok: true as const, data: rules });
     },
+    'permission/sessionRead': async (params) => {
+      const result = await command({ type: 'get_permission_rules', threadId: params.threadId });
+      if (!result.ok) return fail(result.reason);
+      const data = result.data as { rules?: unknown; source?: unknown };
+      const source = data.source === 'thread' ? 'thread' : 'global';
+      return { ok: true as const, data: { rules: parsePermissionRules(data.rules), source } };
+    },
+    'permission/sessionWrite': (params) => {
+      deps.audit(`permission_write_session:${params.threadId}:${params.rules === null ? 'clear' : params.rules.mode}`);
+      const request: Parameters<PaiRuntime['host']['request']>[0] =
+        params.rules === null
+          ? { type: 'set_permission_rules', threadId: params.threadId, rules: null }
+          : { type: 'set_permission_rules', threadId: params.threadId, rules: params.rules };
+      return command(request).then((result) => (result.ok ? { ok: true as const, data: null } : fail(result.reason)));
+    },
     'permission/write': (params) => {
       deps.audit(`permission_write:${params.rules.mode}`);
       const written = deps.agentDirFiles.writeJsonAtomic('permission-rules.json', params.rules);
