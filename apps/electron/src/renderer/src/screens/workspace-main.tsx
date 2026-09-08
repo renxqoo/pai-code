@@ -12,7 +12,7 @@ import { formatRelativeAge } from '@/lib/relative-age';
 import { isWindowsPlatform } from '@/lib/platform';
 import { useSidebarResize } from '@/hooks/use-sidebar-resize';
 import { NoticeStrip } from '@/notices/notice-strip';
-import { SettingsSheet } from '@/settings/settings-sheet';
+import { SettingsScreen } from '@/settings/settings-screen';
 import { Sidebar } from '@/sidebar/sidebar';
 import { filterSessions } from '@/sidebar/filter-sessions';
 import { MessageList } from '@/thread/message-list';
@@ -85,11 +85,15 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     });
   };
 
-  /** Esc 语义：对话框开→交由对话框；面板开→收面板；生成中→清队列+停止（api.md 约定） */
+  /** Esc 语义：对话框开→交由对话框；设置开→关设置；面板开→收面板；生成中→清队列+停止（api.md 约定） */
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       if (workspace.dialogs.length > 0) return;
+      if (settingsOpen) {
+        setSettingsOpen(false);
+        return;
+      }
       if (panel !== null) {
         setPanel(null);
         return;
@@ -98,7 +102,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [panel, workspace.dialogs.length, workspace.generating, workspace.actions]);
+  }, [panel, settingsOpen, workspace.dialogs.length, workspace.generating, workspace.actions]);
 
   /** 浏览器直开（无 preload）时桥不存在，降级为无动作 */
   const toggleMaximize = () => {
@@ -268,7 +272,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         onToggle={() => setSidebarCollapsed((collapsed) => !collapsed)}
       />
       {isWindowsPlatform ? <WindowCaptionButtons /> : null}
-      <SettingsSheet
+      <SettingsScreen
         open={settingsOpen}
         providers={workspace.providers}
         saved={workspace.saved}
