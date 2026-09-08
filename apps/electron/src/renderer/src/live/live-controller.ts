@@ -31,6 +31,12 @@ export interface LiveController {
   /** 压缩：成功返回 null，失败返回原因（调用方转用户可见提示）。 */
   readonly compact: (threadId: string) => Promise<string | null>;
   readonly refreshSaved: () => Promise<void>;
+  /** hub 凭据目录刷新（auth/list，永不含 key 本身）。 */
+  readonly refreshCredentials: () => Promise<void>;
+  /** 写入官方 provider key（hub 侧 auth.json）；成功返回 null，失败返回原因。 */
+  readonly setProviderKey: (provider: string, apiKey: string) => Promise<string | null>;
+  /** 移除官方 provider key（OAuth 类凭据受 hub 保护拒绝）；成功返回 null。 */
+  readonly removeProviderKey: (provider: string) => Promise<string | null>;
   readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: string[]; apiKey?: string }) => Promise<boolean>;
   readonly removeProvider: (name: string) => Promise<boolean>;
   readonly refreshStats: (threadId: string) => Promise<void>;
@@ -150,6 +156,8 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       }
       if (outcome === null) return;
       store.getState().bootstrap(outcome.data);
+      // 凭据目录随启动刷新（auth/list 轻量、失败静默——设置页有手动刷新兜底）
+      void this.refreshCredentials();
       const active = store.getState().activeThreadId;
       if (active !== null) await hydrateFull(active).catch(() => undefined);
     },
@@ -225,6 +233,24 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
         // saved 列表直接进 store（避免与 bootstrap 动作耦合）
         store.setState({ saved: outcome.data });
       }
+    },
+    async refreshCredentials(): Promise<void> {
+      const outcome = await client.invoke('auth/list', {});
+      if (outcome.ok) {
+        store.setState({ credentials: outcome.data });
+      }
+    },
+    async setProviderKey(provider: string, apiKey: string): Promise<string | null> {
+      const outcome = await client.invoke('auth/setKey', { provider, apiKey });
+      if (!outcome.ok) return outcome.reason;
+      await this.refreshCredentials();
+      return null;
+    },
+    async removeProviderKey(provider: string): Promise<string | null> {
+      const outcome = await client.invoke('auth/removeKey', { provider });
+      if (!outcome.ok) return outcome.reason;
+      await this.refreshCredentials();
+      return null;
     },
     async upsertProvider(input: { name: string; baseUrl: string; api: string; models: string[]; apiKey?: string }): Promise<boolean> {
       const outcome = await client.invoke('provider/upsert', input);

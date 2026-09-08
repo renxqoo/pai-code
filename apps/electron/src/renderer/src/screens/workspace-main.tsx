@@ -275,6 +275,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
       <SettingsScreen
         open={settingsOpen}
         providers={workspace.providers}
+        credentials={workspace.credentials}
         saved={workspace.saved}
         onClose={closeSettings}
         onUpsertProvider={workspace.actions.upsertProvider}
@@ -284,6 +285,9 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
           setSettingsOpen(false);
         }}
         onRefreshSaved={workspace.actions.refreshSaved}
+        onSaveKey={workspace.actions.setProviderKey}
+        onRemoveKey={workspace.actions.removeProviderKey}
+        onRefreshKeys={workspace.actions.refreshCredentials}
       />
       <NewThreadModal
         open={newThreadOpen}

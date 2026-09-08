@@ -2,6 +2,7 @@ import { createStore } from 'zustand/vanilla';
 
 import type {
   ApiData,
+  CredentialView,
   ModelInfoView,
   ProviderConfigView,
   SavedSessionView,
@@ -39,6 +40,8 @@ export interface LiveStoreState {
   saved: readonly SavedSessionView[];
   models: readonly ModelInfoView[];
   providers: readonly ProviderConfigView[];
+  /** hub 侧 auth.json 凭据目录（永不含 key 本身）。 */
+  credentials: readonly CredentialView[];
   threads: Readonly<Record<string, LiveThreadState>>;
   dialogs: Readonly<Record<string, PendingDialog>>;
   dialogOrder: readonly string[];
@@ -213,6 +216,7 @@ function initialStoreState(): LiveStoreState {
     saved: [],
     models: [],
     providers: [],
+    credentials: [],
     threads: {},
     dialogs: {},
     dialogOrder: [],

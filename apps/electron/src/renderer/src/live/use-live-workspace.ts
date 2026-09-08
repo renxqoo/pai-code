@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import type { SessionView } from '@paiapp/contracts';
+import type { CredentialView, SessionView } from '@paiapp/contracts';
 import { useStore } from 'zustand';
 
 import { collectThreadDiff } from '@/diff-panel/collect-thread-diff';
@@ -66,6 +66,8 @@ export type LiveWorkspaceView = {
   notices: readonly { id: string; text: string }[];
   saved: ReadonlyArray<{ sessionPath: string; title: string; cwd: string; modifiedAt: number; messageCount: number }>;
   providers: LiveStoreState['providers'];
+  /** hub 侧凭据目录（provider 名 + 凭据类型，永不含 key）。 */
+  credentials: readonly CredentialView[];
   thinkingLevels: readonly string[];
   actions: {
     readonly submitDraft: (message: string) => Promise<string | null>;
@@ -80,6 +82,9 @@ export type LiveWorkspaceView = {
     readonly cancelDialog: (requestId: string) => void;
     readonly dismissNotice: (id: string) => void;
     readonly refreshSaved: () => void;
+    readonly refreshCredentials: () => void;
+    readonly setProviderKey: (provider: string, apiKey: string) => Promise<boolean>;
+    readonly removeProviderKey: (provider: string) => Promise<boolean>;
     readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: string[]; apiKey?: string }) => Promise<boolean>;
     readonly removeProvider: (name: string) => Promise<boolean>;
     readonly renameSession: (threadId: string, name: string) => Promise<boolean>;
@@ -181,6 +186,7 @@ export function useLiveWorkspace(): LiveWorkspaceView {
       messageCount: session.messageCount,
     })),
     providers: state.providers,
+    credentials: state.credentials,
     thinkingLevels: effortLevels,
     actions: {
       submitDraft: async (message) => {
@@ -212,6 +218,17 @@ export function useLiveWorkspace(): LiveWorkspaceView {
       cancelDialog: (requestId) => void controller.cancelDialog(requestId),
       dismissNotice: (id) => store.getState().dismissNotice(id),
       refreshSaved: () => void controller.refreshSaved(),
+      refreshCredentials: () => void controller.refreshCredentials(),
+      setProviderKey: async (provider, apiKey) => {
+        const reason = await controller.setProviderKey(provider, apiKey);
+        if (reason !== null) pushNotice(copy.settings.keySaveFailed(reason));
+        return reason === null;
+      },
+      removeProviderKey: async (provider) => {
+        const reason = await controller.removeProviderKey(provider);
+        if (reason !== null) pushNotice(copy.settings.keyRemoveFailed(reason));
+        return reason === null;
+      },
       upsertProvider: (input) => controller.upsertProvider(input),
       removeProvider: (name) => controller.removeProvider(name),
       renameSession: async (threadId, name) => {
