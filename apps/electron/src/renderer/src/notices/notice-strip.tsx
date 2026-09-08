@@ -11,7 +11,7 @@ type NoticeStripProps = {
 function NoticeStrip({ notices, onDismiss }: NoticeStripProps) {
   if (notices.length === 0) return null;
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-[46px] z-30 flex flex-col items-center gap-[6px]">
+    <div className="pointer-events-none fixed inset-x-0 top-[46px] z-[60] flex flex-col items-center gap-[6px]">
       {notices.map((notice) => (
         <div
           key={notice.id}

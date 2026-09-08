@@ -166,6 +166,7 @@ export const copy = {
     defaultModelNone: 'Not set (first available model)',
     editProvider: 'Edit',
     cancelEdit: 'Cancel',
+    nameLocked: 'Provider name cannot change after creation (rename would fork the entry)',
     testConnection: 'Test connection',
     testing: 'Testing…',
     testOk: (latencyMs: number): string => `OK · ${latencyMs} ms`,
@@ -176,6 +177,7 @@ export const copy = {
     hint: 'Pick the folder this conversation works in. The agent reads and edits files under this directory.',
     fieldCwd: '/path/to/project',
     create: 'Start conversation',
+    createFailed: 'Could not start the conversation. Check the directory and try again.',
   },
   notices: {
     dismiss: 'Dismiss',

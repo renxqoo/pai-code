@@ -8,6 +8,7 @@ import type { SessionCardModel } from '@/sidebar/session-card-model';
 import type { ThreadModel } from '@/thread/thread-model';
 import { summarizeAgents } from '@/thread/panel-summary';
 import { copy } from '@/strings';
+import { pickSessionModel } from './pick-session-model';
 
 import { createBridgeClient } from './client-invoke';
 import { createLiveController, type LiveController } from './live-controller';
@@ -130,6 +131,8 @@ export function useLiveWorkspace(): LiveWorkspaceView {
 
   React.useEffect(() => {
     if (activeThreadId.length === 0) return;
+    // 切会话先清档位再拉取，避免上一会话的能力列表残留到新会话
+    setEffortLevels([]);
     void controller.ensureHydrated(activeThreadId);
     // 思考档位随会话拉取（模型能力差异）
     void bridgeClient.invoke('session/thinkingLevels', { threadId: activeThreadId }).then((outcome) => {
@@ -207,13 +210,11 @@ export function useLiveWorkspace(): LiveWorkspaceView {
         store.getState().setActiveThread(threadId);
       },
       createSession: (cwd) => {
-        // 默认模型偏好优先（新会话预选）；失效回落 composer 当前选择 → 首个可用模型
-        const key = (model: { provider: string; modelId: string }) => `${model.provider}/${model.modelId}`;
-        const selected =
-          state.models.find((model) => key(model) === state.preferences.defaultModel) ??
-          state.models.find((model) => key(model) === composer.model) ??
-          state.models[0];
-        return controller.createSession(cwd, selected);
+        const selected = pickSessionModel(state.models, state.preferences.defaultModel, composer.model);
+        return controller.createSession(cwd, selected).then((ok) => {
+          if (!ok) pushNotice(copy.newThread.createFailed);
+          return ok;
+        });
       },
       openSavedSession: (sessionPath) => controller.openSavedSession(sessionPath),
       closeSession: (threadId) => void controller.closeSession(threadId),
@@ -247,7 +248,9 @@ export function useLiveWorkspace(): LiveWorkspaceView {
         });
       },
       completeOnboarding: () => {
-        void controller.updatePreferences({ onboarded: true });
+        void controller.updatePreferences({ onboarded: true }).then((next) => {
+          if (next === null) pushNotice(copy.settings.preferenceSaveFailed);
+        });
       },
       testProvider: (name) => controller.testProvider(name),
       upsertProvider: (input) => controller.upsertProvider(input),

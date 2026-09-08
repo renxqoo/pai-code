@@ -35,7 +35,11 @@ export function createFileSettings(settingsFile: string, keyStore: ProviderKeySt
 
   const write = (next: Settings): void => {
     mkdirSync(dirname(settingsFile), { recursive: true });
-    writeFileSync(settingsFile, `${JSON.stringify(next, null, 2)}\n`);
+    // 原子写：先落临时文件再同卷 rename，写盘中途崩溃不产生截断的 settings.json
+    // （截断文件会触发 read() 降级默认值，静默清空全部 provider/偏好）
+    const tempFile = `${settingsFile}.tmp`;
+    writeFileSync(tempFile, `${JSON.stringify(next, null, 2)}\n`);
+    renameSync(tempFile, settingsFile);
     cached = next;
   };
 

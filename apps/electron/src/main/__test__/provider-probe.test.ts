@@ -12,8 +12,9 @@ function makeHarness() {
   const providers = new Map<string, { baseUrl: string; models: string[] }>([
     ['glm', { baseUrl: 'https://api.example.com/v1/', models: ['glm-4.7'] }],
     ['nokey', { baseUrl: 'https://api.example.com/v1', models: ['m'] }],
+    ['weird', { baseUrl: 'https://api.example.com/v1/?x=1#frag', models: ['m'] }],
   ]);
-  const keys = new Map<string, string>([['glm', 'sk-test']]);
+  const keys = new Map<string, string>([['glm', 'sk-test'], ['weird', 'sk-test']]);
   const deps: ProviderProbeDeps = {
     getProvider: (name) => providers.get(name),
     getKey: (name) => keys.get(name) ?? null,
@@ -78,6 +79,12 @@ test('网络异常 → network_error；超时类异常 → timeout', async () =>
     throw error;
   });
   expect(await createProviderProbe(timedOut.deps).probe('glm')).toEqual({ ok: false, reason: 'timeout' });
+});
+
+test('baseUrl 带 query/fragment：URL 归一去 fragment、保 query、拼对路径', async () => {
+  const h = makeHarness();
+  await createProviderProbe(h.deps).probe('weird');
+  expect(h.calls[0]?.url).toBe('https://api.example.com/v1/chat/completions?x=1');
 });
 
 test('同 provider 单飞：并发两次只发一次请求', async () => {

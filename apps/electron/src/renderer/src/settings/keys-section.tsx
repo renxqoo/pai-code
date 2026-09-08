@@ -29,7 +29,11 @@ function KeysSection({ credentials, onSaveKey, onRemoveKey, onRefresh }: KeysSec
     setSaving(true);
     const ok = await onSaveKey(nextProvider, nextKey);
     setSaving(false);
-    if (!ok) return;
+    if (!ok) {
+      // 失败原因（hub 拒绝等）走全局通知条；此处内联兜底，避免设置页全屏下动作无反馈
+      setError(copy.settings.formFailed);
+      return;
+    }
     setProvider('');
     setApiKey('');
   };

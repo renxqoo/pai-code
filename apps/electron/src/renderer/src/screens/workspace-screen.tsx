@@ -1,4 +1,5 @@
 import { BootstrapState } from './bootstrap-state';
+import { NoticeStrip } from '@/notices/notice-strip';
 import { OnboardingScreen } from '@/onboarding/onboarding-screen';
 import { useLiveWorkspace } from '@/live/use-live-workspace';
 import { WorkspaceMain } from './workspace-main';
@@ -14,21 +15,25 @@ function WorkspaceScreen(): React.JSX.Element {
   }
   if (!workspace.preferences.onboarded) {
     return (
-      <OnboardingScreen
-        providers={workspace.providers}
-        modelOptions={workspace.composer.modelOptions}
-        onUpsertProvider={workspace.actions.upsertProvider}
-        onSelectDefaultModel={workspace.actions.setDefaultModel}
-        onRefreshModels={workspace.actions.refreshModels}
-        onFinish={(cwd) => {
-          workspace.actions.completeOnboarding();
-          const directory = cwd.trim();
-          if (directory.length > 0 && workspace.composer.modelOptions.length > 0) {
-            void workspace.actions.createSession(directory);
-          }
-        }}
-        onSkip={workspace.actions.completeOnboarding}
-      />
+      <>
+        <OnboardingScreen
+          providers={workspace.providers}
+          modelOptions={workspace.composer.modelOptions}
+          onUpsertProvider={workspace.actions.upsertProvider}
+          onSelectDefaultModel={workspace.actions.setDefaultModel}
+          onRefreshModels={workspace.actions.refreshModels}
+          onFinish={(cwd) => {
+            workspace.actions.completeOnboarding();
+            const directory = cwd.trim();
+            if (directory.length > 0 && workspace.composer.modelOptions.length > 0) {
+              void workspace.actions.createSession(directory);
+            }
+          }}
+          onSkip={workspace.actions.completeOnboarding}
+        />
+        {/* 引导屏同样承接失败通知（完成/首会话/偏好写失败） */}
+        <NoticeStrip notices={workspace.notices} onDismiss={workspace.actions.dismissNotice} />
+      </>
     );
   }
   return <WorkspaceMain workspace={workspace} />;

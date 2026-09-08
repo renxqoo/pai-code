@@ -81,6 +81,8 @@ describe('Settings zod：round-trip 与拒绝表', () => {
     expect(s.providers).toEqual([]);
     expect(s.trustedDefault).toBe(false);
     expect(s.hubDev).toEqual({ bunPath: null, hubEntry: null });
+    expect(s.defaultModel).toBeNull();
+    expect(s.onboarded).toBe(false);
   });
 
   test('全量字段 round-trip', () => {
@@ -147,10 +149,22 @@ describe('API schema：每方法合法/非法样本', () => {
     expect(r).toEqual({ cwd: '/tmp/w' });
   });
 
+  test('app/setPreference 部分写合法：单字段与清空默认模型', () => {
+    expect(ApiSchemas['app/setPreference'].params.parse({ onboarded: true })).toEqual({ onboarded: true });
+    expect(ApiSchemas['app/setPreference'].params.parse({ defaultModel: null })).toEqual({ defaultModel: null });
+  });
+
+  test('provider/test 合法样本通过', () => {
+    expect(ApiSchemas['provider/test'].params.parse({ name: 'glm' })).toEqual({ name: 'glm' });
+  });
+
   test.each([
     ['session/start 缺 cwd', 'session/start', {}],
     ['session/start 未知键', 'session/start', { cwd: '/w', nope: 1 }],
     ['dialog/respond 缺 payload', 'dialog/respond', { requestId: 'r1' }],
+    ['app/setPreference 空 patch（empty_preference）', 'app/setPreference', {}],
+    ['app/setPreference 未知键', 'app/setPreference', { nope: 1 }],
+    ['provider/test 空 name', 'provider/test', { name: '' }],
     ['auth/setKey 空 key', 'auth/setKey', { provider: 'p', apiKey: '' }],
     ['session/prompt 空消息', 'session/prompt', { threadId: 't', message: '' }],
     ['session/prompt 非法 streamingBehavior', 'session/prompt', { threadId: 't', message: 'hi', streamingBehavior: 'queue' }],

@@ -34,16 +34,19 @@ export function createProviderProbe(deps: ProviderProbeDeps) {
     activeCount += 1;
     const startedAt = Date.now();
     try {
-      const base = provider.baseUrl.replace(/\/+$/, '');
-      const response = await (deps.fetchFn ?? fetch)(`${base}/chat/completions`, {
+      // URL 对象归一：容忍尾斜杠/query，防 baseUrl 带 ?/# 拼出畸形地址打到错误端点
+      const target = new URL(provider.baseUrl);
+      target.hash = '';
+      target.pathname = `${target.pathname.replace(/\/+$/, '')}/chat/completions`;
+      const response = await (deps.fetchFn ?? fetch)(target, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
         body: JSON.stringify({ model: provider.models[0], max_tokens: 1, messages: [{ role: 'user', content: 'ping' }] }),
         signal: (deps.timeoutSignal ?? defaultTimeoutSignal)(PROBE_TIMEOUT_MS),
       });
-      if (!response.ok) return { ok: false, reason: `http_${response.status}` };
-      // 排空响应体，避免连接悬挂
+      // 成败两路径都排空响应体，避免错误响应占住连接池 socket
       await response.arrayBuffer().catch(() => undefined);
+      if (!response.ok) return { ok: false, reason: `http_${response.status}` };
       return { ok: true, latencyMs: Date.now() - startedAt };
     } catch (error) {
       const errorName = error instanceof Error ? error.name : '';

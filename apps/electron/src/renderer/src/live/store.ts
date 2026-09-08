@@ -151,6 +151,8 @@ export function createLiveStore() {
             models: data.models,
             providers: data.providers,
             credentials: state.credentials,
+            // 偏好整体替换：bootstrap 只在启动时发生一次，晚于它写入的偏好不会被回滚；
+            // 若未来引入重连 re-bootstrap，需改为字段级合并（滞后快照可能覆盖本地新写值）
             preferences: data.preferences,
             threads,
             activeThreadId,

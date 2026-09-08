@@ -49,7 +49,9 @@ describe('live store（对话框/通知/bootstrap 合并）', () => {
 
   test('bootstrap 合并在途线程状态（不重置已折叠的流式现场）', () => {
     const store = createLiveStore();
-    store.getState().bootstrap({ sessions: [session('t1')], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true } });
+    store.getState().bootstrap({ sessions: [session('t1')], saved: [], models: [], providers: [], preferences: { defaultModel: 'glm/glm-4.7', onboarded: true } });
+    // 偏好随 bootstrap 快照折叠（defaultModel 透传，供 createSession 回落与向导判定）
+    expect(store.getState().preferences).toEqual({ defaultModel: 'glm/glm-4.7', onboarded: true });
     store.getState().applyEvent({ type: 'turnStarted', threadId: 't1', at: 5 }, 5);
     // 二次 bootstrap（StrictMode/重入）不得清掉流式状态
     store.getState().bootstrap({ sessions: [session('t1'), session('t2')], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true } });

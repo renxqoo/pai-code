@@ -63,6 +63,11 @@ function ProviderForm({ onSubmit, initial = null, onCancel }: ProviderFormProps)
       setError(copy.settings.formFailed);
       return;
     }
+    // 编辑态保存成功即收起（外层复位 editing，key 重建回新增态）；新增态保持清空继续录入
+    if (initial !== null && onCancel !== undefined) {
+      onCancel();
+      return;
+    }
     setName('');
     setBaseUrl('');
     setModels([]);
@@ -78,7 +83,14 @@ function ProviderForm({ onSubmit, initial = null, onCancel }: ProviderFormProps)
       className="flex flex-col gap-[8px] rounded-[10px] border border-dashed border-border px-[12px] py-[12px]"
     >
       <p className="text-[11.5px] font-medium text-muted-foreground">{copy.settings.addProvider}</p>
-      <input value={name} onChange={(e) => setName(e.target.value)} placeholder={copy.settings.fieldName} className={fieldClassName} />
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder={copy.settings.fieldName}
+        disabled={initial !== null}
+        title={initial !== null ? copy.settings.nameLocked : undefined}
+        className={fieldClassName}
+      />
       <input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder={copy.settings.fieldBaseUrl} className={fieldClassName} />
       <div className="flex min-h-[30px] flex-wrap items-center gap-[5px] rounded-[8px] border border-border bg-background px-[8px] py-[4px] outline-none focus-within:border-foreground/25">
         {models.map((id) => (

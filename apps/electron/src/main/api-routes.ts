@@ -338,7 +338,12 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       } catch {
         return fail('invalid_params');
       }
-      return routes[method as ApiMethod](parsed as never);
+      try {
+        return await routes[method as ApiMethod](parsed as never);
+      } catch {
+        // 路由实现内未捕获的异常（磁盘错/装配面）统一收窄，不沿 IPC reject 到渲染层
+        return fail('internal_error');
+      }
     },
 
     providersView,
