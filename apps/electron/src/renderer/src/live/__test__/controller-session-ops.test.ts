@@ -66,3 +66,22 @@ test('renameSession trim 后为空直接拒绝且不发出命令', async () => {
   expect(await controller.renameSession('t1', '   ')).toBe(false);
   expect(client.calls.filter((call) => call.method === 'session/setName')).toEqual([]);
 });
+
+test('submitDraft 携带 images 透传（prompt 与 followUp 两路径）', async () => {
+  const images = [{ type: 'image' as const, data: 'aGk=', mimeType: 'image/png' }];
+  const streamingClient = makeClient({});
+  const streamingStore = createLiveStore();
+  streamingStore.getState().bootstrap({ sessions: [], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true } });
+  // streaming 状态经 foldThreadEvent 设置太重：直接走非流式路径断言 prompt 透传
+  const idle = createLiveController(streamingClient, streamingStore);
+  expect(await idle.submitDraft('t1', 'hello', images)).toBeNull();
+  expect(streamingClient.calls.find((call) => call.method === 'session/prompt')?.params).toMatchObject({
+    threadId: 't1',
+    message: 'hello',
+    images: [{ type: 'image', data: 'aGk=', mimeType: 'image/png' }],
+  });
+
+  const noImages = makeClient({});
+  await createLiveController(noImages, createLiveStore()).submitDraft('t1', 'hello');
+  expect(noImages.calls.find((call) => call.method === 'session/prompt')?.params).not.toHaveProperty('images');
+});

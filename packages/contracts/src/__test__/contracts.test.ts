@@ -162,6 +162,21 @@ describe('API schema：每方法合法/非法样本', () => {
     expect(ApiSchemas['command/list'].params.parse({ threadId: 't1' })).toEqual({ threadId: 't1' });
   });
 
+  test('session/prompt 携带 images 合法；畸形 image 拒绝', () => {
+    const ok = ApiSchemas['session/prompt'].params.parse({
+      threadId: 't',
+      message: 'hi',
+      images: [{ type: 'image', data: 'aGk=', mimeType: 'image/png' }],
+    });
+    expect(ok.images?.length).toBe(1);
+    expect(() =>
+      ApiSchemas['session/prompt'].params.parse({ threadId: 't', message: 'hi', images: [{ type: 'image', data: '', mimeType: 'image/png' }] }),
+    ).toThrow();
+    expect(() =>
+      ApiSchemas['session/prompt'].params.parse({ threadId: 't', message: 'hi', images: [{ type: 'file', data: 'x', mimeType: 'text/plain' }] }),
+    ).toThrow();
+  });
+
   test('agent/list 合法样本：带与不带 threadId', () => {
     expect(ApiSchemas['agent/list'].params.parse({})).toEqual({});
     expect(ApiSchemas['agent/list'].params.parse({ threadId: 't1' })).toEqual({ threadId: 't1' });

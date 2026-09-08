@@ -1,11 +1,14 @@
 import * as React from 'react';
 
 import { AutocompleteList } from '@paiapp/ui';
-import type { CommandView } from '@paiapp/contracts';
+import type { CommandView, ImagePayload } from '@paiapp/contracts';
 
 import { ComposerActionsRow } from '@/composer/composer-actions-row';
 import { ComposerContextBar } from '@/composer/composer-context-bar';
+import { AttachmentChips } from '@/composer/attachment-chips';
+import { imagePayloadOf, readImageFile, type PendingImage } from '@/composer/read-image-file';
 import { activeSlashQuery, applySlashSelection, filterSlashItems } from '@/composer/slash-trigger';
+import { copy } from '@/strings';
 
 type ComposerProps = {
   value: string
@@ -38,9 +41,9 @@ type ComposerProps = {
   /** 压缩进行中：压缩按钮禁用，横幅由 ThreadBanner 呈现 */
   compacting: boolean
   onChange: (value: string) => void
-  onSubmit: () => void
+  /** 提交（文本 + 图片附件）；resolve true = 已发出（composer 据此清空附件） */
+  onSubmit: (text: string, images: readonly ImagePayload[]) => Promise<boolean>
   onStop: () => void
-  onAttach: () => void
   onCompact: () => void
   onOpenSettings?: () => void
   onSelectModel: (value: string) => void
@@ -75,7 +78,6 @@ function Composer({
   onChange,
   onSubmit,
   onStop,
-  onAttach,
   onCompact,
   onOpenSettings,
   onSelectModel,
@@ -83,6 +85,66 @@ function Composer({
   onSelectCheckout,
 }: ComposerProps) {
   const canSend = value.trim().length > 0;
+
+  /** 图片附件态：对象 URL 创建/回收与读取都在本组件（提交成功才清空）。 */
+  type Attachment = { id: number; name: string; previewUrl: string; payload: PendingImage };
+  const [attachments, setAttachments] = React.useState<readonly Attachment[]>([]);
+  const [attachError, setAttachError] = React.useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const attachSeqRef = React.useRef(0);
+  const attachUrlRef = React.useRef<ReadonlySet<string>>(new Set());
+
+  React.useEffect(() => {
+    const urls = attachUrlRef.current;
+    return () => {
+      for (const url of urls) URL.revokeObjectURL(url);
+    };
+  }, []);
+
+  const trackUrl = (url: string): string => {
+    attachUrlRef.current = new Set([...attachUrlRef.current, url]);
+    return url;
+  };
+  const untrackUrl = (url: string): void => {
+    const next = new Set(attachUrlRef.current);
+    next.delete(url);
+    attachUrlRef.current = next;
+    URL.revokeObjectURL(url);
+  };
+
+  const addFiles = (files: readonly File[]): void => {
+    setAttachError(null);
+    void Promise.all(files.map(async (file) => ({ file, image: await readImageFile(file) }))).then((results) => {
+      const added: Attachment[] = [];
+      for (const result of results) {
+        if (result.image === null) {
+          setAttachError(copy.composer.imageUnsupported);
+          continue;
+        }
+        attachSeqRef.current += 1;
+        added.push({
+          id: attachSeqRef.current,
+          name: result.file.name,
+          previewUrl: trackUrl(URL.createObjectURL(result.file)),
+          payload: result.image,
+        });
+      }
+      if (added.length > 0) setAttachments((current) => [...current, ...added]);
+    });
+  };
+
+  const removeAttachment = (id: number): void => {
+    setAttachments((current) => {
+      const target = current.find((item) => item.id === id);
+      if (target !== undefined) untrackUrl(target.previewUrl);
+      return current.filter((item) => item.id !== id);
+    });
+  };
+
+  const clearAttachments = (): void => {
+    for (const item of attachments) untrackUrl(item.previewUrl);
+    setAttachments([]);
+  };
 
   /** 斜杠补全交互态：caret 跟踪 + 键盘高亮 + Esc 抑制（query 变化后自动复弹）。
    * dismissedQuery 是单槽记忆：只记住最近一次被 Esc 关闭的 query 值——
@@ -144,7 +206,9 @@ function Composer({
           event.preventDefault();
           // 生成中 Enter = 排队消息（followUp，api.md 语义）；停止走停止按钮/Esc
           if (!canSend) return;
-          onSubmit();
+          void onSubmit(value, attachments.map((item) => imagePayloadOf(item.payload))).then((sent) => {
+            if (sent) clearAttachments();
+          });
         }}
         className="rounded-[20px] border border-border bg-background shadow-[0_14px_22px_-16px_rgba(24,24,28,0.22)] transition-colors duration-150 focus-within:border-foreground/15"
       >
@@ -177,6 +241,15 @@ function Composer({
             onKeyUp={(event) => syncCaret(event.currentTarget)}
             onClick={(event) => syncCaret(event.currentTarget)}
             onFocus={(event) => syncCaret(event.currentTarget)}
+            onPaste={(event) => {
+              const files = Array.from(event.clipboardData?.items ?? [])
+                .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+                .map((item) => item.getAsFile())
+                .filter((file): file is File => file !== null);
+              if (files.length === 0) return;
+              event.preventDefault();
+              addFiles(files);
+            }}
             onKeyDown={(event) => {
               if (slashActive && !event.nativeEvent.isComposing) {
                 if (event.key === 'ArrowDown') {
@@ -212,6 +285,10 @@ function Composer({
             className="block min-h-[84px] w-full resize-none bg-transparent px-4 pt-[17px] pb-1 text-[12.5px] leading-[19px] text-foreground outline-none placeholder:text-muted-foreground/85 field-sizing-content"
           />
         </div>
+        {attachments.length > 0 ? (
+          <AttachmentChips items={attachments} removeLabel={copy.composer.removeImage} onRemove={removeAttachment} />
+        ) : null}
+        {attachError !== null ? <p className="px-4 pt-[6px] text-[11px] text-red-600">{attachError}</p> : null}
         <ComposerActionsRow
           model={model}
           effort={effort}
@@ -230,12 +307,24 @@ function Composer({
           effortUnavailableLabel={effortUnavailableLabel}
           onSelectModel={onSelectModel}
           onSelectEffort={onSelectEffort}
-          onAttach={onAttach}
+          onAttach={() => fileInputRef.current?.click()}
           onCompact={onCompact}
           onOpenSettings={onOpenSettings}
           onStop={onStop}
         />
       </form>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(event) => {
+          addFiles(Array.from(event.target.files ?? []));
+          // 允许连续选择同一文件
+          event.target.value = '';
+        }}
+      />
       <ComposerContextBar
         checkoutLabel={checkoutLabel}
         checkout={checkout}

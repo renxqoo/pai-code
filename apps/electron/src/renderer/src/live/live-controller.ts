@@ -1,4 +1,4 @@
-import type { PermissionRules, PreferencesView, UiEvent } from '@paiapp/contracts';
+import type { ImagePayload, PermissionRules, PreferencesView, UiEvent } from '@paiapp/contracts';
 
 import type { BridgeClient } from './client-invoke';
 import type { LiveStore } from './store';
@@ -18,7 +18,7 @@ export interface LiveController {
   readonly start: () => Promise<void>;
   readonly dispose: () => void;
   /** 发送：成功返回 null，失败返回原因（调用方转用户可见提示）。 */
-  readonly submitDraft: (threadId: string, message: string) => Promise<string | null>;
+  readonly submitDraft: (threadId: string, message: string, images?: readonly ImagePayload[]) => Promise<string | null>;
   readonly stopActiveTurn: (threadId: string) => Promise<void>;
   readonly createSession: (cwd: string, model?: { provider: string; modelId: string }, trusted?: boolean) => Promise<boolean>;
   readonly openSavedSession: (sessionPath: string, trusted?: boolean) => Promise<boolean>;
@@ -182,16 +182,18 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       unsubscribe?.();
       unsubscribe = null;
     },
-    async submitDraft(threadId: string, message: string): Promise<string | null> {
+    async submitDraft(threadId: string, message: string, images?: readonly ImagePayload[]): Promise<string | null> {
       const text = message.trim();
       if (text.length === 0) return 'empty_message';
+      const payloads = images === undefined || images.length === 0 ? undefined : [...images];
+      const withImages = payloads === undefined ? {} : { images: payloads };
       const streaming = store.getState().threads[threadId]?.streaming ?? false;
       let outcome = streaming
-        ? await client.invoke('session/followUp', { threadId, message: text })
-        : await client.invoke('session/prompt', { threadId, message: text });
+        ? await client.invoke('session/followUp', { threadId, message: text, ...withImages })
+        : await client.invoke('session/prompt', { threadId, message: text, ...withImages });
       // TOCTOU 兜底：读取 streaming 与 invoke 之间轮次边界翻转时，按对侧路径回落一次
       if (!outcome.ok && !streaming && /stream/i.test(outcome.reason)) {
-        outcome = await client.invoke('session/followUp', { threadId, message: text });
+        outcome = await client.invoke('session/followUp', { threadId, message: text, ...withImages });
       }
       return outcome.ok ? null : outcome.reason;
     },

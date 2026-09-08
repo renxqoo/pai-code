@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import type { AgentView, CommandView, CredentialView, PermissionRules, PreferencesView, SessionView } from '@paiapp/contracts';
+import type { AgentView, CommandView, CredentialView, ImagePayload, PermissionRules, PreferencesView, SessionView } from '@paiapp/contracts';
 import { useStore } from 'zustand';
 
 import { collectThreadDiff } from '@/diff-panel/collect-thread-diff';
@@ -78,7 +78,7 @@ export type LiveWorkspaceView = {
   permissionRules: PermissionRules | null;
   thinkingLevels: readonly string[];
   actions: {
-    readonly submitDraft: (message: string) => Promise<string | null>;
+    readonly submitDraft: (message: string, images?: readonly ImagePayload[]) => Promise<string | null>;
     readonly stopActiveTurn: () => void;
     readonly selectSession: (threadId: string) => void;
     readonly createSession: (cwd: string, trusted?: boolean) => Promise<boolean>;
@@ -220,8 +220,8 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     permissionRules: state.permissionRules,
     thinkingLevels: effortLevels,
     actions: {
-      submitDraft: async (message) => {
-        const reason = await controller.submitDraft(activeThreadId, message);
+      submitDraft: async (message, images) => {
+        const reason = await controller.submitDraft(activeThreadId, message, images);
         if (reason !== null && reason !== 'bridge_unavailable') {
           pushNotice(copy.flow.sendFailed(reason));
         }

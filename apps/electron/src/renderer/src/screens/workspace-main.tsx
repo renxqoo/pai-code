@@ -18,6 +18,7 @@ import { filterSessions } from '@/sidebar/filter-sessions';
 import { MessageList } from '@/thread/message-list';
 import { ThreadBanner } from '@/thread/thread-banner';
 import { ThreadHeader } from '@/thread/thread-header';
+import type { ImagePayload } from '@paiapp/contracts';
 import type { LiveWorkspaceView } from '@/live/use-live-workspace';
 
 import { copy } from '@/strings';
@@ -77,11 +78,12 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     composerTextRef.current?.focus();
   };
 
-  const submitDraft = () => {
-    const text = draft.trim();
-    if (text.length === 0) return;
-    void workspace.actions.submitDraft(text).then((reason) => {
+  const submitDraft = (text: string, images?: readonly ImagePayload[]) => {
+    const trimmed = text.trim();
+    if (trimmed.length === 0) return Promise.resolve(false);
+    return workspace.actions.submitDraft(trimmed, images).then((reason) => {
       if (reason === null) clearDraft();
+      return reason === null;
     });
   };
 
@@ -271,7 +273,6 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
             onChange={setDraft}
             onSubmit={submitDraft}
             onStop={workspace.actions.stopActiveTurn}
-            onAttach={noop}
             onCompact={workspace.actions.compact}
             onOpenSettings={openSettings}
             onSelectModel={workspace.actions.selectModel}

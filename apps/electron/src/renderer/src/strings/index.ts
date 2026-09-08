@@ -118,6 +118,8 @@ export const copy = {
     noModels: 'No models yet — open Settings',
     effortUnavailable: 'Thinking unavailable',
     slashAria: 'Command suggestions',
+    imageUnsupported: 'Only images up to 8 MB can be attached.',
+    removeImage: 'Remove image',
     localCheckout: 'Local checkout',
     checkoutMenu: ['main', 'v0.6.1', 'v0.6.2'] as readonly string[],
     effortMenu: ['Low · 200K', 'Medium · 200K', 'High · 1M'] as readonly string[],

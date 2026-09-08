@@ -155,6 +155,13 @@ export type BootstrapView = z.infer<typeof BootstrapViewSchema>;
 const empty = z.object({}).strict();
 const threadOnly = z.object({ threadId: z.string().min(1) }).strict();
 const threadAndMessage = z.object({ threadId: z.string().min(1), message: z.string().min(1) }).strict();
+const imagePayload = z
+  .object({
+    type: z.literal('image'),
+    data: z.string().min(1),
+    mimeType: z.string().min(1),
+  })
+  .strict();
 
 export const ApiSchemas = {
   'app/bootstrap': {
@@ -190,6 +197,7 @@ export const ApiSchemas = {
         threadId: z.string().min(1),
         message: z.string().min(1),
         streamingBehavior: z.enum(['steer', 'followUp']).optional(),
+        images: z.array(imagePayload).optional(),
       })
       .strict(),
     result: z.null(),
@@ -199,7 +207,9 @@ export const ApiSchemas = {
     result: z.null(),
   },
   'session/followUp': {
-    params: threadAndMessage,
+    params: z
+      .object({ threadId: z.string().min(1), message: z.string().min(1), images: z.array(imagePayload).optional() })
+      .strict(),
     result: z.null(),
   },
   'session/abort': {

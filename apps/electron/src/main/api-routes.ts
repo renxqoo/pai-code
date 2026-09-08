@@ -180,6 +180,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
         threadId: params.threadId,
         message: params.message,
         streamingBehavior: params.streamingBehavior,
+        images: params.images,
       });
       if (!result.ok) return fail(result.reason);
       void runtime.autoTitleOnPrompt(params.threadId, params.message);
@@ -190,7 +191,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       return result.ok ? { ok: true as const, data: null } : fail(result.reason);
     },
     'session/followUp': async (params) => {
-      const result = await command({ type: 'follow_up', threadId: params.threadId, message: params.message });
+      const result = await command({ type: 'follow_up', threadId: params.threadId, message: params.message, images: params.images });
       return result.ok ? { ok: true as const, data: null } : fail(result.reason);
     },
     'session/abort': async (params) => {
