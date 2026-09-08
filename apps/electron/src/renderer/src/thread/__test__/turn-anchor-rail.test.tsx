@@ -26,6 +26,7 @@ describe('TurnAnchorRail 渲染', () => {
   test('定位：贴主区左缘栏沟（left-[9px]），不设视口断点（栏沟固定 40px 恒可容纳）', () => {
     const html = renderToStaticMarkup(<TurnAnchorRail anchors={anchors} onJump={() => undefined} />);
     expect(html).toContain('left-[9px]');
-    expect(html).not.toContain('hidden');
+    expect(html).not.toContain('min-[1280px]');
+    expect(html).not.toMatch(/class="[^"]*(?:^|\s)hidden(?:\s|")/);
   });
 });
