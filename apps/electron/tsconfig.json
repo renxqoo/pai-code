@@ -8,6 +8,6 @@
       "@/*": ["./src/renderer/src/*"]
     }
   },
-  "include": ["src", "electron.vite.config.ts", "components.json"],
+  "include": ["src", "electron.vite.config.ts", "components.json", "vite-plugin-slim-fonts.ts"],
   "exclude": ["src/**/__test__/**"]
 }
