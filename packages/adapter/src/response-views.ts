@@ -1,4 +1,5 @@
 import type {
+  CommandView,
   ModelInfoView,
   SavedSessionView,
   SessionStatsView,
@@ -140,6 +141,22 @@ export function thinkingLevels(data: unknown): { allowed: string[] } {
   return {
     allowed: Array.isArray(d.levels) ? d.levels.filter((item): item is string => typeof item === 'string') : [],
   };
+}
+
+/** get_commands 响应 → 命令视图（缺名/非对象/source 词表外丢弃；description 缺失收窄 null）。 */
+export function sessionCommands(data: unknown): CommandView[] {
+  const commands = recordOf(data)['commands'];
+  if (!Array.isArray(commands)) return [];
+  const out: CommandView[] = [];
+  for (const item of commands) {
+    const c = recordOf(item);
+    const name = str(c.name);
+    if (name.length === 0) continue;
+    const source = c.source;
+    if (source !== 'extension' && source !== 'prompt' && source !== 'skill') continue;
+    out.push({ name, description: optStr(c.description), source });
+  }
+  return out;
 }
 
 function str(value: unknown): string {

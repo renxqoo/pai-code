@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import type { CredentialView, PreferencesView, SessionView } from '@paiapp/contracts';
+import type { CommandView, CredentialView, PreferencesView, SessionView } from '@paiapp/contracts';
 import { useStore } from 'zustand';
 
 import { collectThreadDiff } from '@/diff-panel/collect-thread-diff';
@@ -69,6 +69,8 @@ export type LiveWorkspaceView = {
   providers: LiveStoreState['providers'];
   /** hub 侧凭据目录（provider 名 + 凭据类型，永不含 key）。 */
   credentials: readonly CredentialView[];
+  /** 当前会话的斜杠命令/技能目录（补全数据源）。 */
+  commands: readonly CommandView[];
   preferences: PreferencesView;
   thinkingLevels: readonly string[];
   actions: {
@@ -119,6 +121,7 @@ export function useLiveWorkspace(): LiveWorkspaceView {
   const state = useStore(store);
   const [now, setNow] = React.useState(() => Date.now());
   const [effortLevels, setEffortLevels] = React.useState<readonly string[]>([]);
+  const [commands, setCommands] = React.useState<readonly CommandView[]>([]);
 
   React.useEffect(() => {
     void controller.start();
@@ -131,12 +134,18 @@ export function useLiveWorkspace(): LiveWorkspaceView {
 
   React.useEffect(() => {
     if (activeThreadId.length === 0) return;
-    // 切会话先清档位再拉取，避免上一会话的能力列表残留到新会话
+    // 切会话先清档位/命令目录再拉取，避免上一会话的能力列表残留到新会话
     setEffortLevels([]);
+    setCommands([]);
     void controller.ensureHydrated(activeThreadId);
     // 思考档位随会话拉取（模型能力差异）
     void bridgeClient.invoke('session/thinkingLevels', { threadId: activeThreadId }).then((outcome) => {
       if (outcome.ok) setEffortLevels(outcome.data.allowed);
+    });
+    // 斜杠命令目录随会话拉取（thread 级；响应回来时会话已切换则丢弃——以 store 真相判活）
+    void bridgeClient.invoke('command/list', { threadId: activeThreadId }).then((outcome) => {
+      if (store.getState().activeThreadId !== activeThreadId) return;
+      if (outcome.ok) setCommands(outcome.data);
     });
     void controller.refreshStats(activeThreadId);
   }, [activeThreadId]);
@@ -195,6 +204,7 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     })),
     providers: state.providers,
     credentials: state.credentials,
+    commands,
     preferences: state.preferences,
     thinkingLevels: effortLevels,
     actions: {

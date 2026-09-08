@@ -26,6 +26,7 @@ export type PaiCommandType =
   | 'get_thinking_levels'
   | 'get_session_stats'
   | 'set_session_name'
+  | 'get_commands'
   | 'auth/list'
   | 'auth/set_api_key'
   | 'auth/remove_key'
@@ -55,6 +56,7 @@ export const PAI_COMMAND_TYPES = [
   'get_thinking_levels',
   'get_session_stats',
   'set_session_name',
+  'get_commands',
   'auth/list',
   'auth/set_api_key',
   'auth/remove_key',

@@ -1,7 +1,11 @@
 import * as React from 'react';
 
+import { AutocompleteList } from '@paiapp/ui';
+import type { CommandView } from '@paiapp/contracts';
+
 import { ComposerActionsRow } from '@/composer/composer-actions-row';
 import { ComposerContextBar } from '@/composer/composer-context-bar';
+import { activeSlashQuery, applySlashSelection, filterSlashItems } from '@/composer/slash-trigger';
 
 type ComposerProps = {
   value: string
@@ -21,6 +25,10 @@ type ComposerProps = {
   modelOptions: readonly string[]
   effortOptions: readonly string[]
   checkoutOptions: readonly string[]
+  /** 会话内斜杠命令/技能目录（补全数据源） */
+  commands: readonly CommandView[]
+  /** 补全弹层的无障碍名 */
+  slashAriaLabel: string
   /** 无可选模型时的引导文案（点击触发 onOpenSettings） */
   noModelsLabel: string
   /** 思考档不可用时的禁用原因文案 */
@@ -58,6 +66,8 @@ function Composer({
   modelOptions,
   effortOptions,
   checkoutOptions,
+  commands,
+  slashAriaLabel,
   noModelsLabel,
   effortUnavailableLabel,
   generating,
@@ -74,6 +84,45 @@ function Composer({
 }: ComposerProps) {
   const canSend = value.trim().length > 0;
 
+  /** 斜杠补全交互态：caret 跟踪 + 键盘高亮 + Esc 抑制（query 变化后自动复弹） */
+  const [caret, setCaret] = React.useState(0);
+  const [activeIndex, setActiveIndex] = React.useState(0);
+  const [dismissedQuery, setDismissedQuery] = React.useState<string | null>(null);
+  const [pendingCaret, setPendingCaret] = React.useState<number | null>(null);
+
+  const query = activeSlashQuery(value, caret);
+  const slashItems = React.useMemo(
+    () => (query === null ? [] : filterSlashItems(commands, query)),
+    [commands, query],
+  );
+  const slashActive = query !== null && query !== dismissedQuery && slashItems.length > 0;
+  const activeItem = slashActive ? slashItems[activeIndex % slashItems.length] : undefined;
+
+  React.useEffect(() => {
+    setActiveIndex(0);
+  }, [query]);
+
+  React.useEffect(() => {
+    if (pendingCaret === null) return;
+    // textareaRef 是 Ref 或回调 ref 的联合：仅对象 ref 可直接定位光标
+    if (textareaRef !== null && textareaRef !== undefined && typeof textareaRef !== 'function') {
+      textareaRef.current?.setSelectionRange(pendingCaret, pendingCaret);
+    }
+    setCaret(pendingCaret);
+    setPendingCaret(null);
+  }, [pendingCaret, textareaRef]);
+
+  const acceptSlash = (name: string): void => {
+    const next = applySlashSelection(value, caret, name);
+    onChange(next.text);
+    setPendingCaret(next.caret);
+    setDismissedQuery(null);
+  };
+
+  const syncCaret = (element: HTMLTextAreaElement): void => {
+    setCaret(element.selectionStart ?? 0);
+  };
+
   return (
     <div className="mx-auto w-full max-w-[700px]">
       <form
@@ -85,21 +134,67 @@ function Composer({
         }}
         className="rounded-[20px] border border-border bg-background shadow-[0_14px_22px_-16px_rgba(24,24,28,0.22)] transition-colors duration-150 focus-within:border-foreground/15"
       >
-        <textarea
-          ref={textareaRef}
-          value={value}
-          placeholder={placeholder}
-          onChange={(event) => onChange(event.target.value)}
-          onKeyDown={(event) => {
-            // 输入法组合期间的 Enter 是候选确认，不提交
-            if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return;
-            event.preventDefault();
-            // 统一走 form 提交路径：生成中转为停止、空文本不提交
-            event.currentTarget.form?.requestSubmit();
-          }}
-          rows={2}
-          className="block min-h-[84px] w-full resize-none bg-transparent px-4 pt-[17px] pb-1 text-[12.5px] leading-[19px] text-foreground outline-none placeholder:text-muted-foreground/85 field-sizing-content"
-        />
+        <div className="relative">
+          {slashActive ? (
+            <div className="absolute bottom-full left-4 z-10 mb-[4px]">
+              <AutocompleteList
+                items={slashItems.map((command) => ({ id: command.name, label: command.name, description: command.description }))}
+                activeId={activeItem?.name ?? null}
+                onSelect={acceptSlash}
+                onHover={(id) => {
+                  const index = slashItems.findIndex((command) => command.name === id);
+                  if (index >= 0) setActiveIndex(index);
+                }}
+                ariaLabel={slashAriaLabel}
+              />
+            </div>
+          ) : null}
+          <textarea
+            ref={textareaRef}
+            value={value}
+            placeholder={placeholder}
+            onChange={(event) => {
+              onChange(event.target.value);
+              syncCaret(event.currentTarget);
+            }}
+            onKeyUp={(event) => syncCaret(event.currentTarget)}
+            onClick={(event) => syncCaret(event.currentTarget)}
+            onFocus={(event) => syncCaret(event.currentTarget)}
+            onKeyDown={(event) => {
+              if (slashActive) {
+                if (event.key === 'ArrowDown') {
+                  event.preventDefault();
+                  setActiveIndex((index) => (index + 1) % slashItems.length);
+                  return;
+                }
+                if (event.key === 'ArrowUp') {
+                  event.preventDefault();
+                  setActiveIndex((index) => (index - 1 + slashItems.length) % slashItems.length);
+                  return;
+                }
+                if ((event.key === 'Enter' || event.key === 'Tab') && !event.nativeEvent.isComposing) {
+                  // 采纳补全：Enter 不再走提交语义
+                  event.preventDefault();
+                  if (activeItem !== undefined) acceptSlash(activeItem.name);
+                  return;
+                }
+                if (event.key === 'Escape') {
+                  // 只关补全层，不外溢全局停止语义
+                  event.stopPropagation();
+                  setDismissedQuery(query);
+                  return;
+                }
+              }
+              // 输入法组合期间的 Enter 是候选确认，不提交
+              if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return;
+              event.preventDefault();
+              // 统一走 form 提交路径：生成中转为停止、空文本不提交
+              event.currentTarget.form?.requestSubmit();
+            }}
+            rows={2}
+            className="block min-h-[84px] w-full resize-none bg-transparent px-4 pt-[17px] pb-1 text-[12.5px] leading-[19px] text-foreground outline-none placeholder:text-muted-foreground/85 field-sizing-content"
+          />
+        </div>
         <ComposerActionsRow
           model={model}
           effort={effort}

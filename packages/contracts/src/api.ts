@@ -103,6 +103,14 @@ export const CredentialViewSchema = z.object({
 });
 export type CredentialView = z.infer<typeof CredentialViewSchema>;
 
+/** 会话内斜杠命令/技能条目（get_commands 收窄；source 三源）。 */
+export const CommandViewSchema = z.object({
+  name: z.string(),
+  description: z.string().nullable(),
+  source: z.enum(['extension', 'prompt', 'skill']),
+});
+export type CommandView = z.infer<typeof CommandViewSchema>;
+
 export const ProviderConfigViewSchema = z.object({
   name: z.string(),
   baseUrl: z.string(),
@@ -252,6 +260,10 @@ export const ApiSchemas = {
       .object({ threadId: z.string().min(1), subagentId: z.string().min(1), message: z.string().min(1) })
       .strict(),
     result: z.null(),
+  },
+  'command/list': {
+    params: z.object({ threadId: z.string().min(1) }).strict(),
+    result: z.array(CommandViewSchema),
   },
   'provider/upsert': {
     params: z

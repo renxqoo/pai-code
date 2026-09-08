@@ -1,3 +1,4 @@
+export { AutocompleteList, type AutocompleteItem, type AutocompleteListProps } from './autocomplete-list';
 export { CaretToggle, type CaretToggleProps } from './caret-toggle';
 export { ChatBubble, type ChatBubbleProps } from './chat-bubble';
 export { ChevronToggle, type ChevronToggleProps } from './chevron-toggle';

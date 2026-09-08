@@ -1,7 +1,7 @@
 import { realpathSync } from 'node:fs';
 import { basename as baseName, dirname as dirnamePath, join as joinPaths, resolve as resolvePath, sep as pathSep } from 'node:path';
 
-import { mapEntries, modelInfos, savedSessions, sessionStatsView, threadStateView, thinkingLevels } from '@paiapp/adapter';
+import { mapEntries, modelInfos, savedSessions, sessionCommands, sessionStatsView, threadStateView, thinkingLevels } from '@paiapp/adapter';
 import { envVarNameForProvider } from './models-config';
 import { createProviderProbe } from './provider-probe';
 import { ApiSchemas, type ApiMethod, type ApiOutcome, type ApiParams } from '@paiapp/contracts';
@@ -276,6 +276,10 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       deps.audit(`dialog_respond:${params.requestId}:${cancelled ? 'cancelled' : confirmed ? 'confirmed' : 'value'}`);
       const result = await command({ type: 'ui_response', requestId: params.requestId, payload: params.payload });
       return result.ok ? { ok: true as const, data: null } : fail(result.reason);
+    },
+    'command/list': async (params) => {
+      const result = await command({ type: 'get_commands', threadId: params.threadId });
+      return result.ok ? { ok: true as const, data: sessionCommands(result.data) } : fail(result.reason);
     },
     'subagent/steer': async (params) => {
       const result = await command({ type: 'subagent/steer', threadId: params.threadId, subagentId: params.subagentId, message: params.message });

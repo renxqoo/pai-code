@@ -248,6 +248,8 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
             modelOptions={workspace.composer.modelOptions}
             effortOptions={workspace.composer.effortOptions}
             checkoutOptions={workspace.composer.checkoutOptions}
+            commands={workspace.commands}
+            slashAriaLabel={copy.composer.slashAria}
             noModelsLabel={copy.composer.noModels}
             effortUnavailableLabel={copy.composer.effortUnavailable}
             generating={workspace.generating}

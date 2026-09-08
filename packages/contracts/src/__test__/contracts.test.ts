@@ -158,6 +158,10 @@ describe('API schema：每方法合法/非法样本', () => {
     expect(ApiSchemas['provider/test'].params.parse({ name: 'glm' })).toEqual({ name: 'glm' });
   });
 
+  test('command/list 合法样本通过', () => {
+    expect(ApiSchemas['command/list'].params.parse({ threadId: 't1' })).toEqual({ threadId: 't1' });
+  });
+
   test.each([
     ['session/start 缺 cwd', 'session/start', {}],
     ['session/start 未知键', 'session/start', { cwd: '/w', nope: 1 }],
@@ -165,6 +169,8 @@ describe('API schema：每方法合法/非法样本', () => {
     ['app/setPreference 空 patch（empty_preference）', 'app/setPreference', {}],
     ['app/setPreference 未知键', 'app/setPreference', { nope: 1 }],
     ['provider/test 空 name', 'provider/test', { name: '' }],
+    ['command/list 缺 threadId', 'command/list', {}],
+    ['command/list 未知键', 'command/list', { threadId: 't', nope: 1 }],
     ['auth/setKey 空 key', 'auth/setKey', { provider: 'p', apiKey: '' }],
     ['session/prompt 空消息', 'session/prompt', { threadId: 't', message: '' }],
     ['session/prompt 非法 streamingBehavior', 'session/prompt', { threadId: 't', message: 'hi', streamingBehavior: 'queue' }],

@@ -12,6 +12,7 @@ export {
   modelInfos,
   sessionStatsView,
   thinkingLevels,
+  sessionCommands,
   type SessionViewInput,
 } from './response-views';
 export { isFileMutatingTool, diffFromPatch, diffFromWriteArgs } from './diff-extract';
