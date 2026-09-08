@@ -28,7 +28,8 @@ export interface LiveController {
   readonly cancelDialog: (requestId: string) => Promise<void>;
   readonly selectModel: (threadId: string, provider: string, modelId: string) => Promise<void>;
   readonly selectThinking: (threadId: string, level: string) => Promise<void>;
-  readonly compact: (threadId: string) => Promise<void>;
+  /** 压缩：成功返回 null，失败返回原因（调用方转用户可见提示）。 */
+  readonly compact: (threadId: string) => Promise<string | null>;
   readonly refreshSaved: () => Promise<void>;
   readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: string[]; apiKey?: string }) => Promise<boolean>;
   readonly removeProvider: (name: string) => Promise<boolean>;
@@ -195,7 +196,9 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       await client.invoke('session/stop', { threadId });
     },
     async renameSession(threadId: string, name: string): Promise<boolean> {
-      const outcome = await client.invoke('session/setName', { threadId, name });
+      const trimmed = name.trim();
+      if (trimmed.length === 0) return false;
+      const outcome = await client.invoke('session/setName', { threadId, name: trimmed });
       return outcome.ok;
     },
     async respondDialog(requestId: string, payload: Record<string, unknown>): Promise<void> {
@@ -212,8 +215,9 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     async selectThinking(threadId: string, level: string): Promise<void> {
       await client.invoke('session/setThinking', { threadId, level });
     },
-    async compact(threadId: string): Promise<void> {
-      await client.invoke('session/compact', { threadId });
+    async compact(threadId: string): Promise<string | null> {
+      const outcome = await client.invoke('session/compact', { threadId });
+      return outcome.ok ? null : outcome.reason;
     },
     async refreshSaved(): Promise<void> {
       const outcome = await client.invoke('session/listSaved', {});

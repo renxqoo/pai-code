@@ -12,25 +12,26 @@ type ComposerProps = {
   sendLabel: string
   stopLabel: string
   contextUsageLabel: string
+  compactLabel: string
   contextUsed: number
   model: string
   effort: string
-  access: string
   checkout: string
   checkoutLabel: string
   modelOptions: readonly string[]
   effortOptions: readonly string[]
-  accessOptions: readonly string[]
   checkoutOptions: readonly string[]
   /** 有生成任务时回车与提交动作都转为停止 */
   generating: boolean
+  /** 压缩进行中：压缩按钮禁用，横幅由 ThreadBanner 呈现 */
+  compacting: boolean
   onChange: (value: string) => void
   onSubmit: () => void
   onStop: () => void
   onAttach: () => void
+  onCompact: () => void
   onSelectModel: (value: string) => void
   onSelectEffort: (value: string) => void
-  onSelectAccess: (value: string) => void
   onSelectCheckout: (value: string) => void
 }
 
@@ -43,24 +44,24 @@ function Composer({
   sendLabel,
   stopLabel,
   contextUsageLabel,
+  compactLabel,
   contextUsed,
   model,
   effort,
-  access,
   checkout,
   checkoutLabel,
   modelOptions,
   effortOptions,
-  accessOptions,
   checkoutOptions,
   generating,
+  compacting,
   onChange,
   onSubmit,
   onStop,
   onAttach,
+  onCompact,
   onSelectModel,
   onSelectEffort,
-  onSelectAccess,
   onSelectCheckout,
 }: ComposerProps) {
   const canSend = value.trim().length > 0;
@@ -94,21 +95,21 @@ function Composer({
         <ComposerActionsRow
           model={model}
           effort={effort}
-          access={access}
           modelOptions={modelOptions}
           effortOptions={effortOptions}
-          accessOptions={accessOptions}
           attachLabel={attachLabel}
           sendLabel={sendLabel}
           stopLabel={stopLabel}
           contextUsageLabel={contextUsageLabel}
+          compactLabel={compactLabel}
           contextUsed={contextUsed}
           canSend={canSend}
           generating={generating}
+          compacting={compacting}
           onSelectModel={onSelectModel}
           onSelectEffort={onSelectEffort}
-          onSelectAccess={onSelectAccess}
           onAttach={onAttach}
+          onCompact={onCompact}
           onStop={onStop}
         />
       </form>

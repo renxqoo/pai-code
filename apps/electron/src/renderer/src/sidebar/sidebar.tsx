@@ -19,21 +19,28 @@ type SidebarProps = {
     workflows: string
     usage: string
     refresh: string
+    clearSearch: string
   }
   sessions: readonly SessionCardModel[]
   ages: Readonly<Record<string, string>>
   activeSessionId: string
   projects: readonly string[]
   selectedProject: string
+  /** 会话过滤查询（受控）：空串 = 不过滤 */
+  searchQuery: string
+  onSearchQueryChange: (value: string) => void
+  /** 过滤后无命中时的空态文案 */
+  filterEmptyLabel: string
   footerActions: readonly [SidebarFooterAction, SidebarFooterAction, SidebarFooterAction]
   refreshAction: SidebarFooterAction
-  onSearch: () => void
   onNewThread: () => void
   onSelectProject: (project: string) => void
   onNewProject: () => void
   onSelectSession: (sessionId: string) => void
   /** 关闭会话（dispose，文件保留）；不传则卡片不显示关闭入口。 */
   onCloseSession?: (sessionId: string) => void
+  /** 重命名会话；不传则卡片不显示重命名入口。 */
+  onRenameSession?: (sessionId: string, name: string) => void
 }
 
 /** 会话侧栏：搜索、项目筛选、会话列表与底部工具；标题行由窗口顶栏承担。 */
@@ -46,15 +53,19 @@ function Sidebar({
   activeSessionId,
   projects,
   selectedProject,
+  searchQuery,
+  onSearchQueryChange,
+  filterEmptyLabel,
   footerActions,
   refreshAction,
-  onSearch,
   onNewThread,
   onSelectProject,
   onNewProject,
   onSelectSession,
   onCloseSession,
+  onRenameSession,
 }: SidebarProps) {
+  const filtering = searchQuery.trim().length > 0;
   return (
     <aside
       style={{ width: collapsed ? 0 : width }}
@@ -69,7 +80,9 @@ function Sidebar({
         <SidebarSearchRow
           searchLabel={labels.search}
           newThreadLabel={labels.newThread}
-          onSearch={onSearch}
+          clearLabel={labels.clearSearch}
+          query={searchQuery}
+          onQueryChange={onSearchQueryChange}
           onNewThread={onNewThread}
         />
         <SidebarProjectsRow
@@ -80,18 +93,23 @@ function Sidebar({
           onSelectProject={onSelectProject}
           onNewProject={onNewProject}
         />
-        <div className="mt-1 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pb-2">
-          {sessions.map((item) => (
-            <SessionCard
-              key={item.id}
-              session={item}
-              age={ages[item.id] ?? ''}
-              active={item.id === activeSessionId}
-              onSelect={() => onSelectSession(item.id)}
-              onClose={onCloseSession === undefined ? undefined : () => onCloseSession(item.id)}
-            />
-          ))}
-        </div>
+        {filtering && sessions.length === 0 ? (
+          <p className="px-2 pt-6 text-center text-[11.5px] leading-[16px] text-muted-foreground/80">{filterEmptyLabel}</p>
+        ) : (
+          <div className="mt-1 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pb-2">
+            {sessions.map((item) => (
+              <SessionCard
+                key={item.id}
+                session={item}
+                age={ages[item.id] ?? ''}
+                active={item.id === activeSessionId}
+                onSelect={() => onSelectSession(item.id)}
+                onClose={onCloseSession === undefined ? undefined : () => onCloseSession(item.id)}
+                onRename={onRenameSession === undefined ? undefined : (name) => onRenameSession(item.id, name)}
+              />
+            ))}
+          </div>
+        )}
       </div>
       <SidebarFooter actions={footerActions} refresh={refreshAction} />
     </aside>

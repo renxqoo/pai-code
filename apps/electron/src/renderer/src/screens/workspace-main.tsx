@@ -14,6 +14,7 @@ import { useSidebarResize } from '@/hooks/use-sidebar-resize';
 import { NoticeStrip } from '@/notices/notice-strip';
 import { SettingsSheet } from '@/settings/settings-sheet';
 import { Sidebar } from '@/sidebar/sidebar';
+import { filterSessions } from '@/sidebar/filter-sessions';
 import { MessageList } from '@/thread/message-list';
 import { ThreadBanner } from '@/thread/thread-banner';
 import { ThreadHeader } from '@/thread/thread-header';
@@ -37,6 +38,8 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   /** 草稿按会话隔离：切走再回来不丢，也互不串扰 */
   const [drafts, setDrafts] = React.useState<Readonly<Record<string, string>>>({});
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
+  /** 侧栏会话过滤查询（A3）：按标题/项目名过滤 */
+  const [sidebarQuery, setSidebarQuery] = React.useState('');
   /** 面板开合挂在会话之上：切换会话不丢失 */
   const [panel, setPanel] = React.useState<SidePanel>(null);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
@@ -59,10 +62,6 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
       return Object.fromEntries(Object.entries(current).filter(([key]) => key !== activeThreadId));
     });
   };
-
-  const togglePanel = React.useCallback((which: Exclude<SidePanel, null>) => {
-    setPanel((current) => (current === which ? null : which));
-  }, []);
 
   const openAgents = React.useCallback(() => setPanel('agents'), []);
   const openDiff = React.useCallback(() => setPanel('diff'), []);
@@ -109,6 +108,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const refreshSaved = workspace.actions.refreshSaved;
   const refreshAction = React.useMemo(() => ({ label: copy.sidebar.refresh, onSelect: refreshSaved }), [refreshSaved]);
   const projects = React.useMemo(() => [...new Set(sessions.map((session) => session.projectName))], [sessions]);
+  const visibleSessions = React.useMemo(() => filterSessions(sessions, sidebarQuery), [sessions, sidebarQuery]);
   const ages = React.useMemo(() => {
     const table: Record<string, string> = {};
     for (const session of sessions) {
@@ -131,19 +131,22 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
           workflows: copy.sidebar.workflows,
           usage: copy.sidebar.usage,
           refresh: copy.sidebar.refresh,
+          clearSearch: copy.sidebar.clearSearch,
         }}
-        sessions={sessions}
+        sessions={visibleSessions}
         ages={ages}
         activeSessionId={activeThreadId}
         projects={projects}
         selectedProject={copy.sidebar.allProjects}
+        searchQuery={sidebarQuery}
+        onSearchQueryChange={setSidebarQuery}
+        filterEmptyLabel={copy.sidebar.noMatches}
         footerActions={[
           { label: copy.sidebar.settings, onSelect: openSettings },
           { label: copy.sidebar.workflows, onSelect: noop },
           { label: copy.sidebar.usage, onSelect: noop },
         ]}
         refreshAction={refreshAction}
-        onSearch={noop}
         onNewThread={openNewThread}
         onSelectProject={noopSelectProject}
         onNewProject={openNewThread}
@@ -152,6 +155,9 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
           setPanel(null);
         }}
         onCloseSession={workspace.actions.closeSession}
+        onRenameSession={(sessionId, name) => {
+          void workspace.actions.renameSession(sessionId, name);
+        }}
       />
       <div className="relative flex min-w-0 flex-1 flex-col">
         {sidebarCollapsed ? null : (
@@ -229,24 +235,24 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
             sendLabel={copy.composer.send}
             stopLabel={copy.composer.stop}
             contextUsageLabel={copy.composer.contextUsage}
+            compactLabel={copy.composer.compact}
             contextUsed={workspace.composer.contextUsed}
             model={workspace.composer.model}
             effort={workspace.composer.effort}
-            access={workspace.composer.access}
             checkout={workspace.composer.checkout}
             checkoutLabel={copy.composer.localCheckout}
             modelOptions={workspace.composer.modelOptions}
             effortOptions={workspace.composer.effortOptions}
-            accessOptions={workspace.composer.accessOptions}
             checkoutOptions={workspace.composer.checkoutOptions}
             generating={workspace.generating}
+            compacting={workspace.compacting}
             onChange={setDraft}
             onSubmit={submitDraft}
             onStop={workspace.actions.stopActiveTurn}
             onAttach={noop}
+            onCompact={workspace.actions.compact}
             onSelectModel={workspace.actions.selectModel}
             onSelectEffort={workspace.actions.selectEffort}
-            onSelectAccess={noop}
             onSelectCheckout={noop}
           />
         </div>

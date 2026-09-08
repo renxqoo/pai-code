@@ -36,8 +36,6 @@ export type ComposerSelection = {
   modelOptions: readonly string[];
   effort: string;
   effortOptions: readonly string[];
-  access: string;
-  accessOptions: readonly string[];
   checkout: string;
   checkoutOptions: readonly string[];
   contextUsed: number;
@@ -84,6 +82,7 @@ export type LiveWorkspaceView = {
     readonly refreshSaved: () => void;
     readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: string[]; apiKey?: string }) => Promise<boolean>;
     readonly removeProvider: (name: string) => Promise<boolean>;
+    readonly renameSession: (threadId: string, name: string) => Promise<boolean>;
     readonly compact: () => void;
   };
 };
@@ -97,6 +96,13 @@ const EFFORT_LABELS: Readonly<Record<string, string>> = {
   xhigh: 'X-high',
   max: 'Max',
 };
+
+/** 通知条追加（保留最近 5 条，id 单调避免同毫秒碰撞）。 */
+let noticeSeq = 0;
+function pushNotice(text: string): void {
+  noticeSeq += 1;
+  store.setState({ notices: [...store.getState().notices.slice(-4), { id: `notice-${noticeSeq}`, text }] });
+}
 
 export function useLiveWorkspace(): LiveWorkspaceView {
   const state = useStore(store);
@@ -180,7 +186,7 @@ export function useLiveWorkspace(): LiveWorkspaceView {
       submitDraft: async (message) => {
         const reason = await controller.submitDraft(activeThreadId, message);
         if (reason !== null && reason !== 'bridge_unavailable') {
-          store.setState({ notices: [...store.getState().notices.slice(-4), { id: `send-fail-${Date.now()}`, text: copy.flow.sendFailed(reason) }] });
+          pushNotice(copy.flow.sendFailed(reason));
         }
         return reason;
       },
@@ -208,7 +214,16 @@ export function useLiveWorkspace(): LiveWorkspaceView {
       refreshSaved: () => void controller.refreshSaved(),
       upsertProvider: (input) => controller.upsertProvider(input),
       removeProvider: (name) => controller.removeProvider(name),
-      compact: () => void controller.compact(activeThreadId),
+      renameSession: async (threadId, name) => {
+        const ok = await controller.renameSession(threadId, name);
+        if (!ok) pushNotice(copy.sidebar.renameFailed);
+        return ok;
+      },
+      compact: () => {
+        void controller.compact(activeThreadId).then((reason) => {
+          if (reason !== null) pushNotice(copy.flow.compactFailed(reason));
+        });
+      },
     },
   };
 }
@@ -232,8 +247,6 @@ function buildComposer(
     modelOptions,
     effort,
     effortOptions: levelLabels,
-    access: 'Standard',
-    accessOptions: ['Standard'],
     checkout: cwdBase,
     checkoutOptions: cwdBase.length > 0 ? [cwdBase] : [],
     contextUsed: state.stats[session?.threadId ?? '']?.contextUsage ?? 0,
