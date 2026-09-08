@@ -48,6 +48,8 @@ export interface LiveController {
   readonly readSessionRules: (threadId: string) => Promise<{ rules: PermissionRules; source: 'thread' | 'global' } | null>;
   /** 会话级规则写入（null = 删除 sidecar 回退全局）；成功返回 null。 */
   readonly writeSessionRules: (threadId: string, rules: PermissionRules | null) => Promise<string | null>;
+  /** 向运行中子代理注入 steer（非 running 一律失败，原因透传）。 */
+  readonly steerSubagent: (threadId: string, subagentId: string, message: string) => Promise<string | null>;
   /** agent 定义目录刷新（带 threadId 时含受信可见的项目级；失败静默保持旧值）。 */
   readonly refreshAgents: (threadId: string | null) => Promise<void>;
   /** 项目文件搜索（@ 引用；cwd 门禁在主进程，失败返回 null）。 */
@@ -321,6 +323,12 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     },
     async writeSessionRules(threadId: string, rules: PermissionRules | null): Promise<string | null> {
       const outcome = await client.invoke('permission/sessionWrite', { threadId, rules });
+      return outcome.ok ? null : outcome.reason;
+    },
+    async steerSubagent(threadId: string, subagentId: string, message: string): Promise<string | null> {
+      const text = message.trim();
+      if (text.length === 0) return 'empty_message';
+      const outcome = await client.invoke('subagent/steer', { threadId, subagentId, message: text });
       return outcome.ok ? null : outcome.reason;
     },
     async refreshAgents(threadId: string | null): Promise<void> {

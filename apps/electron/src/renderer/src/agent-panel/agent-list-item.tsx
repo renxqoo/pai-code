@@ -6,6 +6,7 @@ import { copy } from '@/strings';
 import { agentActivity, panelStatusLabelKey } from '@/thread/agent-activity';
 import { agentElapsedMs } from '@/thread/panel-summary';
 import { formatElapsed } from '@/thread/format-elapsed';
+import { SteerInput } from './steer-input';
 import { formatTokenCount } from '@/thread/format-count-unit';
 import type { SubagentModel } from '@/thread/thread-model';
 
@@ -14,6 +15,8 @@ import { AgentToolRow } from './agent-tool-row';
 type AgentListItemProps = {
   agent: SubagentModel
   now: number
+  /** 运行中子代理的行内 steer 输入（H1；不传则不显示）。 */
+  onSteer?: (subagentId: string, message: string) => void
 }
 
 type DetailLine =
@@ -41,7 +44,7 @@ function detailLine(agent: SubagentModel, now: number): DetailLine {
 }
 
 /** 面板列表项：状态点 + 名称 + 类型胶囊 + 耗时 + 活动行 + 元信息行，可展开工具明细。 */
-function AgentListItem({ agent, now }: AgentListItemProps) {
+function AgentListItem({ agent, now, onSteer }: AgentListItemProps) {
   const [open, setOpen] = React.useState(false);
   const toggle = () => setOpen((current) => !current);
   const detail = detailLine(agent, now);
@@ -101,6 +104,7 @@ function AgentListItem({ agent, now }: AgentListItemProps) {
       <div className="mt-[6px] pl-[16px]">
         <MetaLine items={metaItems} />
       </div>
+      {onSteer !== undefined && agent.status === 'working' ? <SteerInput onSubmit={(message) => onSteer(agent.id, message)} /> : null}
     </div>
   );
 }

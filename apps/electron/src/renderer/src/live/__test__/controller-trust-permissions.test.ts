@@ -181,3 +181,14 @@ test('会话级规则读取/写入/清除透传（sidecar）', async () => {
   expect(await controller.writeSessionRules('t1', null)).toBeNull();
   expect(client.calls).toContainEqual({ method: 'permission/sessionWrite', params: { threadId: 't1', rules: null } });
 });
+
+test('steerSubagent：trim 校验 + 命令透传 + 失败原因', async () => {
+  const client = makeClient({ 'subagent/steer': { ok: false, reason: 'not_running' } });
+  const controller = createLiveController(client, createLiveStore());
+  expect(await controller.steerSubagent('t1', 's1', '   ')).toBe('empty_message');
+  expect(await controller.steerSubagent('t1', 's1', ' 提速 ')).toBe('not_running');
+  expect(client.calls).toContainEqual({ method: 'subagent/steer', params: { threadId: 't1', subagentId: 's1', message: '提速' } });
+
+  const okClient = makeClient({});
+  expect(await createLiveController(okClient, createLiveStore()).steerSubagent('t1', 's1', 'go')).toBeNull();
+});

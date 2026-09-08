@@ -117,6 +117,7 @@ export type LiveWorkspaceView = {
     readonly forkFromEntry: (entryId: string) => Promise<boolean>;
     readonly submitDraftAs: (message: string, mode: 'steer' | 'followUp') => Promise<string | null>;
     readonly reloadSessionTrusted: (threadId: string, trusted: boolean) => void;
+    readonly steerSubagent: (subagentId: string, message: string) => void;
     readonly testProvider: (name: string) => Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }>;
     readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: string[]; apiKey?: string }) => Promise<boolean>;
     readonly removeProvider: (name: string) => Promise<boolean>;
@@ -332,6 +333,11 @@ export function useLiveWorkspace(): LiveWorkspaceView {
         const reason = await controller.writePermissionRules(rules);
         if (reason !== null) pushNotice(copy.settings.permissionSaveFailed);
         return reason === null;
+      },
+      steerSubagent: (subagentId, message) => {
+        void controller.steerSubagent(activeThreadId, subagentId, message).then((reason) => {
+          if (reason !== null) pushNotice(copy.flow.steerFailed(reason));
+        });
       },
       reloadSessionTrusted: (threadId, trusted) => {
         void controller.reloadSessionTrusted(threadId, trusted).then((ok) => {

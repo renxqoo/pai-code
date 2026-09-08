@@ -50,6 +50,8 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   /** 排队消息面板开合（A7；横幅排队行点击切换） */
   const [queueOpen, setQueueOpen] = React.useState(false);
+  /** 停止确认（H2：存在在途子代理时二次确认，不可恢复） */
+  const [confirmStop, setConfirmStop] = React.useState(false);
   const [newThreadOpen, setNewThreadOpen] = React.useState(false);
   /** 编辑重发：回填草稿后聚焦输入框 */
   const composerTextRef = React.useRef<HTMLTextAreaElement | null>(null);
@@ -130,11 +132,17 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         return;
       }
       if (workspace.bashRunning) workspace.actions.abortBash();
-      else if (workspace.generating) workspace.actions.stopActiveTurn();
+      else if (confirmStop) {
+        setConfirmStop(false);
+        workspace.actions.stopActiveTurn();
+      } else if (workspace.generating) {
+        if (workspace.agentsActive) setConfirmStop(true);
+        else workspace.actions.stopActiveTurn();
+      }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [panel, settingsOpen, workspace.dialogs.length, workspace.generating, workspace.actions]);
+  }, [panel, settingsOpen, confirmStop, workspace.dialogs.length, workspace.generating, workspace.agentsActive, workspace.actions]);
 
   /** 浏览器直开（无 preload）时桥不存在，降级为无动作 */
   const toggleMaximize = () => {
@@ -296,6 +304,27 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
             paddingRight: CONTENT_HORIZONTAL_PADDING,
           }}
         >
+          {confirmStop ? (
+            <div className="mx-auto mb-[8px] flex w-full max-w-[700px] items-center gap-[12px] rounded-[12px] border border-border bg-background px-[14px] py-[10px]">
+              <div className="min-w-0 flex-1">
+                <p className="text-[12.5px] font-medium text-foreground">{copy.flow.stopConfirmTitle}</p>
+                <p className="text-[11.5px] leading-[16px] text-muted-foreground">{copy.flow.stopConfirmHint}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmStop(false);
+                  workspace.actions.stopActiveTurn();
+                }}
+                className="h-[28px] shrink-0 rounded-[8px] bg-stop px-[12px] text-[12px] font-medium text-white hover:bg-stop/85"
+              >
+                {copy.flow.stopConfirmYes}
+              </button>
+              <button type="button" onClick={() => setConfirmStop(false)} className="shrink-0 text-[12px] text-muted-foreground hover:text-foreground">
+                {copy.flow.stopConfirmNo}
+              </button>
+            </div>
+          ) : null}
           <ThreadBanner
             crashed={workspace.crashed}
             compacting={workspace.compacting}
@@ -339,7 +368,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
             compacting={workspace.compacting}
             onChange={setDraft}
             onSubmit={submitDraft}
-            onStop={workspace.bashRunning ? workspace.actions.abortBash : workspace.actions.stopActiveTurn}
+            onStop={workspace.bashRunning ? workspace.actions.abortBash : workspace.agentsActive && workspace.generating ? () => setConfirmStop(true) : workspace.actions.stopActiveTurn}
             onCompact={workspace.actions.compact}
             onOpenSettings={openSettings}
             onSelectModel={workspace.actions.selectModel}
@@ -348,7 +377,9 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
           />
         </div>
       </div>
-      {panel === 'agents' ? <AgentPanel agents={workspace.activeThread.agents} now={workspace.now} onClose={closePanel} /> : null}
+      {panel === 'agents' ? (
+        <AgentPanel agents={workspace.activeThread.agents} now={workspace.now} onClose={closePanel} onSteer={workspace.actions.steerSubagent} />
+      ) : null}
       {panel === 'diff' ? <DiffPanel diff={workspace.threadDiff} onClose={closePanel} /> : null}
       <TitleBarLeft
         titleName={copy.appTitle.name}

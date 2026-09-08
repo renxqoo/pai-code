@@ -15,10 +15,12 @@ type AgentPanelProps = {
   agents: readonly SubagentModel[]
   now: number
   onClose: () => void
+  /** 向运行中子代理注入 steer（H1；不传则行内输入不显示）。 */
+  onSteer?: (subagentId: string, message: string) => void
 }
 
 /** Agent 侧边栏：DIRECT SPAWNS 列表 + 底部汇总，Esc / 关闭入口 / 顶部标签均可收起。 */
-function AgentPanel({ agents, now, onClose }: AgentPanelProps) {
+function AgentPanel({ agents, now, onClose, onSteer }: AgentPanelProps) {
   const summary = summarizeAgents(agents);
 
   return (
@@ -41,7 +43,7 @@ function AgentPanel({ agents, now, onClose }: AgentPanelProps) {
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto px-[14px] pt-[2px] pb-[10px]">
           {agents.map((agent) => (
-            <AgentListItem key={agent.id} agent={agent} now={now} />
+            <AgentListItem key={agent.id} agent={agent} now={now} onSteer={onSteer} />
           ))}
         </div>
       )}
