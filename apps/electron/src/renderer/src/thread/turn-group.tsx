@@ -65,9 +65,9 @@ function TurnGroup({ turn, now, onOpenAgents, onOpenDiff }: TurnGroupProps) {
 }
 
 // 比较器只看数据身份与时刻：回调/开面板函数引用不稳（内联箭头）不触发重渲，
-// 流式期间仅当前轮次（turn 引用变化）真正重渲
+// 流式期间仅当前轮次（turn 引用变化）真正重渲；已结束轮 elapsed 冻结，tick 不再触发重渲
 const TurnGroupMemo = React.memo(
   TurnGroup,
-  (prev, next) => prev.turn === next.turn && prev.now === next.now,
+  (prev, next) => prev.turn === next.turn && (!isTurnRunning(prev.turn) || prev.now === next.now),
 );
 export { TurnGroupMemo as TurnGroup };

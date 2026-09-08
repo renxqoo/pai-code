@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { defaultPermissionRules } from '@paiapp/contracts';
-import { createLiveStore } from '../store';
+import { createLiveStore, threadModelOf } from '../store';
 import type { SessionView, UiEvent } from '@paiapp/contracts';
 
 const session = (threadId: string): SessionView => ({
@@ -175,5 +175,34 @@ describe('live store（对话框/通知/bootstrap 合并）', () => {
     store.getState().applyEvent({ type: 'host', phase: 'failed' }, 1);
     store.getState().bootstrap({ sessions: [], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] }, hostPhase: 'ready' });
     expect(store.getState().hostPhase).toBe('failed');
+  });
+});
+
+describe('threadModelOf 引用稳定', () => {
+  test('症状回归：无关 set（后台线程事件/其他字段更新）不再让活跃线程模型换引用', () => {
+    const store = createLiveStore();
+    store.getState().bootstrap({ sessions: [session('t1'), session('t2')], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } });
+    store.getState().hydrate('t1', {
+      kind: 'hydrate/initial',
+      items: [{ kind: 'user', id: 'e1', text: 'hi', origin: 'user', images: [], at: 1 }],
+      cursor: 'e1',
+    });
+    const first = threadModelOf(store.getState(), 't1');
+    // 后台线程 t2 的 delta（threads 其他条目换引用）+ 无关字段（stats）
+    store.getState().applyEvent({ type: 'turnStarted', threadId: 't2', at: 2 }, 2);
+    store.getState().applyEvent({ type: 'textDelta', threadId: 't2', messageId: 'm1', delta: 'x' }, 3);
+    store.getState().updateStats('t2', { contextUsage: 0.1, tokensTotal: 5 });
+    expect(threadModelOf(store.getState(), 't1')).toBe(first);
+  });
+
+  test('活跃线程自身折叠更新后模型换引用（内容跟进）', () => {
+    const store = createLiveStore();
+    store.getState().bootstrap({ sessions: [session('t1')], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } });
+    store.getState().applyEvent({ type: 'turnStarted', threadId: 't1', at: 1 }, 1);
+    const first = threadModelOf(store.getState(), 't1');
+    store.getState().applyEvent({ type: 'textDelta', threadId: 't1', messageId: 'm1', delta: 'x' }, 2);
+    const second = threadModelOf(store.getState(), 't1');
+    expect(second).not.toBe(first);
+    expect(second.items).not.toBe(first.items);
   });
 });

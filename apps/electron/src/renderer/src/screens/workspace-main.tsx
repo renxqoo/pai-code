@@ -14,12 +14,15 @@ import { NoticeStrip } from '@/notices/notice-strip';
 import { SettingsScreen } from '@/settings/settings-screen';
 import { HostDownBanner } from '@/screens/host-down-banner';
 import { Sidebar } from '@/sidebar/sidebar';
+import type { SidebarFooterAction } from '@/sidebar/sidebar-footer';
 import { filterSessions } from '@/sidebar/filter-sessions';
 import { changeLocale, getLocale, type Locale } from '@/strings';
 import type { SessionCardModel } from '@/sidebar/session-card-model';
 import { MessageList } from '@/thread/message-list';
+import { StopConfirmBar } from '@/thread/stop-confirm-bar';
 import { QueuePanel } from '@/thread/queue-panel';
 import { UsageScreen } from '@/screens/usage-screen';
+import { buildUsageEntries } from '@/screens/usage-entries';
 import { ThreadBanner } from '@/thread/thread-banner';
 import { AgentPanel } from '@/agent-panel/agent-panel';
 import { DiffPanel } from '@/diff-panel/diff-panel';
@@ -50,6 +53,19 @@ type SidePanel = 'diff' | 'agents' | null;
 
 /** 尚未接线/不适用当前会话的动作统一落到空实现，接线点保持稳定。 */
 function noop(): void {}
+
+/** 侧栏静态文案（模块级常量：copy 目录稳定，避免每渲染新对象击穿 Sidebar memo）。 */
+const sidebarLabels = {
+  search: copy.sidebar.search,
+  newThread: copy.sidebar.newThread,
+  allProjects: copy.sidebar.allProjects,
+  newProject: copy.sidebar.newProject,
+  settings: copy.sidebar.settings,
+  workflows: copy.sidebar.workflows,
+  usage: copy.sidebar.usage,
+  refresh: copy.sidebar.refresh,
+  clearSearch: copy.sidebar.noMatches,
+};
 
 function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.JSX.Element {
   const [composerDraft, setComposerDraft] = React.useState(uiState.composerDraft);
@@ -228,46 +244,66 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     [visibleSessions, collapsedGroups],
   );
   const usageEntries = React.useMemo(
-    () =>
-      workspace.sessions.map((session) => {
-        const stats = workspace.statsById[session.id];
-        return {
-          title: session.title,
-          projectName: session.projectName,
-          model: session.version,
-          tokensTotal: stats?.tokensTotal ?? 0,
-          cost: stats?.cost ?? 0,
-          messageCount: (stats?.userMessages ?? 0) + (stats?.assistantMessages ?? 0),
-        };
-      }),
+    () => buildUsageEntries(workspace.sessions, workspace.statsById),
     [workspace.sessions, workspace.statsById],
   );
   const pinnedSessions = React.useMemo(() => new Set(workspace.preferences.pinnedSessions), [workspace.preferences.pinnedSessions]);
   const savedProjects = React.useMemo(() => [...new Set(workspace.saved.map((session) => session.cwd))], [workspace.saved]);
+  /** 相对年龄为分钟级粒度：独立低频 tick（静止会话不随流式 tick 重渲，流式 tick 只走消息流）。 */
+  const [ageNow, setAgeNow] = React.useState(() => Date.now());
+  React.useEffect(() => {
+    const handle = window.setInterval(() => setAgeNow(Date.now()), 30_000);
+    return () => window.clearInterval(handle);
+  }, []);
   const ages = React.useMemo(() => {
     const table: Record<string, string> = {};
     for (const session of sessions) {
-      table[session.id] = formatRelativeAge(workspace.now, session.lastActivityAt);
+      table[session.id] = formatRelativeAge(ageNow, session.lastActivityAt);
     }
     return table;
-  }, [sessions, workspace.now]);
+  }, [sessions, ageNow]);
+
+  /** 侧栏/顶栏回调与常量 props：引用恒定（actions 已稳定），Sidebar/ThreadHeader memo 不被父级重渲击穿。 */
+  const onSelectSession = React.useCallback(
+    (sessionId: string) => {
+      workspace.actions.selectSession(sessionId);
+      setPanel(null);
+    },
+    [workspace.actions],
+  );
+  const onRenameSession = React.useCallback(
+    (sessionId: string, name: string) => {
+      void workspace.actions.renameSession(sessionId, name);
+    },
+    [workspace.actions],
+  );
+  const footerActions = React.useMemo<readonly [SidebarFooterAction, SidebarFooterAction, SidebarFooterAction]>(
+    () => [
+      { label: copy.sidebar.settings, onSelect: openSettings },
+      { label: copy.sidebar.workflows, onSelect: noop },
+      { label: copy.sidebar.usage, onSelect: () => setUsageOpen(true) },
+    ],
+    [openSettings],
+  );
+  const onOpenMenuSelect = React.useCallback(
+    (label: string) => {
+      // 受信重开：stop → 同文件 resume(trusted)；其余装饰项维持原空操作
+      if (label === copy.thread.reloadTrusted) {
+        workspace.actions.reloadSessionTrusted(activeThreadId, true);
+      } else if (label === copy.thread.reloadUntrusted) {
+        workspace.actions.reloadSessionTrusted(activeThreadId, false);
+      }
+    },
+    [workspace.actions, activeThreadId],
+  );
+  const onToggleSplitView = React.useCallback(() => setPanel((current) => (current === 'agents' ? null : 'agents')), []);
 
   return (
     <div className="relative flex h-screen min-h-0 overflow-hidden bg-background text-foreground">
       <Sidebar
         width={width}
         collapsed={sidebarCollapsed}
-        labels={{
-          search: copy.sidebar.search,
-          newThread: copy.sidebar.newThread,
-          allProjects: copy.sidebar.allProjects,
-          newProject: copy.sidebar.newProject,
-          settings: copy.sidebar.settings,
-          workflows: copy.sidebar.workflows,
-          usage: copy.sidebar.usage,
-          refresh: copy.sidebar.refresh,
-          clearSearch: copy.sidebar.clearSearch,
-        }}
+        labels={sidebarLabels}
         groups={sessionGroups}
         ages={ages}
         activeSessionId={activeThreadId}
@@ -276,23 +312,14 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         searchQuery={sidebarQuery}
         onSearchQueryChange={setSidebarQuery}
         filterEmptyLabel={copy.sidebar.noMatches}
-        footerActions={[
-          { label: copy.sidebar.settings, onSelect: openSettings },
-          { label: copy.sidebar.workflows, onSelect: noop },
-          { label: copy.sidebar.usage, onSelect: () => setUsageOpen(true) },
-        ]}
+        footerActions={footerActions}
         refreshAction={refreshAction}
         onNewThread={openNewThread}
         onSelectProject={noopSelectProject}
         onNewProject={openNewThread}
-        onSelectSession={(sessionId) => {
-          workspace.actions.selectSession(sessionId);
-          setPanel(null);
-        }}
+        onSelectSession={onSelectSession}
         onCloseSession={workspace.actions.closeSession}
-        onRenameSession={(sessionId, name) => {
-          void workspace.actions.renameSession(sessionId, name);
-        }}
+        onRenameSession={onRenameSession}
       />
       <div className="relative flex min-w-0 flex-1 flex-col">
         {sidebarCollapsed ? null : (
@@ -329,16 +356,9 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
           onAddAction={noop}
           onOpen={noop}
           onCommit={noop}
-          onOpenMenuSelect={(label) => {
-            // 受信重开：stop → 同文件 resume(trusted)；其余装饰项维持原空操作
-            if (label === copy.thread.reloadTrusted) {
-              workspace.actions.reloadSessionTrusted(activeThreadId, true);
-            } else if (label === copy.thread.reloadUntrusted) {
-              workspace.actions.reloadSessionTrusted(activeThreadId, false);
-            }
-          }}
+          onOpenMenuSelect={onOpenMenuSelect}
           onCommitMenuSelect={noop}
-          onToggleSplitView={() => setPanel((current) => (current === 'agents' ? null : 'agents'))}
+          onToggleSplitView={onToggleSplitView}
           onToggleMaximize={toggleMaximize}
         />
         {hostDown ? <HostDownBanner onOpenSettings={openSettings} /> : null}
@@ -361,25 +381,13 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
           }}
         >
           {confirmStop ? (
-            <div className="mx-auto mb-[8px] flex w-full max-w-[700px] items-center gap-[12px] rounded-[12px] border border-border bg-background px-[14px] py-[10px]">
-              <div className="min-w-0 flex-1">
-                <p className="text-[12.5px] font-medium text-foreground">{copy.flow.stopConfirmTitle}</p>
-                <p className="text-[11.5px] leading-[16px] text-muted-foreground">{copy.flow.stopConfirmHint}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setConfirmStop(false);
-                  workspace.actions.stopActiveTurn();
-                }}
-                className="h-[28px] shrink-0 rounded-[8px] bg-stop px-[12px] text-[12px] font-medium text-white hover:bg-stop/85"
-              >
-                {copy.flow.stopConfirmYes}
-              </button>
-              <button type="button" onClick={() => setConfirmStop(false)} className="shrink-0 text-[12px] text-muted-foreground hover:text-foreground">
-                {copy.flow.stopConfirmNo}
-              </button>
-            </div>
+            <StopConfirmBar
+              onConfirm={() => {
+                setConfirmStop(false);
+                workspace.actions.stopActiveTurn();
+              }}
+              onCancel={() => setConfirmStop(false)}
+            />
           ) : null}
           <ThreadBanner
             crashed={workspace.crashed}

@@ -1,6 +1,7 @@
 import type { ImagePayload, PermissionRules, PreferencesView, ProviderModel, SkillView, ThinkingFormat, UiEvent } from '@paiapp/contracts';
 
 import type { BridgeClient } from './client-invoke';
+import { coalesceEvents } from './coalesce-events';
 import type { LiveStore } from './store';
 
 /**
@@ -195,9 +196,14 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       // 可重入：StrictMode/HMR 的双挂载会先 dispose 再 start；复原 disposed、
       // 订阅以 unsubscribe 为准只建一次，bootstrap 每次刷新（幂等快照替换）。
       disposed = false;
-      unsubscribe ??= client.subscribe((raw) => {
-        const parsed = parseEvent(raw);
-        if (parsed !== null) onEvent(parsed);
+      unsubscribe ??= client.subscribe((batch) => {
+        const parsed: UiEvent[] = [];
+        for (const raw of batch) {
+          const event = parseEvent(raw);
+          if (event !== null) parsed.push(event);
+        }
+        // 批内相邻同类 delta 折叠后再逐条折叠进 store（批本身有序，不重排）
+        for (const event of coalesceEvents(parsed)) onEvent(event);
       });
       let outcome: Awaited<ReturnType<typeof client.invoke<'app/bootstrap'>>> | null = null;
       try {

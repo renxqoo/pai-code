@@ -10,19 +10,19 @@ type Outcome = { ok: true; data: unknown } | { ok: false; reason: string };
 
 function makeClient(results: Record<string, Outcome>): BridgeClient & { calls: string[] } {
   const calls: string[] = [];
-  let listener: ((event: unknown) => void) | undefined;
+  let listener: ((events: readonly unknown[]) => void) | undefined;
   return {
     calls,
     available: true,
-    emitToController: (event: unknown) => listener?.(event),
+    emitToController: (event: unknown) => listener?.([event]),
     invoke: (method: string, params?: unknown) => {
       calls.push(method);
       void params;
       const outcome = results[method] ?? { ok: true as const, data: null };
       return Promise.resolve(outcome as never);
     },
-    subscribe: (onEvent: (event: unknown) => void) => {
-      listener = onEvent;
+    subscribe: (onBatch: (events: readonly unknown[]) => void) => {
+      listener = onBatch;
       return () => {
         listener = undefined;
       };

@@ -25,11 +25,11 @@ function stubTimers(): { fire: () => void } {
 
 function makeClient(): BridgeClient & { invokes: string[]; emitToController: (event: unknown) => void } {
   const invokes: string[] = [];
-  let listener: ((event: unknown) => void) | undefined;
+  let listener: ((events: readonly unknown[]) => void) | undefined;
   return {
     invokes,
     available: true,
-    emitToController: (event: unknown) => listener?.(event),
+    emitToController: (event: unknown) => listener?.([event]),
     invoke: async (method: string) => {
       invokes.push(method);
       if (method === 'app/bootstrap') {
@@ -46,8 +46,8 @@ function makeClient(): BridgeClient & { invokes: string[]; emitToController: (ev
       }
       return { ok: true, data: null } as never;
     },
-    subscribe: (onEvent: (event: unknown) => void) => {
-      listener = onEvent;
+    subscribe: (onBatch: (events: readonly unknown[]) => void) => {
+      listener = onBatch;
       return () => {
         listener = undefined;
       };

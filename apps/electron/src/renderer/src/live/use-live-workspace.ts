@@ -1,38 +1,25 @@
 import * as React from 'react';
 
-import type { AgentView, CommandView, CredentialView, ImagePayload, PermissionRules, PreferencesView, ProviderModel, SessionStatsView, SessionView, SkillView, ThinkingFormat } from '@paiapp/contracts';
+import type { AgentView, CommandView, CredentialView, PermissionRules, PreferencesView, ProviderConfigView, SessionStatsView, SessionView, SkillView } from '@paiapp/contracts';
 import { useStore } from 'zustand';
 
 import type { SessionCardModel } from '@/sidebar/session-card-model';
 import type { ThreadModel } from '@/thread/thread-model';
 import { collectThreadDiff } from '@/diff-panel/collect-thread-diff';
 import { summarizeAgents } from '@/thread/panel-summary';
-import { copy } from '@/strings';
-import { pickSessionModel } from './pick-session-model';
-import { nextSessionRulesForMode } from './permission-mode';
 import { baseNameOf } from '@/lib/project-dirs';
 
-import { createBridgeClient } from './client-invoke';
-import { createLiveController, type LiveController } from './live-controller';
-import { createLiveStore, threadModelOf, type LiveStoreState, type PendingDialog } from './store';
+import type { WorkspaceActions, WorkspaceDiagnostics } from './workspace-actions';
+import { createWorkspaceActions } from './workspace-actions';
+import { bridgeClient, controller, store } from './workspace-runtime';
+import { threadModelOf, type LiveStoreState, type PendingDialog } from './store';
 
 /**
- * live 工作区装配：store/controller 单例 + React 订阅面。
+ * live 工作区装配的 React 订阅面：细粒度 selector 订阅（store 任何 set 只让
+ * 受影响字段的订阅者重渲——后台线程事件不再驱动整棵工作区树）；
+ * 动作全部经稳定 actions（workspace-actions），本 hook 不再生产闭包。
  * 生产装配唯一入口（demo 装配只服务组件测试夹具）。
  */
-
-const store = createLiveStore();
-const bridgeClient = createBridgeClient(window.pai);
-const controller: LiveController = createLiveController(bridgeClient, store);
-// 诊断句柄（e2e/排障用）：只读快照 + 事件观察
-declare global {
-  interface Window {
-    __paiDebug?: { snapshot(): unknown };
-  }
-}
-if (typeof window !== 'undefined') {
-  window.__paiDebug = { snapshot: () => ({ ...store.getState(), controllerPhase: 'n/a' }) };
-}
 
 export type ComposerSelection = {
   model: string;
@@ -69,19 +56,18 @@ export type LiveWorkspaceView = {
   retrying: { attempt: number; maxAttempts: number } | null;
   hydrateFailed: boolean;
   now: number;
-  hasActivity: boolean;
   threadDiff: ReturnType<typeof collectThreadDiff>;
   /** 当前会话用量明细（I1 popover 数据源）。 */
   activeStats: SessionStatsView | null;
   /** 各会话用量快照（I2 聚合数据源）。 */
   statsById: Readonly<Record<string, SessionStatsView>>;
   /** 运行时诊断（M1 分区数据源；null = 未拉取）。 */
-  diagnostics: { hostPhase: 'starting' | 'ready' | 'restarting' | 'failed' | null; stderrTail: string; registrySessions: number } | null;
+  diagnostics: WorkspaceDiagnostics | null;
   composer: ComposerSelection;
   dialogs: readonly PendingDialog[];
   notices: readonly { id: string; text: string }[];
   saved: ReadonlyArray<{ sessionPath: string; title: string; cwd: string; modifiedAt: number; messageCount: number }>;
-  providers: LiveStoreState['providers'];
+  providers: readonly ProviderConfigView[];
   /** hub 侧凭据目录（provider 名 + 凭据类型，永不含 key）。 */
   credentials: readonly CredentialView[];
   /** 当前会话的斜杠命令/技能目录（补全数据源）。 */
@@ -96,61 +82,7 @@ export type LiveWorkspaceView = {
   /** 会话级规则（null = 未加载；source=thread 表示存在 sidecar）。 */
   sessionRules: { rules: PermissionRules; source: 'thread' | 'global' } | null;
   thinkingLevels: readonly string[];
-  actions: {
-    readonly submitDraft: (message: string, images?: readonly ImagePayload[], mode?: 'auto' | 'steer' | 'followUp') => Promise<string | null>;
-    readonly stopActiveTurn: () => void;
-    readonly selectSession: (threadId: string) => void;
-    readonly createSession: (cwd: string, trusted?: boolean) => Promise<boolean>;
-    readonly openSavedSession: (sessionPath: string) => Promise<boolean>;
-    readonly closeSession: (threadId: string) => void;
-    readonly selectModel: (value: string) => void;
-    readonly selectEffort: (value: string) => void;
-    readonly respondDialog: (requestId: string, payload: Record<string, unknown>) => void;
-    readonly cancelDialog: (requestId: string) => void;
-    readonly dismissNotice: (id: string) => void;
-    readonly refreshSaved: () => void;
-    readonly refreshCredentials: () => void;
-    readonly refreshModels: () => void;
-    readonly setProviderKey: (provider: string, apiKey: string) => Promise<boolean>;
-    readonly removeProviderKey: (provider: string) => Promise<boolean>;
-    readonly setDefaultModel: (value: string | null) => void;
-    readonly completeOnboarding: () => void;
-    readonly refreshPermissionRules: () => void;
-    readonly writePermissionRules: (rules: PermissionRules) => Promise<boolean>;
-    readonly readSessionRules: () => void;
-    readonly writeSessionRules: (rules: PermissionRules | null) => Promise<boolean>;
-    /** 操作栏会话权限模式切换：当前生效规则为基线只改 mode；同模式无操作不写。 */
-    readonly setSessionPermissionMode: (mode: PermissionRules['mode']) => Promise<boolean>;
-    readonly refreshAgents: () => void;
-    /** 技能目录刷新（设置页技能分区进入时）。 */
-    readonly refreshSkills: () => void;
-    /** 技能启停：落盘后重开全部活跃会话使新设置生效（失败 notice）。 */
-    readonly setSkillEnabled: (name: string, enabled: boolean) => Promise<boolean>;
-    readonly searchFiles: (query: string) => Promise<string[] | null>;
-    readonly runBash: (command: string) => Promise<string | null>;
-    readonly abortBash: () => void;
-    readonly clearQueue: () => void;
-    readonly revealSession: (sessionPath: string) => void;
-    /** 系统目录选择对话框；null = 取消（新会话弹窗浏览入口）。 */
-    readonly pickDirectory: (defaultPath: string | null) => Promise<string | null>;
-    readonly togglePinnedSession: (sessionPath: string) => void;
-    readonly forkFromEntry: (entryId: string) => Promise<string | null>;
-    readonly reloadSessionTrusted: (threadId: string, trusted: boolean) => void;
-    readonly steerSubagent: (subagentId: string, message: string) => void;
-    readonly fetchDiagnostics: () => void;
-    readonly restartHost: () => void;
-    /** 打开 Usage 页时对全部活跃线程补拉 stats（防未访问会话显示 0）。 */
-    readonly refreshAllStats: () => void;
-    /** 通用通知（bash 携图拒绝等接线层提示）。 */
-    readonly showNotice: (text: string) => void;
-    /** J2 通用偏好保存（trustedDefault / 宿主路径）。 */
-    readonly saveGeneralPreferences: (patch: { trustedDefault?: boolean }) => Promise<boolean>;
-    readonly testProvider: (name: string) => Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }>;
-    readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; thinkingFormat?: ThinkingFormat; apiKey?: string }) => Promise<boolean>;
-    readonly removeProvider: (name: string) => Promise<boolean>;
-    readonly renameSession: (threadId: string, name: string) => Promise<boolean>;
-    readonly compact: () => void;
-  };
+  actions: WorkspaceActions;
 };
 
 const EFFORT_LABELS: Readonly<Record<string, string>> = {
@@ -163,31 +95,42 @@ const EFFORT_LABELS: Readonly<Record<string, string>> = {
   max: 'Max',
 };
 
-/** 通知条追加（保留最近 5 条，id 单调避免同毫秒碰撞）。 */
-let noticeSeq = 0;
-function pushNotice(text: string): void {
-  noticeSeq += 1;
-  store.setState({ notices: [...store.getState().notices.slice(-4), { id: `notice-${noticeSeq}`, text }] });
-}
-
-/** 会话规则写链：写 + 回读成对串行排队，防并发写后回读乱序覆盖生效视图（与 controller.skillToggleChain 同型）。 */
-let sessionRulesWriteChain: Promise<void> = Promise.resolve();
+const EMPTY_QUEUE: { steering: readonly string[]; followUp: readonly string[] } = { steering: [], followUp: [] };
 
 export function useLiveWorkspace(): LiveWorkspaceView {
-  const state = useStore(store);
   const [now, setNow] = React.useState(() => Date.now());
   const [effortLevels, setEffortLevels] = React.useState<readonly string[]>([]);
   const [commands, setCommands] = React.useState<readonly CommandView[]>([]);
-  const [diagnostics, setDiagnostics] = React.useState<{ hostPhase: 'starting' | 'ready' | 'restarting' | 'failed' | null; stderrTail: string; registrySessions: number } | null>(null);
+  const [diagnostics, setDiagnostics] = React.useState<WorkspaceDiagnostics | null>(null);
+  const actions = React.useMemo(() => createWorkspaceActions(setDiagnostics), []);
+
+  const hostPhase = useStore(store, (s) => s.hostPhase);
+  const bootstrapLoaded = useStore(store, (s) => s.bootstrapLoaded);
+  const bootstrapError = useStore(store, (s) => s.bootstrapError);
+  const sessions = useStore(store, (s) => s.sessions);
+  const savedRaw = useStore(store, (s) => s.saved);
+  const models = useStore(store, (s) => s.models);
+  const providers = useStore(store, (s) => s.providers);
+  const credentials = useStore(store, (s) => s.credentials);
+  const preferences = useStore(store, (s) => s.preferences);
+  const permissionRules = useStore(store, (s) => s.permissionRules);
+  const sessionRules = useStore(store, (s) => s.sessionRules);
+  const agentDefs = useStore(store, (s) => s.agents);
+  const skills = useStore(store, (s) => s.skills);
+  const stats = useStore(store, (s) => s.stats);
+  const notices = useStore(store, (s) => s.notices);
+  const dialogs = useStore(store, (s) => s.dialogs);
+  const dialogOrder = useStore(store, (s) => s.dialogOrder);
+  const activeThreadId = useStore(store, (s) => s.activeThreadId) ?? '';
+  // 活跃线程折叠态：后台线程事件只换 threads 其他条目引用，本 selector 引用不变 → 不重渲
+  const threadState = useStore(store, (s) => (s.activeThreadId === null ? undefined : s.threads[s.activeThreadId]));
+  // 模型经 WeakMap 缓存（引用稳定）：无关 set 不再击穿消息流 memo
+  const activeThread = useStore(store, (s) => threadModelOf(s, s.activeThreadId ?? ''));
 
   React.useEffect(() => {
     void controller.start();
     return () => controller.dispose();
   }, []);
-
-  const activeThreadId = state.activeThreadId ?? '';
-  const activeThread = React.useMemo(() => threadModelOf(state, activeThreadId), [state, activeThreadId]);
-  const threadState = state.threads[activeThreadId];
 
   React.useEffect(() => {
     // 切会话（或最后一个会话被移除）先清会话级派生态，避免上一会话残留到新会话
@@ -219,82 +162,38 @@ export function useLiveWorkspace(): LiveWorkspaceView {
    * 清除面由折叠层保证（settle / worker 死亡 / 宿主重启均已就地终态）；
    * 后台子代理跨轮运行不并入（父轮已结算，明细归 Agents 面板）。 */
   const executing = generating || bashRunning || compacting;
-  const hasActivity = React.useMemo(
-    () =>
-      Object.values(state.threads).some(
-        (thread) => thread.streaming || thread.compacting || thread.agents.some((agent) => agent.status === 'working'),
-      ),
-    [state.threads],
-  );
 
+  // 走表 tick 只随活跃线程执行中存在（后台线程活动不驱动任何渲染）；
+  // 已结束轮 elapsed 冻结于 endedAt，不依赖 tick
   React.useEffect(() => {
-    if (!hasActivity) return;
+    if (!executing) return;
     const handle = window.setInterval(() => setNow(Date.now()), 1_000);
     return () => window.clearInterval(handle);
-  }, [hasActivity]);
+  }, [executing]);
 
-  // 引用稳定（进依赖数组的 effect 用）：读 store 真相的活跃会话，不闭包旧 threadId
-  const stableReadSessionRules = React.useCallback((): void => {
-    const threadId = store.getState().activeThreadId ?? '';
-    if (threadId.length === 0) return;
-    void controller.readSessionRules(threadId);
-  }, []);
-  const stableWriteSessionRules = React.useCallback(async (rules: PermissionRules | null): Promise<boolean> => {
-    const threadId = store.getState().activeThreadId ?? '';
-    if (threadId.length === 0) return false;
-    // threadId 捕获于入队时刻（sidecar 是按线程寻址，不是按活跃会话相对寻址）
-    const run = async (): Promise<boolean> => {
-      const reason = await controller.writeSessionRules(threadId, rules);
-      if (reason !== null) {
-        pushNotice(copy.settings.permissionSaveFailed);
-        return false;
-      }
-      await controller.readSessionRules(threadId);
-      return true;
-    };
-    const chained = sessionRulesWriteChain.then(run, run);
-    sessionRulesWriteChain = chained.then(
-      () => undefined,
-      () => undefined,
-    );
-    return chained;
-  }, []);
-  const stableSetSessionPermissionMode = React.useCallback(async (mode: PermissionRules['mode']): Promise<boolean> => {
-    const threadId = store.getState().activeThreadId ?? '';
-    if (threadId.length === 0) return false;
-    const current = store.getState().sessionRules ?? (await controller.readSessionRules(threadId));
-    // 未加载即无入口（控件隐藏），静默失败即可
-    if (current === null) return false;
-    const next = nextSessionRulesForMode(current.rules, mode);
-    if (next === null) return true;
-    return stableWriteSessionRules(next);
-  }, [stableWriteSessionRules]);
-  const activeSession = state.sessions[activeThreadId];
-  /** @ 文件搜索回调：引用稳定（仅随 cwd 变化），防 composer 去抖 effect 被高频重置 */
-  const activeCwdValue = activeSession?.cwd ?? '';
-  const searchFiles = React.useCallback((query: string) => controller.searchFiles(activeCwdValue, query), [activeCwdValue]);
+  const activeSession = sessions[activeThreadId];
+  const queue = threadState?.queue;
+  const queueItems = queue ?? EMPTY_QUEUE;
 
-  const stateModels = state.models;
-  const stateStats = state.stats;
   const composer = React.useMemo(
-    () => buildComposer({ ...state, models: stateModels, stats: stateStats }, activeSession, threadState, effortLevels),
-    [stateModels, stateStats, activeSession, threadState, effortLevels],
+    () => buildComposer(models, stats, activeSession, threadState, effortLevels),
+    [models, stats, activeSession, threadState, effortLevels],
   );
 
   return {
-    ready: state.bootstrapLoaded,
-    bootstrapError: state.bootstrapError,
+    ready: bootstrapLoaded,
+    bootstrapError,
     bridgeAvailable: bridgeClient.available,
-    hostPhase: state.hostPhase,
-    sessions: React.useMemo(() => toCards(state.sessions), [state.sessions]),
+    hostPhase,
+    sessions: React.useMemo(() => toCards(sessions), [sessions]),
     activeThreadId,
     activeThread,
     activeCwd: activeSession?.cwd ?? '',
     generating,
     executing,
     agentsActive: summarizeAgents(activeThread.agents).workingCount > 0,
-    queueCount: (threadState?.queue.steering.length ?? 0) + (threadState?.queue.followUp.length ?? 0),
-    queueItems: { steering: threadState?.queue.steering ?? [], followUp: threadState?.queue.followUp ?? [] },
+    queueCount: queueItems.steering.length + queueItems.followUp.length,
+    queueItems,
     crashed: threadState?.crashed ?? false,
     compacting,
     bashRunning,
@@ -302,214 +201,48 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     retrying: threadState?.retrying ?? null,
     hydrateFailed: threadState?.hydrateFailed ?? false,
     now,
-    hasActivity,
     threadDiff: React.useMemo(() => collectThreadDiff(activeThread), [activeThread]),
-    activeStats: state.stats[activeThreadId] ?? null,
+    activeStats: stats[activeThreadId] ?? null,
     diagnostics,
-    statsById: state.stats,
+    statsById: stats,
     composer,
-    dialogs: state.dialogOrder.map((id) => state.dialogs[id]).filter((dialog): dialog is PendingDialog => dialog !== undefined),
-    notices: state.notices,
+    dialogs: React.useMemo(
+      () => dialogOrder.map((id) => dialogs[id]).filter((dialog): dialog is PendingDialog => dialog !== undefined),
+      [dialogOrder, dialogs],
+    ),
+    notices,
     saved: React.useMemo(
       () =>
-        state.saved.map((session) => ({
+        savedRaw.map((session) => ({
           sessionPath: session.sessionPath,
           title: session.name ?? session.firstMessage.slice(0, 40),
           cwd: session.cwd,
           modifiedAt: session.modifiedAt,
           messageCount: session.messageCount,
         })),
-      [state.saved],
+      [savedRaw],
     ),
-    providers: state.providers,
-    credentials: state.credentials,
+    providers,
+    credentials,
     commands,
-    agents: state.agents,
-    skills: state.skills,
-    preferences: state.preferences,
-    permissionRules: state.permissionRules,
-    sessionRules: state.sessionRules,
+    agents: agentDefs,
+    skills,
+    preferences,
+    permissionRules,
+    sessionRules,
     thinkingLevels: effortLevels,
-    actions: {
-      submitDraft: async (message, images, mode) => {
-        // 调用时读 store 真相：fork/重开等异步链路后的旧闭包不得打到旧线程
-        const threadId = store.getState().activeThreadId ?? activeThreadId;
-        const reason = await controller.submitDraft(threadId, message, images, mode);
-        if (reason !== null && reason !== 'bridge_unavailable') {
-          pushNotice(copy.flow.sendFailed(reason));
-        }
-        return reason;
-      },
-      stopActiveTurn: () => void controller.stopActiveTurn(activeThreadId),
-      selectSession: (threadId) => {
-        store.getState().setActiveThread(threadId);
-      },
-      createSession: (cwd, trusted) => {
-        // 项目默认模型记忆优先（A4）→ 全局默认 → 当前选择 → 首个可用
-        const selected = pickSessionModel(state.models, state.preferences.projectModels[cwd] ?? state.preferences.defaultModel, composer.model);
-        return controller.createSession(cwd, selected, trusted).then((reason) => {
-          if (reason !== null) pushNotice(copy.newThread.createFailed(reason));
-          return reason === null;
-        });
-      },
-      openSavedSession: (sessionPath) => controller.openSavedSession(sessionPath),
-      closeSession: (threadId) => void controller.closeSession(threadId),
-      selectEffort: (value: string) => {
-        const level = Object.entries(EFFORT_LABELS).find(([, label]) => label === value)?.[0];
-        if (level !== undefined) void controller.selectThinking(activeThreadId, level);
-      },
-      selectModel: (value) => {
-        const model = state.models.find((entry) => `${entry.provider}/${entry.modelId}` === value);
-        if (model === undefined) return;
-        void controller.selectModel(activeThreadId, model.provider, model.modelId);
-        // 项目默认模型记忆（A4）：该 cwd 下次新建会话预选
-        const cwd = activeSession?.cwd;
-        if (cwd !== undefined && cwd.length > 0) {
-          // 记忆上限 50 项：超出按插入序淘汰最旧（防 settings.json 无界增长）
-          const entries = [...Object.entries(state.preferences.projectModels), [cwd, value] as const];
-          const projectModels = Object.fromEntries(entries.slice(Math.max(0, entries.length - 50)));
-          void controller.updatePreferences({ projectModels });
-        }
-      },
-      respondDialog: (requestId, payload) => void controller.respondDialog(requestId, payload),
-      cancelDialog: (requestId) => void controller.cancelDialog(requestId),
-      dismissNotice: (id) => store.getState().dismissNotice(id),
-      refreshSaved: () => void controller.refreshSaved(),
-      refreshCredentials: () => void controller.refreshCredentials(),
-      refreshModels: () => void controller.refreshModels(),
-      setProviderKey: async (provider, apiKey) => {
-        const reason = await controller.setProviderKey(provider, apiKey);
-        if (reason !== null) pushNotice(copy.settings.keySaveFailed(reason));
-        return reason === null;
-      },
-      removeProviderKey: async (provider) => {
-        const reason = await controller.removeProviderKey(provider);
-        if (reason !== null) pushNotice(copy.settings.keyRemoveFailed(reason));
-        return reason === null;
-      },
-      setDefaultModel: (value) => {
-        void controller.updatePreferences({ defaultModel: value }).then((next) => {
-          if (next === null) pushNotice(copy.settings.preferenceSaveFailed);
-        });
-      },
-      completeOnboarding: () => {
-        void controller.updatePreferences({ onboarded: true }).then((next) => {
-          if (next === null) pushNotice(copy.settings.preferenceSaveFailed);
-        });
-      },
-      testProvider: (name) => controller.testProvider(name),
-      refreshPermissionRules: () => {
-        void controller.refreshPermissionRules();
-      },
-      readSessionRules: stableReadSessionRules,
-      writeSessionRules: stableWriteSessionRules,
-      setSessionPermissionMode: stableSetSessionPermissionMode,
-      writePermissionRules: async (rules) => {
-        const reason = await controller.writePermissionRules(rules);
-        if (reason !== null) pushNotice(copy.settings.permissionSaveFailed);
-        return reason === null;
-      },
-      fetchDiagnostics: () => {
-        void controller.fetchDiagnostics().then((data) => setDiagnostics(data));
-      },
-      refreshAllStats: () => {
-        for (const threadId of Object.keys(store.getState().sessions)) {
-          void controller.refreshStats(threadId);
-        }
-      },
-      showNotice: (text) => {
-        pushNotice(text);
-      },
-      saveGeneralPreferences: async (patch) => {
-        const next = await controller.updatePreferences(patch);
-        if (next === null) {
-          pushNotice(copy.settings.generalSaveFailed);
-          return false;
-        }
-        return true;
-      },
-      restartHost: () => controller.restartHost(),
-      reloadSessionTrusted: (threadId, trusted) => {
-        void controller.reloadSessionTrusted(threadId, trusted).then((ok) => {
-          if (!ok) pushNotice(copy.thread.reloadTrustFailed);
-        });
-      },
-      refreshAgents: () => {
-        void controller.refreshAgents(activeThreadId.length > 0 ? activeThreadId : null);
-      },
-      refreshSkills: () => {
-        void controller.refreshSkills();
-      },
-      setSkillEnabled: async (name, enabled) => {
-        // 生效编排走 controller 排队链：写 pi settings + 串行重开全部 live 会话（信任态由注册表补全）
-        const outcome = await controller.applySkillToggle(name, enabled);
-        if (!outcome.ok && outcome.reason !== 'skill_not_found') {
-          pushNotice(copy.settings.skillToggleFailed);
-          return false;
-        }
-        if (outcome.ok && outcome.reopenFailures > 0) pushNotice(copy.settings.skillReopenFailed);
-        return outcome.ok;
-      },
-      searchFiles,
-      runBash: async (command) => {
-        const reason = await controller.runBash(activeThreadId, command);
-        if (reason !== null) pushNotice(copy.flow.bashFailed(reason));
-        return reason;
-      },
-      abortBash: () => void controller.abortBash(activeThreadId),
-      clearQueue: () => void controller.clearQueue(activeThreadId),
-      revealSession: (sessionPath) => void controller.revealSession(sessionPath),
-      pickDirectory: async (defaultPath) => {
-        const outcome = await bridgeClient.invoke('dialog/pickDirectory', defaultPath !== null ? { defaultPath } : {});
-        if (!outcome.ok) {
-          // 失败与取消区分：取消静默，失败要给用户反馈（通知条层级高于弹窗）
-          pushNotice(copy.newThread.pickFailed);
-          return null;
-        }
-        return outcome.data;
-      },
-      togglePinnedSession: (sessionPath) => {
-        const current = state.preferences.pinnedSessions;
-        const pinnedSessions = current.includes(sessionPath)
-          ? current.filter((path) => path !== sessionPath)
-          : [...current, sessionPath];
-        void controller.updatePreferences({ pinnedSessions }).then((next) => {
-          if (next === null) pushNotice(copy.settings.preferenceSaveFailed);
-        });
-      },
-      forkFromEntry: async (entryId) => {
-        const newThreadId = await controller.forkSession(activeThreadId, entryId);
-        if (newThreadId === null) pushNotice(copy.flow.forkFailed);
-        return newThreadId;
-      },
-      upsertProvider: (input) => controller.upsertProvider(input),
-      removeProvider: (name) => controller.removeProvider(name),
-      renameSession: async (threadId, name) => {
-        const ok = await controller.renameSession(threadId, name);
-        if (!ok) pushNotice(copy.sidebar.renameFailed);
-        return ok;
-      },
-      compact: () => {
-        void controller.compact(activeThreadId).then((reason) => {
-          if (reason !== null) pushNotice(copy.flow.compactFailed(reason));
-        });
-      },
-      steerSubagent: (subagentId, message) => {
-        void controller.steerSubagent(activeThreadId, subagentId, message).then((reason) => {
-          if (reason !== null) pushNotice(copy.flow.steerFailed(reason));
-        });
-      },
-    },
+    actions,
   };
 }
 
 function buildComposer(
-  state: LiveStoreState,
+  models: LiveStoreState['models'],
+  stats: LiveStoreState['stats'],
   session: SessionView | undefined,
   thread: LiveStoreState['threads'][string] | undefined,
   effortLevels: readonly string[],
 ): ComposerSelection {
-  const modelOptions = state.models.map((model) => `${model.provider}/${model.modelId}`);
+  const modelOptions = models.map((model) => `${model.provider}/${model.modelId}`);
   const currentModel = session?.model ?? modelOptions[0] ?? '';
   // 思考档以模型能力列表为真相：拉取前/不支持时为空，composer 侧禁用并给原因（不臆造默认档）
   const levelLabels = effortLevels.map((level) => EFFORT_LABELS[level] ?? level);
@@ -524,7 +257,7 @@ function buildComposer(
     effortOptions: levelLabels,
     checkout: cwdBase,
     checkoutOptions: cwdBase.length > 0 ? [cwdBase] : [],
-    contextUsed: state.stats[session?.threadId ?? '']?.contextUsage ?? 0,
+    contextUsed: stats[session?.threadId ?? '']?.contextUsage ?? 0,
   };
 }
 

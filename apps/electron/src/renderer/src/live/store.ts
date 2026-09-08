@@ -224,9 +224,17 @@ export function createLiveStore() {
   return store;
 }
 
+/** 模型缓存 key = 折叠态引用：不可变更新保证「引用不变 ⇒ 内容不变」，
+ * 后台线程/无关字段的 set 不再让活跃线程模型换引用（消息流 memo 的命中前提）。 */
+const threadModelCache = new WeakMap<LiveThreadState, ThreadModel>();
+
 export function threadModelOf(state: LiveStoreState, threadId: string): ThreadModel {
   const thread = state.threads[threadId] ?? initialThreadState;
-  return { sessionId: threadId, items: thread.items, agents: thread.agents };
+  const cached = threadModelCache.get(thread);
+  if (cached?.sessionId === threadId) return cached;
+  const model: ThreadModel = { sessionId: threadId, items: thread.items, agents: thread.agents };
+  threadModelCache.set(thread, model);
+  return model;
 }
 
 function toPendingDialog(event: DialogViewSource): PendingDialog {
