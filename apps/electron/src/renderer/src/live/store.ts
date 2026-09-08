@@ -102,8 +102,9 @@ export function createLiveStore() {
               if (!(event.threadId in state.sessions)) return state;
               const sessions = omitKey(state.sessions, event.threadId);
               const threads = omitKey(state.threads, event.threadId);
+              const stats = omitKey(state.stats, event.threadId);
               const activeThreadId = state.activeThreadId === event.threadId ? firstSessionId(sessions) : state.activeThreadId;
-              return { sessions, threads, activeThreadId };
+              return { sessions, threads, stats, activeThreadId };
             }
             case 'sessionDied': {
               const thread = threadOf(state, event.threadId);
@@ -247,7 +248,7 @@ function initialStoreState(): LiveStoreState {
     providers: [],
     credentials: [],
     agents: [],
-    preferences: { defaultModel: null, onboarded: false, projectModels: {}, pinnedSessions: [], trustedDefault: false, hubDev: { bunPath: null, hubEntry: null } },
+    preferences: { defaultModel: null, onboarded: false, projectModels: {}, pinnedSessions: [], trustedDefault: false },
     permissionRules: null,
     sessionRules: null,
     threads: {},

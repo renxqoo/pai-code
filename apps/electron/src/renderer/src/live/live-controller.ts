@@ -76,8 +76,8 @@ export interface LiveController {
   readonly clearQueue: (threadId: string) => Promise<void>;
   /** 在系统文件管理器中显示会话文件（主进程白名单校验）。 */
   readonly revealSession: (sessionPath: string) => Promise<void>;
-  /** 从历史条目分叉（position=before）→ 激活新会话。 */
-  readonly forkSession: (threadId: string, entryId: string) => Promise<boolean>;
+  /** 从历史条目分叉（position=before）→ 激活新会话；返回新 threadId（失败 null）。 */
+  readonly forkSession: (threadId: string, entryId: string) => Promise<string | null>;
   readonly refreshStats: (threadId: string) => Promise<void>;
   readonly ensureHydrated: (threadId: string) => Promise<void>;
 }
@@ -366,12 +366,12 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     async revealSession(sessionPath: string): Promise<void> {
       await client.invoke('session/reveal', { sessionPath });
     },
-    async forkSession(threadId: string, entryId: string): Promise<boolean> {
+    async forkSession(threadId: string, entryId: string): Promise<string | null> {
       const outcome = await client.invoke('session/fork', { threadId, entryId, position: 'before' });
-      if (!outcome.ok) return false;
+      if (!outcome.ok) return null;
       store.getState().setActiveThread(outcome.data.threadId);
       await hydrateFull(outcome.data.threadId).catch(() => undefined);
-      return true;
+      return outcome.data.threadId;
     },
     async searchFiles(cwd: string, query: string): Promise<string[] | null> {
       if (cwd.length === 0) return null;

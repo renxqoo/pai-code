@@ -160,3 +160,60 @@ describe('api-routes 权限面（2d 对抗审查补）', () => {
     expect(audits.some((line) => line.startsWith('session_trusted:start:/w:true'))).toBe(true);
   });
 });
+
+describe('api-routes 门禁（第三波审查补：file/search 与 reveal）', () => {
+  test('file/search：越界 cwd 拒绝 cwd_forbidden；已知 cwd（含 .. 归一）放行', async () => {
+    const work = mkdtempSync(join(tmpdir(), 'pai-sec-search-'));
+    const { routes } = makeRoutes(work);
+    const agentDir = join(work, 'agent');
+    mkdirSync(join(agentDir, 'sessions'), { recursive: true });
+    writeFileSync(join(agentDir, 'sessions', 'a.jsonl'), '{}', 'utf8');
+
+    const forbidden = (await routes.invoke('file/search', { cwd: '/etc', query: '' })) as { ok: boolean; reason?: string };
+    expect(forbidden.ok).toBe(false);
+    expect(forbidden.reason).toBe('cwd_forbidden');
+
+    const escape = (await routes.invoke('file/search', { cwd: `${agentDir}/../..`, query: '' })) as { ok: boolean; reason?: string };
+    expect(escape.ok).toBe(false);
+    expect(escape.reason).toBe('cwd_forbidden');
+  });
+
+  test('session/reveal：白名单外路径拒绝，目录内放行', async () => {
+    const work = mkdtempSync(join(tmpdir(), 'pai-sec-reveal-'));
+    const revealed: string[] = [];
+    const agentDir = join(work, 'agent');
+    mkdirSync(join(agentDir, 'sessions'), { recursive: true });
+    const sessionFile = join(agentDir, 'sessions', 'a.jsonl');
+    writeFileSync(sessionFile, '{}', 'utf8');
+    const settings = createFileSettings(join(work, 's.json'), keyStore);
+    const runtime = createPaiRuntime({
+      paths: {
+        userDataDir: work,
+        agentDir,
+        registryDb: join(work, 'r.sqlite'),
+        settingsFile: join(work, 's.json'),
+        providerKeysFile: join(work, 'k.json'),
+        logFile: join(work, 'l.log'),
+      },
+      keyStore,
+      providers: () => [],
+      hubPaths: () => ({ bunPath: 'bun', hubEntry: '/nonexistent/cli.js' }),
+      logger: { log: () => undefined },
+      emit: () => undefined,
+    });
+    const routes = createApiRoutes({
+      runtime,
+      settings,
+      keyStore,
+      audit: () => undefined,
+      agentDirFiles: createAgentDirFiles(agentDir),
+      revealPath: (path) => revealed.push(path),
+    });
+    const outside = (await routes.invoke('session/reveal', { sessionPath: '/etc/passwd' })) as { ok: boolean; reason?: string };
+    expect(outside.ok).toBe(false);
+    expect(outside.reason).toBe('session_path_forbidden');
+    const inside = (await routes.invoke('session/reveal', { sessionPath: sessionFile })) as { ok: boolean };
+    expect(inside.ok).toBe(true);
+    expect(revealed).toEqual([sessionFile]);
+  });
+});

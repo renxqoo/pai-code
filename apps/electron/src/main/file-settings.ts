@@ -88,7 +88,12 @@ export function createFileLogger(logFile: string, maxBytes = 1_024 * 1_024) {
           truncateSync(logFile, 0);
           renameSync(logFile, `${logFile}.1`);
         }
-        appendFileSync(logFile, `${new Date().toISOString()} ${message}\n`);
+        // 控制字符清洗（回车换行与 C0 控制区）：审计 message 可能含渲染层可控串，防伪造日志行
+        const sanitized = Array.from(message)
+          .filter((ch) => ch.charCodeAt(0) >= 0x20)
+          .join('')
+          .replace(/[\r\n]/g, ' ');
+        appendFileSync(logFile, `${new Date().toISOString()} ${sanitized}\n`);
       } catch {
         // 日志失败不影响主流程
       }

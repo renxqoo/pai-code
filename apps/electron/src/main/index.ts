@@ -91,6 +91,10 @@ void app.whenReady().then(async () => {
       new Notification({ title: 'pai', body: event.title ?? 'Action required' }).show();
     } else if (event.type === 'host' && event.phase === 'failed') {
       new Notification({ title: 'pai', body: 'Agent host failed to start.' }).show();
+    } else if (event.type === 'host' && event.phase === 'restarting') {
+      new Notification({ title: 'pai', body: 'Agent host is restarting.' }).show();
+    } else if (event.type === 'turnSettled') {
+      new Notification({ title: 'pai', body: 'Turn finished.' }).show();
     }
   };
 

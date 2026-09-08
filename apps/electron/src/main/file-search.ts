@@ -10,15 +10,19 @@ import { join } from 'node:path';
 const SKIP_DIRS: ReadonlySet<string> = new Set(['node_modules', '.git', 'dist', 'build', 'out', '.next', 'coverage', 'target']);
 const MAX_RESULTS = 200;
 const MAX_DEPTH = 8;
+/** 已访问目录数上限：同步扫描的主进程阻塞预算（大树 cwd 截断而非全量遍历）。 */
+const MAX_DIRS = 2000;
 
 export function searchProjectFiles(cwd: string, query: string): string[] {
   const needle = query.trim().toLowerCase();
   const results: string[] = [];
   const queue: Array<{ dir: string; rel: string; depth: number }> = [{ dir: cwd, rel: '', depth: 0 }];
-  while (queue.length > 0 && results.length < MAX_RESULTS) {
+  let visitedDirs = 0;
+  while (queue.length > 0 && results.length < MAX_RESULTS && visitedDirs < MAX_DIRS) {
     const next = queue.shift();
     if (next === undefined) break;
     const { dir, rel, depth } = next;
+    visitedDirs += 1;
     let entries;
     try {
       entries = readdirSync(dir, { withFileTypes: true });

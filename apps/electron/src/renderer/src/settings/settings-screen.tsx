@@ -38,9 +38,8 @@ type SettingsScreenProps = {
   onSaveSessionRules: (rules: PermissionRules | null) => Promise<boolean>
   onLoadSessionRules: () => void
   trustedDefault: boolean
-  hubDev: { bunPath: string | null; hubEntry: string | null }
   language: 'zh' | 'en'
-  onSaveGeneral: (patch: { trustedDefault?: boolean; hubDev?: { bunPath: string | null; hubEntry: string | null } }) => Promise<boolean>
+  onSaveGeneral: (patch: { trustedDefault?: boolean }) => Promise<boolean>
   onLanguageChange: (language: 'zh' | 'en') => void
   diagnostics: { hostPhase: 'starting' | 'ready' | 'restarting' | 'failed' | null; stderrTail: string; registrySessions: number } | null
   onShowDiagnostics: () => void
@@ -84,7 +83,6 @@ function SettingsScreen({
   onLoadSessionRules,
   onShowAgents,
   trustedDefault,
-  hubDev,
   language,
   onSaveGeneral,
   onLanguageChange,
@@ -155,7 +153,6 @@ function SettingsScreen({
               {section === 'general' ? (
                 <GeneralSection
                   trustedDefault={trustedDefault}
-                  hubDev={hubDev}
                   language={language}
                   onSave={onSaveGeneral}
                   onLanguageChange={onLanguageChange}

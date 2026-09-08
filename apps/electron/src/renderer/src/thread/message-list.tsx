@@ -21,9 +21,9 @@ type MessageListProps = {
   onForkUserMessage?: (entryId: string, text: string, autoResend: boolean) => void
 }
 
-/** 水化消息 id（msg-<entryId>）→ 协议 entryId；非水化形态返回原样（调用方守卫）。 */
-function entryIdOf(messageId: string): string {
-  return messageId.replace(/^msg-/, '');
+/** 水化消息 id（msg-<entryId>）→ 协议 entryId；live 回显（UUID）不可分叉返回 null。 */
+function entryIdOf(messageId: string): string | null {
+  return messageId.startsWith('msg-') ? messageId.slice('msg-'.length) : null;
 }
 
 function itemTopMargin(index: number, item: ThreadItem): string {
@@ -63,14 +63,14 @@ function MessageList({ thread, now, emptyTitle, emptyHint, onOpenAgents, onOpenD
                     message={item.message}
                     onEdit={onEditUserMessage}
                     onEditRerun={
-                      onForkUserMessage === undefined
+                      onForkUserMessage === undefined || entryIdOf(item.message.id) === null
                         ? undefined
-                        : (text) => onForkUserMessage(entryIdOf(item.message.id), text, false)
+                        : (text) => onForkUserMessage(entryIdOf(item.message.id) ?? '', text, false)
                     }
                     onRetry={
-                      onForkUserMessage === undefined
+                      onForkUserMessage === undefined || entryIdOf(item.message.id) === null
                         ? undefined
-                        : (text) => onForkUserMessage(entryIdOf(item.message.id), text, true)
+                        : (text) => onForkUserMessage(entryIdOf(item.message.id) ?? '', text, true)
                     }
                   />
                 ) : item.message.role === 'system' ? (

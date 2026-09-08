@@ -110,7 +110,7 @@ function HistorySection({
               >
                 <span className="w-full truncate text-[12.5px] text-foreground">{session.title}</span>
                 <span className="text-[11px] text-muted-foreground">
-                  {formatRelativeAge(now, session.modifiedAt)} · {session.messageCount} msgs · {session.cwd}
+                  {formatRelativeAge(now, session.modifiedAt)} · {session.messageCount} {copy.settings.historyMsgs} · {session.cwd}
                 </span>
               </button>
               <div className="absolute top-1/2 right-[8px] hidden -translate-y-1/2 items-center gap-[10px] rounded-[6px] bg-background px-[6px] py-[3px] group-focus-within/history-row:flex group-hover/history-row:flex">

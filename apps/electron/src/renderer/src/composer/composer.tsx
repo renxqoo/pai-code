@@ -37,6 +37,8 @@ type ComposerProps = {
   onSearchFiles: (query: string) => Promise<string[] | null>
   /** 用量明细（I1）。 */
   stats: SessionStatsView | null
+  /** 会话标识：切换时清空附件（防图片串发到别的会话）。 */
+  threadId: string
   /** 无可选模型时的引导文案（点击触发 onOpenSettings） */
   noModelsLabel: string
   /** 思考档不可用时的禁用原因文案 */
@@ -79,6 +81,7 @@ function Composer({
   fileAriaLabel,
   onSearchFiles,
   stats,
+  threadId,
   noModelsLabel,
   effortUnavailableLabel,
   generating,
@@ -150,6 +153,18 @@ function Composer({
       return current.filter((item) => item.id !== id);
     });
   };
+
+  // 切会话清空附件并回收对象 URL（文本草稿按会话隔离，附件同样不得串扰）
+  const prevThreadRef = React.useRef(threadId);
+  React.useEffect(() => {
+    if (prevThreadRef.current === threadId) return;
+    prevThreadRef.current = threadId;
+    setAttachments((current) => {
+      for (const item of current) untrackUrl(item.previewUrl);
+      return [];
+    });
+    setAttachError(null);
+  }, [threadId]);
 
   const clearAttachments = (): void => {
     for (const item of attachments) untrackUrl(item.previewUrl);
@@ -301,12 +316,12 @@ function Composer({
               if (autocompleteActive && !event.nativeEvent.isComposing) {
                 if (event.key === 'ArrowDown') {
                   event.preventDefault();
-                  setActiveIndex((index) => (index + 1) % slashItems.length);
+                  setActiveIndex((index) => (index + 1) % items.length);
                   return;
                 }
                 if (event.key === 'ArrowUp') {
                   event.preventDefault();
-                  setActiveIndex((index) => (index - 1 + slashItems.length) % slashItems.length);
+                  setActiveIndex((index) => (index - 1 + items.length) % items.length);
                   return;
                 }
                 if (event.key === 'Enter' || event.key === 'Tab') {

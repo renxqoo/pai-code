@@ -22,22 +22,8 @@ type SaveStatus = 'saved' | 'failed' | null;
 const TOOLS: readonly ToolKey[] = ['bash', 'write', 'edit'];
 const PATTERN_KINDS: readonly PatternKind[] = ['allowPatterns', 'blockPatterns'];
 
-const MODE_OPTIONS: ReadonlyArray<{ value: PermissionRules['mode']; label: string }> = [
-  { value: 'ask', label: copy.settings.permissionsModeAsk },
-  { value: 'allow-all', label: copy.settings.permissionsModeAllowAll },
-  { value: 'block-all', label: copy.settings.permissionsModeBlockAll },
-];
 
-const TOOL_TITLES: Record<ToolKey, string> = {
-  bash: copy.settings.permissionsBash,
-  write: copy.settings.permissionsWrite,
-  edit: copy.settings.permissionsEdit,
-};
 
-const KIND_LABELS: Record<PatternKind, string> = {
-  allowPatterns: copy.settings.permissionsAllow,
-  blockPatterns: copy.settings.permissionsBlock,
-};
 
 /** 深拷贝规则：保存时传给外层，避免草稿与已保存对象共享数组引用。 */
 function cloneRules(rules: PermissionRules): PermissionRules {
@@ -129,6 +115,21 @@ function patternEditor(config: {
 
 /** Permissions 分区：模式单选卡 + bash/write/edit 各自的 allow/block pattern chips + 保存（草稿未变时禁用）。 */
 function PermissionsSection({ rules, onSave, sessionRules, onLoadSession, onSaveSession }: PermissionsSectionProps) {
+  // 语言切换后随渲染重估（模块级常量会冻结首个 locale）
+  const MODE_OPTIONS: ReadonlyArray<{ value: PermissionRules['mode']; label: string }> = [
+  { value: 'ask', label: copy.settings.permissionsModeAsk },
+  { value: 'allow-all', label: copy.settings.permissionsModeAllowAll },
+  { value: 'block-all', label: copy.settings.permissionsModeBlockAll },
+];
+  const TOOL_TITLES: Record<ToolKey, string> = {
+  bash: copy.settings.permissionsBash,
+  write: copy.settings.permissionsWrite,
+  edit: copy.settings.permissionsEdit,
+};
+  const KIND_LABELS: Record<PatternKind, string> = {
+  allowPatterns: copy.settings.permissionsAllow,
+  blockPatterns: copy.settings.permissionsBlock,
+};
   /** 作用域：全局规则文件 / 当前会话 sidecar（G2） */
   const [scope, setScope] = React.useState<'global' | 'session'>('global');
   const baseline = scope === 'global' ? rules : sessionRules?.rules ?? null;

@@ -30,6 +30,15 @@ import { copy } from '@/strings';
 const SIDEBAR_WIDTH = 188;
 const SIDEBAR_MIN_WIDTH = 168;
 const SIDEBAR_MAX_WIDTH = 320;
+
+/** 语言切换触发根级重挂载时需要存续的 UI 态（会话草稿/侧栏几何/开合）。 */
+const uiState = {
+  composerDraft: '',
+  drafts: {} as Record<string, string>,
+  sidebarWidth: SIDEBAR_WIDTH,
+  sidebarCollapsed: false,
+  settingsOpen: false,
+};
 const CONTENT_HORIZONTAL_PADDING = 56;
 
 /** 右侧面板槽位：Diff / Agents 共用一个槽位，互斥切换 */
@@ -39,37 +48,52 @@ type SidePanel = 'diff' | 'agents' | null;
 function noop(): void {}
 
 function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.JSX.Element {
-  const [composerDraft, setComposerDraft] = React.useState('');
+  const [composerDraft, setComposerDraft] = React.useState(uiState.composerDraft);
   /** 草稿按会话隔离：切走再回来不丢，也互不串扰 */
-  const [drafts, setDrafts] = React.useState<Readonly<Record<string, string>>>({});
-  const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
+  const [drafts, setDrafts] = React.useState<Readonly<Record<string, string>>>(uiState.drafts);
+  const [sidebarCollapsed, setSidebarCollapsed] = React.useState(uiState.sidebarCollapsed);
   /** 侧栏会话过滤查询（A3）：按标题/项目名过滤 */
   const [sidebarQuery, setSidebarQuery] = React.useState('');
   /** 折叠的项目分组名集合（A4） */
   const [collapsedGroups, setCollapsedGroups] = React.useState<ReadonlySet<string>>(new Set());
   /** 面板开合挂在会话之上：切换会话不丢失 */
   const [panel, setPanel] = React.useState<SidePanel>(null);
-  const [settingsOpen, setSettingsOpen] = React.useState(false);
+  const [settingsOpen, setSettingsOpen] = React.useState(uiState.settingsOpen);
   /** 排队消息面板开合（A7；横幅排队行点击切换） */
   const [queueOpen, setQueueOpen] = React.useState(false);
   /** 停止确认（H2：存在在途子代理时二次确认，不可恢复） */
   const [confirmStop, setConfirmStop] = React.useState(false);
   /** Usage 总览页（I2；侧栏 footer 入口） */
   const [usageOpen, setUsageOpen] = React.useState(false);
+  React.useEffect(() => {
+    if (usageOpen) workspace.actions.refreshAllStats();
+    // eslint 不在此项目；actions 引用不稳，依赖 usageOpen 单轴即可
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [usageOpen]);
   /** 界面语言镜像（changeLocale 广播后 app 根重挂载；此 state 驱动设置分区即时刷新） */
   const [language, setLanguage] = React.useState<Locale>(getLocale());
   const [newThreadOpen, setNewThreadOpen] = React.useState(false);
   /** 编辑重发：回填草稿后聚焦输入框 */
   const composerTextRef = React.useRef<HTMLTextAreaElement | null>(null);
-  const { width, dragging, separators } = useSidebarResize(SIDEBAR_WIDTH, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
+  const { width, dragging, separators } = useSidebarResize(uiState.sidebarWidth, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
   const { sessions, activeThreadId } = workspace;
 
   const draft = drafts[activeThreadId] ?? composerDraft;
   const setDraft = (value: string) => {
     setComposerDraft(value);
+    uiState.composerDraft = value;
     if (activeThreadId.length === 0) return;
     setDrafts((current) => ({ ...current, [activeThreadId]: value }));
   };
+  React.useEffect(() => {
+    uiState.drafts = { ...drafts };
+  }, [drafts]);
+  React.useEffect(() => {
+    uiState.sidebarWidth = width;
+    uiState.sidebarCollapsed = sidebarCollapsed;
+    uiState.settingsOpen = settingsOpen;
+  }, [width, sidebarCollapsed, settingsOpen]);
+
   const clearDraft = () => {
     setComposerDraft('');
     setDrafts((current) => {
@@ -90,12 +114,14 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   /** 分叉重发（B2/A5）：fork 到该用户消息之前；autoResend=true 原样重发，否则回填草稿。
    * 仅水化消息可分叉（live 回显是 UUID，对账后才有协议 entryId）。 */
   const forkUserMessage = (entryId: string, text: string, autoResend: boolean) => {
-    void workspace.actions.forkFromEntry(entryId).then((ok) => {
-      if (!ok) return;
+    void workspace.actions.forkFromEntry(entryId).then((newThreadId) => {
+      if (newThreadId === null) return;
       if (autoResend) {
+        // submitDraft 调用时读 store 真相（已是分叉线程）
         void workspace.actions.submitDraft(text);
       } else {
-        setDraft(text);
+        // 回填到分叉线程的草稿槽（不得写旧会话键）
+        setDrafts((current) => ({ ...current, [newThreadId]: text }));
         composerTextRef.current?.focus();
       }
     });
@@ -109,10 +135,14 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const submitDraft = (text: string, images?: readonly ImagePayload[], mode: 'auto' | 'steer' | 'followUp' = 'auto') => {
     const trimmed = text.trim();
     if (trimmed.length === 0) return Promise.resolve(false);
-    // 行首 `! ` 前缀 = 直执行命令（B4）：走 bash 通路，不进模型轮次
-    if (trimmed.startsWith('!')) {
-      const command = trimmed.slice(1).trim();
+    // 行首 `! ` 前缀 = 直执行命令（B4）：走 bash 通路，不进模型轮次；不支持图片
+    if (trimmed.startsWith('! ')) {
+      const command = trimmed.slice(2).trim();
       if (command.length === 0) return Promise.resolve(false);
+      if ((images?.length ?? 0) > 0) {
+        workspace.actions.showNotice(copy.flow.bashNoImages);
+        return Promise.resolve(false);
+      }
       return workspace.actions.runBash(command).then((reason) => {
         if (reason === null) clearDraft();
         return reason === null;
@@ -129,6 +159,10 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       if (workspace.dialogs.length > 0) return;
+      if (usageOpen) {
+        setUsageOpen(false);
+        return;
+      }
       if (settingsOpen) {
         setSettingsOpen(false);
         return;
@@ -148,7 +182,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [panel, settingsOpen, confirmStop, workspace.dialogs.length, workspace.generating, workspace.agentsActive, workspace.actions]);
+  }, [panel, settingsOpen, usageOpen, confirmStop, workspace.dialogs.length, workspace.generating, workspace.agentsActive, workspace.actions]);
 
   /** 浏览器直开（无 preload）时桥不存在，降级为无动作 */
   const toggleMaximize = () => {
@@ -384,6 +418,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
             fileAriaLabel={copy.composer.fileAria}
             onSearchFiles={workspace.actions.searchFiles}
             stats={workspace.activeStats}
+            threadId={activeThreadId}
             noModelsLabel={copy.composer.noModels}
             effortUnavailableLabel={copy.composer.effortUnavailable}
             generating={workspace.generating}
@@ -438,7 +473,6 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         onSaveSessionRules={workspace.actions.writeSessionRules}
         onLoadSessionRules={workspace.actions.readSessionRules}
         trustedDefault={workspace.preferences.trustedDefault}
-        hubDev={workspace.preferences.hubDev}
         language={language}
         onSaveGeneral={workspace.actions.saveGeneralPreferences}
         onLanguageChange={(next) => {

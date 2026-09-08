@@ -139,7 +139,6 @@ export const PreferencesViewSchema = z.object({
   projectModels: z.record(z.string(), z.string()),
   pinnedSessions: z.array(z.string()),
   trustedDefault: z.boolean(),
-  hubDev: z.object({ bunPath: z.string().nullable(), hubEntry: z.string().nullable() }).strict(),
 });
 export type PreferencesView = z.infer<typeof PreferencesViewSchema>;
 
@@ -158,7 +157,6 @@ export type BootstrapView = z.infer<typeof BootstrapViewSchema>;
 
 const empty = z.object({}).strict();
 const threadOnly = z.object({ threadId: z.string().min(1) }).strict();
-const threadAndMessage = z.object({ threadId: z.string().min(1), message: z.string().min(1) }).strict();
 const imagePayload = z
   .object({
     type: z.literal('image'),
@@ -207,7 +205,9 @@ export const ApiSchemas = {
     result: z.null(),
   },
   'session/steer': {
-    params: threadAndMessage,
+    params: z
+      .object({ threadId: z.string().min(1), message: z.string().min(1), images: z.array(imagePayload).optional() })
+      .strict(),
     result: z.null(),
   },
   'session/followUp': {
@@ -390,7 +390,6 @@ export const ApiSchemas = {
         projectModels: z.record(z.string(), z.string()).optional(),
         pinnedSessions: z.array(z.string()).optional(),
         trustedDefault: z.boolean().optional(),
-        hubDev: z.object({ bunPath: z.string().nullable(), hubEntry: z.string().nullable() }).strict().optional(),
       })
       .strict()
       .refine(
@@ -399,8 +398,7 @@ export const ApiSchemas = {
           value.onboarded !== undefined ||
           value.projectModels !== undefined ||
           value.pinnedSessions !== undefined ||
-          value.trustedDefault !== undefined ||
-          value.hubDev !== undefined,
+          value.trustedDefault !== undefined,
         { message: 'empty_preference' },
       ),
     result: PreferencesViewSchema,

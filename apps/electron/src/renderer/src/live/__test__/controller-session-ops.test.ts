@@ -134,14 +134,14 @@ test('clearQueue 与 forkSession：命令形状与新会话激活', async () => 
   await controller.clearQueue('t1');
   expect(client.calls).toContainEqual({ method: 'session/clearQueue', params: { threadId: 't1' } });
 
-  expect(await controller.forkSession('t1', 'entry-9')).toBe(true);
+  expect(await controller.forkSession('t1', 'entry-9')).toBe('t-fork');
   expect(client.calls).toContainEqual({ method: 'session/fork', params: { threadId: 't1', entryId: 'entry-9', position: 'before' } });
   expect(store.getState().activeThreadId).toBe('t-fork');
 });
 
-test('forkSession 失败返回 false 不切会话', async () => {
+test('forkSession 失败返回 null 不切会话', async () => {
   const client = makeClient({ 'session/fork': { ok: false, reason: 'entry_not_found' } });
   const store = createLiveStore();
-  expect(await createLiveController(client, store).forkSession('t1', 'x')).toBe(false);
+  expect(await createLiveController(client, store).forkSession('t1', 'x')).toBeNull();
   expect(store.getState().activeThreadId).toBeNull();
 });

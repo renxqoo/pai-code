@@ -120,14 +120,18 @@ export type LiveWorkspaceView = {
     readonly clearQueue: () => void;
     readonly revealSession: (sessionPath: string) => void;
     readonly togglePinnedSession: (sessionPath: string) => void;
-    readonly forkFromEntry: (entryId: string) => Promise<boolean>;
+    readonly forkFromEntry: (entryId: string) => Promise<string | null>;
     readonly submitDraftAs: (message: string, mode: 'steer' | 'followUp') => Promise<string | null>;
     readonly reloadSessionTrusted: (threadId: string, trusted: boolean) => void;
     readonly steerSubagent: (subagentId: string, message: string) => void;
     readonly fetchDiagnostics: () => void;
     readonly restartHost: () => void;
+    /** 打开 Usage 页时对全部活跃线程补拉 stats（防未访问会话显示 0）。 */
+    readonly refreshAllStats: () => void;
+    /** 通用通知（bash 携图拒绝等接线层提示）。 */
+    readonly showNotice: (text: string) => void;
     /** J2 通用偏好保存（trustedDefault / 宿主路径）。 */
-    readonly saveGeneralPreferences: (patch: { trustedDefault?: boolean; hubDev?: { bunPath: string | null; hubEntry: string | null } }) => Promise<boolean>;
+    readonly saveGeneralPreferences: (patch: { trustedDefault?: boolean }) => Promise<boolean>;
     readonly testProvider: (name: string) => Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }>;
     readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: string[]; apiKey?: string }) => Promise<boolean>;
     readonly removeProvider: (name: string) => Promise<boolean>;
@@ -173,7 +177,7 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     // 切会话（或最后一个会话被移除）先清会话级派生态，避免上一会话残留到新会话
     setEffortLevels([]);
     setCommands([]);
-    store.setState({ agents: [] });
+    store.setState({ agents: [], sessionRules: null });
     if (activeThreadId.length === 0) return;
     void controller.ensureHydrated(activeThreadId);
     // 思考档位随会话拉取（模型能力差异；响应回来时会话已切换则丢弃）
@@ -205,6 +209,10 @@ export function useLiveWorkspace(): LiveWorkspaceView {
   }, [hasActivity]);
 
   const activeSession = state.sessions[activeThreadId];
+  /** @ 文件搜索回调：引用稳定（仅随 cwd 变化），防 composer 去抖 effect 被高频重置 */
+  const activeCwdValue = activeSession?.cwd ?? '';
+  const searchFiles = React.useCallback((query: string) => controller.searchFiles(activeCwdValue, query), [activeCwdValue]);
+
   const stateModels = state.models;
   const stateStats = state.stats;
   const composer = React.useMemo(
@@ -257,14 +265,17 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     thinkingLevels: effortLevels,
     actions: {
       submitDraft: async (message, images, mode) => {
-        const reason = await controller.submitDraft(activeThreadId, message, images, mode);
+        // 调用时读 store 真相：fork/重开等异步链路后的旧闭包不得打到旧线程
+        const threadId = store.getState().activeThreadId ?? activeThreadId;
+        const reason = await controller.submitDraft(threadId, message, images, mode);
         if (reason !== null && reason !== 'bridge_unavailable') {
           pushNotice(copy.flow.sendFailed(reason));
         }
         return reason;
       },
       submitDraftAs: async (message, mode) => {
-        const reason = await controller.submitDraft(activeThreadId, message, undefined, mode);
+        const threadId = store.getState().activeThreadId ?? activeThreadId;
+        const reason = await controller.submitDraft(threadId, message, undefined, mode);
         if (reason !== null && reason !== 'bridge_unavailable') {
           pushNotice(copy.flow.sendFailed(reason));
         }
@@ -291,7 +302,9 @@ export function useLiveWorkspace(): LiveWorkspaceView {
         // 项目默认模型记忆（A4）：该 cwd 下次新建会话预选
         const cwd = activeSession?.cwd;
         if (cwd !== undefined && cwd.length > 0) {
-          const projectModels = { ...state.preferences.projectModels, [cwd]: value };
+          // 记忆上限 50 项：超出按插入序淘汰最旧（防 settings.json 无界增长）
+          const entries = [...Object.entries(state.preferences.projectModels), [cwd, value] as const];
+          const projectModels = Object.fromEntries(entries.slice(Math.max(0, entries.length - 50)));
           void controller.updatePreferences({ projectModels });
         }
       },
@@ -351,6 +364,14 @@ export function useLiveWorkspace(): LiveWorkspaceView {
       fetchDiagnostics: () => {
         void controller.fetchDiagnostics().then((data) => setDiagnostics(data));
       },
+      refreshAllStats: () => {
+        for (const threadId of Object.keys(store.getState().sessions)) {
+          void controller.refreshStats(threadId);
+        }
+      },
+      showNotice: (text) => {
+        pushNotice(text);
+      },
       saveGeneralPreferences: async (patch) => {
         const next = await controller.updatePreferences(patch);
         if (next === null) {
@@ -373,7 +394,7 @@ export function useLiveWorkspace(): LiveWorkspaceView {
       refreshAgents: () => {
         void controller.refreshAgents(activeThreadId.length > 0 ? activeThreadId : null);
       },
-      searchFiles: (query) => controller.searchFiles(activeSession?.cwd ?? '', query),
+      searchFiles,
       runBash: async (command) => {
         const reason = await controller.runBash(activeThreadId, command);
         if (reason !== null) pushNotice(copy.flow.bashFailed(reason));
@@ -392,9 +413,9 @@ export function useLiveWorkspace(): LiveWorkspaceView {
         });
       },
       forkFromEntry: async (entryId) => {
-        const ok = await controller.forkSession(activeThreadId, entryId);
-        if (!ok) pushNotice(copy.flow.forkFailed);
-        return ok;
+        const newThreadId = await controller.forkSession(activeThreadId, entryId);
+        if (newThreadId === null) pushNotice(copy.flow.forkFailed);
+        return newThreadId;
       },
       upsertProvider: (input) => controller.upsertProvider(input),
       removeProvider: (name) => controller.removeProvider(name),
