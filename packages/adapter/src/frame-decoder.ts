@@ -142,21 +142,23 @@ export function createFrameDecoder(onFrame: (frame: HubFrame) => void, options: 
           return;
         }
       }
+      // 行提取用偏移游标推进、chunk 处理完一次性压缩尾巴：单 chunk 含 k 行时
+      // 复制成本从 O(k×chunk) 降为每 chunk 一次（流式高频小 delta 帧是热路径）
+      let start = 0;
       for (;;) {
         const index = buffer.indexOf('\n', scanned);
-        if (index === -1) {
-          scanned = buffer.length;
-          break;
-        }
-        const line = buffer.slice(0, index);
-        buffer = buffer.slice(index + 1);
-        scanned = 0;
+        if (index === -1) break;
+        const line = buffer.slice(start, index);
+        start = index + 1;
+        scanned = start;
         if (line.length > maxLineChars) {
           options.onDropped?.('line_too_long');
           continue;
         }
         handleLine(line);
       }
+      if (start > 0) buffer = buffer.slice(start);
+      scanned = buffer.length;
     },
     finish(): void {
       const tail = buffer;

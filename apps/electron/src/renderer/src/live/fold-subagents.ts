@@ -1,7 +1,7 @@
 import type { UiEvent } from '@paiapp/contracts';
 import type { SubagentModel, ThreadItem } from '@/thread/thread-model';
 
-import type { LiveThreadState } from './live-thread-state';
+import { noteCallStart, omitCallStart, type LiveThreadState } from './live-thread-state';
 import { clip, findTurn, updateTurn } from './turn-ops';
 
 /**
@@ -110,7 +110,7 @@ function onSubagentTool(
 ): LiveThreadState {
   if (event.phase === 'start') {
     const key = `${event.subagentId}:${event.call.id}`;
-    const withStart = { ...state, callStarts: { ...state.callStarts, [key]: now } };
+    const withStart = { ...state, callStarts: noteCallStart(state.callStarts, key, now) };
     return upsertAgent(withStart, event.subagentId, now, (agent) => ({
       ...agent,
       toolCount: agent.toolCount + 1,
@@ -126,9 +126,10 @@ function onSubagentTool(
       tools: agent.tools.map((tool) => (tool.id === event.call.id ? { ...tool, output: clip(event.output ?? tool.output) } : tool)),
     }));
   }
-  const startedAt = state.callStarts[`${event.subagentId}:${event.call.id}`];
+  const key = `${event.subagentId}:${event.call.id}`;
+  const startedAt = state.callStarts[key];
   const durationMs = typeof startedAt === 'number' ? Math.max(0, now - startedAt) : null;
-  return upsertAgent(state, event.subagentId, now, (agent) => ({
+  return upsertAgent({ ...state, callStarts: omitCallStart(state.callStarts, key) }, event.subagentId, now, (agent) => ({
     ...agent,
     tools: agent.tools.map((tool) =>
       tool.id === event.call.id

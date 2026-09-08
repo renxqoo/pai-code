@@ -68,3 +68,49 @@ export type HydrateAction =
   /** 全量重建（settle 对账）：条目真相整体替换 items，继承停止语义。 */
   | { kind: 'hydrate/rebuild'; items: readonly HistoryItem[]; cursor: string | null }
   | { kind: 'hydrate/failed' };
+
+/**
+ * 无界增长治理：seenIds/callStarts 都是「在途辅助表」，长会话必须封顶。
+ * seenIds 的去重主保障是 cursor 区间（只前进），seenIds 是双保险——
+ * 超限按插入序淘汰最旧一批（Set/Object 迭代序即写入序）。
+ */
+const SEEN_IDS_LIMIT = 5000;
+const SEEN_IDS_TRIM_TO = 4000;
+const CALL_STARTS_LIMIT = 1024;
+
+export function capSeenIds(seen: ReadonlySet<string>): ReadonlySet<string> {
+  if (seen.size <= SEEN_IDS_LIMIT) return seen;
+  const next = new Set(seen);
+  let dropped = 0;
+  const excess = seen.size - SEEN_IDS_TRIM_TO;
+  for (const id of seen) {
+    if (dropped >= excess) break;
+    next.delete(id);
+    dropped += 1;
+  }
+  return next;
+}
+
+/** 工具计时写入：超限保留最新一半（在途工具数量远小于上限，裁剪只发生在异常堆积）。 */
+export function noteCallStart(table: Readonly<Record<string, number>>, callId: string, at: number): Readonly<Record<string, number>> {
+  const merged = { ...table, [callId]: at };
+  const keys = Object.keys(merged);
+  if (keys.length <= CALL_STARTS_LIMIT) return merged;
+  const keep = new Set(keys.slice(keys.length - Math.floor(CALL_STARTS_LIMIT / 2)));
+  const next: Record<string, number> = {};
+  for (const key of keys) {
+    const value = merged[key];
+    if (keep.has(key) && value !== undefined) next[key] = value;
+  }
+  return next;
+}
+
+/** 工具结束即除名（durationMs 已定格，条目不再有用途）。 */
+export function omitCallStart(table: Readonly<Record<string, number>>, callId: string): Readonly<Record<string, number>> {
+  if (!(callId in table)) return table;
+  const next: Record<string, number> = {};
+  for (const [key, value] of Object.entries(table)) {
+    if (key !== callId) next[key] = value;
+  }
+  return next;
+}

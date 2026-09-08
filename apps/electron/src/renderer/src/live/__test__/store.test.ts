@@ -21,13 +21,12 @@ describe('live store（对话框/通知/bootstrap 合并）', () => {
     const store = createLiveStore();
     const request: UiEvent = { type: 'dialogRequest', threadId: 't', requestId: 'r1', method: 'confirm', message: 'm' };
     store.getState().applyEvent(request, 1);
-    expect(store.getState().dialogOrder).toEqual(['r1']);
+    expect(store.getState().dialogs.map((dialog) => dialog.requestId)).toEqual(['r1']);
     store.getState().applyEvent({ type: 'dialogSettled', requestId: 'r1' }, 2);
-    expect(store.getState().dialogOrder).toEqual([]);
-    expect(Object.keys(store.getState().dialogs)).toEqual([]);
+    expect(store.getState().dialogs).toEqual([]);
     // 未知 id 的 settle 无害
     store.getState().applyEvent({ type: 'dialogSettled', requestId: 'ghost' }, 3);
-    expect(store.getState().dialogOrder).toEqual([]);
+    expect(store.getState().dialogs).toEqual([]);
   });
 
   test('B-P6：notify 同 requestId 重投去重（与 dialog 路径对称）', () => {
@@ -42,7 +41,7 @@ describe('live store（对话框/通知/bootstrap 合并）', () => {
     const store = createLiveStore();
     store.getState().applyEvent({ type: 'dialogRequest', threadId: 't', requestId: 'n1', method: 'notify', message: 'hello' }, 1);
     store.getState().applyEvent({ type: 'dialogRequest', threadId: 't', requestId: 's1', method: 'setStatus' }, 1);
-    expect(store.getState().dialogOrder).toEqual([]);
+    expect(store.getState().dialogs).toEqual([]);
     expect(store.getState().notices).toEqual([{ id: 'n1', text: 'hello' }]);
     store.getState().dismissNotice('n1');
     expect(store.getState().notices).toEqual([]);
@@ -128,10 +127,9 @@ describe('live store（对话框/通知/bootstrap 合并）', () => {
     store.getState().applyEvent({ type: 'host', phase: 'failed' }, 8);
     expect(store.getState().threads['t2']?.streaming).toBe(false);
     // 挂起对话框随宿主进程消亡：立即收起（不等 5 分钟兜底超时）；线程标记 crashed 供横幅提示中断
-    store.setState({ dialogs: { r1: { requestId: 'r1', threadId: 't1', method: 'confirm' } }, dialogOrder: ['r1'] });
+    store.setState({ dialogs: [{ requestId: 'r1', threadId: 't1', method: 'confirm' }] });
     store.getState().applyEvent({ type: 'host', phase: 'restarting' }, 9);
-    expect(store.getState().dialogs).toEqual({});
-    expect(store.getState().dialogOrder).toEqual([]);
+    expect(store.getState().dialogs).toEqual([]);
     expect(store.getState().threads['t1']?.crashed).toBe(true);
   });
 
@@ -141,8 +139,8 @@ describe('live store（对话框/通知/bootstrap 合并）', () => {
     store.getState().applyEvent({ type: 'dialogRequest', threadId: 't1', requestId: 'r1', method: 'confirm', title: '允许执行？' }, 1);
     store.getState().applyEvent({ type: 'dialogRequest', threadId: 't2', requestId: 'r2', method: 'confirm', title: '另一个会话' }, 2);
     store.getState().applyEvent({ type: 'sessionDied', threadId: 't1', reason: 'crash' }, 3);
-    expect(Object.keys(store.getState().dialogs)).toEqual(['r2']);
-    expect(store.getState().dialogOrder).toEqual(['r2']);
+    expect(store.getState().dialogs.map((dialog) => dialog.requestId)).toEqual(['r2']);
+    expect(store.getState().dialogs.map((dialog) => dialog.requestId)).toEqual(['r2']);
     expect(store.getState().threads['t1']?.crashed).toBe(true);
   });
 

@@ -3,7 +3,7 @@ import type { ThreadItem, ToolCallModel, TurnBlock, TurnModel } from '@/thread/t
 
 import { attachTailSubagents, onSubagentEvent, syncSubagentsBlock } from './fold-subagents';
 import { hydrateItems, hydrateNewItems, mergeDiffFile } from './hydrate-items';
-import { initialThreadState, type HydrateAction, type LiveThreadState } from './live-thread-state';
+import { capSeenIds, initialThreadState, noteCallStart, omitCallStart, type HydrateAction, type LiveThreadState } from './live-thread-state';
 import { clip, findTurn, updateTurn } from './turn-ops';
 
 /**
@@ -35,7 +35,7 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
       };
       return {
         ...state,
-        seenIds: new Set([...state.seenIds, event.message.id]),
+        seenIds: capSeenIds(new Set([...state.seenIds, event.message.id])),
         items: insertBeforeLiveTurn(state.items, message, state.liveTurnId),
       };
     }
@@ -59,7 +59,7 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
         durationMs: null,
         status: 'running',
       };
-      const withStart = { ...withTurn, callStarts: { ...withTurn.callStarts, [event.call.id]: now } };
+      const withStart = { ...withTurn, callStarts: noteCallStart(withTurn.callStarts, event.call.id, now) };
       return updateTurn(withStart, turn.id, (current) => ({
         ...current,
         blocks: appendToolCall(current.blocks, call, current.id),
@@ -131,7 +131,7 @@ export function foldHydrate(state: LiveThreadState, action: HydrateAction): Live
   switch (action.kind) {
     case 'hydrate/initial': {
       const items = hydrateItems(action.items);
-      return { ...initialThreadState, items, cursor: action.cursor, seenIds: new Set(action.items.map((item) => item.id)), hydrated: true };
+      return { ...initialThreadState, items, cursor: action.cursor, seenIds: capSeenIds(new Set(action.items.map((item) => item.id))), hydrated: true };
     }
     case 'hydrate/reconcile': {
       const fresh = hydrateNewItems(action.items).filter(({ entryIds }) => entryIds.some((id) => !state.seenIds.has(id)));
@@ -157,7 +157,7 @@ export function foldHydrate(state: LiveThreadState, action: HydrateAction): Live
           }
         }
       }
-      const seen = new Set([...state.seenIds, ...action.items.map((item) => item.id)]);
+      const seen = capSeenIds(new Set([...state.seenIds, ...action.items.map((item) => item.id)]));
       return { ...state, items, cursor: action.cursor ?? state.cursor, seenIds: seen, liveTurnId: liveTurn };
     }
     case 'hydrate/rebuild': {
@@ -176,7 +176,7 @@ export function foldHydrate(state: LiveThreadState, action: HydrateAction): Live
       }
       // 转写条目无子代理形态：会话级子代理条随对话尾部重建（面板同一数据源，后台代理跨轮可见）
       const withSubagents = attachTailSubagents(items, state.agents);
-      return { ...state, items: withSubagents, cursor: action.cursor, seenIds: new Set(action.items.map((item) => item.id)), liveTurnId: null, liveMessageId: null, hydrateFailed: false };
+      return { ...state, items: withSubagents, cursor: action.cursor, seenIds: capSeenIds(new Set(action.items.map((item) => item.id))), liveTurnId: null, liveMessageId: null, hydrateFailed: false };
     }
     case 'hydrate/failed':
       return { ...state, hydrateFailed: true };
@@ -295,7 +295,8 @@ function onToolEnded(
       });
     }
   }
-  return next;
+  // durationMs 已定格，计时条目随即除名（长会话不累积）
+  return { ...next, callStarts: omitCallStart(next.callStarts, callId) };
 }
 
 /** message_update 的 partial 被 pai-cli 剥离时增量为空 id：挂到当前流式消息。 */

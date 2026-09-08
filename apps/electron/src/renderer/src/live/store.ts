@@ -58,8 +58,8 @@ export interface LiveStoreState {
   /** 用户级技能目录（进技能分区时拉取；启停真相在 pi settings）。 */
   skills: readonly SkillView[];
   threads: Readonly<Record<string, LiveThreadState>>;
-  dialogs: Readonly<Record<string, PendingDialog>>;
-  dialogOrder: readonly string[];
+  /** 挂起对话框队列（入队序即呈现序；数组本身即真相，无伴生索引）。 */
+  dialogs: readonly PendingDialog[];
   activeThreadId: string | null;
   stats: Readonly<Record<string, SessionStatsView>>;
   /** 通知条（notify/setStatus 类对话框的瞬时呈现）。 */
@@ -101,7 +101,7 @@ export function createLiveStore() {
               for (const [threadId, thread] of Object.entries(state.threads)) {
                 threads[threadId] = { ...foldDeath(thread, now), crashed: true };
               }
-              return { hostPhase: event.phase, threads, dialogs: {}, dialogOrder: [] };
+              return { hostPhase: event.phase, threads, dialogs: [] };
             }
             case 'sessionUpdated':
               return { sessions: { ...state.sessions, [event.session.threadId]: event.session } };
@@ -121,12 +121,8 @@ export function createLiveStore() {
             case 'sessionDied': {
               const thread = threadOf(state, event.threadId);
               // 该 worker 的挂起对话框随进程消亡：立即收起，不等 5 分钟兜底超时
-              const deadDialogIds = new Set(
-                state.dialogOrder.filter((id) => state.dialogs[id]?.threadId === event.threadId),
-              );
-              const dialogs = deadDialogIds.size === 0 ? state.dialogs : omitKeys(state.dialogs, deadDialogIds);
-              const dialogOrder = deadDialogIds.size === 0 ? state.dialogOrder : state.dialogOrder.filter((id) => !deadDialogIds.has(id));
-              return { threads: { ...state.threads, [event.threadId]: foldThreadEvent(thread, event, now) }, dialogs, dialogOrder };
+              const dialogs = state.dialogs.filter((dialog) => dialog.threadId !== event.threadId);
+              return { threads: { ...state.threads, [event.threadId]: foldThreadEvent(thread, event, now) }, dialogs };
             }
             case 'dialogRequest': {
               if (event.method === 'notify') {
@@ -137,15 +133,12 @@ export function createLiveStore() {
                 return { notices: [...deduped.slice(-4), { id: event.requestId, text }] };
               }
               if (event.method === 'setStatus') return state;
-              const dialogs = { ...state.dialogs, [event.requestId]: toPendingDialog(event) };
-              return { dialogs, dialogOrder: [...state.dialogOrder.filter((id) => id !== event.requestId), event.requestId] };
+              const dialogs = [...state.dialogs.filter((dialog) => dialog.requestId !== event.requestId), toPendingDialog(event)];
+              return { dialogs };
             }
             case 'dialogSettled': {
-              if (!(event.requestId in state.dialogs)) return state;
-              return {
-                dialogs: omitKey(state.dialogs, event.requestId),
-                dialogOrder: state.dialogOrder.filter((id) => id !== event.requestId),
-              };
+              if (!state.dialogs.some((dialog) => dialog.requestId === event.requestId)) return state;
+              return { dialogs: state.dialogs.filter((dialog) => dialog.requestId !== event.requestId) };
             }
             default: {
               const threadId = (event as { threadId?: string }).threadId;
@@ -262,14 +255,6 @@ function omitKey<T>(source: Readonly<Record<string, T>>, key: string): Record<st
   return out;
 }
 
-function omitKeys<T>(source: Readonly<Record<string, T>>, keys: ReadonlySet<string>): Record<string, T> {
-  const out: Record<string, T> = {};
-  for (const [name, value] of Object.entries(source)) {
-    if (!keys.has(name)) out[name] = value;
-  }
-  return out;
-}
-
 function firstSessionId(sessions: Readonly<Record<string, SessionView>>): string | null {
   const ids = Object.keys(sessions);
   return ids.length > 0 ? (ids[0] ?? null) : null;
@@ -291,8 +276,7 @@ function initialStoreState(): LiveStoreState {
     permissionRules: null,
     sessionRules: null,
     threads: {},
-    dialogs: {},
-    dialogOrder: [],
+    dialogs: [],
     activeThreadId: null,
     stats: {},
     notices: [],

@@ -167,7 +167,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
         event.requestId,
         setTimeout(() => {
           dialogTimers.delete(event.requestId);
-          const stillPending = event.requestId in store.getState().dialogs;
+          const stillPending = store.getState().dialogs.some((dialog) => dialog.requestId === event.requestId);
           if (stillPending) void controller.cancelDialog(event.requestId);
         }, DIALOG_AUTO_DISMISS_MS),
       );

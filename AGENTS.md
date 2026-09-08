@@ -50,8 +50,8 @@ bun test          # 各模块 __test__ 单测 + T1 夹具回归
 ## 当前项目是怎么工作的
 
 - **进程模型**：主进程 spawn **一个** pi-hub（bun 二进制运行；env 清洗 provider key + `PI_CODING_AGENT_DIR=userData/agent` + `PI_SKIP_VERSION_CHECK=1`）；hub 进程内承载全部 thread（pi SDK AgentSession）；hub 心跳 1Hz，>10s 无心跳 = 挂死 → SIGKILL 进程组 → 重启 → 按快照逐个 `thread/resume`；Electron 退出 = 关 stdin → hub 优雅退出（协议级无孤儿）
-- **数据流**：hub stdout → 帧解析器（LF 唯一分隔，U+2028 不切，16MiB 行上限）→ 协议适配（`packages/adapter`，全项目唯一认识 hub 协议的实现包：帧解码 + 事件映射 + 命令编码）→ StreamAggregator（50ms 按 thread 分桶批推）→ Client/IPC → 渲染层 Zustand 两层状态机（thread 级 / turn 级）
-- **调度与预算**：线程并发由 Electron 客户端限流（全局按内存动态 2..8、单对话 ≤3、排队可见优先）；BudgetTracker 按 `message_end` usage 计量，超预算熔断拒绝新 thread
+- **数据流**：hub stdout → 帧解析器（LF 唯一分隔，U+2028 不切，16MiB 行上限）→ 协议适配（`packages/adapter`，全项目唯一认识 hub 协议的实现包：帧解码 + 事件映射 + 命令编码）→ 主进程事件批推（50ms 定时 / 满 128 条即刷，扁平有序不分桶，`apps/electron/src/main`）→ preload IPC → 渲染层 Zustand（单一 vanilla store；订阅面细粒度 selector，thread 级 / turn 级是 store 内两层折叠状态机，50ms 批内相邻同类 delta 先折叠再进 store）
+- **调度与预算**：线程并发由 Electron 客户端限流（全局按内存动态 2..8、单对话 ≤3、排队可见优先）；BudgetTracker 按 `message_end` usage 计量，超预算熔断拒绝新 thread（调度/预算模块未落地：`packages/core`、`packages/api` 当前为空壳，落地任务见 `tasks/T4`）
 - **权限与沙箱**：权限判定、拦截、超时默认拒绝、OS 沙箱**全部在 hub**；Pai 只做 UI 交互与提交，不镜像判定逻辑、不经手 spawn 包裹；thread 默认 `trusted:false` 不加载项目扩展。全局规则的唯一通路是 hub 热读的 `agentDir/permission-rules.json`（协议的 `get/set_permission_rules` 仅每线程 sidecar）——Pai 主进程经固定文件名白名单 Port 原子写该文件（宽容解析镜像 hub normalizeRules），会话级规则走协议命令
 - **持久化**：会话真相源 = hub 管理的 session jsonl（agentDir/sessions）；`node:sqlite` 只存 UI 元数据与 thread 映射（恢复快照）；重水化首选协议（`thread/list` + `get_state`/`get_messages`）
 - **认证**：仅 API key（auth/list、set_api_key、remove_key，key 只经 stdin 进 hub 侧 auth.json，Electron 零接触零回显）；无 OAuth

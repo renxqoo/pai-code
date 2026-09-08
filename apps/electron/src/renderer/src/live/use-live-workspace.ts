@@ -120,7 +120,6 @@ export function useLiveWorkspace(): LiveWorkspaceView {
   const stats = useStore(store, (s) => s.stats);
   const notices = useStore(store, (s) => s.notices);
   const dialogs = useStore(store, (s) => s.dialogs);
-  const dialogOrder = useStore(store, (s) => s.dialogOrder);
   const activeThreadId = useStore(store, (s) => s.activeThreadId) ?? '';
   // 活跃线程折叠态：后台线程事件只换 threads 其他条目引用，本 selector 引用不变 → 不重渲
   const threadState = useStore(store, (s) => (s.activeThreadId === null ? undefined : s.threads[s.activeThreadId]));
@@ -206,10 +205,7 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     diagnostics,
     statsById: stats,
     composer,
-    dialogs: React.useMemo(
-      () => dialogOrder.map((id) => dialogs[id]).filter((dialog): dialog is PendingDialog => dialog !== undefined),
-      [dialogOrder, dialogs],
-    ),
+    dialogs,
     notices,
     saved: React.useMemo(
       () =>
