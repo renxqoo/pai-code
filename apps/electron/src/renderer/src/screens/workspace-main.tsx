@@ -248,6 +248,8 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
             modelOptions={workspace.composer.modelOptions}
             effortOptions={workspace.composer.effortOptions}
             checkoutOptions={workspace.composer.checkoutOptions}
+            noModelsLabel={copy.composer.noModels}
+            effortUnavailableLabel={copy.composer.effortUnavailable}
             generating={workspace.generating}
             compacting={workspace.compacting}
             onChange={setDraft}
@@ -255,6 +257,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
             onStop={workspace.actions.stopActiveTurn}
             onAttach={noop}
             onCompact={workspace.actions.compact}
+            onOpenSettings={openSettings}
             onSelectModel={workspace.actions.selectModel}
             onSelectEffort={workspace.actions.selectEffort}
             onSelectCheckout={noop}

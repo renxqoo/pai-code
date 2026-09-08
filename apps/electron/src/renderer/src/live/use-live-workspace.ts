@@ -272,10 +272,11 @@ function buildComposer(
 ): ComposerSelection {
   const modelOptions = state.models.map((model) => `${model.provider}/${model.modelId}`);
   const currentModel = session?.model ?? modelOptions[0] ?? '';
-  const levels = effortLevels.length > 0 ? effortLevels : ['off', 'low', 'medium', 'high'];
+  // 思考档以模型能力列表为真相：拉取前/不支持时为空，composer 侧禁用并给原因（不臆造默认档）
+  const levels = effortLevels;
   const levelLabels = levels.map((level) => EFFORT_LABELS[level] ?? level);
-  const currentLabel = session?.thinkingLevel !== undefined && session.thinkingLevel !== null ? EFFORT_LABELS[session.thinkingLevel] : undefined;
-  // 未知档位回落到第一个可选档（模型能力列表是真相，不臆造默认）
+  const currentLabel = session?.thinkingLevel !== undefined && session?.thinkingLevel !== null ? EFFORT_LABELS[session.thinkingLevel] : undefined;
+  // 未知档位回落到第一个可选档；无可选档时留空（触发禁用态）
   const effort = currentLabel ?? levelLabels[0] ?? '';
   const cwdBase = basename(session?.cwd ?? '');
   return {

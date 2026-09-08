@@ -21,6 +21,10 @@ type ComposerProps = {
   modelOptions: readonly string[]
   effortOptions: readonly string[]
   checkoutOptions: readonly string[]
+  /** 无可选模型时的引导文案（点击触发 onOpenSettings） */
+  noModelsLabel: string
+  /** 思考档不可用时的禁用原因文案 */
+  effortUnavailableLabel: string
   /** 有生成任务时回车与提交动作都转为停止 */
   generating: boolean
   /** 压缩进行中：压缩按钮禁用，横幅由 ThreadBanner 呈现 */
@@ -30,6 +34,7 @@ type ComposerProps = {
   onStop: () => void
   onAttach: () => void
   onCompact: () => void
+  onOpenSettings?: () => void
   onSelectModel: (value: string) => void
   onSelectEffort: (value: string) => void
   onSelectCheckout: (value: string) => void
@@ -53,6 +58,8 @@ function Composer({
   modelOptions,
   effortOptions,
   checkoutOptions,
+  noModelsLabel,
+  effortUnavailableLabel,
   generating,
   compacting,
   onChange,
@@ -60,6 +67,7 @@ function Composer({
   onStop,
   onAttach,
   onCompact,
+  onOpenSettings,
   onSelectModel,
   onSelectEffort,
   onSelectCheckout,
@@ -106,10 +114,13 @@ function Composer({
           canSend={canSend}
           generating={generating}
           compacting={compacting}
+          noModelsLabel={noModelsLabel}
+          effortUnavailableLabel={effortUnavailableLabel}
           onSelectModel={onSelectModel}
           onSelectEffort={onSelectEffort}
           onAttach={onAttach}
           onCompact={onCompact}
+          onOpenSettings={onOpenSettings}
           onStop={onStop}
         />
       </form>

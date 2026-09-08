@@ -12,6 +12,8 @@ type ComposerActionsRowProps = {
   sendLabel: string
   stopLabel: string
   contextUsageLabel: string
+  noModelsLabel: string
+  effortUnavailableLabel: string
   contextUsed: number
   canSend: boolean
   /** 有生成任务时发送键让位给红色停止键 */
@@ -22,6 +24,8 @@ type ComposerActionsRowProps = {
   onSelectEffort: (value: string) => void
   onCompact: () => void
   onAttach: () => void
+  /** 无可选模型时点击引导跳设置 */
+  onOpenSettings?: () => void
   onStop: () => void
 }
 
@@ -43,6 +47,8 @@ function ComposerActionsRow({
   sendLabel,
   stopLabel,
   contextUsageLabel,
+  noModelsLabel,
+  effortUnavailableLabel,
   contextUsed,
   canSend,
   generating,
@@ -51,40 +57,57 @@ function ComposerActionsRow({
   onSelectEffort,
   onCompact,
   onAttach,
+  onOpenSettings,
   onStop,
 }: ComposerActionsRowProps) {
   return (
     <div className="flex items-center gap-[7px] px-4 pt-1 pb-[13px]">
-      <MenuButton
-        aria-label={model}
-        align="start"
-        popupMinWidth={200}
-        items={optionItems(modelOptions, model)}
-        onSelect={onSelectModel}
-        triggerClassName={menuTriggerClassName}
-        trigger={
-          <>
-            <SparkMark size={13} className="text-spark" />
-            <span className="whitespace-nowrap">{model}</span>
-            <ChevronDown className="size-3 text-muted-foreground/70" strokeWidth={2} />
-          </>
-        }
-      />
+      {modelOptions.length === 0 && onOpenSettings !== undefined ? (
+        <button type="button" onClick={onOpenSettings} title={noModelsLabel} className={menuTriggerClassName}>
+          <SparkMark size={13} className="text-spark" />
+          <span className="whitespace-nowrap">{noModelsLabel}</span>
+        </button>
+      ) : (
+        <MenuButton
+          aria-label={model}
+          align="start"
+          popupMinWidth={200}
+          items={optionItems(modelOptions, model)}
+          onSelect={onSelectModel}
+          triggerClassName={menuTriggerClassName}
+          trigger={
+            <>
+              <SparkMark size={13} className="text-spark" />
+              <span className="whitespace-nowrap">{model}</span>
+              <ChevronDown className="size-3 text-muted-foreground/70" strokeWidth={2} />
+            </>
+          }
+        />
+      )}
       <span aria-hidden="true" className="mx-[6px] h-[13px] w-px shrink-0 bg-border" />
-      <MenuButton
-        aria-label={effort}
-        align="start"
-        popupMinWidth={168}
-        items={optionItems(effortOptions, effort)}
-        onSelect={onSelectEffort}
-        triggerClassName={menuTriggerClassName}
-        trigger={
-          <>
-            <span className="whitespace-nowrap">{effort}</span>
-            <ChevronDown className="size-3 text-muted-foreground/70" strokeWidth={2} />
-          </>
-        }
-      />
+      {effortOptions.length === 0 ? (
+        <span
+          title={effortUnavailableLabel}
+          className="flex cursor-default items-center gap-2 rounded-lg py-1 pr-1 pl-1.5 text-[12px] leading-none text-muted-foreground/60 select-none"
+        >
+          <span className="whitespace-nowrap">{effortUnavailableLabel}</span>
+        </span>
+      ) : (
+        <MenuButton
+          aria-label={effort}
+          align="start"
+          popupMinWidth={168}
+          items={optionItems(effortOptions, effort)}
+          onSelect={onSelectEffort}
+          triggerClassName={menuTriggerClassName}
+          trigger={
+            <>
+              <span className="whitespace-nowrap">{effort}</span>
+              <ChevronDown className="size-3 text-muted-foreground/70" strokeWidth={2} />
+            </>
+          }
+        />
+      )}
       <div className="ml-auto flex items-center gap-[9px]">
         <IconButton label={compactLabel} size="sm" onClick={onCompact} disabled={compacting} className="text-muted-foreground/90">
           <FoldVertical strokeWidth={1.75} />

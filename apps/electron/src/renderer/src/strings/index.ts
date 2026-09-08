@@ -112,6 +112,8 @@ export const copy = {
     stop: 'Stop generating',
     contextUsage: 'Context used',
     compact: 'Compact context',
+    noModels: 'No models yet — open Settings',
+    effortUnavailable: 'Thinking unavailable',
     localCheckout: 'Local checkout',
     checkoutMenu: ['main', 'v0.6.1', 'v0.6.2'] as readonly string[],
     effortMenu: ['Low · 200K', 'Medium · 200K', 'High · 1M'] as readonly string[],
