@@ -35,6 +35,10 @@ export type LiveThreadState = {
   hydrateFailed: boolean;
   /** 是否已成功水化过（空会话 cursor 为 null，不能以 cursor 判定）。 */
   hydrated: boolean;
+  /** 直执行 bash 在途（`!` 命令；横幅呈现，停止键转中止）。 */
+  bashRunning: boolean;
+  /** 直执行 bash 的流式输出尾部（bashOutput 增量，封顶 2000 字符）。 */
+  bashTail: string;
 };
 
 export const initialThreadState: LiveThreadState = {
@@ -53,6 +57,8 @@ export const initialThreadState: LiveThreadState = {
   crashed: false,
   hydrateFailed: false,
   hydrated: false,
+  bashRunning: false,
+  bashTail: '',
 };
 
 /** 对账动作（非 UiEvent 的内部输入，controller 编排水化时派发）。 */

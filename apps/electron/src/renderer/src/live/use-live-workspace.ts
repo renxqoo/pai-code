@@ -57,6 +57,9 @@ export type LiveWorkspaceView = {
   queueCount: number;
   crashed: boolean;
   compacting: boolean;
+  /** 直执行 bash 在途与其流式输出尾部。 */
+  bashRunning: boolean;
+  bashTail: string;
   retrying: { attempt: number; maxAttempts: number } | null;
   hydrateFailed: boolean;
   now: number;
@@ -100,6 +103,8 @@ export type LiveWorkspaceView = {
     readonly writePermissionRules: (rules: PermissionRules) => Promise<boolean>;
     readonly refreshAgents: () => void;
     readonly searchFiles: (query: string) => Promise<string[] | null>;
+    readonly runBash: (command: string) => Promise<string | null>;
+    readonly abortBash: () => void;
     readonly reloadSessionTrusted: (threadId: string, trusted: boolean) => void;
     readonly testProvider: (name: string) => Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }>;
     readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: string[]; apiKey?: string }) => Promise<boolean>;
@@ -198,6 +203,8 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     queueCount: (threadState?.queue.steering.length ?? 0) + (threadState?.queue.followUp.length ?? 0),
     crashed: threadState?.crashed ?? false,
     compacting: threadState?.compacting ?? false,
+    bashRunning: threadState?.bashRunning ?? false,
+    bashTail: threadState?.bashTail ?? '',
     retrying: threadState?.retrying ?? null,
     hydrateFailed: threadState?.hydrateFailed ?? false,
     now,
@@ -293,6 +300,12 @@ export function useLiveWorkspace(): LiveWorkspaceView {
         void controller.refreshAgents(activeThreadId.length > 0 ? activeThreadId : null);
       },
       searchFiles: (query) => controller.searchFiles(activeSession?.cwd ?? '', query),
+      runBash: async (command) => {
+        const reason = await controller.runBash(activeThreadId, command);
+        if (reason !== null) pushNotice(copy.flow.bashFailed(reason));
+        return reason;
+      },
+      abortBash: () => void controller.abortBash(activeThreadId),
       upsertProvider: (input) => controller.upsertProvider(input),
       removeProvider: (name) => controller.removeProvider(name),
       renameSession: async (threadId, name) => {

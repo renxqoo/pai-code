@@ -125,14 +125,15 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
         crashed: true,
         agents: state.agents.map((agent) => (agent.status === 'working' ? { ...agent, status: 'done' as const, endedAt: now } : agent)),
       };
+    case 'bashOutput':
+      // 直执行 bash 流式输出：只留尾部 2000 字符（横幅预览；权威条目经对账到达）
+      return { ...state, bashTail: (state.bashTail + event.delta).slice(-2000) };
     case 'dialogRequest':
     case 'dialogSettled':
     case 'host':
     case 'sessionUpdated':
     case 'sessionRemoved':
     case 'sessionRenamed':
-    case 'bashOutput':
-      // 会话表/对话框/直执行面在 store 层处理；bash 无 v1 UI 入口
       return state;
     default:
       return state;

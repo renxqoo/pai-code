@@ -297,6 +297,15 @@ export const ApiSchemas = {
     params: z.object({ cwd: z.string().min(1), query: z.string() }).strict(),
     result: z.array(z.string()),
   },
+  /** 直执行 shell（hub 侧走同一权限门；结果在 response，流式经 bashOutput 事件）。 */
+  'session/bash': {
+    params: z.object({ threadId: z.string().min(1), command: z.string().min(1) }).strict(),
+    result: z.null(),
+  },
+  'session/abortBash': {
+    params: threadOnly,
+    result: z.null(),
+  },
   /** 全局权限规则（agentDir/permission-rules.json，hub 热读）。 */
   'permission/read': {
     params: empty,

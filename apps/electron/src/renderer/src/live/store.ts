@@ -68,6 +68,9 @@ export interface LiveStoreActions {
   bootstrapFailed(reason: string): void;
   setActiveThread(threadId: string | null): void;
   updateStats(threadId: string, stats: { contextUsage: number | null; tokensTotal: number }): void;
+  /** 直执行 bash 开始/结束（流式尾部经 bashOutput 事件折叠）。 */
+  bashStarted(threadId: string): void;
+  bashSettled(threadId: string): void;
   dismissNotice(id: string): void;
   reset(): void;
 }
@@ -177,6 +180,12 @@ export function createLiveStore() {
       },
       updateStats(threadId, stats) {
         set((state) => ({ stats: { ...state.stats, [threadId]: stats } }));
+      },
+      bashStarted(threadId) {
+        set((state) => ({ threads: { ...state.threads, [threadId]: { ...threadOf(state, threadId), bashRunning: true, bashTail: '' } } }));
+      },
+      bashSettled(threadId) {
+        set((state) => ({ threads: { ...state.threads, [threadId]: { ...threadOf(state, threadId), bashRunning: false, bashTail: '' } } }));
       },
       dismissNotice(id) {
         set((state) => ({ notices: state.notices.filter((notice) => notice.id !== id) }));

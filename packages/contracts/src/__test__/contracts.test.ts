@@ -177,6 +177,12 @@ describe('API schema：每方法合法/非法样本', () => {
     ).toThrow();
   });
 
+  test('session/bash 与 abortBash 样本', () => {
+    expect(ApiSchemas['session/bash'].params.parse({ threadId: 't', command: 'git status' })).toEqual({ threadId: 't', command: 'git status' });
+    expect(() => ApiSchemas['session/bash'].params.parse({ threadId: 't', command: '' })).toThrow();
+    expect(ApiSchemas['session/abortBash'].params.parse({ threadId: 't' })).toEqual({ threadId: 't' });
+  });
+
   test('file/search 合法样本与拒绝', () => {
     expect(ApiSchemas['file/search'].params.parse({ cwd: '/w', query: 'ap' })).toEqual({ cwd: '/w', query: 'ap' });
     expect(() => ApiSchemas['file/search'].params.parse({ cwd: '', query: '' })).toThrow();

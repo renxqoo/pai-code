@@ -81,6 +81,15 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const submitDraft = (text: string, images?: readonly ImagePayload[]) => {
     const trimmed = text.trim();
     if (trimmed.length === 0) return Promise.resolve(false);
+    // 行首 `! ` 前缀 = 直执行命令（B4）：走 bash 通路，不进模型轮次
+    if (trimmed.startsWith('!')) {
+      const command = trimmed.slice(1).trim();
+      if (command.length === 0) return Promise.resolve(false);
+      return workspace.actions.runBash(command).then((reason) => {
+        if (reason === null) clearDraft();
+        return reason === null;
+      });
+    }
     return workspace.actions.submitDraft(trimmed, images).then((reason) => {
       if (reason === null) clearDraft();
       return reason === null;
@@ -100,7 +109,8 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         setPanel(null);
         return;
       }
-      if (workspace.generating) workspace.actions.stopActiveTurn();
+      if (workspace.bashRunning) workspace.actions.abortBash();
+      else if (workspace.generating) workspace.actions.stopActiveTurn();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
@@ -246,6 +256,8 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
             compacting={workspace.compacting}
             retrying={workspace.retrying}
             queueCount={workspace.queueCount}
+            bashRunning={workspace.bashRunning}
+            bashTail={workspace.bashTail}
           />
           <Composer
             textareaRef={composerTextRef}
@@ -274,7 +286,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
             compacting={workspace.compacting}
             onChange={setDraft}
             onSubmit={submitDraft}
-            onStop={workspace.actions.stopActiveTurn}
+            onStop={workspace.bashRunning ? workspace.actions.abortBash : workspace.actions.stopActiveTurn}
             onCompact={workspace.actions.compact}
             onOpenSettings={openSettings}
             onSelectModel={workspace.actions.selectModel}

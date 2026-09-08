@@ -85,3 +85,29 @@ test('submitDraft 携带 images 透传（prompt 与 followUp 两路径）', asyn
   await createLiveController(noImages, createLiveStore()).submitDraft('t1', 'hello');
   expect(noImages.calls.find((call) => call.method === 'session/prompt')?.params).not.toHaveProperty('images');
 });
+
+test('runBash：置位/清位 bashRunning、发出命令、随后对账拉取', async () => {
+  const client = makeClient({});
+  const store = createLiveStore();
+  const controller = createLiveController(client, store);
+  store.getState().bootstrap({ sessions: [], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true } });
+  const seen: boolean[] = [];
+  const unsubscribe = store.subscribe((state) => {
+    seen.push(Object.values(state.threads)[0]?.bashRunning ?? false);
+  });
+  expect(await controller.runBash('t1', '  git status ')).toBeNull();
+  unsubscribe();
+  expect(client.calls).toContainEqual({ method: 'session/bash', params: { threadId: 't1', command: 'git status' } });
+  expect(client.calls.some((call) => call.method === 'session/entries')).toBe(true);
+  expect(seen[0]).toBe(true);
+  expect(seen[seen.length - 1]).toBe(false);
+});
+
+test('runBash 空命令拒绝且不发命令；abortBash 发出中止', async () => {
+  const client = makeClient({});
+  const controller = createLiveController(client, createLiveStore());
+  expect(await controller.runBash('t1', '   ')).toBe('empty_command');
+  expect(client.calls.some((call) => call.method === 'session/bash')).toBe(false);
+  await controller.abortBash('t1');
+  expect(client.calls).toContainEqual({ method: 'session/abortBash', params: { threadId: 't1' } });
+});

@@ -55,6 +55,9 @@ export interface LiveController {
   readonly updatePreferences: (patch: { defaultModel?: string | null; onboarded?: boolean }) => Promise<PreferencesView | null>;
   /** provider 连接探活（主进程直发；结果原样透传给调用方做内联展示）。 */
   readonly testProvider: (name: string) => Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }>;
+  /** 直执行 bash（`!` 前缀）：成功返回 null；权威条目经对账进入对话流。 */
+  readonly runBash: (threadId: string, command: string) => Promise<string | null>;
+  readonly abortBash: (threadId: string) => Promise<void>;
   readonly refreshStats: (threadId: string) => Promise<void>;
   readonly ensureHydrated: (threadId: string) => Promise<void>;
 }
@@ -292,6 +295,18 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       // 判活：请求发出后会话已切换则丢弃（防陈旧目录覆盖新会话视角）
       if (threadId !== null && store.getState().activeThreadId !== threadId) return;
       store.setState({ agents: outcome.data });
+    },
+    async runBash(threadId: string, command: string): Promise<string | null> {
+      const text = command.trim();
+      if (text.length === 0) return 'empty_command';
+      store.getState().bashStarted(threadId);
+      const outcome = await client.invoke('session/bash', { threadId, command: text });
+      store.getState().bashSettled(threadId);
+      await rebuildFromTranscript(threadId).catch(() => undefined);
+      return outcome.ok ? null : outcome.reason;
+    },
+    async abortBash(threadId: string): Promise<void> {
+      await client.invoke('session/abortBash', { threadId });
     },
     async searchFiles(cwd: string, query: string): Promise<string[] | null> {
       if (cwd.length === 0) return null;

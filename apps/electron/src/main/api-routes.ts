@@ -293,6 +293,15 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       const result = await command({ type: 'agents/list', threadId: params.threadId });
       return result.ok ? { ok: true as const, data: agentViews(result.data) } : fail(result.reason);
     },
+    'session/bash': async (params) => {
+      deps.audit(`bash_run:${params.threadId}`);
+      const result = await command({ type: 'bash', threadId: params.threadId, command: params.command });
+      return result.ok ? { ok: true as const, data: null } : fail(result.reason);
+    },
+    'session/abortBash': async (params) => {
+      const result = await command({ type: 'abort_bash', threadId: params.threadId });
+      return result.ok ? { ok: true as const, data: null } : fail(result.reason);
+    },
     'file/search': (params) => {
       // 目录门禁：只允许扫描本应用已知会话目录（活跃会话 + 注册表），防被攻陷渲染层任意枚举
       const root = resolvePath(params.cwd);

@@ -80,6 +80,8 @@ export const copy = {
     retrying: (attempt: number, maxAttempts: number): string => `Retrying (${attempt}/${maxAttempts})`,
     crashedBanner: 'This conversation hit a worker crash and is recovering. The next command resumes it automatically.',
     compacting: 'Compacting context…',
+    bashRunning: 'Running command…',
+    bashFailed: (reason: string): string => `Command not run (${reason}).`,
     compactFailed: (reason: string): string => `Compaction failed (${reason}).`,
     systemMessageLabel: 'System',
     sendFailed: (reason: string): string => `Message not sent (${reason}). Try again.`,

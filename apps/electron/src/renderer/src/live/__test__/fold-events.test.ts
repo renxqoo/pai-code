@@ -316,11 +316,11 @@ describe('foldEvents · 队列/压缩/崩溃', () => {
     expect(s.crashed).toBe(false);
   });
 
-  test('bashOutput/host/dialog 等事件在 thread 层为无操作', () => {
+  test('host/dialog 等事件在 thread 层为无操作；bashOutput 折叠尾部', () => {
     const s = initialThreadState;
-    expect(foldThreadEvent(s, ev({ type: 'bashOutput', threadId: 't', id: 'b', delta: 'x' }), T)).toBe(s);
     expect(foldThreadEvent(s, ev({ type: 'host', phase: 'ready' }), T)).toBe(s);
     expect(foldThreadEvent(s, ev({ type: 'dialogRequest', threadId: 't', requestId: 'r', method: 'confirm' }), T)).toBe(s);
+    expect(foldThreadEvent(s, ev({ type: 'bashOutput', threadId: 't', id: 'b', delta: 'x' }), T).bashTail).toBe('x');
   });
 });
 
@@ -362,4 +362,15 @@ describe('foldEvents · 子代理', () => {
     s = foldThreadEvent(s, ev({ type: 'subagentText', threadId: 't', subagentId: 's1', text: '全文' }), tick(2));
     expect(s.agents[0]?.summary).toBe('全文');
   });
+});
+
+test('bashOutput 增量入尾部并封顶 2000 字符', () => {
+  let state = initialThreadState;
+  state = foldThreadEvent(state, { type: 'bashOutput', threadId: 't1', id: 'b1', delta: 'abc' }, 1);
+  state = foldThreadEvent(state, { type: 'bashOutput', threadId: 't1', delta: 'def' }, 2);
+  expect(state.bashTail).toBe('abcdef');
+  const big = 'x'.repeat(3000);
+  state = foldThreadEvent(state, { type: 'bashOutput', threadId: 't1', delta: big }, 3);
+  expect(state.bashTail.length).toBe(2000);
+  expect(state.bashTail.startsWith('x')).toBe(true);
 });
