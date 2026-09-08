@@ -197,7 +197,12 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       const data = result.data as { threadId?: string; cwd?: string; sessionPath?: string | null };
       const threadId = data.threadId ?? '';
       if (threadId.length === 0) return fail('malformed_response');
-      const view = runtime.applyStartOutcome(threadId, data.cwd ?? '', data.sessionPath ?? params.sessionPath, runtime.defaultTitle, trusted);
+      // threadId 只信响应；标题沿用注册表行（占位视图/既有命名的延续，不回退默认标题）
+      const view = runtime.applyStartOutcome(threadId, data.cwd ?? known?.cwd ?? '', data.sessionPath ?? params.sessionPath, known?.title ?? runtime.defaultTitle, trusted);
+      if (known !== null && known.threadId !== threadId) {
+        // 换 id 整行替换：旧行删除 + 旧 id 视图同步清出（与对账/启动链路同一不变量）
+        runtime.removeSession(known.threadId);
+      }
       fillSessionMeta(threadId);
       return { ok: true as const, data: view };
     },

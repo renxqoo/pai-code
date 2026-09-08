@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-import { mapDialogRequest, mapSessionEvent, mapSubagentEvent, sessionFromStartResponse, threadListEntries, toSessionView } from '@paiapp/adapter';
+import { mapDialogRequest, mapSessionEvent, mapSubagentEvent, savedSessions, toSessionView } from '@paiapp/adapter';
 import {
   openRegistryStore,
   createHostProcess,
@@ -24,8 +24,9 @@ import { writeModelsConfig } from './models-config';
 /**
  * 主进程运行时：host 进程 + 注册表 + 会话表（SessionView 单一内存真相）。
  * 职责：帧 → UiEvent（协议语义只经 adapter）；注册表与内存表同步；
- * 挂死/手动重启后的会话恢复（按注册表逐个 thread/resume）；
- * 渲染层事件在 bootstrap 前缓冲（上限 1000，先到先丢弃）。
+ * 启动/重启后只对账（注册表 vs 盘上会话，parked 占位渲染），会话恢复是
+ * 渲染层按需发起的 session/resume（懒恢复）；渲染层事件在 bootstrap 前
+ * 缓冲（上限 1000，先到先丢弃）。
  */
 
 const DEFAULT_TITLE = 'New conversation';
@@ -41,6 +42,8 @@ export interface PaiRuntimeDeps {
   /** 事件出口（装配层接 IPC 推送）。 */
   emit: (event: UiEvent) => void;
   timing?: HostProcessDeps['timing'];
+  /** host 工厂注入缝（缺省 infra 实现；单测注入 fake port）。 */
+  createHost?: (deps: HostProcessDeps) => HostProcessPort;
 }
 
 export interface PaiRuntime {
@@ -58,7 +61,8 @@ export interface PaiRuntime {
   markBootstrapped(): void;
   registry: RegistryStorePort;
   defaultTitle: string;
-  refreshSessionsFromHost(): Promise<void>;
+  /** 启动/重启后的注册表对账（占位渲染，不 resume；懒恢复由渲染层发起）。 */
+  reconcileSessions(): Promise<void>;
   applyStartOutcome(threadId: string, cwd: string, sessionPath: string | null, title: string, trusted?: boolean): SessionView;
   removeSession(threadId: string): void;
   renameSession(threadId: string, name: string): void;
@@ -168,50 +172,53 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
     }
   };
 
-  const resumeAll = async (): Promise<void> => {
-    const active = host ?? null;
+  /**
+   * 注册表 vs 盘上会话对账（启动与 host 重启后）：不发任何 thread/resume——
+   * 恢复由渲染层按需发起（懒恢复）。hub 的 list_saved 以 cwd 过滤（无 cwd =
+   * host 进程 cwd，不适用），按注册表去重 cwd 逐目录列举聚合。
+   */
+  const reconcileSessions = async (): Promise<void> => {
+    const active = host;
     if (active === null) return;
-    for (const row of registry.list()) {
-      if (row.sessionPath === null) {
-        // 从未有首条消息的空会话无法恢复（无会话文件）
-        registry.remove(row.threadId);
-        sessions.delete(row.threadId);
-        continue;
-      }
-      const outcome = await active.request({ type: 'thread/resume', sessionPath: row.sessionPath, trusted: row.trusted ?? false });
+    const rows = registry.list();
+    const onDisk = new Set<string>();
+    const listedCwds = new Set<string>();
+    for (const cwd of new Set(rows.map((row) => row.cwd).filter((value) => value.length > 0))) {
+      const outcome = await active.request({ type: 'thread/list_saved', cwd });
       if (!outcome.ok) {
-        // 可重试失败（超时/暂时错误）保留行：下次重启/手动仍可恢复；
-        // 仅会话文件缺失（不可恢复）才除名
-        log(`resume_failed:${row.threadId}:${outcome.error}`);
-        if (/not found|no such/i.test(outcome.error)) {
-          registry.remove(row.threadId);
-          sessions.delete(row.threadId);
-          emit({ type: 'sessionRemoved', threadId: row.threadId });
-        }
+        // 暂态列举失败不得删行（丢恢复依据）；行保留为占位，真实缺失由 resume 失败显式暴露
+        log(`list_saved_failed:${cwd}:${outcome.error}`);
         continue;
       }
-      const view = sessionFromStartOutcome(outcome.data, row.title);
-      if (view === null) continue;
-      // resume 可能换 id；注册表与内存表按新 id 整行替换（旧 id 视图同步清出）
-      if (view.threadId !== row.threadId) {
+      listedCwds.add(cwd);
+      for (const session of savedSessions(outcome.data)) onDisk.add(session.sessionPath);
+    }
+    for (const row of rows) {
+      if (row.sessionPath === null) {
+        // 从未有首条消息的空会话无会话文件，不可恢复
         registry.remove(row.threadId);
         sessions.delete(row.threadId);
         emit({ type: 'sessionRemoved', threadId: row.threadId });
+        continue;
       }
-      upsertSession({ ...view, title: row.title });
-      persistSession({ ...view, title: row.title }, row.trusted ?? false);
+      if (listedCwds.has(row.cwd) && !onDisk.has(row.sessionPath)) {
+        // 该行 cwd 列举成功且盘上无此文件：确认缺失（与 resume 失败 not-found 删行同语义）
+        registry.remove(row.threadId);
+        sessions.delete(row.threadId);
+        emit({ type: 'sessionRemoved', threadId: row.threadId });
+        continue;
+      }
+      upsertSession(
+        toSessionView({
+          threadId: row.threadId,
+          cwd: row.cwd,
+          sessionPath: row.sessionPath,
+          state: 'parked',
+          title: row.title,
+          lastActivityAt: row.updatedAt,
+        }),
+      );
     }
-  };
-
-  const sessionFromStartOutcome = (data: unknown, title: string): SessionView | null => {
-    const view = sessionFromStartResponse(data, title);
-    if (view === null) {
-      const d = typeof data === 'object' && data !== null ? (data as Record<string, unknown>) : {};
-      const threadId = typeof d['threadId'] === 'string' ? d['threadId'] : '';
-      if (threadId.length === 0) return null;
-      return toSessionView({ threadId, cwd: typeof d['cwd'] === 'string' ? d['cwd'] : '', sessionPath: null, title });
-    }
-    return view;
   };
 
   const buildHost = (): HostProcessPort => {
@@ -219,7 +226,8 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
     if (hub === null) {
       throw new Error('hub_paths_unconfigured');
     }
-    return createHostProcess({
+    const factory = deps.createHost ?? createHostProcess;
+    return factory({
       config: {
         bunPath: hub.bunPath,
         hubEntry: hub.hubEntry,
@@ -233,7 +241,7 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
         log(`host_phase:${phase}`);
         emit({ type: 'host', phase });
       },
-      onRestart: resumeAll,
+      onRestart: reconcileSessions,
       onDiagnostic: (message) => log(`host:${message}`),
       timing: deps.timing,
     });
@@ -257,7 +265,7 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
       }
       host = buildHost();
       await waitForPhase(host, 'ready', READY_TIMEOUT_MS);
-      await this.refreshSessionsFromHost();
+      await this.reconcileSessions();
     },
     async stop(): Promise<void> {
       await host?.dispose();
@@ -279,54 +287,7 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
     markBootstrapped(): void {
       bootstrapped = true;
     },
-    async refreshSessionsFromHost(): Promise<void> {
-      const active = host;
-      if (active === null) return;
-      const outcome = await active.request({ type: 'thread/list' });
-      if (!outcome.ok) {
-        log(`thread_list_failed:${outcome.error}`);
-        return;
-      }
-      const entries = threadListEntries(outcome.data);
-      const liveIds = new Set(entries.map((entry) => entry.threadId));
-      // host 里存在但内存表没有（如手工恢复）：按注册表标题或路径补建
-      for (const entry of entries) {
-        const existing = sessions.get(entry.threadId);
-        if (existing !== undefined) {
-          if (existing.state !== entry.state || existing.streaming !== entry.isStreaming) {
-            upsertSession({ ...existing, state: entry.state, streaming: entry.isStreaming });
-          }
-          continue;
-        }
-        const row = registry.get(entry.threadId);
-        upsertSession(
-          toSessionView({
-            threadId: entry.threadId,
-            cwd: entry.cwd,
-            sessionPath: entry.sessionPath,
-            state: entry.state,
-            streaming: entry.isStreaming,
-            title: row?.title ?? DEFAULT_TITLE,
-            lastActivityAt: row?.updatedAt ?? Date.now(),
-          }),
-        );
-      }
-      // 注册表里要求恢复、但 host 里没有的会话 → resume
-      for (const row of registry.list()) {
-        if (liveIds.has(row.threadId) || sessions.has(row.threadId)) continue;
-        if (row.sessionPath === null) continue;
-        const resumeOutcome = await active.request({ type: 'thread/resume', sessionPath: row.sessionPath, trusted: row.trusted ?? false });
-        if (!resumeOutcome.ok) {
-          log(`resume_failed:${row.threadId}:${resumeOutcome.error}`);
-          continue;
-        }
-        const view = sessionFromStartOutcome(resumeOutcome.data, row.title);
-        if (view === null) continue;
-        if (view.threadId !== row.threadId) registry.remove(row.threadId);
-        upsertSession({ ...view, title: row.title });
-        persistSession({ ...view, title: row.title }, row.trusted ?? false);
-      }
-    },
+    reconcileSessions,
     applyStartOutcome(threadId: string, cwd: string, sessionPath: string | null, title: string, trusted?: boolean): SessionView {
       const view = toSessionView({ threadId, cwd, sessionPath, title, lastActivityAt: Date.now() });
       upsertSession(view);
@@ -384,11 +345,6 @@ function waitForPhase(host: HostProcessPort, target: HostPhase, timeoutMs: numbe
       reject(new Error('host_ready_timeout'));
     }, timeoutMs);
   });
-}
-
-/** 启动时注册表视图兜底（host 未恢复前的侧栏占位）。 */
-export function registryViews(registry: RegistryStorePort): SessionView[] {
-  return registry.list().map((row) => toSessionView({ threadId: row.threadId, cwd: row.cwd, sessionPath: row.sessionPath, state: 'parked', title: row.title, lastActivityAt: row.updatedAt }));
 }
 
 function errorMessage(error: unknown): string {
