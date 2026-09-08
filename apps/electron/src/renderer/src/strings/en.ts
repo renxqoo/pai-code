@@ -93,6 +93,7 @@ export const en = {
     editRerun: 'Edit & rerun (fork)',
     retryFromHere: 'Retry from here',
     forkFailed: 'Forking the conversation failed. Try again.',
+    resumeFailed: 'Resuming the conversation failed. Try again.',
     sendModeSteer: 'Steer now',
     stopConfirmTitle: 'Stop everything?',
     stopConfirmHint: 'This terminates all foreground and background subagents and cannot be undone.',

@@ -91,6 +91,7 @@ export const zh: typeof en = {
     editRerun: '编辑并重开（分叉）',
     retryFromHere: '从这里重试',
     forkFailed: '分叉会话失败，请重试。',
+    resumeFailed: '会话恢复失败，请重试。',
     sendModeSteer: '即时改向',
     sendModeQueue: '轮后发送',
     stopConfirmTitle: '停止全部任务？',

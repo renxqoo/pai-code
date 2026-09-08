@@ -125,6 +125,8 @@ export function useLiveWorkspace(): LiveWorkspaceView {
   const threadState = useStore(store, (s) => (s.activeThreadId === null ? undefined : s.threads[s.activeThreadId]));
   // 模型经 WeakMap 缓存（引用稳定）：无关 set 不再击穿消息流 memo
   const activeThread = useStore(store, (s) => threadModelOf(s, s.activeThreadId ?? ''));
+  // 活跃会话生命周期态：parked → live 翻转（懒恢复完成）时激活 effect 需要重跑
+  const activeSessionState = useStore(store, (s) => (s.activeThreadId === null ? null : s.sessions[s.activeThreadId]?.state ?? null));
 
   React.useEffect(() => {
     void controller.start();
@@ -137,7 +139,9 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     setEffortLevels([]);
     setCommands([]);
     store.setState({ agents: [] });
-    if (activeThreadId.length === 0) return;
+    // parked 占位：懒恢复完成（state 翻转为 live）后本 effect 重跑再拉取，
+    // 避免对未恢复线程发注定失败的水化/档位/命令/规则请求
+    if (activeThreadId.length === 0 || activeSessionState === 'parked') return;
     void controller.ensureHydrated(activeThreadId);
     // 思考档位随会话拉取（模型能力差异；响应回来时会话已切换则丢弃）
     void bridgeClient.invoke('session/thinkingLevels', { threadId: activeThreadId }).then((outcome) => {
@@ -152,7 +156,7 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     // 会话权限规则随会话拉取（操作栏模式控件数据源；判活在 controller.readSessionRules 内）
     void controller.readSessionRules(activeThreadId);
     void controller.refreshStats(activeThreadId);
-  }, [activeThreadId]);
+  }, [activeThreadId, activeSessionState]);
 
   const generating = threadState?.streaming ?? false;
   const bashRunning = threadState?.bashRunning ?? false;

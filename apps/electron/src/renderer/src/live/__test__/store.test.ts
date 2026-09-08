@@ -203,3 +203,19 @@ describe('threadModelOf 引用稳定', () => {
     expect(second.items).not.toBe(first.items);
   });
 });
+
+describe('pushNotice（通知条单一入口）', () => {
+  test('追加保留最近 5 条，id 单调可逐条 dismiss', () => {
+    const store = createLiveStore();
+    for (let i = 1; i <= 7; i += 1) {
+      store.getState().pushNotice(`通知${i}`);
+    }
+    const notices = store.getState().notices;
+    expect(notices.map((notice) => notice.text)).toEqual(['通知3', '通知4', '通知5', '通知6', '通知7']);
+    const ids = new Set(notices.map((notice) => notice.id));
+    expect(ids.size).toBe(5);
+
+    store.getState().dismissNotice(notices[0]?.id ?? '');
+    expect(store.getState().notices.map((notice) => notice.text)).toEqual(['通知4', '通知5', '通知6', '通知7']);
+  });
+});

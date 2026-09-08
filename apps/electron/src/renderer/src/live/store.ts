@@ -77,6 +77,8 @@ export interface LiveStoreActions {
   /** 直执行 bash 开始/结束（流式尾部经 bashOutput 事件折叠）。 */
   bashStarted(threadId: string): void;
   bashSettled(threadId: string): void;
+  /** 通知条追加（保留最近 5 条；controller/actions 共用的单一入口）。 */
+  pushNotice(text: string): void;
   dismissNotice(id: string): void;
   reset(): void;
 }
@@ -206,6 +208,9 @@ export function createLiveStore() {
       bashSettled(threadId) {
         set((state) => ({ threads: { ...state.threads, [threadId]: { ...threadOf(state, threadId), bashRunning: false, bashTail: '' } } }));
       },
+      pushNotice(text) {
+        set((state) => ({ notices: [...state.notices.slice(-4), { id: `notice-${(noticeSeq += 1)}`, text }] }));
+      },
       dismissNotice(id) {
         set((state) => ({ notices: state.notices.filter((notice) => notice.id !== id) }));
       },
@@ -229,6 +234,9 @@ export function threadModelOf(state: LiveStoreState, threadId: string): ThreadMo
   threadModelCache.set(thread, model);
   return model;
 }
+
+/** 通知条 id 单调序列（避免同毫秒碰撞；dismiss 按 id 定位）。 */
+let noticeSeq = 0;
 
 function toPendingDialog(event: DialogViewSource): PendingDialog {
   return {

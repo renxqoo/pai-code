@@ -83,11 +83,9 @@ export type WorkspaceActions = {
   readonly compact: () => void;
 };
 
-/** 通知条追加（保留最近 5 条，id 单调避免同毫秒碰撞）。 */
-let noticeSeq = 0;
-export function pushNotice(text: string): void {
-  noticeSeq += 1;
-  store.setState({ notices: [...store.getState().notices.slice(-4), { id: `notice-${noticeSeq}`, text }] });
+/** 通知条写入（store 动作的便捷别名；保留最近 5 条）。 */
+function pushNotice(text: string): void {
+  store.getState().pushNotice(text);
 }
 
 /** 会话规则写链：写 + 回读成对串行排队，防并发写后回读乱序覆盖生效视图（与 controller.skillToggleChain 同型）。 */
@@ -126,17 +124,16 @@ export function createWorkspaceActions(setDiagnostics: (value: WorkspaceDiagnost
 
   return {
     submitDraft: async (message, images, mode) => {
-      // 调用时读 store 真相：fork/重开等异步链路后的旧闭包不得打到旧线程
+      // 调用时读 store 真相：fork/重开等异步链路后的旧闭包不得打到旧线程；
+      // parked 占位的懒恢复兜底在 controller.submitDraft 内（threadId 只信 resume 响应）
       const reason = await controller.submitDraft(activeThreadOf(), message, images, mode);
       if (reason !== null && reason !== 'bridge_unavailable') {
-        pushNotice(copy.flow.sendFailed(reason));
+        pushNotice(reason === 'resume_failed' ? copy.flow.resumeFailed : copy.flow.sendFailed(reason));
       }
       return reason;
     },
     stopActiveTurn: () => void controller.stopActiveTurn(activeThreadOf()),
-    selectSession: (threadId) => {
-      store.getState().setActiveThread(threadId);
-    },
+    selectSession: (threadId) => controller.selectSession(threadId),
     createSession: (cwd, trusted) => {
       // 项目默认模型记忆优先（A4）→ 全局默认 → 当前选择 → 首个可用（调用时读真相重算选择链）
       const state = store.getState();
