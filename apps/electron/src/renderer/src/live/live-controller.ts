@@ -1,6 +1,7 @@
 import type { AgentDefinition, ImagePayload, PermissionRules, PreferencesView, ProviderModel, SkillView, ThinkingFormat, UiEvent } from '@paiapp/contracts';
 
 import { copy } from '@/strings';
+import { queuedDrafts } from '@/composer/queued-drafts';
 import type { BridgeClient } from './client-invoke';
 import { coalesceEvents } from './coalesce-events';
 import { createLazyResume } from './lazy-resume';
@@ -89,8 +90,6 @@ export interface LiveController {
   /** 直执行 bash（`!` 前缀）：成功返回 null；权威条目经对账进入对话流。 */
   readonly runBash: (threadId: string, command: string) => Promise<string | null>;
   readonly abortBash: (threadId: string) => Promise<void>;
-  /** 清空排队消息（全清语义）。 */
-  readonly clearQueue: (threadId: string) => Promise<void>;
   /** 在系统文件管理器中显示会话文件（主进程白名单校验）。 */
   readonly revealSession: (sessionPath: string) => Promise<void>;
   /** 从历史条目分叉（position=before）→ 激活新会话；返回新 threadId（失败 null）。 */
@@ -116,6 +115,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
 
   const refreshAgentDefinitions = async (): Promise<void> => {
     const outcome = await client.invoke('agent/definitions', {});
+
     if (outcome.ok) store.setState({ agentDefinitions: outcome.data });
   };
 
@@ -138,6 +138,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
 
   const rebuildFromTranscript = async (threadId: string): Promise<void> => {
     const outcome = await client.invoke('session/entries', { threadId });
+
     if (disposed) return;
     if (!outcome.ok) {
       store.getState().hydrate(threadId, { kind: 'hydrate/failed' });
@@ -339,7 +340,9 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       return true;
     },
     async closeSession(threadId: string): Promise<void> {
-      // 用户关闭：stop(dispose) + 注册表删行（remove 路由语义）
+      // 用户关闭：stop(dispose) + 注册表删行（remove 路由语义）；本地暂存
+      // 排队随之硬丢弃（重开/懒恢复类移除不走这里——那类按路径改绑，见 queued-flush）
+      queuedDrafts.dropThread(threadId);
       const sessionPath = store.getState().sessions[threadId]?.sessionPath ?? null;
       await client.invoke('session/stop', { threadId, remove: true });
       if (sessionPath !== null) lazy.discardResumed(sessionPath);
@@ -495,9 +498,6 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     },
     async abortBash(threadId: string): Promise<void> {
       await client.invoke('session/abortBash', { threadId });
-    },
-    async clearQueue(threadId: string): Promise<void> {
-      await client.invoke('session/clearQueue', { threadId });
     },
     async revealSession(sessionPath: string): Promise<void> {
       await client.invoke('session/reveal', { sessionPath });

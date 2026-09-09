@@ -1,18 +1,23 @@
 import * as React from 'react';
 
 import { CONVERSATION_COLUMN_CLASS } from '@/thread/conversation-column';
-import { AutocompleteList } from '@paiapp/ui';
-import type { CommandView, ImagePayload, PermissionRules, SessionStatsView } from '@paiapp/contracts';
+import { AutocompleteGroupList, type AutocompleteGroup } from '@paiapp/ui';
+import type { CommandView, PermissionRules, SessionStatsView } from '@paiapp/contracts';
 
 import { ComposerActionsRow } from '@/composer/composer-actions-row';
 import { ComposerContextBar } from '@/composer/composer-context-bar';
 import { ComposerHighlightLayer } from '@/composer/composer-highlight-layer';
 import { leadingCommandHighlight, commandTokenDeleteRange } from '@/composer/command-highlight';
 import { AttachmentChips } from '@/composer/attachment-chips';
-import { imagePayloadOf, imageDataUrl, readImageFile, type PendingImage } from '@/composer/read-image-file';
+import { QueuedMessageCard } from '@/composer/queued-message-card';
+import { imageDataUrl, readImageFile, type PendingImage } from '@/composer/read-image-file';
 import { activeTokenQuery, applyTokenSelection, filterTokenItems, type TokenTrigger } from '@/composer/token-trigger';
+import { fileGroup, slashCommandGroups } from '@/composer/command-groups';
 import { cn } from '@/lib/utils';
 import { copy } from '@/strings';
+
+/** 输入卡持有的图片附件（提交时原样交 onSubmit，协议转换由调用层负责）。 */
+export type ComposerAttachment = { id: number; name: string; payload: PendingImage };
 
 type ComposerProps = {
   value: string
@@ -51,13 +56,20 @@ type ComposerProps = {
   noModelsLabel: string
   /** 思考档不可用时的禁用原因文案 */
   effortUnavailableLabel: string
-  /** 有生成任务时回车与提交动作都转为停止 */
+  /** 有生成任务时回车 = 排队消息（语义由父层按会话状态裁决），发送键仍为停止 */
   generating: boolean
   /** 压缩进行中：压缩按钮禁用，横幅由 ThreadBanner 呈现 */
   compacting: boolean
+  /** 本地暂存的排队消息（旧→新；生成中显示为输入卡顶部的灰色卡片堆） */
+  queuedMessages: readonly { id: number; text: string }[]
+  onSendNowQueued: (id: number) => void
+  onEditQueued: (id: number) => void
+  onRemoveQueued: (id: number) => void
+  /** 一次性图片回填信号：token 变化时把 images 并入附件态；null = 无回填 */
+  restore: { token: number; images: readonly { name: string; payload: PendingImage }[] } | null
   onChange: (value: string) => void
-  /** 提交（文本 + 图片附件 + 生成中投递模式）；resolve true = 已发出（composer 据此清空附件） */
-  onSubmit: (text: string, images: readonly ImagePayload[], mode: 'auto' | 'steer' | 'followUp') => Promise<boolean>
+  /** 提交（文本 + 附件原样交出，投递语义由父层决定）；resolve true = 已发出（composer 据此清空附件） */
+  onSubmit: (text: string, attachments: readonly ComposerAttachment[]) => Promise<boolean>
   onStop: () => void
   onCompact: () => void
   onOpenSettings?: () => void
@@ -105,6 +117,11 @@ function Composer({
   effortUnavailableLabel,
   generating,
   compacting,
+  queuedMessages,
+  onSendNowQueued,
+  onEditQueued,
+  onRemoveQueued,
+  restore,
   onChange,
   onSubmit,
   onStop,
@@ -126,18 +143,15 @@ function Composer({
   const [inputScrollTop, setInputScrollTop] = React.useState(0);
 
   /** 图片附件态：读取与持有都在本组件（提交成功才清空）；预览用 data URL，无对象 URL 生命周期。 */
-  type Attachment = { id: number; name: string; payload: PendingImage };
-  const [attachments, setAttachments] = React.useState<readonly Attachment[]>([]);
+  const [attachments, setAttachments] = React.useState<readonly ComposerAttachment[]>([]);
   const [attachError, setAttachError] = React.useState<string | null>(null);
-  /** 生成中的投递方式（A7 显式选择；非生成中不生效） */
-  const [sendMode, setSendMode] = React.useState<'steer' | 'followUp'>('followUp');
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const attachSeqRef = React.useRef(0);
 
   const addFiles = (files: readonly File[]): void => {
     setAttachError(null);
     void Promise.all(files.map(async (file) => ({ file, image: await readImageFile(file) }))).then((results) => {
-      const added: Attachment[] = [];
+      const added: ComposerAttachment[] = [];
       for (const result of results) {
         if (result.image === null) {
           setAttachError(copy.composer.imageUnsupported);
@@ -153,6 +167,19 @@ function Composer({
   const removeAttachment = (id: number): void => {
     setAttachments((current) => current.filter((item) => item.id !== id));
   };
+
+  /** 一次性回填：编辑重发等通路的图片并入附件态（不覆盖已有附件），token 只消费一次 */
+  const appliedRestoreTokenRef = React.useRef<number | null>(restore === null ? null : restore.token);
+  React.useEffect(() => {
+    if (restore === null || appliedRestoreTokenRef.current === restore.token) return;
+    appliedRestoreTokenRef.current = restore.token;
+    if (restore.images.length === 0) return;
+    const added = restore.images.map((image) => {
+      attachSeqRef.current += 1;
+      return { id: attachSeqRef.current, name: image.name, payload: image.payload };
+    });
+    setAttachments((current) => [...current, ...added]);
+  }, [restore]);
 
   // 切会话清空附件（文本草稿按会话隔离，附件同样不得串扰）
   const prevThreadRef = React.useRef(threadId);
@@ -186,19 +213,24 @@ function Composer({
   const fileSeqRef = React.useRef(0);
   const lastFileQueryRef = React.useRef<string | null>(null);
 
-  const slashItems = React.useMemo(
-    () => (slashQuery === null ? [] : filterTokenItems(commands, slashQuery)),
+  /** 斜杠命令分组视图（组序即键盘导航序，items 由 groups 拍平派生） */
+  const slashGroups = React.useMemo(
+    () =>
+      slashQuery === null
+        ? []
+        : slashCommandGroups(filterTokenItems(commands, slashQuery), {
+            commandTitle: copy.composer.groupCommands,
+            skillTitle: copy.composer.groupSkills,
+          }),
     [commands, slashQuery],
   );
-  const atItems = React.useMemo(
-    () => (atQuery === null ? [] : filterTokenItems(fileItems.map((path) => ({ name: path })), atQuery)),
+  const atGroup = React.useMemo(
+    () => (atQuery === null ? null : fileGroup(fileItems, atQuery, copy.composer.groupFiles)),
     [fileItems, atQuery],
   );
-  const items = trigger === '/'
-    ? slashItems.map((command) => ({ id: `${command.source}:${command.name}`, label: command.name, description: command.description }))
-    : trigger === '@'
-      ? atItems.map((file) => ({ id: `@:${file.name}`, label: file.name, description: null }))
-      : [];
+  const groups: readonly AutocompleteGroup[] =
+    trigger === '/' ? slashGroups : trigger === '@' ? (atGroup === null ? [] : [atGroup]) : [];
+  const items = groups.flatMap((group) => group.items);
   const dismissedKey = trigger === null || query === null ? null : `${trigger}:${query}`;
   const autocompleteActive = trigger !== null && dismissedKey !== dismissedQuery && items.length > 0;
   const activeItemIndex = autocompleteActive ? activeIndex % items.length : -1;
@@ -262,19 +294,36 @@ function Composer({
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          // 生成中 Enter = 排队消息（followUp，api.md 语义）；停止走停止按钮/Esc
+          // 生成中 Enter = 排队消息（投递语义由父层裁决）；停止走停止按钮/Esc
           if (!canSend) return;
-          void onSubmit(value, attachments.map((item) => imagePayloadOf(item.payload)), generating ? sendMode : 'auto').then((sent) => {
+          void onSubmit(value, attachments).then((sent) => {
             if (sent) clearAttachments();
           });
         }}
         className="rounded-[20px] border border-border bg-background shadow-[0_14px_22px_-16px_rgba(24,24,28,0.22)] transition-colors duration-150 focus-within:border-foreground/15"
       >
+        {queuedMessages.length > 0 ? (
+          // 贴卡片顶部的排队堆：容器裁出与输入卡一致的内圆角，多条卡片纵向相连（旧→新）
+          <div className="overflow-hidden rounded-t-[19px]">
+            {queuedMessages.map((item) => (
+              <QueuedMessageCard
+                key={item.id}
+                text={item.text}
+                sendNowLabel={copy.composer.sendNow}
+                editLabel={copy.composer.editQueued}
+                removeLabel={copy.composer.removeQueued}
+                onSendNow={() => onSendNowQueued(item.id)}
+                onEdit={() => onEditQueued(item.id)}
+                onRemove={() => onRemoveQueued(item.id)}
+              />
+            ))}
+          </div>
+        ) : null}
         <div className="relative">
           {autocompleteActive ? (
-            <div className="absolute bottom-full left-4 z-10 mb-[4px]">
-              <AutocompleteList
-                items={items}
+            <div className="absolute bottom-full left-1 right-1 z-10 mb-[6px]">
+              <AutocompleteGroupList
+                groups={groups}
                 activeId={items[activeItemIndex]?.id ?? null}
                 onSelect={(id) => {
                   const item = items.find((entry) => entry.id === id);
@@ -285,6 +334,8 @@ function Composer({
                   if (index >= 0) setActiveIndex(index);
                 }}
                 ariaLabel={trigger === '/' ? slashAriaLabel : fileAriaLabel}
+                footerHint={trigger === '/' ? copy.composer.slashHint : undefined}
+                scrollDownLabel={copy.composer.scrollDown}
               />
             </div>
           ) : null}
@@ -294,7 +345,7 @@ function Composer({
           <textarea
             ref={textareaRef}
             value={value}
-            placeholder={placeholder}
+            placeholder={generating ? copy.composer.queuePlaceholder : placeholder}
             onScroll={(event) => setInputScrollTop(event.currentTarget.scrollTop)}
             onChange={(event) => {
               onChange(event.target.value);
@@ -402,8 +453,6 @@ function Composer({
           permissionFollowsGlobal={permissionFollowsGlobal}
           onSelectPermissionMode={onSelectPermissionMode}
           onFollowPermissionGlobal={onFollowPermissionGlobal}
-          sendMode={generating ? sendMode : null}
-          onSendModeChange={setSendMode}
           stats={stats}
           onAttach={() => fileInputRef.current?.click()}
           onCompact={onCompact}

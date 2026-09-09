@@ -47,7 +47,7 @@ function SettingsSectionNav({ section, onSelectSection, onClose }: SettingsSecti
       <button
         type="button"
         onClick={onClose}
-        className="flex h-9 w-full cursor-pointer items-center gap-[8px] rounded-lg px-[10px] text-left text-[13px] leading-none text-muted-foreground outline-none select-none hover:bg-accent/50 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+        className="flex h-9 w-full cursor-pointer items-center gap-[8px] rounded-lg mt-[36px] px-[10px] text-left text-[13px] leading-none text-muted-foreground outline-none select-none hover:bg-accent/50 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
       >
         <ArrowLeft className="size-[15px] shrink-0" strokeWidth={1.75} />
         {copy.settings.backToWorkspace}

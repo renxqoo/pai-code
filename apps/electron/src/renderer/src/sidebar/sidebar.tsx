@@ -126,7 +126,7 @@ function Sidebar({
       )}
     >
       {/* 顶行由 fixed 标题覆盖块承担，这里只留等高占位 */}
-      <div aria-hidden="true" className="h-[46px] shrink-0" />
+      <div aria-hidden="true" className="h-[46px] shrink-0  " />
       {projectFiles !== null ? (
         /* 项目文件面板：整个内容区让位（快捷区/搜索/Tab/列表不渲染），底部工具条同图不渲染 */
         <div className="flex min-h-0 flex-1 flex-col px-2 pt-1 pb-2">
@@ -140,7 +140,7 @@ function Sidebar({
         </div>
       ) : (
         <>
-          <div className="flex min-h-0 flex-1 flex-col px-2 pt-1">
+          <div className="flex min-h-0 flex-1 flex-col pt-1 ">
             <QuickActionsRow onNewThread={onNewThread} onOpenSearch={onOpenSearch} />
             {searchOpen ? (
               <div className="pt-1.5">
@@ -154,7 +154,9 @@ function Sidebar({
                   }}
                 />
               </div>
-            ) : null}
+              ) : null}
+
+          <div className='overflow-y-auto px-[4px] overflow-x-hidden'>
             <div className="pt-2.5">
               <ViewSwitchTabs view={view} onViewChange={onViewChange} onCollapseSidebar={onCollapseSidebar} />
             </div>
@@ -167,7 +169,7 @@ function Sidebar({
                 {emptyTasksLabel}
               </p>
             ) : (
-              <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pt-2 pb-2">
+              <div className="flex min-h-0 flex-1 flex-col gap-2  pt-2 pb-2">
                 {pinned.length > 0 ? (
                   <PinnedSection
                     sessions={pinned}
@@ -180,18 +182,21 @@ function Sidebar({
                   />
                 ) : null}
                 {view === 'grouped' ? (
-                  timeList.map((session) => (
-                    <SessionRow
-                      key={session.id}
-                      session={session}
-                      age={ages[session.id] ?? ''}
-                      active={session.id === activeSessionId}
-                      onSelect={onSelectSession}
-                      onClose={onCloseSession}
-                      onRename={onRenameSession}
-                      onTogglePin={onTogglePin}
-                    />
-                  ))
+                  /* 平铺行与置顶区/项目组内行同一间距节律（gap-[2px]），容器 gap-2 只负责区隔各分区 */
+                  <section className="flex flex-col gap-[2px]">
+                    {timeList.map((session) => (
+                      <SessionRow
+                        key={session.id}
+                        session={session}
+                        age={ages[session.id] ?? ''}
+                        active={session.id === activeSessionId}
+                        onSelect={onSelectSession}
+                        onClose={onCloseSession}
+                        onRename={onRenameSession}
+                        onTogglePin={onTogglePin}
+                      />
+                    ))}
+                  </section>
                 ) : projectGroups.length > 0 ? (
                   <>
                     <div className="px-2 pt-1 pb-[2px] text-[11.5px] leading-none text-muted-foreground">
@@ -218,7 +223,8 @@ function Sidebar({
                   </>
                 ) : null}
               </div>
-            )}
+                )}
+              </div>
           </div>
           <SidebarFooter actions={footerActions} refresh={refreshAction} />
         </>

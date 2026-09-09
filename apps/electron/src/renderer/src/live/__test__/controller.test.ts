@@ -101,3 +101,19 @@ test('B-P1 对照：无新轮时 rebuild 正常执行', async () => {
   expect(rebuilds).toBeGreaterThan(0);
   controller.dispose();
 });
+
+test('症状回归：StrictMode 双挂载序列（start→dispose→start）下 bootstrap 应答不得丢弃', async () => {
+  // 症状：启动永久停留「正在连接 coding agent 宿主」——effect cleanup 若在挂载当帧
+  // 立即调用 dispose，两次 start 的 bootstrap 应答全部撞上 disposed 提前返回。
+  // 本用例锁定 controller 契约：后继 start 复原 disposed 后，先前在途应答正常落
+  // store，bootstrapLoaded 必须置位（渲染层装配 use-live-workspace 依赖此时序）。
+  const store = createLiveStore();
+  const client = makeClient();
+  const controller = createLiveController(client, store);
+  const first = controller.start();
+  controller.dispose();
+  const second = controller.start();
+  await Promise.all([first, second]);
+  expect(store.getState().bootstrapLoaded).toBe(true);
+  controller.dispose();
+});

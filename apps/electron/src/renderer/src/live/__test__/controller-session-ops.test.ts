@@ -146,15 +146,12 @@ test('症状回归：对话已结束但 streaming 镜像滞留 true 时，submit
   expect(client.calls.some((call) => call.method === 'session/followUp' || call.method === 'session/steer')).toBe(false);
 });
 
-test('clearQueue 与 forkSession：命令形状与新会话激活', async () => {
+test('forkSession：命令形状与新会话激活', async () => {
   const client = makeClient({
     'session/fork': { ok: true, data: { threadId: 't-fork', cwd: '/w', sessionPath: '/a.jsonl', state: 'live', streaming: false, title: '分叉', model: null, thinkingLevel: null, lastActivityAt: 0 } },
   });
   const store = createLiveStore();
   const controller = createLiveController(client, store);
-  await controller.clearQueue('t1');
-  expect(client.calls).toContainEqual({ method: 'session/clearQueue', params: { threadId: 't1' } });
-
   expect(await controller.forkSession('t1', 'entry-9')).toBe('t-fork');
   expect(client.calls).toContainEqual({ method: 'session/fork', params: { threadId: 't1', entryId: 'entry-9', position: 'before' } });
   expect(store.getState().activeThreadId).toBe('t-fork');

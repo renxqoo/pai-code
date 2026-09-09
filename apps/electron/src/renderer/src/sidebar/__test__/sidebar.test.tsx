@@ -107,6 +107,14 @@ describe('Sidebar 渲染冒烟', () => {
     expect(html).toContain('3小时');
   });
 
+  test('两视图行距不一致症状（分组平铺行 8px、项目组内行 2px）：平铺列表与置顶区/项目组内行同一 gap-[2px] 节律', () => {
+    const grouped = renderToStaticMarkup(
+      <Sidebar {...makeProps({ timeList: [makeSession({ id: 'a' })] })} />,
+    );
+    // 置顶区为空，该节律类只能来自平铺列表自身的栈
+    expect(grouped).toContain('flex flex-col gap-[2px]');
+  });
+
   test('置顶区：pinned 非空时渲染已置顶标题与行首钉子（两视图共用）', () => {
     const pinned = [makeSession({ id: 'p', title: '新建分支并用 Bun 重构' })];
     const grouped = renderToStaticMarkup(<Sidebar {...makeProps({ pinned })} />);
@@ -152,6 +160,14 @@ describe('Sidebar 渲染冒烟', () => {
     expect(projects).toContain('lucide-list-tree');
     const grouped = renderToStaticMarkup(<Sidebar {...makeProps({ view: 'grouped' })} />);
     expect(grouped).not.toContain('更多操作');
+  });
+
+  test('项目行 hover 标题位移症状：「更多」触发器常驻占位淡入，不再流内 hidden/flex 切换；菜单打开中保持可见', () => {
+    const projects = renderToStaticMarkup(
+      <Sidebar {...makeProps({ view: 'projects', projectGroups: [makeGroup()] })} />,
+    );
+    expect(projects).toContain('group-has-data-[popup-open]/row:opacity-100');
+    expect(projects).not.toContain('group-hover/row:flex');
   });
 
   test('项目行无 focus-within 常驻边框（点击行内折叠钮后行周残留灰框的症状）：焦点环只随键盘聚焦出现', () => {
@@ -202,16 +218,12 @@ describe('Sidebar 渲染冒烟', () => {
       />,
     );
     expect(truncated).toContain('显示更多');
-    const full = renderToStaticMarkup(
-      <Sidebar {...makeProps({ view: 'projects', projectGroups: [makeGroup()] })} />,
-    );
+    const full = renderToStaticMarkup(<Sidebar {...makeProps({ view: 'projects', projectGroups: [makeGroup()] })} />);
     expect(full).not.toContain('显示更多');
   });
 
   test('搜索框展开渲染输入行（有内容时带清空钮）；流式会话带进行中指示', () => {
-    const searching = renderToStaticMarkup(
-      <Sidebar {...makeProps({ searchOpen: true, searchQuery: 'pai' })} />,
-    );
+    const searching = renderToStaticMarkup(<Sidebar {...makeProps({ searchOpen: true, searchQuery: 'pai' })} />);
     expect(searching).toContain('<input');
     expect(searching).toContain('清空搜索');
     const idle = renderToStaticMarkup(<Sidebar {...makeProps({ searchOpen: true })} />);
@@ -228,9 +240,7 @@ describe('Sidebar 渲染冒烟', () => {
   });
 
   test('搜索非空且列表全空：显示空态文案', () => {
-    const html = renderToStaticMarkup(
-      <Sidebar {...makeProps({ searchQuery: 'zzz', filterEmptyLabel: '没有匹配的会话' })} />,
-    );
+    const html = renderToStaticMarkup(<Sidebar {...makeProps({ searchQuery: 'zzz', filterEmptyLabel: '没有匹配的会话' })} />);
     expect(html).toContain('没有匹配的会话');
     expect(html).not.toContain('已置顶');
   });

@@ -3,6 +3,7 @@ import { Folder, ListTree } from 'lucide-react';
 
 import { ChevronToggle, MenuButton, type MenuItemDef } from '@paiapp/ui';
 
+import { cn } from '@/lib/utils';
 import { copy } from '@/strings';
 import type { ProjectGroup } from '@/sidebar/build-project-groups';
 import { SessionRow } from '@/sidebar/session-row';
@@ -39,6 +40,10 @@ const projectMenuItems: readonly MenuItemDef[] = [
 /** 项目行内动作钮：与 SessionRow 行内按钮同一形态。 */
 const moreTriggerClass =
   'flex size-5 cursor-pointer items-center justify-center rounded-[5px] text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50';
+
+/** 触发器淡入：常驻占位（外层 size-5 网格），hover/键盘聚焦/菜单打开中可见，标题宽度不随 hover 变化。 */
+const moreTriggerRevealClass =
+  'col-start-1 row-start-1 opacity-0 invisible transition-opacity duration-150 motion-reduce:transition-none group-hover/row:visible group-hover/row:opacity-100 group-focus-within/row:visible group-focus-within/row:opacity-100 group-has-data-[popup-open]/row:visible group-has-data-[popup-open]/row:opacity-100';
 
 /** 项目分组：文件夹行（折叠切换 + hover「更多」菜单）+ 缩进会话行 + 组末「显示更多」。 */
 function ProjectSection({
@@ -79,13 +84,13 @@ function ProjectSection({
           </span>
         </button>
         {/* 菜单打开中即使鼠标已移出行也要保持锚点可见（data-popup-open 由 Base UI 落在触发器上） */}
-        <span className="hidden shrink-0 items-center group-hover/row:flex group-focus-within/row:flex group-has-data-[popup-open]/row:flex">
+        <span className="grid size-5 shrink-0 place-items-center">
           <MenuButton
             aria-label={copy.thread.addAction}
             align="end"
             popupMinWidth={148}
             trigger={<ListTree className="size-3" strokeWidth={1.75} />}
-            triggerClassName={moreTriggerClass}
+            triggerClassName={cn(moreTriggerClass, moreTriggerRevealClass)}
             items={projectMenuItems}
             onSelect={selectMenuAction}
           />

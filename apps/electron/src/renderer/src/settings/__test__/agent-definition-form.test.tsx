@@ -53,6 +53,9 @@ describe('agent 定义表单渲染冒烟', () => {
     expect(html).toContain(copy.settings.agentsModelInherit);
     expect(html).toContain(copy.settings.agentsScopeUser);
     expect(html).toContain(copy.settings.agentsScopeProject);
+    // 模型弹窗关态零渲染（T21）
+    expect(html).not.toContain(copy.modelPicker.searchPlaceholder);
+    expect(html).not.toContain(copy.modelPicker.empty);
   });
 
   test('编辑带 tools 回填「自定义工具」：工具词表渲染，预填名称/描述/提示词/模型', () => {

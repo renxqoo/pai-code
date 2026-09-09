@@ -19,11 +19,13 @@ import type { SidebarFooterAction } from '@/sidebar/sidebar-footer';
 import { toggleGroupFold, expandGroup, type GroupFold } from '@/sidebar/group-collapse';
 import { buildSidebarViewModel } from '@/screens/sidebar-view-model';
 import { submitDraftText } from '@/screens/submit-draft';
+import { imagePayloadOf, type PendingImage } from '@/composer/read-image-file';
+import { queuedDrafts } from '@/composer/queued-drafts';
+import type { ComposerAttachment } from '@/composer/composer';
 import { useUsagePanel } from '@/hooks/use-usage-panel';
 import { useProjectFiles } from '@/hooks/use-project-files';
 import { useSettingsScreen } from '@/settings/use-settings-screen';
 import { StopConfirmBar } from '@/thread/stop-confirm-bar';
-import { QueuePanel } from '@/thread/queue-panel';
 import { UsageScreen } from '@/screens/usage-screen';
 import type { SidePanel } from '@/screens/esc-action';
 import { useEscDismiss } from '@/screens/use-esc-dismiss';
@@ -31,7 +33,6 @@ import { ThreadBanner } from '@/thread/thread-banner';
 import { AgentPanel } from '@/agent-panel/agent-panel';
 import { DiffPanel } from '@/diff-panel/diff-panel';
 import { ThreadStage } from '@/screens/thread-stage';
-import type { ImagePayload } from '@paiapp/contracts';
 import type { LiveWorkspaceView } from '@/live/use-live-workspace';
 
 import { copy } from '@/strings';
@@ -39,6 +40,8 @@ import { copy } from '@/strings';
 const SIDEBAR_WIDTH = 264;
 const SIDEBAR_MIN_WIDTH = 208;
 const SIDEBAR_MAX_WIDTH = 400;
+/** 空暂存列表的恒定引用（Composer memo 不被每次渲染的新数组击穿）。 */
+const EMPTY_QUEUED_MESSAGES: readonly { id: number; text: string }[] = [];
 /** 新会话已知目录快捷条目上限（更多走系统文件夹选择）。 */
 const KNOWN_DIRS_LIMIT = 6;
 
@@ -77,8 +80,6 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   /** 项目内新建任务的预填目录；'' = 用当前会话目录 */
   const [newThreadCwd, setNewThreadCwd] = React.useState('');
   const [settingsOpen, setSettingsOpen] = React.useState(uiState.settingsOpen);
-  /** 排队消息面板开合（A7；横幅排队行点击切换） */
-  const [queueOpen, setQueueOpen] = React.useState(false);
   /** 停止确认（H2：存在在途子代理时二次确认，不可恢复） */
   const [confirmStop, setConfirmStop] = React.useState(false);
   /** Usage 总览页（I2；侧栏 footer 入口） */
@@ -187,9 +188,49 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     composerTextRef.current?.focus();
   };
 
-  // 提交语义（`! ` 直执行 / 模型轮次）单一真相在 screens/submit-draft
-  const submitDraft = (text: string, images?: readonly ImagePayload[], mode: 'auto' | 'steer' | 'followUp' = 'auto') =>
-    submitDraftText({ actions: workspace.actions, clearDraft }, text, images, mode);
+  /** 排队消息编辑回填的一次性图片信号（token 自增；composer 按并入处理） */
+  const [restore, setRestore] = React.useState<{ token: number; images: readonly { name: string; payload: PendingImage }[] } | null>(null);
+  const restoreSeqRef = React.useRef(0);
+  /** 立即改向/编辑/移除共用的暂存投递（单一真相在 useLiveWorkspace 装配面） */
+  const submitQueuedDraft = workspace.submitQueuedDraft;
+  /** 活跃会话文件路径（暂存记录路径——重开换 id 时按路径改绑） */
+  const activeSessionPath = workspace.sessions.find((session) => session.id === activeThreadId)?.sessionPath ?? null;
+
+  // 提交语义（`! ` 直执行 / 生成中本地暂存 / 模型轮次）单一真相在 screens/submit-draft
+  // 与 composer/queued-drafts；composer 交出的附件在此按去向转换（暂存保留原名，直发转 ImagePayload）。
+  // 生成中判定读 store 真相（渲染帧快照可能落后一轮结算，落后会把该轮末消息错误暂存）
+  const submitDraft = (text: string, attachments: readonly ComposerAttachment[]): Promise<boolean> => {
+    const trimmed = text.trim();
+    // 生成中普通消息 = 本地暂存（默认轮后发送，轮自然结束冲刷）；`! ` 直执行不走暂存（bash 通道即时执行）
+    if (workspace.isThreadStreaming(activeThreadId) && trimmed.length > 0 && !trimmed.startsWith('! ')) {
+      queuedDrafts.stage(activeThreadId, activeSessionPath, trimmed, attachments.map(({ name, payload }) => ({ name, payload })));
+      clearDraft();
+      return Promise.resolve(true);
+    }
+    return submitDraftText(
+      { actions: workspace.actions, clearDraft },
+      text,
+      attachments.map((item) => imagePayloadOf(item.payload)),
+      'auto',
+    );
+  };
+
+  /** 编辑排队消息：取出暂存条目回填草稿与附件（token 信号驱动 composer 吸收图片） */
+  const editQueuedMessage = (id: number): void => {
+    const draft = queuedDrafts.take(activeThreadId, id);
+    if (draft === null) return;
+    setDraft(draft.text);
+    restoreSeqRef.current += 1;
+    setRestore({ token: restoreSeqRef.current, images: draft.images });
+    composerTextRef.current?.focus();
+  };
+  /** 立即改向：先移除卡片再以 steer 投递（失败自动回插，通知走 submitThreadDraft） */
+  const sendNowQueuedMessage = (id: number): void => {
+    void queuedDrafts.sendNow(activeThreadId, id, submitQueuedDraft);
+  };
+  const removeQueuedMessage = (id: number): void => {
+    queuedDrafts.remove(activeThreadId, id);
+  };
 
   const openAgents = React.useCallback(() => setPanel('agents'), []);
   const openDiff = React.useCallback(() => setPanel('diff'), []);
@@ -342,15 +383,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
             queueCount={workspace.queueCount}
             bashRunning={workspace.bashRunning}
             bashTail={workspace.bashTail}
-            onToggleQueue={() => setQueueOpen((open) => !open)}
           />
-          {queueOpen && workspace.queueCount > 0 ? (
-            <QueuePanel
-              steering={workspace.queueItems.steering}
-              followUp={workspace.queueItems.followUp}
-              onClear={workspace.actions.clearQueue}
-            />
-          ) : null}
           <Composer
             textareaRef={composerTextRef}
             value={draft}
@@ -380,6 +413,11 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
             effortUnavailableLabel={copy.composer.effortUnavailable}
             generating={workspace.generating}
             compacting={workspace.compacting}
+            queuedMessages={workspace.queuedDrafts[activeThreadId] ?? EMPTY_QUEUED_MESSAGES}
+            onSendNowQueued={sendNowQueuedMessage}
+            onEditQueued={editQueuedMessage}
+            onRemoveQueued={removeQueuedMessage}
+            restore={restore}
             onChange={setDraft}
             onSubmit={submitDraft}
             onStop={workspace.bashRunning ? workspace.actions.abortBash : workspace.agentsActive && workspace.generating ? () => setConfirmStop(true) : workspace.actions.stopActiveTurn}

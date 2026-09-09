@@ -99,7 +99,7 @@ function ThreadStage({ workspace, activeThreadId, sidebarCollapsed, panel, onTog
           <HostDownBanner onOpenSettings={onOpenSettings} />
         </div>
       ) : null}
-      <div ref={scrollRef} onScroll={onScroll} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-[40px]">
+      <div ref={scrollRef} onScroll={onScroll} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden  px-[40px]">
         <MessageList
           thread={workspace.activeThread}
           now={workspace.now}

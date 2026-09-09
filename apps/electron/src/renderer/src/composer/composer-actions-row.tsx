@@ -7,7 +7,10 @@ import { UsageDetails } from './usage-details';
 
 import { IconButton, MenuButton, SparkMark, UsageRing } from '@paiapp/ui';
 
-import { SendModeToggle } from './send-mode-toggle';
+import { PickerDialog } from '@/components/picker-dialog';
+import { groupModelOptions } from '@/components/group-model-options';
+import { copy } from '@/strings';
+
 import { PermissionModeMenu } from './permission-mode-menu';
 import { menuTriggerClassName } from './menu-trigger-style';
 
@@ -39,9 +42,6 @@ type ComposerActionsRowProps = {
   onFollowPermissionGlobal: () => void
   onCompact: () => void
   onAttach: () => void
-  /** 生成中显示投递方式切换（null = 隐藏） */
-  sendMode: 'steer' | 'followUp' | null
-  onSendModeChange: (value: 'steer' | 'followUp') => void
   /** 用量明细（I1）；null = 未拉取，环不可点。 */
   stats: { contextUsage: number | null; tokensTotal: number; cost: number; userMessages: number; assistantMessages: number; toolCalls: number } | null
   /** 无可选模型时点击引导跳设置 */
@@ -78,13 +78,12 @@ function ComposerActionsRow({
   onFollowPermissionGlobal,
   onCompact,
   onAttach,
-  sendMode,
-  onSendModeChange,
   stats,
   onOpenSettings,
   onStop,
 }: ComposerActionsRowProps) {
   const [usageOpen, setUsageOpen] = React.useState(false);
+  const [modelPickerOpen, setModelPickerOpen] = React.useState(false);
   return (
     <div className="flex items-center gap-[7px] px-4 pt-1 pb-[13px]">
       {modelOptions.length === 0 && onOpenSettings !== undefined ? (
@@ -93,21 +92,30 @@ function ComposerActionsRow({
           <span className="whitespace-nowrap">{noModelsLabel}</span>
         </button>
       ) : (
-        <MenuButton
-          aria-label={model}
-          align="start"
-          popupMinWidth={200}
-          items={optionItems(modelOptions, model)}
-          onSelect={onSelectModel}
-          triggerClassName={menuTriggerClassName}
-          trigger={
-            <>
-              <SparkMark size={13} className="text-spark" />
-              <span className="whitespace-nowrap">{model}</span>
-              <ChevronDown className="size-3 text-muted-foreground/70" strokeWidth={2} />
-            </>
-          }
-        />
+        <>
+          <button
+            type="button"
+            aria-label={model}
+            aria-haspopup="dialog"
+            aria-expanded={modelPickerOpen}
+            onClick={() => setModelPickerOpen(true)}
+            className={menuTriggerClassName}
+          >
+            <SparkMark size={13} className="text-spark" />
+            <span className="whitespace-nowrap">{model}</span>
+            <ChevronDown className="size-3 text-muted-foreground/70" strokeWidth={2} />
+          </button>
+          <PickerDialog
+            open={modelPickerOpen}
+            onOpenChange={setModelPickerOpen}
+            title={copy.modelPicker.title}
+            searchPlaceholder={copy.modelPicker.searchPlaceholder}
+            emptyLabel={copy.modelPicker.empty}
+            groups={groupModelOptions(modelOptions)}
+            selectedId={model}
+            onSelect={onSelectModel}
+          />
+        </>
       )}
       <span aria-hidden="true" className="mx-[6px] h-[13px] w-px shrink-0 bg-border" />
       {effortOptions.length === 0 ? (
@@ -145,7 +153,6 @@ function ComposerActionsRow({
         </>
       ) : null}
       <div className="ml-auto flex items-center gap-[9px]">
-        {sendMode !== null ? <SendModeToggle value={sendMode} onChange={onSendModeChange} /> : null}
         <IconButton label={compactLabel} size="sm" onClick={onCompact} disabled={compacting} className="text-muted-foreground/90">
           <FoldVertical strokeWidth={1.75} />
         </IconButton>

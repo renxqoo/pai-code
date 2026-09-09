@@ -52,7 +52,7 @@ function SessionRow({
   const canTogglePin = onTogglePin !== undefined && session.sessionPath !== null;
   const canRename = onRename !== undefined;
   const canClose = onClose !== undefined;
-  /** hover 动作与时间标签互斥展示；编辑态只留输入框。 */
+  /** hover 动作与时间标签同格交叉淡切（不在流内增删，行高与标题截断点恒定）；编辑态只留输入框。 */
   const showActions = (canTogglePin || canRename || canClose) && !editing;
 
   return (
@@ -107,65 +107,68 @@ function SessionRow({
             strokeWidth={1.75}
           />
         ) : null}
-        <span
-          className={cn(
-            'text-[10.5px] leading-none text-muted-foreground/80',
-            showActions && 'group-hover/row:hidden group-focus-within/row:hidden',
-          )}
-        >
-          {age}
-        </span>
-        {showActions ? (
-          <span className="hidden items-center gap-[2px] group-hover/row:flex group-focus-within/row:flex">
-            {canTogglePin ? (
-              <button
-                type="button"
-                aria-label={pinned ? copy.sidebar.unpinSession : copy.sidebar.pinSession}
-                title={pinned ? copy.sidebar.unpinSession : copy.sidebar.pinSession}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  if (session.sessionPath !== null) onTogglePin?.(session.sessionPath);
-                }}
-                className={actionButtonClass}
-              >
-                {pinned ? (
-                  <PinOff className="size-3" strokeWidth={1.75} />
-                ) : (
-                  <Pin className="size-3 rotate-45" strokeWidth={1.75} />
-                )}
-              </button>
-            ) : null}
-            {canRename ? (
-              <button
-                type="button"
-                aria-label={copy.sidebar.renameSession}
-                title={copy.sidebar.renameSession}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setDraft(session.title);
-                  setEditing(true);
-                }}
-                className={actionButtonClass}
-              >
-                <Pencil className="size-3" strokeWidth={1.75} />
-              </button>
-            ) : null}
-            {canClose ? (
-              <button
-                type="button"
-                aria-label={copy.sidebar.closeSession}
-                title={copy.sidebar.closeSession}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onClose?.(session.id);
-                }}
-                className={actionButtonClass}
-              >
-                <X className="size-3" strokeWidth={1.75} />
-              </button>
-            ) : null}
+        {/* 时间标签与动作钮占同一网格格：格宽按较大者常驻保留，hover 只切换透明度/可见性，行内布局零位移 */}
+        <span className="grid items-center justify-items-end">
+          <span
+            className={cn(
+              'col-start-1 row-start-1 text-[10.5px] leading-none text-muted-foreground/80 transition-opacity duration-150 motion-reduce:transition-none',
+              showActions && 'group-hover/row:opacity-0 group-focus-within/row:opacity-0',
+            )}
+          >
+            {age}
           </span>
-        ) : null}
+          {showActions ? (
+            <span className="col-start-1 row-start-1 flex items-center gap-[2px] opacity-0 invisible transition-opacity duration-150 motion-reduce:transition-none group-hover/row:visible group-hover/row:opacity-100 group-focus-within/row:visible group-focus-within/row:opacity-100">
+              {canTogglePin ? (
+                <button
+                  type="button"
+                  aria-label={pinned ? copy.sidebar.unpinSession : copy.sidebar.pinSession}
+                  title={pinned ? copy.sidebar.unpinSession : copy.sidebar.pinSession}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (session.sessionPath !== null) onTogglePin?.(session.sessionPath);
+                  }}
+                  className={actionButtonClass}
+                >
+                  {pinned ? (
+                    <PinOff className="size-3" strokeWidth={1.75} />
+                  ) : (
+                    <Pin className="size-3 rotate-45" strokeWidth={1.75} />
+                  )}
+                </button>
+              ) : null}
+              {canRename ? (
+                <button
+                  type="button"
+                  aria-label={copy.sidebar.renameSession}
+                  title={copy.sidebar.renameSession}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setDraft(session.title);
+                    setEditing(true);
+                  }}
+                  className={actionButtonClass}
+                >
+                  <Pencil className="size-3" strokeWidth={1.75} />
+                </button>
+              ) : null}
+              {canClose ? (
+                <button
+                  type="button"
+                  aria-label={copy.sidebar.closeSession}
+                  title={copy.sidebar.closeSession}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onClose?.(session.id);
+                  }}
+                  className={actionButtonClass}
+                >
+                  <X className="size-3" strokeWidth={1.75} />
+                </button>
+              ) : null}
+            </span>
+          ) : null}
+        </span>
       </span>
     </div>
   );

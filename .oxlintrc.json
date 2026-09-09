@@ -57,6 +57,14 @@
       "rules": {
         "eslint/no-console": "off"
       }
+    },
+    {
+      // shadcn 注册表生成组件：上游即单文件多导出结构，保持原样便于随注册表更新；
+      // 本豁免只点名 ui/no-multi-component、只限生成目录，业务组件一文件一组件纪律不变
+      "files": ["apps/electron/src/renderer/src/components/ui/**"],
+      "rules": {
+        "ui/no-multi-component": "off"
+      }
     }
   ],
 

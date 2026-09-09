@@ -31,12 +31,38 @@ const thinkingFormatTriggerClassName =
 /** 思考形态可选项（值域来自 contracts ThinkingFormat；文案单一真相在 strings）。 */
 const THINKING_FORMATS: readonly ThinkingFormat[] = ['default', 'zai', 'qwen', 'deepseek', 'openrouter', 'together', 'string-thinking', 'ant-ling'];
 
-/** 逗号（半角/全角）或换行切分、trim、去空；重复 id 不重复入列（新录入默认不声明思考能力）。 */
+/** 逗号（半角/全角）或换行切分、trim、去空。 */
 function parseModelIds(raw: string): string[] {
   return raw
-    .split(/[,,\n]/)
+    .split(/[,，\n]/)
     .map((id) => id.trim())
     .filter((id) => id.length > 0);
+}
+
+/** 新模型 id 并入列表（去重；新录入默认不声明思考/视觉能力）。 */
+function mergeModelIds(models: readonly ProviderModel[], ids: readonly string[]): ProviderModel[] {
+  const next = [...models];
+  for (const id of ids) {
+    if (!next.some((model) => model.id === id)) next.push({ id, reasoning: false, vision: false });
+  }
+  return next;
+}
+
+/**
+ * 提交视图：必填校验 + 归一。模型输入框里尚未落 chips 的草稿一并计入——
+ * 输入模型 id 后直接点保存（未按 Enter/逗号收编）也视为已填模型，不误报必填缺失。
+ */
+export function buildProviderSubmit(fields: {
+  name: string;
+  baseUrl: string;
+  models: readonly ProviderModel[];
+  modelDraft: string;
+}): { ok: true; name: string; baseUrl: string; models: ProviderModel[] } | { ok: false; reason: 'incomplete' } {
+  const name = fields.name.trim();
+  const baseUrl = fields.baseUrl.trim();
+  const models = mergeModelIds(fields.models, parseModelIds(fields.modelDraft));
+  if (name.length === 0 || baseUrl.length === 0 || models.length === 0) return { ok: false, reason: 'incomplete' };
+  return { ok: true, name, baseUrl, models };
 }
 
 /** provider 表单（新增/编辑共用，onboarding 复用）：名称/地址/模型 chips（含思考·视觉开关）/思考参数形态/密钥。key 不回显；编辑态名称锁定。 */
@@ -52,13 +78,7 @@ function ProviderForm({ onSubmit, initial = null, onCancel }: ProviderFormProps)
   const addModels = (raw: string): void => {
     const ids = parseModelIds(raw);
     if (ids.length === 0) return;
-    setModels((prev) => {
-      const next = [...prev];
-      for (const id of ids) {
-        if (!next.some((model) => model.id === id)) next.push({ id, reasoning: false, vision: false });
-      }
-      return next;
-    });
+    setModels((prev) => mergeModelIds(prev, ids));
   };
 
   const toggleReasoning = (id: string): void => {
@@ -75,17 +95,16 @@ function ProviderForm({ onSubmit, initial = null, onCancel }: ProviderFormProps)
 
   const submit = async (): Promise<void> => {
     setError(null);
-    const nextName = name.trim();
-    const nextBaseUrl = baseUrl.trim();
-    if (nextName.length === 0 || nextBaseUrl.length === 0 || models.length === 0) {
+    const payload = buildProviderSubmit({ name, baseUrl, models, modelDraft });
+    if (!payload.ok) {
       setError(copy.settings.formIncomplete);
       return;
     }
     const ok = await onSubmit({
-      name: nextName,
-      baseUrl: nextBaseUrl,
+      name: payload.name,
+      baseUrl: payload.baseUrl,
       api: 'openai-completions',
-      models: models.map((model) => ({ id: model.id, reasoning: model.reasoning, vision: model.vision })),
+      models: payload.models,
       thinkingFormat,
       apiKey: apiKey.length > 0 ? apiKey : undefined,
     });
@@ -101,6 +120,7 @@ function ProviderForm({ onSubmit, initial = null, onCancel }: ProviderFormProps)
     setName('');
     setBaseUrl('');
     setModels([]);
+    setModelDraft('');
     setThinkingFormat('default');
     setApiKey('');
   };

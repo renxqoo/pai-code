@@ -6,6 +6,8 @@ import { isValidAgentName } from '@paiapp/contracts';
 import { MenuButton, SegmentedControl, type SegmentedControlOption } from '@paiapp/ui';
 
 import { cn } from '@/lib/utils';
+import { PickerDialog } from '@/components/picker-dialog';
+import { groupModelOptions } from '@/components/group-model-options';
 import { copy } from '@/strings';
 
 import type { SettingsScreenProps } from './use-settings-screen';
@@ -78,6 +80,7 @@ function AgentDefinitionForm({ initial, previous, knownProjects, modelOptions, t
   );
   const [error, setError] = React.useState<string | null>(null);
   const [saving, setSaving] = React.useState(false);
+  const [modelPickerOpen, setModelPickerOpen] = React.useState(false);
 
   // 编辑态条目所在项目不在已知列表（目录不再活跃）时保留为可选项，避免改表单即丢项目
   const projectOptions = React.useMemo(() => {
@@ -245,23 +248,30 @@ function AgentDefinitionForm({ initial, previous, knownProjects, modelOptions, t
           </div>
           <div className="flex w-[260px] shrink-0 flex-col gap-[6px]">
             {fieldLabel(copy.settings.agentsFieldModel, undefined, undefined)}
-            <MenuButton
+            <button
+              type="button"
               aria-label={copy.settings.agentsFieldModel}
-              align="end"
-              popupMinWidth={260}
-              items={[
-                { kind: 'item' as const, id: MODEL_INHERIT_ID, label: copy.settings.agentsModelInherit, selected: model === null },
-                ...modelOptions.map((option) => ({ kind: 'item' as const, id: option, label: option, selected: option === model })),
+              aria-haspopup="dialog"
+              aria-expanded={modelPickerOpen}
+              onClick={() => setModelPickerOpen(true)}
+              className={menuTriggerClassName}
+            >
+              <span className="min-w-0 flex-1 truncate">{model ?? copy.settings.agentsModelInherit}</span>
+              <ChevronDown className="size-3 shrink-0 text-muted-foreground/70" strokeWidth={2} />
+            </button>
+            <PickerDialog
+              open={modelPickerOpen}
+              onOpenChange={setModelPickerOpen}
+              title={copy.settings.agentsFieldModel}
+              searchPlaceholder={copy.modelPicker.searchPlaceholder}
+              emptyLabel={copy.modelPicker.empty}
+              groups={[
+                { items: [{ id: MODEL_INHERIT_ID, label: copy.settings.agentsModelInherit }] },
+                ...groupModelOptions(modelOptions),
               ]}
+              selectedId={model ?? MODEL_INHERIT_ID}
               onSelect={(value) => setModel(value === MODEL_INHERIT_ID ? null : value)}
-              triggerClassName={menuTriggerClassName}
-              trigger={
-                <>
-                  <span className="min-w-0 flex-1 truncate">{model ?? copy.settings.agentsModelInherit}</span>
-                  <ChevronDown className="size-3 shrink-0 text-muted-foreground/70" strokeWidth={2} />
-                </>
-                }
-              />
+            />
             {model === null ? fieldHint(copy.settings.agentsModelInheritHint) : null}
           </div>
         </div>

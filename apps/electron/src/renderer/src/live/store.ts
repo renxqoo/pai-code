@@ -170,6 +170,7 @@ export function createLiveStore() {
         set((state) => ({ threads: { ...state.threads, [threadId]: foldStopIntent(threadOf(state, threadId)) } }));
       },
       bootstrap(data) {
+
         set((state) => {
           // 滞后快照合并语义：快照补缺、不清在途（事件流可能先于 bootstrap 建立更新的会话/字段）
           const sessions: Record<string, SessionView> = { ...state.sessions };

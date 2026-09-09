@@ -29,6 +29,8 @@ export type WorkspaceDiagnostics = {
 
 export type WorkspaceActions = {
   readonly submitDraft: (message: string, images?: readonly ImagePayload[], mode?: 'auto' | 'steer' | 'followUp') => Promise<string | null>;
+  /** 指定线程投递（排队暂存的立即改向/轮末冲刷，目标可为后台线程）；失败通知与 submitDraft 同口径。 */
+  readonly submitThreadDraft: (threadId: string, message: string, images?: readonly ImagePayload[], mode?: 'auto' | 'steer' | 'followUp') => Promise<string | null>;
   readonly stopActiveTurn: () => void;
   readonly selectSession: (threadId: string) => void;
   readonly createSession: (cwd: string, trusted?: boolean) => Promise<boolean>;
@@ -66,7 +68,6 @@ export type WorkspaceActions = {
   readonly searchFiles: (query: string) => Promise<string[] | null>;
   readonly runBash: (command: string) => Promise<string | null>;
   readonly abortBash: () => void;
-  readonly clearQueue: () => void;
   readonly revealSession: (sessionPath: string) => void;
   /** 系统目录选择对话框；null = 取消（新会话弹窗浏览入口）。 */
   readonly pickDirectory: (defaultPath: string | null) => Promise<string | null>;
@@ -105,6 +106,12 @@ function activeThreadOf(): string {
   return store.getState().activeThreadId ?? '';
 }
 
+/** 投递失败通知口径：宿主桥不可用不弹（横幅已显式呈现），恢复失败用专项文案。 */
+function notifySubmitFailure(reason: string | null): void {
+  if (reason === null || reason === 'bridge_unavailable') return;
+  pushNotice(reason === 'resume_failed' ? copy.flow.resumeFailed : copy.flow.sendFailed(reason));
+}
+
 export function createWorkspaceActions(setDiagnostics: (value: WorkspaceDiagnostics | null) => void): WorkspaceActions {
   const readSessionRules = (): void => {
     const threadId = activeThreadOf();
@@ -137,9 +144,12 @@ export function createWorkspaceActions(setDiagnostics: (value: WorkspaceDiagnost
       // 调用时读 store 真相：fork/重开等异步链路后的旧闭包不得打到旧线程；
       // parked 占位的懒恢复兜底在 controller.submitDraft 内（threadId 只信 resume 响应）
       const reason = await controller.submitDraft(activeThreadOf(), message, images, mode);
-      if (reason !== null && reason !== 'bridge_unavailable') {
-        pushNotice(reason === 'resume_failed' ? copy.flow.resumeFailed : copy.flow.sendFailed(reason));
-      }
+      notifySubmitFailure(reason);
+      return reason;
+    },
+    submitThreadDraft: async (threadId, message, images, mode) => {
+      const reason = await controller.submitDraft(threadId, message, images, mode);
+      notifySubmitFailure(reason);
       return reason;
     },
     stopActiveTurn: () => void controller.stopActiveTurn(activeThreadOf()),
@@ -298,7 +308,6 @@ export function createWorkspaceActions(setDiagnostics: (value: WorkspaceDiagnost
       return reason;
     },
     abortBash: () => void controller.abortBash(activeThreadOf()),
-    clearQueue: () => void controller.clearQueue(activeThreadOf()),
     revealSession: (sessionPath) => void controller.revealSession(sessionPath),
     pickDirectory: async (defaultPath) => {
       const outcome = await bridgeClient.invoke('dialog/pickDirectory', defaultPath !== null ? { defaultPath } : {});

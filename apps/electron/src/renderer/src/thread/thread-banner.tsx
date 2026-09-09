@@ -11,15 +11,13 @@ type ThreadBannerProps = {
   /** 直执行 bash 在途与其流式输出尾部（截断展示一行）。 */
   bashRunning: boolean;
   bashTail: string;
-  /** 排队行点击展开面板（不传则纯展示）。 */
-  onToggleQueue?: () => void
 };
 
 /**
  * 会话状态横幅：worker 崩溃恢复提示 / 压缩中 / 直执行命令 / 自动重试 / 排队消息数。
  * 输入卡上方的轻量提示条，无状态时整行不占位。
  */
-function ThreadBanner({ crashed, compacting, retrying, queueCount, bashRunning, bashTail, onToggleQueue }: ThreadBannerProps) {
+function ThreadBanner({ crashed, compacting, retrying, queueCount, bashRunning, bashTail }: ThreadBannerProps) {
   if (crashed) {
     return (
       <BannerStrip tone="warn" icon={<AlertTriangle className="size-[13px]" strokeWidth={1.75} />}>
@@ -50,19 +48,9 @@ function ThreadBanner({ crashed, compacting, retrying, queueCount, bashRunning, 
     );
   }
   if (queueCount > 0) {
-    const content = <span>{copy.flow.queued(queueCount)}</span>;
-    if (onToggleQueue === undefined) {
-      return (
-        <BannerStrip tone="info" icon={<Layers className="size-[13px]" strokeWidth={1.75} />}>
-          {content}
-        </BannerStrip>
-      );
-    }
     return (
       <BannerStrip tone="info" icon={<Layers className="size-[13px]" strokeWidth={1.75} />}>
-        <button type="button" onClick={onToggleQueue} className="cursor-pointer text-left underline decoration-border underline-offset-2 hover:decoration-foreground">
-          {content}
-        </button>
+        <span>{copy.flow.queued(queueCount)}</span>
       </BannerStrip>
     );
   }

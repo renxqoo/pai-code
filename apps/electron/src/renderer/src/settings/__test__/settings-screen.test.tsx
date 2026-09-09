@@ -113,4 +113,27 @@ describe('设置页渲染冒烟', () => {
       for (const mark of marks) expect(html).toContain(mark);
     }
   });
+
+  test('providers 分区：默认模型弹窗关态零渲染（有目录时也只出触发器）', () => {
+    const html = renderToStaticMarkup(
+      <SettingsScreen
+        {...makeProps({
+          section: 'providers',
+          providers: {
+            list: [],
+            defaultModel: 'glm/glm-4.7',
+            modelOptions: ['glm/glm-4.7', 'glm/glm-5.3'],
+            onUpsert: ok,
+            onRemove: ok,
+            onSelectDefaultModel: noop,
+            onTest: () => Promise.resolve({ ok: true as const, latencyMs: 1 }),
+          },
+        })}
+      />,
+    );
+    expect(html).toContain('glm/glm-4.7');
+    expect(html).toContain('aria-haspopup="dialog"');
+    expect(html).not.toContain(copy.modelPicker.searchPlaceholder);
+    expect(html).not.toContain(copy.modelPicker.empty);
+  });
 });

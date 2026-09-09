@@ -2,8 +2,9 @@ import * as React from 'react';
 import { ChevronDown } from 'lucide-react';
 
 import type { ProviderConfigView, ProviderModel, ThinkingFormat } from '@paiapp/contracts';
-import { MenuButton } from '@paiapp/ui';
 
+import { PickerDialog } from '@/components/picker-dialog';
+import { groupModelOptions } from '@/components/group-model-options';
 import { copy } from '@/strings';
 
 import { SettingsCard } from './settings-card';
@@ -23,21 +24,12 @@ type ProvidersSectionProps = {
   onTest: (name: string) => Promise<ProviderTestResult>
 }
 
-/** 默认模型下拉触发器：select 观感（描边胶囊 + chevron）。 */
+/** 默认模型弹窗触发器：select 观感（描边胶囊 + chevron）。 */
 const defaultModelTriggerClassName =
   'flex h-9 cursor-pointer items-center justify-between gap-[8px] rounded-lg border border-border bg-background px-3 text-left text-[13px] text-foreground outline-none select-none hover:border-foreground/30 aria-expanded:border-foreground/30 focus-visible:ring-3 focus-visible:ring-ring/50 [&_svg]:shrink-0';
 
-const defaultModelTriggerMinWidth = 240;
-
-function defaultModelItems(modelOptions: readonly string[], selected: string) {
-  const noneValue = copy.settings.defaultModelNone;
-  return [noneValue, ...modelOptions].map((option) => ({
-    kind: 'item' as const,
-    id: option,
-    label: option,
-    selected: option === selected,
-  }));
-}
+/** 「不使用默认模型」项的保留 id（双下划线前缀避免与真实模型名撞车），归一为 null 提交。 */
+const DEFAULT_MODEL_NONE_ID = '__none__';
 
 /** 本地过滤：provider 名称 / baseUrl / 模型 id 包含匹配（大小写不敏感）。 */
 function providerMatchesQuery(provider: ProviderConfigView, query: string): boolean {
@@ -55,6 +47,7 @@ function ProvidersSection({ list, defaultModel, modelOptions, onUpsert, onRemove
   const [editing, setEditing] = React.useState<string | null>(null);
   const [adding, setAdding] = React.useState(false);
   const [query, setQuery] = React.useState('');
+  const [defaultPickerOpen, setDefaultPickerOpen] = React.useState(false);
   const selectedDefault = defaultModel ?? copy.settings.defaultModelNone;
   // 默认模型已不在目录（provider 被删/改名）→ 触发器旁短标记 + 卡内联失效提示
   const defaultModelInvalid = defaultModel !== null && !modelOptions.includes(defaultModel);
@@ -72,27 +65,37 @@ function ProvidersSection({ list, defaultModel, modelOptions, onUpsert, onRemove
       <div className="flex flex-col gap-[16px]">
         <SettingsCard className="divide-y divide-border">
           <SettingsRow title={copy.settings.defaultModelTitle}>
-            <span className="flex items-center gap-[8px]">
+            <div className="flex items-center gap-[8px]">
               {defaultModelInvalid ? (
                 <span className="inline-flex shrink-0 items-center rounded-full border border-destructive/40 px-2 py-[1px] text-[11px] leading-[16px] text-destructive">
                   {copy.settings.defaultModelInvalidShort}
                 </span>
               ) : null}
-              <MenuButton
+              <button
+                type="button"
                 aria-label={copy.settings.defaultModelTitle}
-                align="end"
-                popupMinWidth={defaultModelTriggerMinWidth}
-                items={defaultModelItems(modelOptions, selectedDefault)}
-                onSelect={(value) => onSelectDefaultModel(value === copy.settings.defaultModelNone ? null : value)}
-                triggerClassName={defaultModelTriggerClassName}
-                trigger={
-                  <>
-                    <span className="min-w-0 max-w-[220px] truncate">{selectedDefault}</span>
-                    <ChevronDown className="size-3 shrink-0 text-muted-foreground/70" strokeWidth={2} />
-                  </>
-                }
+                aria-haspopup="dialog"
+                aria-expanded={defaultPickerOpen}
+                onClick={() => setDefaultPickerOpen(true)}
+                className={defaultModelTriggerClassName}
+              >
+                <span className="min-w-0 max-w-[220px] truncate">{selectedDefault}</span>
+                <ChevronDown className="size-3 shrink-0 text-muted-foreground/70" strokeWidth={2} />
+              </button>
+              <PickerDialog
+                open={defaultPickerOpen}
+                onOpenChange={setDefaultPickerOpen}
+                title={copy.settings.defaultModelTitle}
+                searchPlaceholder={copy.modelPicker.searchPlaceholder}
+                emptyLabel={copy.modelPicker.empty}
+                groups={[
+                  { items: [{ id: DEFAULT_MODEL_NONE_ID, label: copy.settings.defaultModelNone }] },
+                  ...groupModelOptions(modelOptions),
+                ]}
+                selectedId={defaultModel ?? DEFAULT_MODEL_NONE_ID}
+                onSelect={(id) => onSelectDefaultModel(id === DEFAULT_MODEL_NONE_ID ? null : id)}
               />
-            </span>
+            </div>
           </SettingsRow>
           {defaultModelInvalid ? (
             <p className="px-[20px] py-[11px] text-[12px] leading-[17px] text-muted-foreground">

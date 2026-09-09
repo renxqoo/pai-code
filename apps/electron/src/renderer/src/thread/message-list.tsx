@@ -41,7 +41,7 @@ function itemTopMargin(index: number, item: ThreadItem): string {
 function MessageList({ thread, now, loading, bottomInset, emptyTitle, emptyHint, onOpenAgents, onOpenDiff, onEditUserMessage, onForkUserMessage }: MessageListProps) {
   const empty = thread.items.length === 0;
   return (
-    <div className={`${CONVERSATION_COLUMN_CLASS} flex min-h-full shrink-0 flex-col pt-6`} style={{ paddingBottom: bottomInset }}>
+    <div className={`${CONVERSATION_COLUMN_CLASS} flex min-h-full shrink-0 flex-col pt-6 px-3`} style={{ paddingBottom: bottomInset }}>
       {empty ? (
         // 首轮事件到达前的空窗（如直执行命令）：留执行中指示，不闪空态引导
         loading ? <TurnLoadingRow label={copy.flow.executing} /> : <EmptyThread title={emptyTitle} hint={emptyHint} />

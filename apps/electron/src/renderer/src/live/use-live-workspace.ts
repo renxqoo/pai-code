@@ -8,6 +8,9 @@ import type { ThreadModel } from '@/thread/thread-model';
 import { collectThreadDiff } from '@/diff-panel/collect-thread-diff';
 import { summarizeAgents } from '@/thread/panel-summary';
 import { baseNameOf } from '@/lib/project-dirs';
+import { imagePayloadOf } from '@/composer/read-image-file';
+import { queuedDrafts, type QueuedDraft, type QueuedDraftSubmit } from '@/composer/queued-drafts';
+import { connectQueuedDraftFlush } from './queued-flush';
 
 import type { WorkspaceActions, WorkspaceDiagnostics } from './workspace-actions';
 import { createWorkspaceActions } from './workspace-actions';
@@ -46,8 +49,14 @@ export type LiveWorkspaceView = {
   executing: boolean;
   agentsActive: boolean;
   queueCount: number;
-  /** 排队消息分组视图（A7 面板数据源）。 */
+  /** 排队消息分组视图（hub 侧队列镜像；横幅计数数据源）。 */
   queueItems: { steering: readonly string[]; followUp: readonly string[] };
+  /** 本地暂存排队消息（按线程；输入卡顶部卡片堆数据源，轮末自动冲刷）。 */
+  queuedDrafts: Readonly<Record<string, readonly QueuedDraft[]>>;
+  /** 暂存投递（立即改向/冲刷共用；调用时读 store 真相寻址线程）。 */
+  submitQueuedDraft: QueuedDraftSubmit;
+  /** 调用时读 store 真相的流式判定（提交路径不得用渲染帧快照判生成中）。 */
+  isThreadStreaming: (threadId: string) => boolean;
   crashed: boolean;
   compacting: boolean;
   /** 直执行 bash 在途与其流式输出尾部。 */
@@ -97,6 +106,9 @@ const EFFORT_LABELS: Readonly<Record<string, string>> = {
 
 const EMPTY_QUEUE: { steering: readonly string[]; followUp: readonly string[] } = { steering: [], followUp: [] };
 
+/** useSyncExternalStore 订阅句柄：引用恒定（queuedDrafts 是模块单例）。 */
+const subscribeQueuedDrafts = (listener: () => void): (() => void) => queuedDrafts.subscribe(listener);
+
 export function useLiveWorkspace(): LiveWorkspaceView {
   const [now, setNow] = React.useState(() => Date.now());
   const [effortLevels, setEffortLevels] = React.useState<readonly string[]>([]);
@@ -130,8 +142,25 @@ export function useLiveWorkspace(): LiveWorkspaceView {
 
   React.useEffect(() => {
     void controller.start();
+    // cleanup 必须返回函数本身：立即调用形态会在挂载当帧置 disposed，
+    // StrictMode 双挂载下两次 bootstrap 应答全部被丢弃——启动永久停留 loading
     return () => controller.dispose();
   }, []);
+
+  // 暂存排队消息的轮末冲刷（连接器单一真相 live/queued-flush：结算冲刷/
+  // 路径宿主保留/重开改绑）。submit 引用恒定（actions 稳定）。
+  const submitQueuedDraft = React.useCallback<QueuedDraftSubmit>(
+    (threadId, draft, mode) =>
+      actions.submitThreadDraft(
+        threadId,
+        draft.text,
+        draft.images.length === 0 ? undefined : draft.images.map((image) => imagePayloadOf(image.payload)),
+        mode,
+      ),
+    [actions],
+  );
+  React.useEffect(() => connectQueuedDraftFlush(store, submitQueuedDraft), [submitQueuedDraft]);
+  const queuedDraftsByThread = React.useSyncExternalStore(subscribeQueuedDrafts, queuedDrafts.snapshot);
 
   React.useEffect(() => {
     // 切会话（或最后一个会话被移除）先清会话级派生态，避免上一会话残留到新会话
@@ -198,6 +227,9 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     agentsActive,
     queueCount: queueItems.steering.length + queueItems.followUp.length,
     queueItems,
+    queuedDrafts: queuedDraftsByThread,
+    submitQueuedDraft,
+    isThreadStreaming: (threadId: string) => store.getState().threads[threadId]?.streaming === true,
     crashed: threadState?.crashed ?? false,
     compacting,
     bashRunning,
