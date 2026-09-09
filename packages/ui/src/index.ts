@@ -10,6 +10,7 @@ export { MenuButton, type MenuItemDef, type MenuButtonProps } from './menu-butto
 export { MetaLine, type MetaLineProps } from './meta-line';
 export { SparkMark } from './spark-mark';
 export { SplitButton, type SplitButtonProps } from './split-button';
+export { Spinner, type SpinnerProps } from './spinner';
 export { StatusDot, type StatusDotProps, type StatusDotTone } from './status-dot';
 export { ToggleSwitch, type ToggleSwitchProps } from './switch';
 export { TypePill, type TypePillProps } from './type-pill';
