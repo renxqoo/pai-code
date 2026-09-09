@@ -43,7 +43,7 @@ function TurnGroup({ turn, now, onOpenAgents, onOpenDiff }: TurnGroupProps) {
         open={collapse.turnOpen}
         onToggle={collapse.toggleTurn}
       />
-      <div className="flex flex-col gap-[18px] pt-[36px]">
+      <div className="flex flex-col gap-[18px] pt-[12px]">
         {runs.map((run) =>
           run.kind === 'process' ? (
             <ProcessGroup

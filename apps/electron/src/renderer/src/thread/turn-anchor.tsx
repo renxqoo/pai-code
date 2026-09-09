@@ -21,7 +21,7 @@ function TurnAnchor({ time, summary, onJump }: TurnAnchorProps) {
       type="button"
       aria-label={copy.flow.turnAnchorAria(time)}
       onClick={onJump}
-      className="group relative flex h-[20px] w-[22px] cursor-pointer items-center justify-start rounded-md outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/50"
+      className="group relative flex h-[10px] w-[22px] cursor-pointer items-center justify-start rounded-md outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/50"
     >
       <span
         aria-hidden="true"
