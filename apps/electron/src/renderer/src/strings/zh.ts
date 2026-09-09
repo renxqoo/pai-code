@@ -95,14 +95,14 @@ export const zh: typeof en = {
     labelSearch: '搜索',
     labelList: '列目录',
     labelSubagent: '子代理',
-    /** 思考单元收起态标签（运行中显 思考中） */
+    /** 思考单元收起态标签（运行中同显 思考，运行态由脉冲点区分） */
     thought: '思考',
     turnStoppedSummary: (elapsed: string): string => `已停止 · ${elapsed}`,
     /** 历史轮左缘锚点（无障碍名） */
     turnAnchorAria: (time: string): string => `查看 ${time} 结束的轮次`,
     /** 历史轮锚点带（无障碍名） */
     turnAnchorRailAria: '历史轮次导航',
-    thinking: '思考中',
+    thinking: '思考',
     queued: (count: number): string => (count === 1 ? '1 条排队消息' : `${count} 条排队消息`),
     retrying: (attempt: number, maxAttempts: number): string => `重试中（${attempt}/${maxAttempts}）`,
     crashedBanner: '本会话的执行进程崩溃，正在恢复。下一条命令会自动续起。',
