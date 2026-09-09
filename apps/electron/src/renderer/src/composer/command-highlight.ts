@@ -42,3 +42,21 @@ export function splitHighlight(text: string, ranges: readonly HighlightRange[]):
   if (at < text.length) segments.push({ text: text.slice(at), highlighted: false })
   return segments
 }
+
+/**
+ * 原子删除决策：高亮命令 token 是不可分整体——Backspace 光标紧贴 token 尾、
+ * Delete（前向）光标紧贴 token 头时，一次删除整个 token；其余位置与展开选区
+ * 不拦截（保留逐字符编辑与选区编辑的正常语义）。仅对「精确命中」token 生效：
+ * 补全弹层打开时的部分输入不整体删除（用户正在改名字）。
+ */
+export function commandTokenDeleteRange(
+  range: HighlightRange | undefined,
+  selectionStart: number,
+  selectionEnd: number,
+  key: string,
+): HighlightRange | null {
+  if (range === undefined || selectionStart !== selectionEnd) return null
+  if (key === 'Backspace') return selectionStart === range.end ? range : null
+  if (key === 'Delete') return selectionStart === range.start ? range : null
+  return null
+}

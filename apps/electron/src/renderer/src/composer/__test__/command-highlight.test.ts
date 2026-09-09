@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { leadingCommandHighlight, splitHighlight } from '../command-highlight';
+import { commandTokenDeleteRange, leadingCommandHighlight, splitHighlight } from '../command-highlight';
 import type { CommandView } from '@paiapp/contracts';
 
 const SKILL: CommandView = { name: 'skill:writer', description: null, source: 'skill' };
@@ -61,5 +61,33 @@ describe('splitHighlight', () => {
 
   test('越界区间经 slice 钳制，垃圾输入不崩溃', () => {
     expect(splitHighlight('ab', [{ start: 0, end: 99, source: 'skill' }])).toEqual([{ text: 'ab', highlighted: true }])
+  })
+})
+
+describe('commandTokenDeleteRange', () => {
+  const RANGE = { start: 0, end: 13, source: 'skill' as const };
+
+  test('Backspace 光标紧贴 token 尾：整体删除', () => {
+    expect(commandTokenDeleteRange(RANGE, 13, 13, 'Backspace')).toEqual(RANGE)
+  })
+
+  test('Delete（前向）光标紧贴 token 头：整体删除', () => {
+    expect(commandTokenDeleteRange(RANGE, 0, 0, 'Delete')).toEqual(RANGE)
+  })
+
+  test('token 内部/越界位置不拦截：保留逐字符编辑语义', () => {
+    expect(commandTokenDeleteRange(RANGE, 12, 12, 'Backspace')).toBeNull()
+    expect(commandTokenDeleteRange(RANGE, 0, 0, 'Backspace')).toBeNull()
+    expect(commandTokenDeleteRange(RANGE, 5, 5, 'Delete')).toBeNull()
+    expect(commandTokenDeleteRange(RANGE, 13, 13, 'Delete')).toBeNull()
+  })
+
+  test('有展开选区时不拦截（用户显式选择的删除走原生语义）', () => {
+    expect(commandTokenDeleteRange(RANGE, 3, 8, 'Backspace')).toBeNull()
+  })
+
+  test('无命中 token 或其他按键返回 null', () => {
+    expect(commandTokenDeleteRange(undefined, 13, 13, 'Backspace')).toBeNull()
+    expect(commandTokenDeleteRange(RANGE, 13, 13, 'Enter')).toBeNull()
   })
 })

@@ -7,7 +7,7 @@ import type { CommandView, ImagePayload, PermissionRules, SessionStatsView } fro
 import { ComposerActionsRow } from '@/composer/composer-actions-row';
 import { ComposerContextBar } from '@/composer/composer-context-bar';
 import { ComposerHighlightLayer } from '@/composer/composer-highlight-layer';
-import { leadingCommandHighlight } from '@/composer/command-highlight';
+import { leadingCommandHighlight, commandTokenDeleteRange } from '@/composer/command-highlight';
 import { AttachmentChips } from '@/composer/attachment-chips';
 import { imagePayloadOf, imageDataUrl, readImageFile, type PendingImage } from '@/composer/read-image-file';
 import { activeTokenQuery, applyTokenSelection, filterTokenItems, type TokenTrigger } from '@/composer/token-trigger';
@@ -309,6 +309,26 @@ function Composer({
               addFiles(files);
             }}
             onKeyDown={(event) => {
+              // 原子删除：光标紧贴命中 token 边界时整体删除（execCommand 走原生
+              // 编辑路径保住撤销栈；不可用时回退直接改值）；补全弹层打开期间不拦截
+              if ((event.key === 'Backspace' || event.key === 'Delete') && !autocompleteActive && !event.nativeEvent.isComposing) {
+                const element = event.currentTarget;
+                const target = commandTokenDeleteRange(
+                  commandRanges[0],
+                  element.selectionStart ?? 0,
+                  element.selectionEnd ?? 0,
+                  event.key,
+                );
+                if (target !== null) {
+                  event.preventDefault();
+                  element.setSelectionRange(target.start, target.end);
+                  if (!document.execCommand('delete')) {
+                    onChange(value.slice(0, target.start) + value.slice(target.end));
+                    setPendingCaret(target.start);
+                  }
+                  return;
+                }
+              }
               if (autocompleteActive && !event.nativeEvent.isComposing) {
                 if (event.key === 'ArrowDown') {
                   event.preventDefault();
