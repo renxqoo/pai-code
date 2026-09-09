@@ -34,6 +34,9 @@ function PickerDialogItems({ groups, selectedId, emptyLabel, onSelect }: PickerD
                 className={ITEM_CLASS_NAME}
               >
                 <span className="min-w-0 truncate">{item.label}</span>
+                {item.detail === undefined ? null : (
+                  <span className="min-w-0 truncate text-xs text-muted-foreground">{item.detail}</span>
+                )}
                 {item.id === selectedId ? (
                   <Check aria-hidden="true" className="ml-auto size-3.5 shrink-0 text-muted-foreground" />
                 ) : null}

@@ -8,7 +8,7 @@ function base(overrides: Partial<EscState> = {}): EscState {
     sidebarSearchOpen: false,
     usageOpen: false,
     projectFilesOpen: false,
-    newThreadOpen: false,
+    newTaskOpen: false,
     settingsOpen: false,
     panel: null,
     bashRunning: false,
@@ -28,10 +28,10 @@ describe('escActionFor', () => {
     expect(escActionFor(base({ bashRunning: true }))).toEqual({ kind: 'abort-bash' });
   });
 
-  test('逐层收起优先级：对话框 → Usage → 新会话弹窗 → 设置 → 可见侧栏搜索 → 面板 → bash/停止', () => {
+  test('逐层收起优先级：对话框 → Usage → 新建任务页 → 设置 → 可见侧栏搜索 → 面板 → bash/停止', () => {
     expect(escActionFor(base({ dialogCount: 1, sidebarSearchOpen: true, usageOpen: true, settingsOpen: true }))).toEqual({ kind: 'dismiss-dialogs' });
-    expect(escActionFor(base({ usageOpen: true, newThreadOpen: true, sidebarSearchOpen: true }))).toEqual({ kind: 'close-usage' });
-    expect(escActionFor(base({ newThreadOpen: true, settingsOpen: true, sidebarSearchOpen: true }))).toEqual({ kind: 'close-new-thread' });
+    expect(escActionFor(base({ usageOpen: true, newTaskOpen: true, sidebarSearchOpen: true }))).toEqual({ kind: 'close-usage' });
+    expect(escActionFor(base({ newTaskOpen: true, settingsOpen: true, sidebarSearchOpen: true }))).toEqual({ kind: 'close-new-task' });
     expect(escActionFor(base({ settingsOpen: true, sidebarSearchOpen: true }))).toEqual({ kind: 'close-settings' });
     expect(escActionFor(base({ sidebarSearchOpen: true, panel: 'diff' }))).toEqual({ kind: 'close-sidebar-search' });
     expect(escActionFor(base({ panel: 'agents', bashRunning: true }))).toEqual({ kind: 'close-panel' });
@@ -39,13 +39,13 @@ describe('escActionFor', () => {
 
   test('症状回归（T17 测试轮）：全屏覆盖层开着时不先收被遮挡的侧栏搜索（不吞 Esc 一拍）', () => {
     expect(escActionFor(base({ settingsOpen: true, sidebarSearchOpen: true }))).toEqual({ kind: 'close-settings' });
-    expect(escActionFor(base({ newThreadOpen: true, sidebarSearchOpen: true }))).toEqual({ kind: 'close-new-thread' });
+    expect(escActionFor(base({ newTaskOpen: true, sidebarSearchOpen: true }))).toEqual({ kind: 'close-new-task' });
   });
 
   test('项目文件面板（T18）：全屏覆盖层之后、侧栏内联层之内优先于搜索收起', () => {
     expect(escActionFor(base({ usageOpen: true, projectFilesOpen: true }))).toEqual({ kind: 'close-usage' });
     expect(escActionFor(base({ settingsOpen: true, projectFilesOpen: true }))).toEqual({ kind: 'close-settings' });
-    expect(escActionFor(base({ projectFilesOpen: true, newThreadOpen: true }))).toEqual({ kind: 'close-new-thread' });
+    expect(escActionFor(base({ projectFilesOpen: true, newTaskOpen: true }))).toEqual({ kind: 'close-new-task' });
     expect(escActionFor(base({ projectFilesOpen: true, sidebarSearchOpen: true }))).toEqual({ kind: 'close-project-files' });
   });
 

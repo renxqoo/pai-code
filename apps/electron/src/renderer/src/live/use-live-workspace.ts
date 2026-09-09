@@ -29,8 +29,6 @@ export type ComposerSelection = {
   modelOptions: readonly string[];
   effort: string;
   effortOptions: readonly string[];
-  checkout: string;
-  checkoutOptions: readonly string[];
   contextUsed: number;
 };
 
@@ -144,6 +142,12 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     return () => controller.dispose();
   }, []);
 
+  /** 流式判定读 store 真相（引用恒定：进 submitDraft 的依赖数组，不破 Composer memo） */
+  const isThreadStreaming = React.useCallback(
+    (threadId: string) => store.getState().threads[threadId]?.streaming === true,
+    [],
+  );
+
   // 暂存排队消息的轮末冲刷（连接器单一真相 live/queued-flush：结算冲刷/
   // 路径宿主保留/重开改绑）。submit 引用恒定（actions 稳定）。
   const submitQueuedDraft = React.useCallback<QueuedDraftSubmit>(
@@ -226,7 +230,7 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     queueItems,
     queuedDrafts: queuedDraftsByThread,
     submitQueuedDraft,
-    isThreadStreaming: (threadId: string) => store.getState().threads[threadId]?.streaming === true,
+    isThreadStreaming,
     crashed: threadState?.crashed ?? false,
     compacting,
     bashRunning,
@@ -278,14 +282,11 @@ function buildComposer(
   const currentLabel = session?.thinkingLevel !== undefined && session?.thinkingLevel !== null ? EFFORT_LABELS[session.thinkingLevel] : undefined;
   // 未知档位回落到第一个可选档；无可选档时留空（触发禁用态）
   const effort = currentLabel ?? levelLabels[0] ?? '';
-  const cwdBase = baseNameOf(session?.cwd ?? '');
   return {
     model: currentModel,
     modelOptions,
     effort,
     effortOptions: levelLabels,
-    checkout: cwdBase,
-    checkoutOptions: cwdBase.length > 0 ? [cwdBase] : [],
     contextUsed: stats[session?.threadId ?? '']?.contextUsage ?? 0,
   };
 }

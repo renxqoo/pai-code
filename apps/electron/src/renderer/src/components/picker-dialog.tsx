@@ -14,6 +14,8 @@ type PickerDialogProps = {
   selectedId: string | null
   /** 选中即回调；关闭经 onOpenChange(false) 交调用方收口 */
   onSelect: (id: string) => void
+  /** 列表下方固定动作区（打开文件夹 / 信任开关 / 创建分支入口）；缺省不渲染 */
+  footer?: React.ReactNode
 };
 
 /**
@@ -24,7 +26,7 @@ type PickerDialogProps = {
  * 常挂载由 open 控制会污染关态 DOM，权衡后保关态零渲染）。defaultValue 让初始键盘
  * 高亮落在当前选中项——打开即回车不会误提交目录首项。
  */
-function PickerDialog({ open, onOpenChange, title, searchPlaceholder, emptyLabel, groups, selectedId, onSelect }: PickerDialogProps) {
+function PickerDialog({ open, onOpenChange, title, searchPlaceholder, emptyLabel, groups, selectedId, onSelect, footer }: PickerDialogProps) {
   if (!open) return null;
   const pick = (id: string): void => {
     onSelect(id);
@@ -38,6 +40,20 @@ function PickerDialog({ open, onOpenChange, title, searchPlaceholder, emptyLabel
         <CommandList label={title}>
           <PickerDialogItems groups={groups} selectedId={selectedId} emptyLabel={emptyLabel} onSelect={pick} />
         </CommandList>
+        {footer === undefined ? null : (
+          // 底部动作区自担键盘：cmdk 根的 Enter/方向键会选中高亮项并 preventDefault，
+          // 不隔断则按钮/开关的 Enter 会被 cmdk 抢走（选中目录而非触发按钮）；
+          // Esc 必须继续冒泡给 Base UI 关闭弹窗（全停会变成键盘死角）
+          <div
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key.startsWith('Arrow') || event.key === 'Home' || event.key === 'End') {
+                event.stopPropagation();
+              }
+            }}
+          >
+            {footer}
+          </div>
+        )}
       </Command>
     </CommandDialog>
   );

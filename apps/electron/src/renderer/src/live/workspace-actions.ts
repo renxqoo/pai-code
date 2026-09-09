@@ -1,7 +1,7 @@
-import type { AgentDefinition, ImagePayload, PermissionRules, ProviderModel, ThinkingFormat } from '@paiapp/contracts';
+import type { AgentDefinition, ApiOutcome, ImagePayload, PermissionRules, ProviderModel, ThinkingFormat } from '@paiapp/contracts';
 
 import { copy } from '@/strings';
-import { pickSessionModel } from './pick-session-model';
+import { parseModelKey, pickSessionModel } from './pick-session-model';
 import { nextSessionRulesForMode } from './permission-mode';
 import { bridgeClient, controller, store } from './workspace-runtime';
 
@@ -33,7 +33,27 @@ export type WorkspaceActions = {
   readonly submitThreadDraft: (threadId: string, message: string, images?: readonly ImagePayload[], mode?: 'auto' | 'steer' | 'followUp') => Promise<string | null>;
   readonly stopActiveTurn: () => void;
   readonly selectSession: (threadId: string) => void;
-  readonly createSession: (cwd: string, trusted?: boolean) => Promise<boolean>;
+  readonly createSession: (input: {
+    cwd: string
+    trusted?: boolean
+    /** `provider/modelId`；缺省按项目记忆 → 全局默认 → 当前会话 → 首个可用重算 */
+    model?: string
+    thinkingLevel?: string
+    permissionMode?: PermissionRules['mode']
+  }) => Promise<boolean>;
+  /** 新建任务页提交：建会话 → 投首条消息；sendFailed 时调用方把文本回填到新会话草稿槽。 */
+  readonly startTask: (input: {
+    cwd: string
+    trusted: boolean
+    /** `provider/modelId` */
+    model: string
+    /** null = 跟随全局规则 */
+    permissionMode: PermissionRules['mode'] | null
+    text: string
+    images?: readonly ImagePayload[]
+  }) => Promise<{ ok: true; threadId: string; sendFailed: boolean } | { ok: false }>;
+  /** 新任务页初始模型键（项目记忆 → 全局默认 → 当前会话 → 首个可用；无模型返回 ''）。 */
+  readonly defaultModelFor: (cwd: string) => string;
   readonly openSavedSession: (sessionPath: string) => Promise<boolean>;
   readonly closeSession: (threadId: string) => void;
   readonly selectModel: (value: string) => void;
@@ -63,6 +83,12 @@ export type WorkspaceActions = {
   /** 技能启停：落盘后重开全部活跃会话使新设置生效（失败 notice）。 */
   readonly setSkillEnabled: (name: string, enabled: boolean) => Promise<boolean>;
   readonly searchFiles: (query: string) => Promise<string[] | null>;
+  /** 指定目录的 @ 文件搜索（新任务页无活跃会话，按所选目录搜索）。 */
+  readonly searchFilesIn: (cwd: string, query: string) => Promise<string[] | null>;
+  /** 本地 git 分支列表（非仓库为空形态；失败 {ok:false}）。 */
+  readonly listGitBranches: (cwd: string) => Promise<ApiOutcome<'git/branches'>>;
+  /** 切换/创建并检出分支（失败原因交调用方转文案：切换走通知条，创建走弹窗内联）。 */
+  readonly checkoutGitBranch: (cwd: string, branch: string, create: boolean) => Promise<ApiOutcome<'git/checkout'>>;
   readonly runBash: (command: string) => Promise<string | null>;
   readonly abortBash: () => void;
   readonly revealSession: (sessionPath: string) => void;
@@ -103,6 +129,20 @@ function activeThreadOf(): string {
   return store.getState().activeThreadId ?? '';
 }
 
+/** 新会话模型选择链（调用时读 store 真相）：项目记忆 → 全局默认 → 当前会话 → 首个可用。 */
+function defaultModelKey(cwd: string): string {
+  const state = store.getState();
+  const active = state.activeThreadId !== null ? state.sessions[state.activeThreadId] : undefined;
+  const firstModel = state.models[0];
+  const fallback = firstModel !== undefined ? `${firstModel.provider}/${firstModel.modelId}` : '';
+  const picked = pickSessionModel(
+    state.models,
+    state.preferences.projectModels[cwd] ?? state.preferences.defaultModel,
+    active?.model ?? fallback,
+  );
+  return picked !== undefined ? `${picked.provider}/${picked.modelId}` : '';
+}
+
 /** 投递失败通知口径：宿主桥不可用不弹（横幅已显式呈现），恢复失败用专项文案。 */
 function notifySubmitFailure(reason: string | null): void {
   if (reason === null || reason === 'bridge_unavailable') return;
@@ -110,6 +150,34 @@ function notifySubmitFailure(reason: string | null): void {
 }
 
 export function createWorkspaceActions(setDiagnostics: (value: WorkspaceDiagnostics | null) => void): WorkspaceActions {
+  /** 建会话的共用路径（新会话入口与新建任务页首条提交）：失败推通知条，成功解除项目隐藏。 */
+  const openSession = async (input: {
+    cwd: string
+    trusted?: boolean
+    model?: string
+    thinkingLevel?: string
+    permissionMode?: PermissionRules['mode']
+  }): Promise<{ ok: true; threadId: string } | { ok: false }> => {
+    const model = parseModelKey(input.model ?? defaultModelKey(input.cwd));
+    const outcome = await controller.createSession({
+      cwd: input.cwd,
+      trusted: input.trusted,
+      model: model ?? undefined,
+      thinkingLevel: input.thinkingLevel,
+      permissionMode: input.permissionMode,
+    });
+    if (!outcome.ok) {
+      pushNotice(copy.newTask.createFailed(outcome.reason));
+      return { ok: false };
+    }
+    // 同目录新建任务 = 解除项目隐藏（移除项目的恢复通路）
+    const hidden = store.getState().preferences.hiddenProjects;
+    if (hidden.includes(input.cwd)) {
+      void controller.updatePreferences({ hiddenProjects: hidden.filter((path) => path !== input.cwd) });
+    }
+    return { ok: true, threadId: outcome.threadId };
+  };
+
   const readSessionRules = (): void => {
     const threadId = activeThreadOf();
     if (threadId.length === 0) return;
@@ -151,30 +219,21 @@ export function createWorkspaceActions(setDiagnostics: (value: WorkspaceDiagnost
     },
     stopActiveTurn: () => void controller.stopActiveTurn(activeThreadOf()),
     selectSession: (threadId) => controller.selectSession(threadId),
-    createSession: (cwd, trusted) => {
-      // 项目默认模型记忆优先（A4）→ 全局默认 → 当前选择 → 首个可用（调用时读真相重算选择链）
-      const state = store.getState();
-      const active = state.activeThreadId !== null ? state.sessions[state.activeThreadId] : undefined;
-      const firstModel = state.models[0];
-      const fallback = firstModel !== undefined ? `${firstModel.provider}/${firstModel.modelId}` : '';
-      const selected = pickSessionModel(
-        state.models,
-        state.preferences.projectModels[cwd] ?? state.preferences.defaultModel,
-        active?.model ?? fallback,
-      );
-      return controller.createSession(cwd, selected, trusted).then((reason) => {
-        if (reason !== null) {
-          pushNotice(copy.newThread.createFailed(reason));
-          return false;
-        }
-        // 同目录新建任务 = 解除项目隐藏（移除项目的恢复通路）
-        const hidden = store.getState().preferences.hiddenProjects;
-        if (hidden.includes(cwd)) {
-          void controller.updatePreferences({ hiddenProjects: hidden.filter((path) => path !== cwd) });
-        }
-        return true;
+    createSession: async (input) => (await openSession(input)).ok,
+    startTask: async (input) => {
+      const created = await openSession({
+        cwd: input.cwd,
+        trusted: input.trusted,
+        model: input.model,
+        permissionMode: input.permissionMode ?? undefined,
       });
+      if (!created.ok) return { ok: false };
+      // 首条消息投递：失败不撤销会话（threadId 已返回，调用方把文本回填草稿槽）
+      const reason = await controller.submitDraft(created.threadId, input.text, input.images);
+      notifySubmitFailure(reason);
+      return { ok: true, threadId: created.threadId, sendFailed: reason !== null };
     },
+    defaultModelFor: (cwd) => defaultModelKey(cwd),
     openSavedSession: (sessionPath) => controller.openSavedSession(sessionPath),
     closeSession: (threadId) => void controller.closeSession(threadId),
     selectEffort: (value: string) => {
@@ -288,6 +347,9 @@ export function createWorkspaceActions(setDiagnostics: (value: WorkspaceDiagnost
       const cwd = state.activeThreadId !== null ? state.sessions[state.activeThreadId]?.cwd ?? '' : '';
       return controller.searchFiles(cwd, query);
     },
+    searchFilesIn: (cwd, query) => controller.searchFiles(cwd, query),
+    listGitBranches: (cwd) => controller.listGitBranches(cwd),
+    checkoutGitBranch: (cwd, branch, create) => controller.checkoutGitBranch(cwd, branch, create),
     runBash: async (command) => {
       const reason = await controller.runBash(activeThreadOf(), command);
       if (reason !== null) pushNotice(copy.flow.bashFailed(reason));
@@ -299,7 +361,7 @@ export function createWorkspaceActions(setDiagnostics: (value: WorkspaceDiagnost
       const outcome = await bridgeClient.invoke('dialog/pickDirectory', defaultPath !== null ? { defaultPath } : {});
       if (!outcome.ok) {
         // 失败与取消区分：取消静默，失败要给用户反馈（通知条层级高于弹窗）
-        pushNotice(copy.newThread.pickFailed);
+        pushNotice(copy.newTask.pickFailed);
         return null;
       }
       return outcome.data;

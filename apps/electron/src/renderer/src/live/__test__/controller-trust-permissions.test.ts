@@ -67,7 +67,7 @@ test('createSession / openSavedSession 透传 trusted', async () => {
     'session/listSaved': { ok: true, data: [] },
   });
   const controller = createLiveController(client, createLiveStore());
-  await controller.createSession('/w', undefined, true);
+  await controller.createSession({ cwd: '/w', trusted: true });
   await controller.openSavedSession('/s.jsonl', false);
   const start = client.calls.find((call) => call.method === 'session/start');
   const resume = client.calls.find((call) => call.method === 'session/resume');
@@ -252,4 +252,68 @@ test('steerSubagent：trim 校验 + 命令透传 + 失败原因', async () => {
 
   const okClient = makeClient({});
   expect(await createLiveController(okClient, createLiveStore()).steerSubagent('t1', 's1', 'go')).toBeNull();
+});
+
+const startData = {
+  threadId: 't1',
+  cwd: '/w',
+  sessionPath: null,
+  state: 'live',
+  streaming: false,
+  title: 'x',
+  model: null,
+  thinkingLevel: null,
+  lastActivityAt: 0,
+};
+
+test('createSession 选项化：start 成功后后置应用 thinkingLevel 与 permissionMode（sidecar 以全局规则为基线）', async () => {
+  const client = makeClient({
+    'session/start': { ok: true, data: startData },
+    'permission/read': { ok: true, data: rules },
+  });
+  const store = createLiveStore();
+  const controller = createLiveController(client, store);  await controller.refreshPermissionRules();
+  const outcome = await controller.createSession({
+    cwd: '/w',
+    trusted: false,
+    model: { provider: 'a', modelId: 'm' },
+    thinkingLevel: 'high',
+    permissionMode: 'block-all',
+  });
+  expect(outcome).toEqual({ ok: true, threadId: 't1' });
+  expect(client.calls.find((call) => call.method === 'session/start')?.params).toMatchObject({
+    cwd: '/w',
+    provider: 'a',
+    modelId: 'm',
+    trusted: false,
+  });
+  const order = client.calls.map((call) => call.method);
+  expect(order.indexOf('session/start')).toBeLessThan(order.indexOf('session/setThinking'));
+  expect(client.calls.find((call) => call.method === 'session/setThinking')?.params).toEqual({ threadId: 't1', level: 'high' });
+  // 以全局规则为基线只改 mode（不丢 patterns、不丢其余字段）
+  expect(client.calls.find((call) => call.method === 'permission/sessionWrite')?.params).toEqual({
+    threadId: 't1',
+    rules: { ...rules, mode: 'block-all' },
+  });
+});
+
+test('createSession：不传后置项时不多发命令；全局规则未加载时跳过 sidecar；start 失败透传原因', async () => {
+  const bare = makeClient({ 'session/start': { ok: true, data: startData } });
+  expect(await createLiveController(bare, createLiveStore()).createSession({ cwd: '/w' })).toEqual({ ok: true, threadId: 't1' });
+  expect(bare.calls.some((call) => call.method === 'session/setThinking')).toBe(false);
+  expect(bare.calls.some((call) => call.method === 'permission/sessionWrite')).toBe(false);
+
+  // 全局规则未加载（store 为 null）时，permissionMode 不写 sidecar（无基线可比，宁缺勿错）
+  const noRules = makeClient({ 'session/start': { ok: true, data: startData } });
+  expect(await createLiveController(noRules, createLiveStore()).createSession({ cwd: '/w', permissionMode: 'allow-all' })).toEqual({
+    ok: true,
+    threadId: 't1',
+  });
+  expect(noRules.calls.some((call) => call.method === 'permission/sessionWrite')).toBe(false);
+
+  const failed = makeClient({ 'session/start': { ok: false, reason: 'cwd_missing' } });
+  expect(await createLiveController(failed, createLiveStore()).createSession({ cwd: '/nope' })).toEqual({
+    ok: false,
+    reason: 'cwd_missing',
+  });
 });

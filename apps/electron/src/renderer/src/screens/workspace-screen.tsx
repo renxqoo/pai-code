@@ -26,7 +26,7 @@ function WorkspaceScreen(): React.JSX.Element {
             workspace.actions.completeOnboarding();
             const directory = cwd.trim();
             if (directory.length > 0 && workspace.composer.modelOptions.length > 0) {
-              void workspace.actions.createSession(directory);
+              void workspace.actions.createSession({ cwd: directory });
             }
           }}
           onSkip={workspace.actions.completeOnboarding}

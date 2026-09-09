@@ -1,10 +1,12 @@
-import type { AgentDefinition, ImagePayload, PermissionRules, PreferencesView, ProviderModel, SkillView, ThinkingFormat, UiEvent } from '@paiapp/contracts';
+import type { AgentDefinition, ApiOutcome, ImagePayload, PermissionRules, PreferencesView, ProviderModel, SkillView, ThinkingFormat, UiEvent } from '@paiapp/contracts';
 
 import { copy } from '@/strings';
 import { queuedDrafts } from '@/composer/queued-drafts';
 import type { BridgeClient } from './client-invoke';
 import { coalesceEvents } from './coalesce-events';
 import { createLazyResume } from './lazy-resume';
+import { checkoutGitBranch, listGitBranches, searchFiles } from './git-actions';
+import { nextSessionRulesForMode } from './permission-mode';
 import type { LiveStore } from './store';
 
 /**
@@ -17,6 +19,18 @@ import type { LiveStore } from './store';
 
 const RECONCILE_SETTLE_DELAY_MS = 120;
 const DIALOG_AUTO_DISMISS_MS = 5 * 60 * 1_000;
+
+/** 新会话入参（渲染层动作面形状）：思考档与权限模式在 thread/start 成功后后置应用。 */
+export type CreateSessionInput = {
+  cwd: string
+  trusted?: boolean
+  model?: { provider: string; modelId: string }
+  thinkingLevel?: string
+  permissionMode?: PermissionRules['mode']
+}
+
+/** 会话创建结果：成功带新 threadId（调用方据此把首条消息/草稿寻址到新会话）。 */
+export type CreateSessionOutcome = { ok: true; threadId: string } | { ok: false; reason: string };
 
 export interface LiveController {
   readonly start: () => Promise<void>;
@@ -31,7 +45,7 @@ export interface LiveController {
   /** 会话选择：parked 占位走懒恢复（成功后以响应 id 激活，失败通知不自动重试）；其余直接激活。 */
   readonly selectSession: (threadId: string) => void;
   readonly stopActiveTurn: (threadId: string) => Promise<void>;
-  readonly createSession: (cwd: string, model?: { provider: string; modelId: string }, trusted?: boolean) => Promise<string | null>;
+  readonly createSession: (input: CreateSessionInput) => Promise<CreateSessionOutcome>;
   readonly openSavedSession: (sessionPath: string, trusted?: boolean) => Promise<boolean>;
   /** 会话信任切换 = stop(await) → 同文件 resume(trusted) → 激活新 threadId；stop 失败即中止不动原会话。 */
   readonly reloadSessionTrusted: (threadId: string, trusted: boolean) => Promise<boolean>;
@@ -75,6 +89,10 @@ export interface LiveController {
   readonly reopenSession: (threadId: string) => Promise<boolean>;
   /** 项目文件搜索（@ 引用；cwd 门禁在主进程，失败返回 null）。 */
   readonly searchFiles: (cwd: string, query: string) => Promise<string[] | null>;
+  /** 本地 git 分支列表（新任务页分支选择；非仓库为空形态，失败为 {ok:false}）。 */
+  readonly listGitBranches: (cwd: string) => Promise<ApiOutcome<'git/branches'>>;
+  /** 切换/创建并检出分支（成功返回 {ok:true}；失败原因透传，由调用方转文案）。 */
+  readonly checkoutGitBranch: (cwd: string, branch: string, create: boolean) => Promise<ApiOutcome<'git/checkout'>>;
   readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; thinkingFormat?: ThinkingFormat; apiKey?: string }) => Promise<boolean>;
   readonly removeProvider: (name: string) => Promise<boolean>;
   /** 应用偏好部分写（返回写后视图；失败返回 null，原因走通知条）。 */
@@ -290,12 +308,27 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       store.getState().stopIntent(threadId);
       await client.invoke('session/abort', { threadId });
     },
-    async createSession(cwd: string, model?: { provider: string; modelId: string }, trusted?: boolean): Promise<string | null> {
-      const outcome = await client.invoke('session/start', { cwd, provider: model?.provider, modelId: model?.modelId, trusted });
-      if (!outcome.ok) return outcome.reason;
-      activate(outcome.data.threadId);
-      await hydrateFull(outcome.data.threadId).catch(() => undefined);
-      return null;
+    async createSession(input: CreateSessionInput): Promise<CreateSessionOutcome> {
+      const outcome = await client.invoke('session/start', {
+        cwd: input.cwd,
+        provider: input.model?.provider,
+        modelId: input.model?.modelId,
+        trusted: input.trusted,
+      });
+      if (!outcome.ok) return { ok: false, reason: outcome.reason };
+      const { threadId } = outcome.data;
+      activate(threadId);
+      await hydrateFull(threadId).catch(() => undefined);
+      // 后置应用（thread/start 不收这两个参数）：思考档按新线程寻址；权限模式以全局规则为基线建 sidecar
+      if (input.thinkingLevel !== undefined && input.thinkingLevel.length > 0) {
+        await client.invoke('session/setThinking', { threadId, level: input.thinkingLevel });
+      }
+      if (input.permissionMode !== undefined) {
+        const globalRules = store.getState().permissionRules;
+        const rules = globalRules === null ? null : nextSessionRulesForMode(globalRules, input.permissionMode);
+        if (rules !== null) await client.invoke('permission/sessionWrite', { threadId, rules });
+      }
+      return { ok: true, threadId };
     },
     async openSavedSession(sessionPath: string, trusted?: boolean): Promise<boolean> {
       // 同文件已在会话表（占位点击与 History 打开收敛）：直接激活，不撞 hub 双开守卫
@@ -501,11 +534,9 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       await hydrateFull(outcome.data.threadId).catch(() => undefined);
       return outcome.data.threadId;
     },
-    async searchFiles(cwd: string, query: string): Promise<string[] | null> {
-      if (cwd.length === 0) return null;
-      const outcome = await client.invoke('file/search', { cwd, query });
-      return outcome.ok ? outcome.data : null;
-    },
+    searchFiles: (cwd: string, query: string) => searchFiles(client, cwd, query),
+    listGitBranches: (cwd: string) => listGitBranches(client, cwd),
+    checkoutGitBranch: (cwd: string, branch: string, create: boolean) => checkoutGitBranch(client, cwd, branch, create),
     async upsertProvider(input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; thinkingFormat?: ThinkingFormat; apiKey?: string }): Promise<boolean> {
       const outcome = await client.invoke('provider/upsert', input);
       if (!outcome.ok) return false;

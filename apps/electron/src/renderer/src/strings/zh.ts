@@ -168,8 +168,12 @@ export const zh: typeof en = {
     permissionMode: '权限模式',
     imageUnsupported: '只能附加不超过 20 MB 的常见格式图片（发送前会自动压缩）。',
     removeImage: '移除图片',
-    localCheckout: '本地检出',
-    checkoutMenu: ['main', 'v0.6.1', 'v0.6.2'],
+    projectSegment: '工作目录',
+    branchSegment: '当前分支',
+    branchLoading: '读取分支…',
+    branchUnavailable: '分支不可用',
+    notARepo: '非 git 仓库',
+    detachedHead: '游离 HEAD',
     effortMenu: ['低 · 200K', '中 · 200K', '高 · 1M'],
   },
   dialogs: {
@@ -185,15 +189,43 @@ export const zh: typeof en = {
     fromSubagent: (agent: string): string => `子代理请求 · ${agent}`,
   },
   settings: zhSettings,
-  newThread: {
-    title: '新会话',
-    hint: '选择本会话的工作目录。agent 会读取并编辑该目录下的文件。',
-    fieldCwd: '/path/to/project',
+  newTask: {
+    greetingNight: '夜深了',
+    greetingMorning: '早上好',
+    greetingAfternoon: '下午好',
+    greetingEvening: '晚上好',
+    subtitleNight: '还在忙什么？',
+    subtitleMorning: '今天想构建点什么？',
+    subtitleAfternoon: '接下来推进什么？',
+    subtitleEvening: '今晚想构建点什么？',
+    placeholder: '向 pai 提问，使用 @ 添加上下文',
+    quickTasks: ['了解这个项目', '修复构建失败', '补充单元测试', '审查最近的改动'],
+    quickTaskPrompt: (label: string): string => `请帮我${label}`,
+    workspacePickerTitle: '选择工作区',
+    workspaceSearch: '搜索文件夹',
+    workspaceEmpty: '没有匹配的文件夹',
+    openFolder: '打开文件夹…',
     trustedLabel: '信任此项目',
     trustedHint: '受信会话会加载项目扩展与项目级 agent。只对你拥有并审阅过的仓库开启。',
-    create: '开始会话',
-    browse: '浏览…（系统文件夹选择）',
-    knownDirs: '已知项目目录',
+    branchPickerTitle: '切换分支',
+    branchSearch: '搜索分支',
+    branchEmpty: '没有匹配的分支',
+    createBranch: '创建并检出…',
+    createBranchTitle: (from: string): string => `从 ${from} 创建并检出`,
+    createBranchField: '新分支名称',
+    createBranchSubmit: '创建并检出',
+    branchLoading: '正在读取分支…',
+    branchUnavailable: '分支列表读取失败，请重试。',
+    branchFailed: (reason: string): string => {
+      if (reason === 'branch_exists') return '同名分支已存在，换一个名称。';
+      if (reason === 'invalid_branch') return '分支名不合法，请换个名称。';
+      if (reason === 'dirty_worktree') return '工作区有未提交改动，先提交或暂存后再切换分支。';
+      if (reason === 'unknown_branch') return '目标分支不存在，请刷新后重试。';
+      if (reason === 'not_a_repo') return '该目录不是 git 仓库。';
+      if (reason === 'git_unavailable') return '系统未找到 git 命令，无法操作分支。';
+      if (reason === 'cwd_not_found') return '工作目录不存在，可能已被移动或删除。';
+      return `分支操作失败（${reason}）。`;
+    },
     pickFailed: '目录选择器打开失败，请重试。',
     createFailed: (reason: string): string => {
       if (reason === 'host_unavailable') return 'agent 宿主未就绪（正在启动或重启），请稍后重试。';

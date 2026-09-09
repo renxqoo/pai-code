@@ -177,8 +177,12 @@ export const en = {
     permissionMode: 'Permission mode',
     imageUnsupported: 'Only common image formats up to 20 MB can be attached (auto-compressed before sending).',
     removeImage: 'Remove image',
-    localCheckout: 'Local checkout',
-    checkoutMenu: ['main', 'v0.6.1', 'v0.6.2'],
+    projectSegment: 'Working directory',
+    branchSegment: 'Current branch',
+    branchLoading: 'Reading branches…',
+    branchUnavailable: 'Branches unavailable',
+    notARepo: 'Not a git repository',
+    detachedHead: 'Detached HEAD',
     effortMenu: ['Low · 200K', 'Medium · 200K', 'High · 1M'],
   },
   dialogs: {
@@ -194,15 +198,43 @@ export const en = {
     fromSubagent: (agent: string): string => `Requested by subagent · ${agent}`,
   },
   settings: enSettings,
-  newThread: {
-    title: 'New conversation',
-    hint: 'Pick the folder this conversation works in. The agent reads and edits files under this directory.',
-    fieldCwd: '/path/to/project',
+  newTask: {
+    greetingNight: 'Working late',
+    greetingMorning: 'Good morning',
+    greetingAfternoon: 'Good afternoon',
+    greetingEvening: 'Good evening',
+    subtitleNight: 'What are you still working on?',
+    subtitleMorning: 'What do you want to build today?',
+    subtitleAfternoon: 'What should we move forward?',
+    subtitleEvening: 'What do you want to build tonight?',
+    placeholder: 'Ask pai anything, use @ to add context',
+    quickTasks: ['Understand this project', 'Fix the build failure', 'Add unit tests', 'Review recent changes'],
+    quickTaskPrompt: (label: string): string => `Help me ${label.toLowerCase()}`,
+    workspacePickerTitle: 'Choose a workspace',
+    workspaceSearch: 'Search folders',
+    workspaceEmpty: 'No matching folders',
+    openFolder: 'Open folder…',
     trustedLabel: 'Trust this project',
     trustedHint: 'Trusted sessions load project extensions and project-level agents. Only enable it for repositories you own and review.',
-    create: 'Start conversation',
-    browse: 'Browse… (system folder picker)',
-    knownDirs: 'Known project directories',
+    branchPickerTitle: 'Switch branch',
+    branchSearch: 'Search branches',
+    branchEmpty: 'No matching branches',
+    createBranch: 'Create and checkout…',
+    createBranchTitle: (from: string): string => `Create from ${from} and checkout`,
+    createBranchField: 'New branch name',
+    createBranchSubmit: 'Create and checkout',
+    branchLoading: 'Loading branches…',
+    branchUnavailable: 'Could not load branches. Try again.',
+    branchFailed: (reason: string): string => {
+      if (reason === 'branch_exists') return 'A branch with that name already exists. Pick another name.';
+      if (reason === 'invalid_branch') return 'That branch name is not valid. Pick another name.';
+      if (reason === 'dirty_worktree') return 'The working tree has uncommitted changes. Commit or stash them before switching branches.';
+      if (reason === 'unknown_branch') return 'That branch no longer exists. Refresh and try again.';
+      if (reason === 'not_a_repo') return 'That folder is not a git repository.';
+      if (reason === 'git_unavailable') return 'git was not found on this system, so branches cannot be changed.';
+      if (reason === 'cwd_not_found') return 'That working directory no longer exists.';
+      return `Branch operation failed (${reason}).`;
+    },
     pickFailed: 'Could not open the directory picker. Try again.',
     createFailed: (reason: string): string => {
       if (reason === 'host_unavailable') return 'The agent host is not ready (starting or restarting). Try again shortly.';

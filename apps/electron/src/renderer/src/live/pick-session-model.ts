@@ -9,3 +9,10 @@ export function pickSessionModel(
   const key = (model: ModelRef): string => `${model.provider}/${model.modelId}`;
   return models.find((model) => key(model) === defaultModel) ?? models.find((model) => key(model) === current) ?? models[0];
 }
+
+/** 模型键 `provider/modelId` → 结构（首个 '/' 切分；缺段返回 null）。与 pickSessionModel 的键格式同一真相。 */
+export function parseModelKey(value: string): ModelRef | null {
+  const index = value.indexOf('/');
+  if (index <= 0 || index === value.length - 1) return null;
+  return { provider: value.slice(0, index), modelId: value.slice(index + 1) };
+}

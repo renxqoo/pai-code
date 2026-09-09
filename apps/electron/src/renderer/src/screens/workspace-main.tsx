@@ -1,8 +1,10 @@
 import * as React from 'react';
 
+import type { PermissionRules } from '@paiapp/contracts';
+
 import { Composer } from '@/composer/composer';
 import { DialogLayer } from '@/dialogs/dialog-layer';
-import { NewThreadModal } from '@/dialogs/new-thread-modal';
+import { NewTaskScreen, type NewTaskStart } from '@/screens/new-task-screen';
 import { TitleBarLeft } from '@/layout/title-bar-left';
 import { WindowCaptionButtons } from '@/layout/window-caption-buttons';
 import { isWindowsPlatform, MODIFIER_KEY_LABEL } from '@/lib/platform';
@@ -21,7 +23,9 @@ import { buildSidebarViewModel } from '@/screens/sidebar-view-model';
 import { submitDraftText } from '@/screens/submit-draft';
 import { imagePayloadOf, type PendingImage } from '@/composer/read-image-file';
 import { queuedDrafts } from '@/composer/queued-drafts';
-import type { ComposerAttachment } from '@/composer/composer';
+import { branchSegmentOf } from '@/composer/branch-segment';
+import type { ComposerAttachment } from '@/composer/prompt-card';
+import { useGitBranches } from '@/hooks/use-git-branches';
 import { useUsagePanel } from '@/hooks/use-usage-panel';
 import { useProjectFiles } from '@/hooks/use-project-files';
 import { useSettingsScreen } from '@/settings/use-settings-screen';
@@ -78,7 +82,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   /** 项目文件面板（T18）：目标/树/加载态（null = 关闭，侧栏内容区照旧） */
   const projectFilesView = useProjectFiles(workspace.actions.listProjectFiles);
   /** 项目内新建任务的预填目录；'' = 用当前会话目录 */
-  const [newThreadCwd, setNewThreadCwd] = React.useState('');
+  const [newTaskCwd, setNewTaskCwd] = React.useState('');
   const [settingsOpen, setSettingsOpen] = React.useState(uiState.settingsOpen);
   /** 停止确认（H2：存在在途子代理时二次确认，不可恢复） */
   const [confirmStop, setConfirmStop] = React.useState(false);
@@ -90,19 +94,44 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const composerLayerRef = useObservedHeight<HTMLDivElement>((height) => {
     setBottomInset(Math.round(height) + 24);
   });
-  const [newThreadOpen, setNewThreadOpen] = React.useState(false);
+  const [newTaskOpen, setNewTaskOpen] = React.useState(false);
+  /** 新建任务页内的浮层（工作区/分支/创建分支）：计入 Esc 链，不穿透关闭整页 */
+  const [newTaskDialogOpen, setNewTaskDialogOpen] = React.useState(false);
   /** 编辑重发：回填草稿后聚焦输入框 */
   const composerTextRef = React.useRef<HTMLTextAreaElement | null>(null);
   const { width } = useSidebarResize(uiState.sidebarWidth, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
   const { sessions, activeThreadId } = workspace;
+  /** 分支视图失效信号：任一处 checkout 成功后递增，驱动线程页只读分支段重拉 */
+  const [branchRevision, setBranchRevision] = React.useState(0);
+  /** 当前会话目录的分支视图（上下文条只读展示；线程页不提供切分支） */
+  const gitBranches = useGitBranches(workspace.activeCwd, workspace.actions.listGitBranches, branchRevision);
+  /** 分支段 props 引用稳定（避免无关 store 变更时无谓重渲输入卡） */
+  const threadBranch = React.useMemo(
+    () => branchSegmentOf(gitBranches.view, gitBranches.loading, gitBranches.failed),
+    [gitBranches.view, gitBranches.loading, gitBranches.failed],
+  );
+  /** 新建任务页已知项目目录（活跃会话 + 已保存会话 cwd 去重，最近优先） */
+  const knownDirs = React.useMemo(
+    () =>
+      projectDirsOf(
+        workspace.sessions.map((session) => ({ cwd: session.cwd, at: session.lastActivityAt })),
+        workspace.saved.map((session) => ({ cwd: session.cwd, at: session.modifiedAt })),
+        KNOWN_DIRS_LIMIT,
+      ),
+    [workspace.sessions, workspace.saved],
+  );
 
   const draft = drafts[activeThreadId] ?? composerDraft;
-  const setDraft = (value: string) => {
-    setComposerDraft(value);
-    uiState.composerDraft = value;
-    if (activeThreadId.length === 0) return;
-    setDrafts((current) => ({ ...current, [activeThreadId]: value }));
-  };
+  /** 以下回调均 useCallback：Composer 是 memo 边界，内联函数会把它击穿（流式 delta 每批重渲输入卡） */
+  const setDraft = React.useCallback(
+    (value: string) => {
+      setComposerDraft(value);
+      uiState.composerDraft = value;
+      if (activeThreadId.length === 0) return;
+      setDrafts((current) => ({ ...current, [activeThreadId]: value }));
+    },
+    [activeThreadId],
+  );
   React.useEffect(() => {
     uiState.drafts = { ...drafts };
   }, [drafts]);
@@ -116,13 +145,13 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     uiState.settingsOpen = settingsOpen;
   }, [width, sidebarCollapsed, sidebarView, searchOpen, sidebarQuery, groupFold, settingsOpen]);
 
-  const clearDraft = () => {
+  const clearDraft = React.useCallback(() => {
     setComposerDraft('');
     setDrafts((current) => {
       if (!(activeThreadId in current)) return current;
       return Object.fromEntries(Object.entries(current).filter(([key]) => key !== activeThreadId));
     });
-  };
+  }, [activeThreadId]);
 
   const usageOpen = usagePanel.usageOpen;
   const closeUsage = usagePanel.closeUsage;
@@ -130,11 +159,11 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const closeSettings = React.useCallback(() => setSettingsOpen(false), []);
   /** 界面语言与全部设置页数据/动作经 use-settings-screen 装配（语言广播后 app 根重挂载） */
   const settings = useSettingsScreen({ workspace, open: settingsOpen, onClose: closeSettings });
-  const openNewThread = React.useCallback(() => {
-    setNewThreadCwd('');
-    setNewThreadOpen(true);
+  const openNewTask = React.useCallback(() => {
+    setNewTaskCwd('');
+    setNewTaskOpen(true);
   }, []);
-  const closeNewThread = React.useCallback(() => setNewThreadOpen(false), []);
+  const closeNewTask = React.useCallback(() => setNewTaskOpen(false), []);
   const openSidebarSearch = React.useCallback(() => {
     // 收起态先展开侧栏：⌘K 不得把焦点劫进零宽容器里的隐形输入框
     setSidebarCollapsed(false);
@@ -147,9 +176,36 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   }, []);
   const collapseSidebar = React.useCallback(() => setSidebarCollapsed(true), []);
   const openNewThreadInProject = React.useCallback((cwd: string) => {
-    setNewThreadCwd(cwd);
-    setNewThreadOpen(true);
+    setNewTaskCwd(cwd);
+    setNewTaskOpen(true);
   }, []);
+  const onNewTaskDialogOpen = React.useCallback((open: boolean) => setNewTaskDialogOpen(open), []);
+  /** 切分支包装：成功即失效线程页只读分支段（新任务页切完后返回会话页看到的必须是新分支） */
+  const checkoutBranch = React.useCallback(
+    async (cwd: string, branch: string, create: boolean) => {
+      const outcome = await workspace.actions.checkoutGitBranch(cwd, branch, create);
+      if (outcome.ok) setBranchRevision((revision) => revision + 1);
+      return outcome;
+    },
+    [workspace.actions],
+  );
+  /** 新建任务页提交：建会话 + 投首条消息；首条未投出时把文本回填到新会话草稿槽（切到会话页可重发） */
+  const startTask = React.useCallback(
+    async (input: NewTaskStart): Promise<boolean> => {
+      const result = await workspace.actions.startTask({
+        cwd: input.cwd,
+        trusted: input.trusted,
+        model: input.model,
+        permissionMode: input.permissionMode,
+        text: input.text,
+        images: input.attachments.map((item) => imagePayloadOf(item.payload)),
+      });
+      if (!result.ok) return false;
+      if (result.sendFailed) setDrafts((current) => ({ ...current, [result.threadId]: input.text }));
+      return true;
+    },
+    [workspace.actions],
+  );
   const removeProject = React.useCallback(
     (cwd: string) => workspace.actions.removeProject(cwd),
     [workspace.actions],
@@ -164,8 +220,8 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   );
   /** 全局 ⌘N/⌘K 在任一模态覆盖/对话框开着时不劫持（模态层优先于全局热键）。 */
   const hotkeysEnabled =
-    workspace.dialogs.length === 0 && !usageOpen && !newThreadOpen && !settingsOpen && projectFilesView.target === null;
-  useCmdHotkeys({ onNewThread: openNewThread, onSearch: openSidebarSearch }, hotkeysEnabled);
+    workspace.dialogs.length === 0 && !usageOpen && !newTaskOpen && !settingsOpen && projectFilesView.target === null;
+  useCmdHotkeys({ onNewThread: openNewTask, onSearch: openSidebarSearch }, hotkeysEnabled);
 
   /** 分叉重发（B2/A5）：fork 到该用户消息之前；autoResend=true 原样重发，否则回填草稿。
    * 仅水化消息可分叉（live 回显是 UUID，对账后才有协议 entryId）。 */
@@ -199,51 +255,64 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   // 提交语义（`! ` 直执行 / 生成中本地暂存 / 模型轮次）单一真相在 screens/submit-draft
   // 与 composer/queued-drafts；composer 交出的附件在此按去向转换（暂存保留原名，直发转 ImagePayload）。
   // 生成中判定读 store 真相（渲染帧快照可能落后一轮结算，落后会把该轮末消息错误暂存）
-  const submitDraft = (text: string, attachments: readonly ComposerAttachment[]): Promise<boolean> => {
-    const trimmed = text.trim();
-    // 生成中普通消息 = 本地暂存（默认轮后发送，轮自然结束冲刷）；`! ` 直执行不走暂存（bash 通道即时执行）
-    if (workspace.isThreadStreaming(activeThreadId) && trimmed.length > 0 && !trimmed.startsWith('! ')) {
-      queuedDrafts.stage(activeThreadId, activeSessionPath, trimmed, attachments.map(({ name, payload }) => ({ name, payload })));
-      clearDraft();
-      return Promise.resolve(true);
-    }
-    return submitDraftText(
-      { actions: workspace.actions, clearDraft },
-      text,
-      attachments.map((item) => imagePayloadOf(item.payload)),
-      'auto',
-    );
-  };
+  const submitDraft = React.useCallback(
+    (text: string, attachments: readonly ComposerAttachment[]): Promise<boolean> => {
+      const trimmed = text.trim();
+      // 生成中普通消息 = 本地暂存（默认轮后发送，轮自然结束冲刷）；`! ` 直执行不走暂存（bash 通道即时执行）
+      if (workspace.isThreadStreaming(activeThreadId) && trimmed.length > 0 && !trimmed.startsWith('! ')) {
+        queuedDrafts.stage(activeThreadId, activeSessionPath, trimmed, attachments.map(({ name, payload }) => ({ name, payload })));
+        clearDraft();
+        return Promise.resolve(true);
+      }
+      return submitDraftText(
+        { actions: workspace.actions, clearDraft },
+        text,
+        attachments.map((item) => imagePayloadOf(item.payload)),
+        'auto',
+      );
+    },
+    [activeThreadId, activeSessionPath, clearDraft, workspace.actions, workspace.isThreadStreaming],
+  );
 
   /** 编辑排队消息：取出暂存条目回填草稿与附件（token 信号驱动 composer 吸收图片） */
-  const editQueuedMessage = (id: number): void => {
-    const draft = queuedDrafts.take(activeThreadId, id);
-    if (draft === null) return;
-    setDraft(draft.text);
-    restoreSeqRef.current += 1;
-    setRestore({ token: restoreSeqRef.current, images: draft.images });
-    composerTextRef.current?.focus();
-  };
+  const editQueuedMessage = React.useCallback(
+    (id: number): void => {
+      const draft = queuedDrafts.take(activeThreadId, id);
+      if (draft === null) return;
+      setDraft(draft.text);
+      restoreSeqRef.current += 1;
+      setRestore({ token: restoreSeqRef.current, images: draft.images });
+      composerTextRef.current?.focus();
+    },
+    [activeThreadId, setDraft],
+  );
   /** 立即改向：先移除卡片再以 steer 投递（失败自动回插，通知走 submitThreadDraft） */
-  const sendNowQueuedMessage = (id: number): void => {
-    void queuedDrafts.sendNow(activeThreadId, id, submitQueuedDraft);
-  };
-  const removeQueuedMessage = (id: number): void => {
-    queuedDrafts.remove(activeThreadId, id);
-  };
+  const sendNowQueuedMessage = React.useCallback(
+    (id: number): void => {
+      void queuedDrafts.sendNow(activeThreadId, id, submitQueuedDraft);
+    },
+    [activeThreadId, submitQueuedDraft],
+  );
+  const removeQueuedMessage = React.useCallback(
+    (id: number): void => {
+      queuedDrafts.remove(activeThreadId, id);
+    },
+    [activeThreadId],
+  );
 
   const openAgents = React.useCallback(() => setPanel('agents'), []);
   const openDiff = React.useCallback(() => setPanel('diff'), []);
   const closePanel = React.useCallback(() => setPanel(null), []);
 
   useEscDismiss({
-    dialogCount: workspace.dialogs.length,
+    /** 本地浮层也算对话框：浮层自行消费 Esc，全局链不穿透关闭整页 */
+    dialogCount: workspace.dialogs.length + (newTaskDialogOpen ? 1 : 0),
     /** 可见搜索才参与 Esc 链：收起态下的搜索不得吞掉一拍 Esc（过滤词保留，展开后恢复） */
     sidebarSearchOpen: searchOpen && !sidebarCollapsed,
     /** 面板同样以可见性参与（替换侧栏内容区，先于侧栏搜索收起） */
     projectFilesOpen: projectFilesView.target !== null && !sidebarCollapsed,
     usageOpen,
-    newThreadOpen,
+    newTaskOpen,
     settingsOpen,
     panel,
     bashRunning: workspace.bashRunning,
@@ -255,7 +324,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     onSidebarSearchClose: closeSidebarSearch,
     onProjectFilesClose: projectFilesView.close,
     onUsageClose: closeUsage,
-    onNewThreadClose: closeNewThread,
+    onNewTaskClose: closeNewTask,
     onSettingsClose: closeSettings,
     onPanelClose: closePanel,
     onConfirmStopChange: setConfirmStop,
@@ -313,6 +382,27 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     [openSettings],
   );
   const onToggleSplitView = React.useCallback(() => setPanel((current) => (current === 'agents' ? null : 'agents')), []);
+  /** 停止/中止：bash 在途→中止；有在途子代理→先确认；否则直接停止（与 Esc 链同语义） */
+  const stopOrAbort = React.useCallback(() => {
+    if (workspace.bashRunning) {
+      workspace.actions.abortBash();
+      return;
+    }
+    if (workspace.agentsActive && workspace.generating) {
+      setConfirmStop(true);
+      return;
+    }
+    workspace.actions.stopActiveTurn();
+  }, [workspace.bashRunning, workspace.agentsActive, workspace.generating, workspace.actions]);
+  const selectPermissionMode = React.useCallback(
+    (mode: PermissionRules['mode']) => {
+      void workspace.actions.setSessionPermissionMode(mode);
+    },
+    [workspace.actions],
+  );
+  const followPermissionGlobal = React.useCallback(() => {
+    void workspace.actions.writeSessionRules(null);
+  }, [workspace.actions]);
 
   return (
     <div className="relative flex h-screen min-h-0 overflow-hidden bg-background text-foreground">
@@ -337,7 +427,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         activeSessionId={activeThreadId}
         filterEmptyLabel={copy.sidebar.noMatches}
         emptyTasksLabel={copy.sidebar.emptyTasks(copy.sidebar.hotkeyNewTask(MODIFIER_KEY_LABEL))}
-        onNewThread={openNewThread}
+        onNewThread={openNewTask}
         onCollapseSidebar={collapseSidebar}
         onSelectSession={onSelectSession}
         onCloseSession={workspace.actions.closeSession}
@@ -352,21 +442,42 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         refreshAction={refreshAction}
       />
       <div className="relative flex min-w-0 flex-1 flex-col">
-        <ThreadStage
-          workspace={workspace}
-          activeThreadId={activeThreadId}
-          sidebarCollapsed={sidebarCollapsed}
-          panel={panel}
-          onToggleSplitView={onToggleSplitView}
-          hostDown={hostDown}
-          bottomInset={bottomInset}
-          onOpenSettings={openSettings}
-          onOpenAgents={openAgents}
-          onOpenDiff={openDiff}
-          onEditUserMessage={editUserMessage}
-          onForkUserMessage={forkUserMessage}
-        />
-        <div ref={composerLayerRef} className="pointer-events-none absolute inset-x-0 bottom-0 z-10 px-[40px] pb-[18px]">
+        {newTaskOpen ? (
+          <NewTaskScreen
+            knownDirs={knownDirs}
+            defaultCwd={newTaskCwd.length > 0 ? newTaskCwd : workspace.activeCwd}
+            trustedDefault={workspace.preferences.trustedDefault}
+            defaultModelFor={workspace.actions.defaultModelFor}
+            modelOptions={workspace.composer.modelOptions}
+            noModelsLabel={hostDown ? copy.composer.hostDownModels : copy.composer.noModels}
+            onOpenSettings={openSettings}
+            globalPermissionMode={workspace.permissionRules === null ? null : workspace.permissionRules.mode}
+            onSearchFiles={workspace.actions.searchFilesIn}
+            onListBranches={workspace.actions.listGitBranches}
+            onCheckoutBranch={checkoutBranch}
+            onPickDirectory={workspace.actions.pickDirectory}
+            onCreate={startTask}
+            onClose={closeNewTask}
+            onNotify={workspace.actions.showNotice}
+            onDialogOpenChange={onNewTaskDialogOpen}
+          />
+        ) : (
+          <>
+            <ThreadStage
+              workspace={workspace}
+              activeThreadId={activeThreadId}
+              sidebarCollapsed={sidebarCollapsed}
+              panel={panel}
+              onToggleSplitView={onToggleSplitView}
+              hostDown={hostDown}
+              bottomInset={bottomInset}
+              onOpenSettings={openSettings}
+              onOpenAgents={openAgents}
+              onOpenDiff={openDiff}
+              onEditUserMessage={editUserMessage}
+              onForkUserMessage={forkUserMessage}
+            />
+            <div ref={composerLayerRef} className="pointer-events-none absolute inset-x-0 bottom-0 z-10 px-[40px] pb-[18px]">
           {confirmStop ? (
             <StopConfirmBar
               onConfirm={() => {
@@ -396,11 +507,10 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
             contextUsed={workspace.composer.contextUsed}
             model={workspace.composer.model}
             effort={workspace.composer.effort}
-            checkout={workspace.composer.checkout}
-            checkoutLabel={copy.composer.localCheckout}
+            cwd={workspace.activeCwd}
+            branch={threadBranch}
             modelOptions={workspace.composer.modelOptions}
             effortOptions={workspace.composer.effortOptions}
-            checkoutOptions={workspace.composer.checkoutOptions}
             permissionMode={workspace.sessionRules === null ? null : workspace.sessionRules.rules.mode}
             permissionFollowsGlobal={workspace.sessionRules?.source !== 'thread'}
             commands={workspace.commands}
@@ -420,20 +530,17 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
             restore={restore}
             onChange={setDraft}
             onSubmit={submitDraft}
-            onStop={workspace.bashRunning ? workspace.actions.abortBash : workspace.agentsActive && workspace.generating ? () => setConfirmStop(true) : workspace.actions.stopActiveTurn}
+            onStop={stopOrAbort}
             onCompact={workspace.actions.compact}
             onOpenSettings={openSettings}
             onSelectModel={workspace.actions.selectModel}
             onSelectEffort={workspace.actions.selectEffort}
-            onSelectPermissionMode={(mode) => {
-              void workspace.actions.setSessionPermissionMode(mode);
-            }}
-            onFollowPermissionGlobal={() => {
-              void workspace.actions.writeSessionRules(null);
-            }}
-            onSelectCheckout={noop}
+            onSelectPermissionMode={selectPermissionMode}
+            onFollowPermissionGlobal={followPermissionGlobal}
           />
-        </div>
+            </div>
+          </>
+        )}
       </div>
       {usageOpen ? <UsageScreen entries={usagePanel.entries} onClose={closeUsage} /> : null}
       {panel === 'agents' ? (
@@ -450,24 +557,6 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
       />
       {isWindowsPlatform ? <WindowCaptionButtons /> : null}
       <SettingsScreen {...settings} />
-      <NewThreadModal
-        open={newThreadOpen}
-        defaultCwd={newThreadCwd.length > 0 ? newThreadCwd : workspace.activeCwd}
-        knownDirs={React.useMemo(
-          () =>
-            projectDirsOf(
-              workspace.sessions.map((session) => ({ cwd: session.cwd, at: session.lastActivityAt })),
-              workspace.saved.map((session) => ({ cwd: session.cwd, at: session.modifiedAt })),
-              KNOWN_DIRS_LIMIT,
-            ),
-          [workspace.sessions, workspace.saved],
-        )}
-        trustedLabel={copy.newThread.trustedLabel}
-        trustedHint={copy.newThread.trustedHint}
-        onClose={closeNewThread}
-        onCreate={workspace.actions.createSession}
-        onPickDirectory={workspace.actions.pickDirectory}
-      />
       <NoticeStrip notices={workspace.notices} onDismiss={workspace.actions.dismissNotice} />
       <DialogLayer
         dialogs={workspace.dialogs}

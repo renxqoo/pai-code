@@ -1,6 +1,6 @@
 /**
  * Esc 语义的纯裁决（api.md 约定）：对话框开→交由对话框；侧栏搜索展开→先收搜索；
- * 设置/Usage/新会话弹窗/面板依次收起；bash 在途→中止；确认条→执行停止；
+ * 设置/Usage/新建任务页/面板依次收起；bash 在途→中止；确认条→执行停止；
  * 生成中→有在途子代理先确认否则直接停止；空闲→无动作。
  * 抽为纯函数使依赖面显式化（任一裁决输入缺订阅都会被用例钉住）。
  */
@@ -13,7 +13,7 @@ export type EscAction =
   | { kind: 'close-sidebar-search' }
   | { kind: 'close-usage' }
   | { kind: 'close-project-files' }
-  | { kind: 'close-new-thread' }
+  | { kind: 'close-new-task' }
   | { kind: 'close-settings' }
   | { kind: 'close-panel' }
   | { kind: 'abort-bash' }
@@ -28,8 +28,8 @@ export type EscState = {
   usageOpen: boolean;
   /** 项目文件面板（侧栏内嵌层：面板可见〔侧栏未收起〕才参与链，先于侧栏搜索）。 */
   projectFilesOpen: boolean;
-  /** 新会话弹窗优先于底层动作：Esc 只关弹窗，不穿透触发停止/清队列。 */
-  newThreadOpen: boolean;
+  /** 新建任务页（整页）优先于底层动作：Esc 只返回会话视图，不穿透触发停止/清队列。 */
+  newTaskOpen: boolean;
   settingsOpen: boolean;
   panel: SidePanel;
   bashRunning: boolean;
@@ -42,7 +42,7 @@ export type EscState = {
 export function escActionFor(state: EscState): EscAction {
   if (state.dialogCount > 0) return { kind: 'dismiss-dialogs' };
   if (state.usageOpen) return { kind: 'close-usage' };
-  if (state.newThreadOpen) return { kind: 'close-new-thread' };
+  if (state.newTaskOpen) return { kind: 'close-new-task' };
   if (state.settingsOpen) return { kind: 'close-settings' };
   // 项目文件面板与侧栏搜索同为侧栏内联层：位于全屏覆盖（Usage/新会话/设置）之下，
   // 只有可见（侧栏未收起）时才参与链；面板替换列表区，先于搜索收起

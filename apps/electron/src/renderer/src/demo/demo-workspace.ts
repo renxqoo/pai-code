@@ -7,7 +7,6 @@ export type ComposerState = {
   model: string;
   modelOptions: readonly string[];
   effort: string;
-  checkout: string;
   contextUsed: number;
 };
 
@@ -97,7 +96,6 @@ export const demoWorkspace: WorkspaceDemo = {
     model: 'Claude Fable 5.1',
     modelOptions: ['Claude Fable 5.1', 'Claude Sonnet 4.5', 'Claude Haiku 4.5'],
     effort: 'High · 1M',
-    checkout: '0.6.2',
     contextUsed: 0.14,
   },
   threads: {
