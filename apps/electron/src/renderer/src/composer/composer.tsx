@@ -6,9 +6,12 @@ import type { CommandView, ImagePayload, PermissionRules, SessionStatsView } fro
 
 import { ComposerActionsRow } from '@/composer/composer-actions-row';
 import { ComposerContextBar } from '@/composer/composer-context-bar';
+import { ComposerHighlightLayer } from '@/composer/composer-highlight-layer';
+import { leadingCommandHighlight } from '@/composer/command-highlight';
 import { AttachmentChips } from '@/composer/attachment-chips';
 import { imagePayloadOf, imageDataUrl, readImageFile, type PendingImage } from '@/composer/read-image-file';
 import { activeTokenQuery, applyTokenSelection, filterTokenItems, type TokenTrigger } from '@/composer/token-trigger';
+import { cn } from '@/lib/utils';
 import { copy } from '@/strings';
 
 type ComposerProps = {
@@ -65,6 +68,11 @@ type ComposerProps = {
   onFollowPermissionGlobal: () => void
 }
 
+/** 输入框排版度量：textarea 与高亮镜像层共用同一份（两处渲染必须逐像素对齐）。 */
+const INPUT_METRICS_CLASS = 'px-4 pt-[17px] pb-1 text-[12.5px] leading-[19px]';
+const TEXTAREA_CLASS =
+  'block min-h-[84px] max-h-[280px] w-full resize-none bg-transparent outline-none placeholder:text-muted-foreground/85 field-sizing-content';
+
 /** 输入卡：多行输入 + 操作行 + 本地检出条，底部锚定于主区。 */
 function Composer({
   value,
@@ -107,6 +115,11 @@ function Composer({
   onFollowPermissionGlobal,
 }: ComposerProps) {
   const canSend = value.trim().length > 0;
+
+  /** 首部命令 token 高亮：命中时 textarea 文字转透明，可见文本由镜像层渲染 */
+  const commandRanges = React.useMemo(() => leadingCommandHighlight(value, commands), [value, commands]);
+  const highlighting = commandRanges.length > 0;
+  const [inputScrollTop, setInputScrollTop] = React.useState(0);
 
   /** 图片附件态：读取与持有都在本组件（提交成功才清空）；预览用 data URL，无对象 URL 生命周期。 */
   type Attachment = { id: number; name: string; payload: PendingImage };
@@ -271,10 +284,14 @@ function Composer({
               />
             </div>
           ) : null}
+          {highlighting ? (
+            <ComposerHighlightLayer text={value} ranges={commandRanges} scrollTop={inputScrollTop} metricsClassName={INPUT_METRICS_CLASS} />
+          ) : null}
           <textarea
             ref={textareaRef}
             value={value}
             placeholder={placeholder}
+            onScroll={(event) => setInputScrollTop(event.currentTarget.scrollTop)}
             onChange={(event) => {
               onChange(event.target.value);
               syncCaret(event.currentTarget);
@@ -324,7 +341,11 @@ function Composer({
               event.currentTarget.form?.requestSubmit();
             }}
             rows={2}
-            className="block min-h-[84px] max-h-[280px] w-full resize-none bg-transparent px-4 pt-[17px] pb-1 text-[12.5px] leading-[19px] text-foreground outline-none placeholder:text-muted-foreground/85 field-sizing-content"
+            className={cn(
+              TEXTAREA_CLASS,
+              INPUT_METRICS_CLASS,
+              highlighting ? 'text-transparent caret-foreground' : 'text-foreground',
+            )}
           />
         </div>
         {attachments.length > 0 ? (

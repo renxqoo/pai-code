@@ -1,0 +1,65 @@
+import { describe, expect, test } from 'bun:test';
+
+import { leadingCommandHighlight, splitHighlight } from '../command-highlight';
+import type { CommandView } from '@paiapp/contracts';
+
+const SKILL: CommandView = { name: 'skill:writer', description: null, source: 'skill' };
+
+describe('leadingCommandHighlight', () => {
+  test('首部技能命令命中：区间覆盖 /skill 名 token，附加指令不进区间', () => {
+    expect(leadingCommandHighlight('/skill:writer 写一段', [SKILL])).toEqual([{ start: 0, end: 13, source: 'skill' }])
+  })
+
+  test('无尾随参数：区间覆盖至串尾', () => {
+    expect(leadingCommandHighlight('/skill:writer', [SKILL])).toEqual([{ start: 0, end: 13, source: 'skill' }])
+  })
+
+  test('其他命令源同样命中（扩展/模板命令：子代理、压缩等新命令入目录即生效）', () => {
+    expect(leadingCommandHighlight('/compact', [{ name: 'compact', description: null, source: 'extension' }])).toEqual([
+      { start: 0, end: 8, source: 'extension' },
+    ])
+    expect(leadingCommandHighlight('/review 尽快', [{ name: 'review', description: null, source: 'prompt' }])).toEqual([
+      { start: 0, end: 7, source: 'prompt' },
+    ])
+  })
+
+  test('目录未收录的名字不高亮（如实呈现：会被原样发送）', () => {
+    expect(leadingCommandHighlight('/skill:unknown', [SKILL])).toEqual([])
+    expect(leadingCommandHighlight('/skill:wri', [SKILL])).toEqual([])
+  })
+
+  test('非首部斜杠不高亮：pi 仅解释 startsWith("/") 的提示词', () => {
+    expect(leadingCommandHighlight('看这个 /skill:writer', [SKILL])).toEqual([])
+    expect(leadingCommandHighlight('普通消息', [SKILL])).toEqual([])
+  })
+
+  test('裸 "/" 与 "/ 空格" 不是命令 token', () => {
+    expect(leadingCommandHighlight('/', [SKILL])).toEqual([])
+    expect(leadingCommandHighlight('/ 写一段', [SKILL])).toEqual([])
+  })
+})
+
+describe('splitHighlight', () => {
+  test('单命中区间切三段：前普通 / 命中 / 尾普通', () => {
+    expect(splitHighlight('/skill:writer 写一段', [{ start: 0, end: 13, source: 'skill' }])).toEqual([
+      { text: '/skill:writer', highlighted: true },
+      { text: ' 写一段', highlighted: false },
+    ])
+  })
+
+  test('中段区间（供后续多区间生产方复用）', () => {
+    expect(splitHighlight('abcXYz', [{ start: 3, end: 5, source: 'skill' }])).toEqual([
+      { text: 'abc', highlighted: false },
+      { text: 'XY', highlighted: true },
+      { text: 'z', highlighted: false },
+    ])
+  })
+
+  test('空区间列表返回整段普通文本', () => {
+    expect(splitHighlight('全文', [])).toEqual([{ text: '全文', highlighted: false }])
+  })
+
+  test('越界区间经 slice 钳制，垃圾输入不崩溃', () => {
+    expect(splitHighlight('ab', [{ start: 0, end: 99, source: 'skill' }])).toEqual([{ text: 'ab', highlighted: true }])
+  })
+})
