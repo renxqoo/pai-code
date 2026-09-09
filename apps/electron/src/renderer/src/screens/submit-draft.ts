@@ -35,8 +35,8 @@ export function submitDraftText(
   const trimmed = text.trim();
   if (trimmed.length === 0) return Promise.resolve(false);
   if (trimmed.startsWith('! ')) {
+    // trim 后以 '! ' 开头 ⇒ 命令体必非空（尾随空白已被 trim 吃掉），无空命令分支
     const command = trimmed.slice(2).trim();
-    if (command.length === 0) return Promise.resolve(false);
     if ((images?.length ?? 0) > 0) {
       deps.actions.showNotice(copy.flow.bashNoImages);
       return Promise.resolve(false);

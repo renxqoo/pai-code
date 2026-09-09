@@ -94,6 +94,14 @@ describe('submitDraftText：/compact 内置命令拦截', () => {
     expect(recorded.bash).toEqual(['/compact']);
     expect(recorded.compact).toEqual([]);
   });
+
+  test('`! ` 携图拒绝：false、草稿保留、不执行（空命令经 trim 不成立，无该分支）', async () => {
+    const recorded: Recorded = { compact: [], bash: [], submitted: [], notices: [], cleared: 0 };
+    await expect(submitDraftText(deps(recorded), '! ls', [IMAGE])).resolves.toBe(false);
+    expect(recorded.bash).toEqual([]);
+    expect(recorded.notices).toEqual([copy.flow.bashNoImages]);
+    expect(recorded.cleared).toBe(0);
+  });
 });
 
 describe('isImmediateSubmit：生成中不入暂存的即时提交判定', () => {
