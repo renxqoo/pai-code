@@ -56,6 +56,9 @@ describe('Composer 命令 token 高亮接线', () => {
     expect(html).toContain('/skill:writer')
     expect(html).toContain('text-transparent')
     expect(html).toContain('caret-foreground')
+    // 修复症状：光标被镜像层文字遮挡——镜像层是定位元素恒画在普通流之上，
+    // textarea 必须以更高绘制层（relative z-[1]）承载光标
+    expect(html).toContain('relative z-[1]')
   })
 
   test('普通文本：不挂镜像层，textarea 原生渲染（不留透明态）', () => {

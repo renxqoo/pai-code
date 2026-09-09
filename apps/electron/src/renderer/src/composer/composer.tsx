@@ -70,8 +70,10 @@ type ComposerProps = {
 
 /** 输入框排版度量：textarea 与高亮镜像层共用同一份（两处渲染必须逐像素对齐）。 */
 const INPUT_METRICS_CLASS = 'px-4 pt-[17px] pb-1 text-[12.5px] leading-[19px]';
+/** relative z-[1]：textarea 必须画在高亮镜像层（absolute 定位元素）之上——CSS 绘制顺序
+ * 中定位元素恒高于普通流内容、与 DOM 先后无关，不提升层级时光标会被镜像层文字遮挡。 */
 const TEXTAREA_CLASS =
-  'block min-h-[84px] max-h-[280px] w-full resize-none bg-transparent outline-none placeholder:text-muted-foreground/85 field-sizing-content';
+  'relative z-[1] block min-h-[84px] max-h-[280px] w-full resize-none bg-transparent outline-none placeholder:text-muted-foreground/85 field-sizing-content';
 
 /** 输入卡：多行输入 + 操作行 + 本地检出条，底部锚定于主区。 */
 function Composer({
