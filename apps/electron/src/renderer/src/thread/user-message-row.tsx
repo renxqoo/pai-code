@@ -6,22 +6,22 @@ import { ChatBubble, CopyButton, IconButton } from '@paiapp/ui';
 import { copy } from '@/strings';
 import { writeClipboardText } from '@/lib/clipboard';
 import { parseSkillInvocation, toSkillInvocationInput } from './skill-invocation';
-import { SkillInvocationChip } from './skill-invocation-chip';
+import { SkillInvocationMessage } from './skill-invocation-message';
 import type { SessionMessage } from './thread-model';
 
 type UserMessageRowProps = {
   message: SessionMessage
   /** 编辑重发：把原文回填草稿并聚焦输入框 */
   onEdit: (text: string) => void
-  /** 编辑并重开：fork 到该消息之前并回填草稿（用户改完手动发，落在分叉线程） */
+  /** 编辑并重开：fork 到该消息之前并回填（用户改完手动发，落在分叉线程） */
   onEditRerun?: (text: string) => void
   /** 从这里重试：fork 到该消息之前并自动原样重发 */
   onRetry?: (text: string) => void
 }
 
 /** 用户消息行：右对齐气泡 + hover 浮出的复制/编辑操作。
- * 技能调用（hub 已展开为全量 SKILL.md 块）转义成技能胶囊 + 附加指令气泡，
- * 编辑/重试回填紧凑输入形式（重发等价），复制仍取全量真相文本。 */
+ * 技能调用（hub 预改写为指针行 [name](url:path)）单框转义：内联高亮技能名 + 附加指令同一气泡，
+ * 路径不进展示层；编辑/重试回填紧凑输入形式（重发等价），复制仍取全量真相文本。 */
 function UserMessageRow({ message, onEdit, onEditRerun, onRetry }: UserMessageRowProps) {
   const invocation = parseSkillInvocation(message.text);
   const editSource = invocation === null ? message.text : toSkillInvocationInput(invocation);
@@ -40,10 +40,7 @@ function UserMessageRow({ message, onEdit, onEditRerun, onRetry }: UserMessageRo
         </div>
       ) : null}
       {invocation !== null ? (
-        <div className="flex max-w-full flex-col items-end gap-[6px]">
-          <SkillInvocationChip invocation={invocation} />
-          {invocation.instructions.length > 0 ? <ChatBubble>{invocation.instructions}</ChatBubble> : null}
-        </div>
+        <SkillInvocationMessage invocation={invocation} />
       ) : message.text.length > 0 ? (
         <ChatBubble>{message.text}</ChatBubble>
       ) : null}
