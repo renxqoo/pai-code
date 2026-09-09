@@ -100,6 +100,8 @@ export const en = {
     labelSubagent: 'Subagent',
     /** 思考单元收起态标签（运行中显 Thinking） */
     thought: 'Thought',
+    /** 技能调用胶囊无障碍名（用户消息中 /skill:name 展开块的紧凑态）：Skill writer */
+    skillChipLabel: (name: string): string => `Skill ${name}`,
     /** 中断轮次的状态行：Stopped · 8m 0s */
     turnStoppedSummary: (elapsed: string): string => `Stopped · ${elapsed}`,
     /** 历史轮左缘锚点（无障碍名）：View the turn finished at 10:46 AM */

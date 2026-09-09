@@ -5,6 +5,8 @@ import { ChatBubble, CopyButton, IconButton } from '@paiapp/ui';
 
 import { copy } from '@/strings';
 import { writeClipboardText } from '@/lib/clipboard';
+import { parseSkillInvocation, toSkillInvocationInput } from './skill-invocation';
+import { SkillInvocationChip } from './skill-invocation-chip';
 import type { SessionMessage } from './thread-model';
 
 type UserMessageRowProps = {
@@ -17,8 +19,12 @@ type UserMessageRowProps = {
   onRetry?: (text: string) => void
 }
 
-/** 用户消息行：右对齐气泡 + hover 浮出的复制/编辑操作。 */
+/** 用户消息行：右对齐气泡 + hover 浮出的复制/编辑操作。
+ * 技能调用（hub 已展开为全量 SKILL.md 块）转义成技能胶囊 + 附加指令气泡，
+ * 编辑/重试回填紧凑输入形式（重发等价），复制仍取全量真相文本。 */
 function UserMessageRow({ message, onEdit, onEditRerun, onRetry }: UserMessageRowProps) {
+  const invocation = parseSkillInvocation(message.text);
+  const editSource = invocation === null ? message.text : toSkillInvocationInput(invocation);
   return (
     <div className="group flex flex-col items-end">
       {message.images.length > 0 ? (
@@ -33,7 +39,14 @@ function UserMessageRow({ message, onEdit, onEditRerun, onRetry }: UserMessageRo
           ))}
         </div>
       ) : null}
-      {message.text.length > 0 ? <ChatBubble>{message.text}</ChatBubble> : null}
+      {invocation !== null ? (
+        <div className="flex max-w-full flex-col items-end gap-[6px]">
+          <SkillInvocationChip invocation={invocation} />
+          {invocation.instructions.length > 0 ? <ChatBubble>{invocation.instructions}</ChatBubble> : null}
+        </div>
+      ) : message.text.length > 0 ? (
+        <ChatBubble>{message.text}</ChatBubble>
+      ) : null}
       <div className="flex items-center gap-[6px] pt-[4px] opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100 motion-reduce:transition-none">
         <CopyButton
           label={copy.flow.copyMessage}
@@ -44,7 +57,7 @@ function UserMessageRow({ message, onEdit, onEditRerun, onRetry }: UserMessageRo
         <IconButton
           label={copy.flow.editMessage}
           size="xs"
-          onClick={() => onEdit(message.text)}
+          onClick={() => onEdit(editSource)}
           className="text-muted-foreground/85"
         >
           <PenLine className="size-3.5" strokeWidth={1.75} />
@@ -53,7 +66,7 @@ function UserMessageRow({ message, onEdit, onEditRerun, onRetry }: UserMessageRo
           <IconButton
             label={copy.flow.editRerun}
             size="xs"
-            onClick={() => onEditRerun(message.text)}
+            onClick={() => onEditRerun(editSource)}
             className="text-muted-foreground/85"
           >
             <GitBranch className="size-3.5" strokeWidth={1.75} />
@@ -63,7 +76,7 @@ function UserMessageRow({ message, onEdit, onEditRerun, onRetry }: UserMessageRo
           <IconButton
             label={copy.flow.retryFromHere}
             size="xs"
-            onClick={() => onRetry(message.text)}
+            onClick={() => onRetry(editSource)}
             className="text-muted-foreground/85"
           >
             <RotateCcw className="size-3.5" strokeWidth={1.75} />

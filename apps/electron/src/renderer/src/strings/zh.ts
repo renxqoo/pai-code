@@ -97,6 +97,8 @@ export const zh: typeof en = {
     labelSubagent: '子代理',
     /** 思考单元收起态标签（运行中同显 思考，运行态由脉冲点区分） */
     thought: '思考',
+    /** 技能调用胶囊无障碍名（用户消息中 /skill:name 展开块的紧凑态） */
+    skillChipLabel: (name: string): string => `技能 ${name}`,
     turnStoppedSummary: (elapsed: string): string => `已停止 · ${elapsed}`,
     /** 历史轮左缘锚点（无障碍名） */
     turnAnchorAria: (time: string): string => `查看 ${time} 结束的轮次`,
