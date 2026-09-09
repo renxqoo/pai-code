@@ -241,7 +241,7 @@ function Composer({
   };
 
   return (
-    <div className={CONVERSATION_COLUMN_CLASS}>
+    <div className={`${CONVERSATION_COLUMN_CLASS} pointer-events-auto`}>
       <form
         onSubmit={(event) => {
           event.preventDefault();

@@ -11,13 +11,13 @@ type TurnAnchorRailProps = {
 
 /**
  * 历史轮锚点带：侧边栏右侧安全间隙（主区 px-40）里的垂直短条列——
- * 距侧栏右缘 24px（= 40px 间隙内偏移 -16px），挂在消息流区域根（固定高、
- * 无横向裁剪），锚点列整体垂直居中恒定于视口；刻痕 20px 等距节距。
+ * 挂在主区固定高根（滚动容器外，左缘即侧栏右缘），距侧栏 16px；
+ * 锚点列整体垂直居中恒定于视口，不随页面滚动；刻痕 20px 等距节距。
  */
 function TurnAnchorRail({ anchors, onJump }: TurnAnchorRailProps) {
-  if (anchors.length === 0) return null;
+  if (anchors.length < 3) return null;
   return (
-    <nav aria-label={copy.flow.turnAnchorRailAria} className="absolute inset-y-0 -left-[16px] flex w-[22px] items-center">
+    <nav aria-label={copy.flow.turnAnchorRailAria} className="absolute inset-y-0 left-[16px] flex w-[22px] items-center">
       <div className="flex flex-col">
         {anchors.map((anchor) => (
           <TurnAnchor

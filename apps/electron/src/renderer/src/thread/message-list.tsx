@@ -2,15 +2,11 @@ import * as React from 'react';
 import { cn } from '@/lib/utils';
 import { copy } from '@/strings';
 import { EmptyThread } from '@/thread/empty-thread';
-import { ScrollToBottomButton } from '@/thread/scroll-to-bottom-button';
 import { TextBlock } from '@/thread/text-block';
 import { TurnGroup } from '@/thread/turn-group';
 import { TurnLoadingRow } from '@/thread/turn-loading-row';
-import { useStickToBottom } from '@/thread/use-stick-to-bottom';
 import { SystemMessageRow } from '@/thread/system-message-row';
 import { CONVERSATION_COLUMN_CLASS } from '@/thread/conversation-column';
-import { TurnAnchorRail } from '@/thread/turn-anchor-rail';
-import { turnAnchors } from '@/thread/turn-anchor-data';
 import { UserMessageRow } from '@/thread/user-message-row';
 
 import type { ThreadItem, ThreadModel } from '@/thread/thread-model';
@@ -40,49 +36,17 @@ function itemTopMargin(index: number, item: ThreadItem): string {
   return item.kind === 'turn' ? 'pt-[48px]' : 'pt-[20px]';
 }
 
-/** 消息流：用户气泡右对齐、轮次组左对齐，轮与轮之间落时间戳行；离开底部时右下浮出回到底部浮标。 */
+/** 消息内容列：用户气泡右对齐、轮次组左对齐，轮与轮之间落时间戳行；滚动与贴底跟随由页面滚动容器负责。
+ * shrink-0 + min-h-full：列盒取自然高度（空态撑满视口居中），底部 padding（输入浮层避让）计入可滚动区域。 */
 function MessageList({ thread, now, loading, bottomInset, emptyTitle, emptyHint, onOpenAgents, onOpenDiff, onEditUserMessage, onForkUserMessage }: MessageListProps) {
-  const { containerRef, onScroll, atBottom, scrollToBottom } = useStickToBottom();
-
-  const anchors = React.useMemo(() => turnAnchors(thread.items), [thread.items]);
-  const jumpToTurn = React.useCallback((turnId: string) => {
-    const container = containerRef.current;
-    if (container === null) return;
-    const section = container.querySelector(`[data-turn-id="${CSS.escape(turnId)}"]`);
-    if (section === null) return;
-    // 尊重系统减弱动态偏好：平滑滚动降级为直接定位
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    section.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start', inline: 'nearest' });
-  }, []);
-
-  const jumpButton = atBottom ? null : (
-    <div className="animate-in fade-in duration-150">
-      <ScrollToBottomButton onClick={scrollToBottom} style={{ bottom: bottomInset + 14 }} />
-    </div>
-  );
-
-  if (thread.items.length === 0) {
-    // 首轮事件到达前的空窗（如直执行命令）：留执行中指示，不闪空态引导
-    return (
-      <div className="relative min-h-0 flex-1">
-        <div className="h-full overflow-y-auto">
-          {loading ? (
-            <div className={`${CONVERSATION_COLUMN_CLASS} flex flex-col pt-6`} style={{ paddingBottom: bottomInset }}>
-              <TurnLoadingRow label={copy.flow.executing} />
-            </div>
-          ) : (
-            <EmptyThread title={emptyTitle} hint={emptyHint} />
-          )}
-        </div>
-      </div>
-    );
-  }
-
+  const empty = thread.items.length === 0;
   return (
-    <div className="relative min-h-0 flex-1">
-      <TurnAnchorRail anchors={anchors} onJump={jumpToTurn} />
-      <div ref={containerRef} onScroll={onScroll} className="h-full overflow-y-auto overflow-x-hidden">
-        <div className={`${CONVERSATION_COLUMN_CLASS} flex flex-col pt-6`} style={{ paddingBottom: bottomInset }}>
+    <div className={`${CONVERSATION_COLUMN_CLASS} flex min-h-full shrink-0 flex-col pt-6`} style={{ paddingBottom: bottomInset }}>
+      {empty ? (
+        // 首轮事件到达前的空窗（如直执行命令）：留执行中指示，不闪空态引导
+        loading ? <TurnLoadingRow label={copy.flow.executing} /> : <EmptyThread title={emptyTitle} hint={emptyHint} />
+      ) : (
+        <>
           {thread.items.map((item, index) => (
             <div key={item.kind === 'message' ? item.message.id : item.turn.id} className={cn(itemTopMargin(index, item))}>
               {item.kind === 'message' ? (
@@ -112,9 +76,8 @@ function MessageList({ thread, now, loading, bottomInset, emptyTitle, emptyHint,
             </div>
           ))}
           {loading ? <TurnLoadingRow label={copy.flow.executing} /> : null}
-        </div>
-      </div>
-      {jumpButton}
+        </>
+      )}
     </div>
   );
 }

@@ -3,7 +3,6 @@ import * as React from 'react';
 import { Composer } from '@/composer/composer';
 import { DialogLayer } from '@/dialogs/dialog-layer';
 import { NewThreadModal } from '@/dialogs/new-thread-modal';
-import { SidebarSeparator } from '@/layout/sidebar-separator';
 import { TitleBarLeft } from '@/layout/title-bar-left';
 import { WindowCaptionButtons } from '@/layout/window-caption-buttons';
 import { isWindowsPlatform, MODIFIER_KEY_LABEL } from '@/lib/platform';
@@ -14,7 +13,6 @@ import { useCmdHotkeys } from '@/hooks/cmd-hotkeys';
 import { useSessionAges } from '@/hooks/use-session-ages';
 import { NoticeStrip } from '@/notices/notice-strip';
 import { SettingsScreen } from '@/settings/settings-screen';
-import { HostDownBanner } from '@/screens/host-down-banner';
 import { Sidebar } from '@/sidebar/sidebar';
 import type { SidebarView } from '@/sidebar/sidebar-view';
 import type { SidebarFooterAction } from '@/sidebar/sidebar-footer';
@@ -24,7 +22,6 @@ import { buildTimeList } from '@/sidebar/build-time-list';
 import { buildProjectGroups } from '@/sidebar/build-project-groups';
 import { toggleGroupFold, expandGroup, type GroupFold } from '@/sidebar/group-collapse';
 import { changeLocale, getLocale, type Locale } from '@/strings';
-import { MessageList } from '@/thread/message-list';
 import { StopConfirmBar } from '@/thread/stop-confirm-bar';
 import { QueuePanel } from '@/thread/queue-panel';
 import { UsageScreen } from '@/screens/usage-screen';
@@ -34,7 +31,7 @@ import { useEscDismiss } from '@/screens/use-esc-dismiss';
 import { ThreadBanner } from '@/thread/thread-banner';
 import { AgentPanel } from '@/agent-panel/agent-panel';
 import { DiffPanel } from '@/diff-panel/diff-panel';
-import { ThreadHeader } from '@/thread/thread-header';
+import { ThreadStage } from '@/screens/thread-stage';
 import type { ImagePayload } from '@paiapp/contracts';
 import type { LiveWorkspaceView } from '@/live/use-live-workspace';
 
@@ -100,7 +97,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const [newThreadOpen, setNewThreadOpen] = React.useState(false);
   /** 编辑重发：回填草稿后聚焦输入框 */
   const composerTextRef = React.useRef<HTMLTextAreaElement | null>(null);
-  const { width, dragging, separators } = useSidebarResize(uiState.sidebarWidth, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
+  const { width } = useSidebarResize(uiState.sidebarWidth, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
   const { sessions, activeThreadId } = workspace;
 
   const draft = drafts[activeThreadId] ?? composerDraft;
@@ -220,11 +217,6 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     onConfirmStopChange: setConfirmStop,
   });
 
-  /** 浏览器直开（无 preload）时桥不存在，降级为无动作 */
-  const toggleMaximize = React.useCallback(() => {
-    void window.pai?.window.toggleMaximize();
-  }, []);
-
   const refreshSaved = workspace.actions.refreshSaved;
   const refreshAction = React.useMemo(() => ({ label: copy.sidebar.refresh, onSelect: refreshSaved }), [refreshSaved]);
   /** 宿主掉线（从未构建或 failed）：置顶横幅 + 模型位换「宿主未连接」，不得伪装成「未配置模型」。 */
@@ -278,17 +270,6 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     ],
     [openSettings],
   );
-  const onOpenMenuSelect = React.useCallback(
-    (label: string) => {
-      // 受信重开：stop → 同文件 resume(trusted)；其余装饰项维持原空操作
-      if (label === copy.thread.reloadTrusted) {
-        workspace.actions.reloadSessionTrusted(activeThreadId, true);
-      } else if (label === copy.thread.reloadUntrusted) {
-        workspace.actions.reloadSessionTrusted(activeThreadId, false);
-      }
-    },
-    [workspace.actions, activeThreadId],
-  );
   const onToggleSplitView = React.useCallback(() => setPanel((current) => (current === 'agents' ? null : 'agents')), []);
 
   return (
@@ -323,60 +304,22 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         footerActions={footerActions}
         refreshAction={refreshAction}
       />
-      <div className="relative flex min-w-0 flex-1 flex-col px-[40px]">
-        {sidebarCollapsed ? null : (
-          <SidebarSeparator
-            width={width}
-            minWidth={SIDEBAR_MIN_WIDTH}
-            maxWidth={SIDEBAR_MAX_WIDTH}
-            dragging={dragging}
-            label={copy.sidebar.toggleSidebar}
-            onResizeStart={separators.onPointerDown}
-            onResizeMove={separators.onPointerMove}
-            onResizeEnd={separators.onPointerUp}
-            onKeyDown={separators.onKeyDown}
-          />
-        )}
-        <ThreadHeader
-          projectName={sessions.find((session) => session.id === activeThreadId)?.projectName ?? ''}
-          sessionTitle={sessions.find((session) => session.id === activeThreadId)?.title ?? ''}
+      <div className="relative flex min-w-0 flex-1 flex-col">
+        <ThreadStage
+          workspace={workspace}
+          activeThreadId={activeThreadId}
           sidebarCollapsed={sidebarCollapsed}
-          labels={{
-            addAction: copy.thread.addAction,
-            open: copy.thread.open,
-            commitPushPr: copy.thread.commitPushPr,
-            toggleSplitView: copy.thread.toggleSplitView,
-            toggleMaximize: copy.thread.toggleMaximize,
-          }}
-          tabs={{
-            addLabel: copy.thread.tabAdd,
-            onAdd: noop,
-          }}
-          activePanel={panel}
-          openMenu={[...(workspace.generating ? [] : [copy.thread.reloadTrusted, copy.thread.reloadUntrusted]), ...copy.thread.openMenu]}
-          commitMenu={copy.thread.commitMenu}
-          onAddAction={noop}
-          onOpen={noop}
-          onCommit={noop}
-          onOpenMenuSelect={onOpenMenuSelect}
-          onCommitMenuSelect={noop}
+          panel={panel}
           onToggleSplitView={onToggleSplitView}
-          onToggleMaximize={toggleMaximize}
-        />
-        {hostDown ? <HostDownBanner onOpenSettings={openSettings} /> : null}
-        <MessageList
-          thread={workspace.activeThread}
-          now={workspace.now}
-          loading={workspace.executing}
+          hostDown={hostDown}
           bottomInset={bottomInset}
-          emptyTitle={copy.thread.emptyTitle}
-          emptyHint={copy.thread.emptyHint}
+          onOpenSettings={openSettings}
           onOpenAgents={openAgents}
           onOpenDiff={openDiff}
           onEditUserMessage={editUserMessage}
           onForkUserMessage={forkUserMessage}
         />
-        <div ref={composerLayerRef} className="absolute inset-x-0 bottom-0 z-10 bg-background px-[40px] pb-[18px]">
+        <div ref={composerLayerRef} className="pointer-events-none absolute inset-x-0 bottom-0 z-10 px-[40px] pb-[18px]">
           {confirmStop ? (
             <StopConfirmBar
               onConfirm={() => {

@@ -41,7 +41,8 @@ type ThreadHeaderProps = {
   onToggleMaximize: () => void
 }
 
-/** 主区头部：与标题覆盖块同排的顶行——面包屑 + 主操作 + 标签 + 布局开关；右端避让 Windows caption。 */
+/** 主区头部：全宽拖拽行（与标题覆盖块同排，无侧栏间隙断档）——面包屑 + 主操作 + 标签 + 布局开关；
+ * 内容用 padding 对齐内容列节奏（主区 40px + 原行内留白），右端避让 Windows caption。 */
 function ThreadHeader({
   projectName,
   sessionTitle,
@@ -61,10 +62,10 @@ function ThreadHeader({
 }: ThreadHeaderProps) {
   return (
     <header
-      className="app-drag flex h-[46px] shrink-0 items-center gap-3 pl-[27px] transition-[padding] duration-200 motion-reduce:transition-none"
+      className="app-drag flex h-[46px] shrink-0 items-center gap-3 pl-[20px]  transition-[padding] duration-200 motion-reduce:transition-none"
       style={{
-        paddingLeft: sidebarCollapsed ? 'calc(var(--titlebar-left-w, 190px) + 14px)' : undefined,
-        paddingRight: WINDOWS_CAPTION_WIDTH + 18,
+        paddingLeft: sidebarCollapsed ? 'calc(var(--titlebar-left-w, 190px))' : undefined,
+        paddingRight: WINDOWS_CAPTION_WIDTH + 20,
       }}
     >
       <div className="app-no-drag flex min-w-0 items-center gap-2">
@@ -108,7 +109,7 @@ function ThreadHeader({
       <div className="app-no-drag ml-[18px] flex shrink-0 items-center">
         <ThreadTabs addLabel={tabs.addLabel} onAdd={tabs.onAdd} />
       </div>
-      <div className="app-no-drag ml-auto flex shrink-0 items-center gap-[10px]">
+      <div className="app-no-drag  flex shrink-0 items-center gap-[10px]">
         <IconButton label={labels.toggleMaximize} size="sm" onClick={onToggleMaximize}>
           <Maximize2 strokeWidth={1.75} />
         </IconButton>
