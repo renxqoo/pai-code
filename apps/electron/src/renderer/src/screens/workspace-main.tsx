@@ -21,7 +21,7 @@ import { buildSidebarViewModel } from '@/screens/sidebar-view-model';
 import { submitDraftText } from '@/screens/submit-draft';
 import { useUsagePanel } from '@/hooks/use-usage-panel';
 import { useProjectFiles } from '@/hooks/use-project-files';
-import { changeLocale, getLocale, type Locale } from '@/strings';
+import { useSettingsScreen } from '@/settings/use-settings-screen';
 import { StopConfirmBar } from '@/thread/stop-confirm-bar';
 import { QueuePanel } from '@/thread/queue-panel';
 import { UsageScreen } from '@/screens/usage-screen';
@@ -76,7 +76,6 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const projectFilesView = useProjectFiles(workspace.actions.listProjectFiles);
   /** 项目内新建任务的预填目录；'' = 用当前会话目录 */
   const [newThreadCwd, setNewThreadCwd] = React.useState('');
-  /** 面板开合挂在会话之上：切换会话不丢失 */
   const [settingsOpen, setSettingsOpen] = React.useState(uiState.settingsOpen);
   /** 排队消息面板开合（A7；横幅排队行点击切换） */
   const [queueOpen, setQueueOpen] = React.useState(false);
@@ -90,8 +89,6 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const composerLayerRef = useObservedHeight<HTMLDivElement>((height) => {
     setBottomInset(Math.round(height) + 24);
   });
-  /** 界面语言镜像（changeLocale 广播后 app 根重挂载；此 state 驱动设置分区即时刷新） */
-  const [language, setLanguage] = React.useState<Locale>(getLocale());
   const [newThreadOpen, setNewThreadOpen] = React.useState(false);
   /** 编辑重发：回填草稿后聚焦输入框 */
   const composerTextRef = React.useRef<HTMLTextAreaElement | null>(null);
@@ -130,6 +127,8 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const closeUsage = usagePanel.closeUsage;
   const openSettings = React.useCallback(() => setSettingsOpen(true), []);
   const closeSettings = React.useCallback(() => setSettingsOpen(false), []);
+  /** 界面语言与全部设置页数据/动作经 use-settings-screen 装配（语言广播后 app 根重挂载） */
+  const settings = useSettingsScreen({ workspace, open: settingsOpen, onClose: closeSettings });
   const openNewThread = React.useCallback(() => {
     setNewThreadCwd('');
     setNewThreadOpen(true);
@@ -237,7 +236,6 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     [sessions, hiddenProjects, pinnedSessions, sidebarQuery, groupFold],
   );
   const { pinned: pinnedList, timeList, projectGroups } = sidebarLists;
-  const savedProjects = React.useMemo(() => [...new Set(workspace.saved.map((session) => session.cwd))], [workspace.saved]);
   const ages = useSessionAges(sessions);
 
   const onToggleGroupCollapse = React.useCallback((key: string) => {
@@ -413,52 +411,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         onToggle={() => setSidebarCollapsed((collapsed) => !collapsed)}
       />
       {isWindowsPlatform ? <WindowCaptionButtons /> : null}
-      <SettingsScreen
-        open={settingsOpen}
-        providers={workspace.providers}
-        credentials={workspace.credentials}
-        defaultModel={workspace.preferences.defaultModel}
-        modelOptions={workspace.composer.modelOptions}
-        permissionRules={workspace.permissionRules}
-        agents={workspace.agents}
-        skills={workspace.skills}
-        saved={workspace.saved}
-        pinnedSessions={pinnedSessions}
-        savedProjects={savedProjects}
-        onTogglePin={workspace.actions.togglePinnedSession}
-        onRevealSession={workspace.actions.revealSession}
-        onClose={closeSettings}
-        onUpsertProvider={workspace.actions.upsertProvider}
-        onRemoveProvider={workspace.actions.removeProvider}
-        onSelectDefaultModel={workspace.actions.setDefaultModel}
-        onTestProvider={workspace.actions.testProvider}
-        onSavePermissionRules={workspace.actions.writePermissionRules}
-        onShowPermissions={workspace.actions.refreshPermissionRules}
-        sessionRules={workspace.sessionRules}
-        onSaveSessionRules={workspace.actions.writeSessionRules}
-        onLoadSessionRules={workspace.actions.readSessionRules}
-        trustedDefault={workspace.preferences.trustedDefault}
-        language={language}
-        onSaveGeneral={workspace.actions.saveGeneralPreferences}
-        onLanguageChange={(next) => {
-          changeLocale(next);
-          setLanguage(getLocale());
-        }}
-        diagnostics={workspace.diagnostics}
-        onShowDiagnostics={workspace.actions.fetchDiagnostics}
-        onRestartHost={workspace.actions.restartHost}
-        onShowAgents={workspace.actions.refreshAgents}
-        onShowSkills={workspace.actions.refreshSkills}
-        onToggleSkill={workspace.actions.setSkillEnabled}
-        onOpenSaved={(sessionPath) => {
-          void workspace.actions.openSavedSession(sessionPath);
-          setSettingsOpen(false);
-        }}
-        onRefreshSaved={workspace.actions.refreshSaved}
-        onSaveKey={workspace.actions.setProviderKey}
-        onRemoveKey={workspace.actions.removeProviderKey}
-        onRefreshKeys={workspace.actions.refreshCredentials}
-      />
+      <SettingsScreen {...settings} />
       <NewThreadModal
         open={newThreadOpen}
         defaultCwd={newThreadCwd.length > 0 ? newThreadCwd : workspace.activeCwd}

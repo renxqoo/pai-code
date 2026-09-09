@@ -2,8 +2,13 @@ import * as React from 'react';
 import { X } from 'lucide-react';
 
 import { clonePermissionRules, defaultPermissionRules, type PermissionRules } from '@paiapp/contracts';
+import { SegmentedControl } from '@paiapp/ui';
 
 import { copy } from '@/strings';
+
+import { SettingsCard } from './settings-card';
+import { SettingsPageHeader } from './settings-page-header';
+import { SettingsRow } from './settings-row';
 
 type PermissionsSectionProps = {
   rules: PermissionRules | null // null = 未加载（显示轻量加载态）
@@ -20,7 +25,6 @@ type PatternKind = 'allowPatterns' | 'blockPatterns';
 type SaveStatus = 'saved' | 'failed' | null;
 
 const TOOLS: readonly ToolKey[] = ['bash', 'write', 'edit'];
-const PATTERN_KINDS: readonly PatternKind[] = ['allowPatterns', 'blockPatterns'];
 
 function patternsEqual(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((pattern, index) => pattern === b[index]);
@@ -50,7 +54,7 @@ function appendPatterns(existing: readonly string[], raw: string): string[] {
   return next;
 }
 
-/** pattern chips 编辑器（沿用 provider-form 模型 chips 的交互与样式）；纯渲染片段，输入草稿态由父层持有。 */
+/** pattern chips 编辑器（与 provider-form 模型 chips 同交互同观感）；纯渲染片段，输入草稿态由父层持有。 */
 function patternEditor(config: {
   patterns: readonly string[]
   inputDraft: string
@@ -59,11 +63,11 @@ function patternEditor(config: {
   onRemove: (pattern: string) => void
 }): React.ReactNode {
   return (
-    <div className="flex min-h-[30px] flex-wrap items-center gap-[5px] rounded-[8px] border border-border bg-background px-[8px] py-[4px] outline-none focus-within:border-foreground/25">
+    <div className="flex min-h-9 flex-wrap items-center gap-[5px] rounded-lg border border-border bg-background px-[10px] py-[5px] outline-none focus-within:border-foreground/30">
       {config.patterns.map((pattern) => (
         <span
           key={pattern}
-          className="flex items-center gap-[3px] rounded-[5px] border border-border bg-muted/40 py-[1px] pr-[3px] pl-[6px] font-mono text-[11px] leading-[15px] text-foreground"
+          className="flex items-center gap-[3px] rounded-md border border-border bg-muted/40 py-[1px] pr-[3px] pl-[7px] font-mono text-[11px] leading-[16px] text-foreground"
         >
           {pattern}
           <button
@@ -94,29 +98,30 @@ function patternEditor(config: {
           config.onInputDraftChange('');
         }}
         placeholder={config.patterns.length === 0 ? copy.settings.permissionsAddPattern : undefined}
-        className="h-[20px] min-w-[120px] flex-1 border-none bg-transparent text-[12px] outline-none placeholder:text-muted-foreground"
+        aria-label={copy.settings.permissionsAddPattern}
+        className="h-[22px] min-w-[120px] flex-1 border-none bg-transparent text-[12px] outline-none placeholder:text-muted-foreground"
       />
     </div>
   );
 }
 
-/** Permissions 分区：模式单选卡 + bash/write/edit 各自的 allow/block pattern chips + 保存（草稿未变时禁用）。 */
+/** Permissions 分区：作用域切换（全局/会话 sidecar）+ 模式分段 + bash/write/edit allow/block chips + 深比较控制保存。 */
 function PermissionsSection({ rules, onSave, sessionRules, onLoadSession, onSaveSession }: PermissionsSectionProps) {
   // 语言切换后随渲染重估（模块级常量会冻结首个 locale）
   const MODE_OPTIONS: ReadonlyArray<{ value: PermissionRules['mode']; label: string }> = [
-  { value: 'ask', label: copy.settings.permissionsModeAsk },
-  { value: 'allow-all', label: copy.settings.permissionsModeAllowAll },
-  { value: 'block-all', label: copy.settings.permissionsModeBlockAll },
-];
+    { value: 'ask', label: copy.settings.permissionsModeAsk },
+    { value: 'allow-all', label: copy.settings.permissionsModeAllowAll },
+    { value: 'block-all', label: copy.settings.permissionsModeBlockAll },
+  ];
   const TOOL_TITLES: Record<ToolKey, string> = {
-  bash: copy.settings.permissionsBash,
-  write: copy.settings.permissionsWrite,
-  edit: copy.settings.permissionsEdit,
-};
+    bash: copy.settings.permissionsBash,
+    write: copy.settings.permissionsWrite,
+    edit: copy.settings.permissionsEdit,
+  };
   const KIND_LABELS: Record<PatternKind, string> = {
-  allowPatterns: copy.settings.permissionsAllow,
-  blockPatterns: copy.settings.permissionsBlock,
-};
+    allowPatterns: copy.settings.permissionsAllow,
+    blockPatterns: copy.settings.permissionsBlock,
+  };
   /** 作用域：全局规则文件 / 当前会话 sidecar（G2） */
   const [scope, setScope] = React.useState<'global' | 'session'>('global');
   /** 会话作用域无 sidecar 时，用户点「创建独立规则」进入本地编辑态（保存成功落 sidecar 后自然退出） */
@@ -182,121 +187,102 @@ function PermissionsSection({ rules, onSave, sessionRules, onLoadSession, onSave
   if (baseline === null || draft === null) {
     return (
       <section>
-        <p className="pb-[10px] text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
-          {copy.settings.permissionsTitle}
-        </p>
-        <p className="pb-[10px] text-[12.5px] text-muted-foreground">{copy.settings.permissionsLoading}</p>
+        <SettingsPageHeader title={copy.settings.permissionsTitle} description={copy.settings.permissionsDesc} />
+        <p className="text-[12.5px] leading-[18px] text-muted-foreground">{copy.settings.permissionsLoading}</p>
       </section>
     );
   }
 
   return (
     <section>
-      <p className="pb-[10px] text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
-        {copy.settings.permissionsTitle}
-      </p>
-      <div className="flex items-center gap-[8px] pb-[12px]">
-        {(['global', 'session'] as const).map((value) => (
-          <button
-            key={value}
-            type="button"
-            aria-pressed={scope === value}
-            onClick={() => setScope(value)}
-            className={`cursor-pointer rounded-[8px] border px-[12px] py-[5px] text-[12px] outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
-              scope === value
-                ? 'border-foreground/40 bg-muted/60 text-foreground'
-                : 'border-border text-muted-foreground hover:bg-muted/40 hover:text-foreground'
-            }`}
-          >
-            {value === 'global' ? copy.settings.permissionsScopeGlobal : copy.settings.permissionsScopeSession}
-          </button>
-        ))}
-      </div>
-      {showFollowGlobal ? (
-        <div className="flex flex-col gap-[8px] rounded-[10px] border border-dashed border-border px-[12px] py-[12px]">
-          <p className="text-[12px] text-muted-foreground">{copy.settings.permissionsFollowGlobal}</p>
-          <button
-            type="button"
-            onClick={createSidecar}
-            className="h-[30px] self-start rounded-[8px] bg-foreground px-[14px] text-[12px] font-medium text-background hover:bg-foreground/90"
-          >
-            {copy.settings.permissionsCreateSession}
-          </button>
-        </div>
-      ) : null}
-      {showFollowGlobal ? null : (
+      <SettingsPageHeader title={copy.settings.permissionsTitle} description={copy.settings.permissionsDesc} />
       <div className="flex flex-col gap-[16px]">
-        <div className="flex flex-col gap-[6px]">
-          <p className="text-[11.5px] text-muted-foreground">{copy.settings.permissionsMode}</p>
-          <div className="flex items-center gap-[8px]">
-            {MODE_OPTIONS.map((option) => {
-              const selected = draft.mode === option.value;
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  aria-pressed={selected}
-                  onClick={() => setMode(option.value)}
-                  className={`cursor-pointer rounded-[8px] border px-[12px] py-[6px] text-[12px] outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
-                    selected
-                      ? 'border-foreground/40 bg-muted/60 text-foreground'
-                      : 'border-border text-muted-foreground hover:bg-muted/40 hover:text-foreground'
-                  }`}
-                >
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
-          <p className="text-[11px] leading-[16px] text-muted-foreground">{copy.settings.permissionsModeHint}</p>
-          <p className="text-[11px] leading-[16px] text-muted-foreground">{copy.settings.permissionsGlobHint}</p>
+        <div>
+          <SegmentedControl
+            aria-label={copy.settings.permissionsTitle}
+            options={[
+              { value: 'global' as const, label: copy.settings.permissionsScopeGlobal },
+              { value: 'session' as const, label: copy.settings.permissionsScopeSession },
+            ]}
+            value={scope}
+            onChange={setScope}
+          />
         </div>
-        {TOOLS.map((tool) => (
-          <div key={tool} className="flex flex-col gap-[8px]">
-            <p className="text-[11.5px] font-medium text-muted-foreground">{TOOL_TITLES[tool]}</p>
-            <div className="grid grid-cols-2 gap-[10px]">
-              {PATTERN_KINDS.map((kind) => {
-                const listKey = `${tool}:${kind}`;
-                return (
-                  <div key={listKey} className="flex flex-col gap-[4px]">
-                    <p className="text-[11px] text-muted-foreground">{KIND_LABELS[kind]}</p>
-                    {patternEditor({
-                      patterns: draft[tool][kind],
-                      inputDraft: inputDrafts[listKey] ?? '',
-                      onInputDraftChange: (value) => setInputDrafts((prev) => ({ ...prev, [listKey]: value })),
-                      onAppend: (raw) => updatePatterns(tool, kind, (patterns) => appendPatterns(patterns, raw)),
-                      onRemove: (pattern) => updatePatterns(tool, kind, (patterns) => patterns.filter((item) => item !== pattern)),
-                    })}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-        <div className="flex items-center gap-[10px]">
-          <button
-            type="button"
-            onClick={() => void submit()}
-            disabled={saving || (baseline !== null && rulesEqual(draft, baseline))}
-            className="h-[30px] rounded-[8px] bg-foreground px-[14px] text-[12px] font-medium text-background hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {copy.settings.permissionsSave}
-          </button>
-          {scope === 'session' && hasSidecar ? (
+        {showFollowGlobal ? (
+          <div className="flex flex-col items-start gap-[8px] rounded-xl border border-dashed border-border px-[20px] py-[16px]">
+            <p className="text-[12px] leading-[17px] text-muted-foreground">{copy.settings.permissionsFollowGlobal}</p>
             <button
               type="button"
-              onClick={() => void followGlobal()}
-              disabled={saving}
-              className="text-[11.5px] text-muted-foreground hover:text-foreground disabled:opacity-60"
+              onClick={createSidecar}
+              className="h-9 cursor-pointer rounded-lg bg-foreground px-4 text-[13px] leading-none font-medium text-background outline-none select-none hover:opacity-90 focus-visible:ring-3 focus-visible:ring-ring/50"
             >
-              {copy.settings.permissionsFollowGlobalAction}
+              {copy.settings.permissionsCreateSession}
             </button>
-          ) : null}
-          {status === 'saved' ? <p className="text-[11.5px] text-muted-foreground">{copy.settings.permissionsSaved}</p> : null}
-          {status === 'failed' ? <p className="text-[11.5px] text-red-600">{copy.settings.permissionsSaveFailed}</p> : null}
-        </div>
+          </div>
+        ) : null}
+        {showFollowGlobal ? null : (
+          <>
+            <SettingsCard className="divide-y divide-border">
+              <SettingsRow title={copy.settings.permissionsMode}>
+                <SegmentedControl aria-label={copy.settings.permissionsMode} options={MODE_OPTIONS} value={draft.mode} onChange={setMode} />
+              </SettingsRow>
+              <div className="flex flex-col gap-[4px] px-[20px] py-[11px]">
+                <p className="text-[11.5px] leading-[16px] text-muted-foreground">{copy.settings.permissionsModeHint}</p>
+                <p className="text-[11.5px] leading-[16px] text-muted-foreground">{copy.settings.permissionsGlobHint}</p>
+              </div>
+            </SettingsCard>
+            {TOOLS.map((tool) => (
+              <SettingsCard key={tool}>
+                <div className="px-[20px] pt-[13px] pb-[10px]">
+                  <p className="text-[13px] leading-[18px] font-medium text-foreground">{TOOL_TITLES[tool]}</p>
+                </div>
+                <div className="flex flex-col gap-[6px] px-[20px] pb-[14px]">
+                  <p className="text-[11.5px] leading-[16px] text-muted-foreground">{KIND_LABELS.allowPatterns}</p>
+                  {patternEditor({
+                    patterns: draft[tool].allowPatterns,
+                    inputDraft: inputDrafts[`${tool}:allowPatterns`] ?? '',
+                    onInputDraftChange: (value) => setInputDrafts((prev) => ({ ...prev, [`${tool}:allowPatterns`]: value })),
+                    onAppend: (raw) => updatePatterns(tool, 'allowPatterns', (patterns) => appendPatterns(patterns, raw)),
+                    onRemove: (pattern) => updatePatterns(tool, 'allowPatterns', (patterns) => patterns.filter((item) => item !== pattern)),
+                  })}
+                </div>
+                <div className="flex flex-col gap-[6px] border-t border-border px-[20px] py-[12px]">
+                  <p className="text-[11.5px] leading-[16px] text-muted-foreground">{KIND_LABELS.blockPatterns}</p>
+                  {patternEditor({
+                    patterns: draft[tool].blockPatterns,
+                    inputDraft: inputDrafts[`${tool}:blockPatterns`] ?? '',
+                    onInputDraftChange: (value) => setInputDrafts((prev) => ({ ...prev, [`${tool}:blockPatterns`]: value })),
+                    onAppend: (raw) => updatePatterns(tool, 'blockPatterns', (patterns) => appendPatterns(patterns, raw)),
+                    onRemove: (pattern) => updatePatterns(tool, 'blockPatterns', (patterns) => patterns.filter((item) => item !== pattern)),
+                  })}
+                </div>
+              </SettingsCard>
+            ))}
+            <div className="flex items-center gap-[10px]">
+              <button
+                type="button"
+                onClick={() => void submit()}
+                disabled={saving || (baseline !== null && rulesEqual(draft, baseline))}
+                className="h-9 cursor-pointer rounded-lg bg-foreground px-4 text-[13px] leading-none font-medium text-background outline-none select-none hover:opacity-90 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {copy.settings.permissionsSave}
+              </button>
+              {scope === 'session' && hasSidecar ? (
+                <button
+                  type="button"
+                  onClick={() => void followGlobal()}
+                  disabled={saving}
+                  className="cursor-pointer rounded-lg px-[6px] py-[6px] text-[12.5px] leading-none text-muted-foreground outline-none select-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
+                >
+                  {copy.settings.permissionsFollowGlobalAction}
+                </button>
+              ) : null}
+              {status === 'saved' ? <p className="text-[12px] leading-[16px] text-muted-foreground">{copy.settings.permissionsSaved}</p> : null}
+              {status === 'failed' ? <p className="text-[12px] leading-[16px] text-destructive">{copy.settings.permissionsSaveFailed}</p> : null}
+            </div>
+          </>
+        )}
       </div>
-      )}
     </section>
   );
 }

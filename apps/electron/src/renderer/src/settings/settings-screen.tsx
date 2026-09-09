@@ -1,6 +1,5 @@
-import * as React from 'react';
+import type { SettingsScreenProps } from './use-settings-screen';
 
-import { copy } from '@/strings';
 import { AgentsSection } from './agents-section';
 import { DiagnosticsSection } from './diagnostics-section';
 import { GeneralSection } from './general-section';
@@ -10,206 +9,38 @@ import { PermissionsSection } from './permissions-section';
 import { ProvidersSection } from './providers-section';
 import { SettingsSectionNav } from './settings-section-nav';
 import { SkillsSection } from './skills-section';
-import type { AgentView, CredentialView, PermissionRules, ProviderConfigView, ProviderModel, SkillView, ThinkingFormat } from '@paiapp/contracts';
-
-type SettingsScreenProps = {
-  open: boolean
-  providers: readonly ProviderConfigView[]
-  credentials: readonly CredentialView[]
-  defaultModel: string | null
-  modelOptions: readonly string[]
-  permissionRules: PermissionRules | null
-  agents: readonly AgentView[]
-  skills: readonly SkillView[]
-  /** 技能启停（写 pi settings + 重开活跃会话生效）。 */
-  onToggleSkill: (name: string, enabled: boolean) => Promise<boolean>
-  saved: ReadonlyArray<{ sessionPath: string; title: string; cwd: string; modifiedAt: number; messageCount: number }>
-  pinnedSessions: ReadonlySet<string>
-  savedProjects: readonly string[]
-  onTogglePin: (sessionPath: string) => void
-  onRevealSession: (sessionPath: string) => void
-  onClose: () => void
-  onUpsertProvider: (input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; thinkingFormat: ThinkingFormat; apiKey?: string }) => Promise<boolean>
-  onRemoveProvider: (name: string) => Promise<boolean>
-  onSelectDefaultModel: (value: string | null) => void
-  onTestProvider: (name: string) => Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }>
-  onSavePermissionRules: (rules: PermissionRules) => Promise<boolean>
-  /** 进入权限分区时拉取规则（hub 文件面无推送，打开即读） */
-  onShowPermissions: () => void
-  sessionRules: { rules: PermissionRules; source: 'thread' | 'global' } | null
-  onSaveSessionRules: (rules: PermissionRules | null) => Promise<boolean>
-  onLoadSessionRules: () => void
-  trustedDefault: boolean
-  language: 'zh' | 'en'
-  onSaveGeneral: (patch: { trustedDefault?: boolean }) => Promise<boolean>
-  onLanguageChange: (language: 'zh' | 'en') => void
-  diagnostics: { hostPhase: 'starting' | 'ready' | 'restarting' | 'failed' | null; stderrTail: string; registrySessions: number } | null
-  onShowDiagnostics: () => void
-  onRestartHost: () => void
-  /** 进入 Agents 分区时拉取（host 级枚举无推送） */
-  onShowAgents: () => void
-  /** 进技能分区时拉取目录（含禁用态全集）。 */
-  onShowSkills: () => void
-  onOpenSaved: (sessionPath: string) => void
-  onRefreshSaved: () => void
-  onSaveKey: (provider: string, apiKey: string) => Promise<boolean>
-  onRemoveKey: (provider: string) => Promise<boolean>
-  onRefreshKeys: () => void
-}
 
 /**
- * 设置页容器：不透明全屏 overlay，左 nav + 右内容两栏。
- * 关闭走右上按钮；Esc 由父层全局监听，本组件不挂键盘事件。
+ * 设置页容器：不透明全屏 overlay，左 nav（320px，sidebar 底色）+ 右内容两栏；
+ * 分区状态/派发与数据装配都在 use-settings-screen，本组件只做展示分派。
+ * Esc 关闭由父层全局监听，本组件不挂键盘事件。
  */
-function SettingsScreen({
-  open,
-  providers,
-  credentials,
-  defaultModel,
-  modelOptions,
-  permissionRules,
-  agents,
-  skills,
-  saved,
-  pinnedSessions,
-  savedProjects,
-  onTogglePin,
-  onRevealSession,
-  onClose,
-  onUpsertProvider,
-  onRemoveProvider,
-  onSelectDefaultModel,
-  onTestProvider,
-  onSavePermissionRules,
-  onShowPermissions,
-  sessionRules,
-  onSaveSessionRules,
-  onLoadSessionRules,
-  onShowAgents,
-  onShowSkills,
-  onToggleSkill,
-  trustedDefault,
-  language,
-  onSaveGeneral,
-  onLanguageChange,
-  diagnostics,
-  onShowDiagnostics,
-  onRestartHost,
-  onOpenSaved,
-  onRefreshSaved,
-  onSaveKey,
-  onRemoveKey,
-  onRefreshKeys,
-}: SettingsScreenProps) {
-  const [section, setSection] = React.useState<'general' | 'providers' | 'keys' | 'permissions' | 'agents' | 'skills' | 'diagnostics' | 'history'>('providers');
-  // 每次打开回到首分区：重进分区会重触发 onShow*（权限/agents 目录无推送，按开即读）
-  React.useEffect(() => {
-    if (open) setSection('providers');
-  }, [open]);
+function SettingsScreen({ open, onClose, section, onSelectSection, general, providers, keys, permissions, agents, skills, history, diagnostics }: SettingsScreenProps) {
   if (!open) return null;
-  const navItems = [
-    { id: 'general', label: copy.settings.generalTitle, selected: section === 'general', onSelect: () => setSection('general') },
-    { id: 'providers', label: copy.settings.providersTitle, selected: section === 'providers', onSelect: () => setSection('providers') },
-    { id: 'keys', label: copy.settings.keysTitle, selected: section === 'keys', onSelect: () => setSection('keys') },
-    {
-      id: 'permissions',
-      label: copy.settings.permissionsTitle,
-      selected: section === 'permissions',
-      onSelect: () => {
-        onShowPermissions();
-        setSection('permissions');
-      },
-    },
-    {
-      id: 'agents',
-      label: copy.settings.agentsTitle,
-      selected: section === 'agents',
-      onSelect: () => {
-        onShowAgents();
-        setSection('agents');
-      },
-    },
-    {
-      id: 'skills',
-      label: copy.settings.skillsTitle,
-      selected: section === 'skills',
-      onSelect: () => {
-        onShowSkills();
-        setSection('skills');
-      },
-    },
-    {
-      id: 'diagnostics',
-      label: copy.settings.diagnosticsTitle,
-      selected: section === 'diagnostics',
-      onSelect: () => {
-        onShowDiagnostics();
-        setSection('diagnostics');
-      },
-    },
-    { id: 'history', label: copy.settings.historyTitle, selected: section === 'history', onSelect: () => setSection('history') },
-  ];
   return (
-    <div className="fixed inset-0 z-40 bg-background">
-      <div className="flex h-full flex-col">
-        <div className="flex items-center justify-between px-[22px] py-[18px]">
-          <p className="text-[13.5px] font-medium">{copy.settings.title}</p>
-          <button type="button" onClick={onClose} className="text-[12px] text-muted-foreground hover:text-foreground">
-            {copy.settings.close}
-          </button>
-        </div>
-        <div className="flex min-h-0 flex-1">
-          <div className="w-[200px] shrink-0 border-r border-border">
-            <SettingsSectionNav ariaLabel={copy.settings.title} items={navItems} />
-          </div>
-          <div className="min-w-0 flex-1 overflow-y-auto">
-            <div className="mx-auto w-full max-w-[720px] px-[28px] pb-[32px]">
-              {section === 'general' ? (
-                <GeneralSection
-                  trustedDefault={trustedDefault}
-                  language={language}
-                  onSave={onSaveGeneral}
-                  onLanguageChange={onLanguageChange}
-                />
-              ) : section === 'providers' ? (
-                <ProvidersSection
-                  providers={providers}
-                  defaultModel={defaultModel}
-                  modelOptions={modelOptions}
-                  onUpsertProvider={onUpsertProvider}
-                  onRemoveProvider={onRemoveProvider}
-                  onSelectDefaultModel={onSelectDefaultModel}
-                  onTestProvider={onTestProvider}
-                />
-              ) : section === 'keys' ? (
-                <KeysSection credentials={credentials} onSaveKey={onSaveKey} onRemoveKey={onRemoveKey} onRefresh={onRefreshKeys} />
-              ) : section === 'permissions' ? (
-                <PermissionsSection
-                  rules={permissionRules}
-                  onSave={onSavePermissionRules}
-                  sessionRules={sessionRules}
-                  onLoadSession={onLoadSessionRules}
-                  onSaveSession={onSaveSessionRules}
-                />
-              ) : section === 'agents' ? (
-                <AgentsSection agents={agents} onRefresh={onShowAgents} />
-              ) : section === 'skills' ? (
-                <SkillsSection skills={skills} onRefresh={onShowSkills} onToggle={onToggleSkill} />
-              ) : section === 'diagnostics' ? (
-                <DiagnosticsSection data={diagnostics} onRefresh={onShowDiagnostics} onRestart={onRestartHost} />
-              ) : (
-                <HistorySection
-                  saved={saved}
-                  pinned={pinnedSessions}
-                  projects={savedProjects}
-                  onTogglePin={onTogglePin}
-                  onReveal={onRevealSession}
-                  onOpenSaved={onOpenSaved}
-                  onRefreshSaved={onRefreshSaved}
-                />
-              )}
-            </div>
-          </div>
+    <div className="fixed inset-0 z-40 flex bg-background">
+      <aside className="h-full w-[320px] shrink-0 border-r border-border bg-sidebar">
+        <SettingsSectionNav section={section} onSelectSection={onSelectSection} onClose={onClose} />
+      </aside>
+      <div className="min-w-0 flex-1 overflow-y-auto">
+        <div className="mx-auto flex w-full max-w-[1000px] flex-col px-[80px] py-[56px]">
+          {section === 'general' ? (
+            <GeneralSection {...general} />
+          ) : section === 'providers' ? (
+            <ProvidersSection {...providers} />
+          ) : section === 'keys' ? (
+            <KeysSection {...keys} />
+          ) : section === 'permissions' ? (
+            <PermissionsSection {...permissions} />
+          ) : section === 'agents' ? (
+            <AgentsSection {...agents} />
+          ) : section === 'skills' ? (
+            <SkillsSection {...skills} />
+          ) : section === 'history' ? (
+            <HistorySection {...history} />
+          ) : (
+            <DiagnosticsSection {...diagnostics} />
+          )}
         </div>
       </div>
     </div>

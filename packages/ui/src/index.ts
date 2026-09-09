@@ -8,6 +8,7 @@ export { IconButton, iconButtonVariants, type IconButtonProps } from './icon-but
 export { InlineCode, type InlineCodeProps } from './inline-code';
 export { MenuButton, type MenuItemDef, type MenuButtonProps } from './menu-button';
 export { MetaLine, type MetaLineProps } from './meta-line';
+export { SegmentedControl, type SegmentedControlProps, type SegmentedControlOption } from './segmented-control';
 export { SparkMark } from './spark-mark';
 export { SplitButton, type SplitButtonProps } from './split-button';
 export { Spinner, type SpinnerProps } from './spinner';

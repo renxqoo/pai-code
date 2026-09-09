@@ -46,6 +46,8 @@ export type WorkspaceActions = {
   readonly removeProviderKey: (provider: string) => Promise<boolean>;
   readonly setDefaultModel: (value: string | null) => void;
   readonly completeOnboarding: () => void;
+  /** 重跑新手引导：onboarded 置回 false（偏好推回后工作区切回引导屏）。 */
+  readonly restartOnboarding: () => Promise<boolean>;
   readonly refreshPermissionRules: () => void;
   readonly writePermissionRules: (rules: PermissionRules) => Promise<boolean>;
   readonly readSessionRules: () => void;
@@ -208,6 +210,14 @@ export function createWorkspaceActions(setDiagnostics: (value: WorkspaceDiagnost
       void controller.updatePreferences({ onboarded: true }).then((next) => {
         if (next === null) pushNotice(copy.settings.preferenceSaveFailed);
       });
+    },
+    restartOnboarding: async () => {
+      const next = await controller.updatePreferences({ onboarded: false });
+      if (next === null) {
+        pushNotice(copy.settings.preferenceSaveFailed);
+        return false;
+      }
+      return true;
     },
     testProvider: (name) => controller.testProvider(name),
     refreshPermissionRules: () => {

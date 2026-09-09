@@ -6,22 +6,28 @@ import { MenuButton } from '@paiapp/ui';
 
 import { copy } from '@/strings';
 
+import { SettingsCard } from './settings-card';
+import { SettingsPageHeader } from './settings-page-header';
+import { SettingsRow } from './settings-row';
+import { SettingsSearchInput } from './settings-search-input';
 import { ProviderForm } from './provider-form';
-import { ProviderRow } from './provider-row';
+import { ProviderRow, type ProviderTestResult } from './provider-row';
 
 type ProvidersSectionProps = {
-  providers: readonly ProviderConfigView[]
+  list: readonly ProviderConfigView[]
   defaultModel: string | null
   modelOptions: readonly string[]  // "provider/modelId" 形态
-  onUpsertProvider: (input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; thinkingFormat: ThinkingFormat; apiKey?: string }) => Promise<boolean>
-  onRemoveProvider: (name: string) => Promise<boolean>
+  onUpsert: (input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; thinkingFormat: ThinkingFormat; apiKey?: string }) => Promise<boolean>
+  onRemove: (name: string) => Promise<boolean>
   onSelectDefaultModel: (value: string | null) => void
-  onTestProvider: (name: string) => Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }>
+  onTest: (name: string) => Promise<ProviderTestResult>
 }
 
-/** composer 菜单触发样式的缩小版，用于分区行内。 */
+/** 默认模型下拉触发器：select 观感（描边胶囊 + chevron）。 */
 const defaultModelTriggerClassName =
-  'flex cursor-pointer items-center gap-1.5 rounded-md py-[3px] pr-1 pl-[6px] text-[11.5px] leading-none text-muted-foreground outline-none select-none hover:bg-accent hover:text-foreground aria-expanded:bg-accent aria-expanded:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 [&_svg]:shrink-0';
+  'flex h-9 cursor-pointer items-center justify-between gap-[8px] rounded-lg border border-border bg-background px-3 text-left text-[13px] text-foreground outline-none select-none hover:border-foreground/30 aria-expanded:border-foreground/30 focus-visible:ring-3 focus-visible:ring-ring/50 [&_svg]:shrink-0';
+
+const defaultModelTriggerMinWidth = 240;
 
 function defaultModelItems(modelOptions: readonly string[], selected: string) {
   const noneValue = copy.settings.defaultModelNone;
@@ -33,71 +39,113 @@ function defaultModelItems(modelOptions: readonly string[], selected: string) {
   }));
 }
 
-/** Providers 分区：默认模型选择 + 已配置 provider 列表（编辑/测试/移除）+ 新增与编辑共用表单。 */
-function ProvidersSection({
-  providers,
-  defaultModel,
-  modelOptions,
-  onUpsertProvider,
-  onRemoveProvider,
-  onSelectDefaultModel,
-  onTestProvider,
-}: ProvidersSectionProps) {
+/** 本地过滤：provider 名称 / baseUrl / 模型 id 包含匹配（大小写不敏感）。 */
+function providerMatchesQuery(provider: ProviderConfigView, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (q.length === 0) return true;
+  return (
+    provider.name.toLowerCase().includes(q) ||
+    provider.baseUrl.toLowerCase().includes(q) ||
+    provider.models.some((model) => model.id.toLowerCase().includes(q))
+  );
+}
+
+/** Providers 分区：默认模型选择卡 + 搜索 + provider 卡列表（编辑/测试/移除）+ 黑按钮展开新增表单。 */
+function ProvidersSection({ list, defaultModel, modelOptions, onUpsert, onRemove, onSelectDefaultModel, onTest }: ProvidersSectionProps) {
   const [editing, setEditing] = React.useState<string | null>(null);
+  const [adding, setAdding] = React.useState(false);
+  const [query, setQuery] = React.useState('');
   const selectedDefault = defaultModel ?? copy.settings.defaultModelNone;
-  // 1c 挂账核销：默认模型已不在目录（provider 被删/改名）→ 内联失效提示
+  // 默认模型已不在目录（provider 被删/改名）→ 触发器旁短标记 + 卡内联失效提示
   const defaultModelInvalid = defaultModel !== null && !modelOptions.includes(defaultModel);
-  const editingProvider = editing === null ? undefined : providers.find((provider) => provider.name === editing);
+  const editingProvider = editing === null ? undefined : list.find((provider) => provider.name === editing);
+  const visibleProviders = list.filter((provider) => providerMatchesQuery(provider, query));
+
+  const openEdit = (name: string): void => {
+    setAdding(false);
+    setEditing(name);
+  };
+
   return (
     <section>
-      <p className="pb-[10px] text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
-        {copy.settings.providersTitle}
-      </p>
-      <div className="flex items-center justify-between pb-[10px]">
-        <p className="text-[11.5px] text-muted-foreground">{copy.settings.defaultModelTitle}</p>
-        <MenuButton
-          aria-label={copy.settings.defaultModelTitle}
-          align="end"
-          popupMinWidth={200}
-          items={defaultModelItems(modelOptions, selectedDefault)}
-          onSelect={(value) => onSelectDefaultModel(value === copy.settings.defaultModelNone ? null : value)}
-          triggerClassName={defaultModelTriggerClassName}
-          trigger={
-            <>
-              <span className="max-w-[220px] truncate">{selectedDefault}</span>
-              <ChevronDown className="size-3 text-muted-foreground/70" strokeWidth={2} />
-            </>
-          }
-        />
+      <SettingsPageHeader title={copy.settings.providersTitle} description={copy.settings.providersDesc} />
+      <div className="flex flex-col gap-[16px]">
+        <SettingsCard className="divide-y divide-border">
+          <SettingsRow title={copy.settings.defaultModelTitle}>
+            <span className="flex items-center gap-[8px]">
+              {defaultModelInvalid ? (
+                <span className="inline-flex shrink-0 items-center rounded-full border border-destructive/40 px-2 py-[1px] text-[11px] leading-[16px] text-destructive">
+                  {copy.settings.defaultModelInvalidShort}
+                </span>
+              ) : null}
+              <MenuButton
+                aria-label={copy.settings.defaultModelTitle}
+                align="end"
+                popupMinWidth={defaultModelTriggerMinWidth}
+                items={defaultModelItems(modelOptions, selectedDefault)}
+                onSelect={(value) => onSelectDefaultModel(value === copy.settings.defaultModelNone ? null : value)}
+                triggerClassName={defaultModelTriggerClassName}
+                trigger={
+                  <>
+                    <span className="min-w-0 max-w-[220px] truncate">{selectedDefault}</span>
+                    <ChevronDown className="size-3 shrink-0 text-muted-foreground/70" strokeWidth={2} />
+                  </>
+                }
+              />
+            </span>
+          </SettingsRow>
+          {defaultModelInvalid ? (
+            <p className="px-[20px] py-[11px] text-[12px] leading-[17px] text-muted-foreground">
+              {copy.settings.generalDefaultModelInvalid}
+            </p>
+          ) : null}
+        </SettingsCard>
+        {list.length === 0 ? null : (
+          <div className="flex justify-end">
+            <SettingsSearchInput value={query} onChange={setQuery} placeholder={copy.settings.searchModels} className="w-[280px]" />
+          </div>
+        )}
+        {list.length === 0 ? (
+          <p className="text-[12.5px] leading-[18px] text-muted-foreground">{copy.settings.providersEmpty}</p>
+        ) : visibleProviders.length === 0 ? (
+          <p className="text-[12.5px] leading-[18px] text-muted-foreground">{copy.settings.searchNoResults}</p>
+        ) : (
+          <div className="flex flex-col gap-[12px]">
+            {visibleProviders.map((provider) => (
+              <ProviderRow
+                key={provider.name}
+                provider={provider}
+                onRemove={onRemove}
+                onEdit={() => openEdit(provider.name)}
+                onTest={() => onTest(provider.name)}
+              />
+            ))}
+          </div>
+        )}
+        {editing !== null && editingProvider !== undefined ? (
+          <ProviderForm
+            key={`edit-${editing}`}
+            onSubmit={onUpsert}
+            initial={{
+              name: editingProvider.name,
+              baseUrl: editingProvider.baseUrl,
+              models: editingProvider.models.map((model) => ({ id: model.id, reasoning: model.reasoning, vision: model.vision })),
+              thinkingFormat: editingProvider.thinkingFormat,
+            }}
+            onCancel={() => setEditing(null)}
+          />
+        ) : adding ? (
+          <ProviderForm key="add" onSubmit={onUpsert} onCancel={() => setAdding(false)} />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="h-9 cursor-pointer self-start rounded-lg bg-foreground px-4 text-[13px] leading-none font-medium text-background outline-none select-none hover:opacity-90 focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            {copy.settings.addProvider}
+          </button>
+        )}
       </div>
-      {defaultModelInvalid ? (
-        <p className="pb-[6px] text-[11px] leading-[15px] text-muted-foreground/80">{copy.settings.generalDefaultModelInvalid}</p>
-      ) : null}
-      {providers.length === 0 ? <p className="pb-[10px] text-[12.5px] text-muted-foreground">{copy.settings.providersEmpty}</p> : null}
-      {providers.map((provider) => (
-        <ProviderRow
-          key={provider.name}
-          provider={provider}
-          onRemove={onRemoveProvider}
-          onEdit={() => setEditing(provider.name)}
-          onTest={() => onTestProvider(provider.name)}
-        />
-      ))}
-      <ProviderForm
-        key={editing ?? 'new'}
-        onSubmit={onUpsertProvider}
-        initial={
-          editingProvider === undefined
-            ? null
-            : {
-                name: editingProvider.name,
-                baseUrl: editingProvider.baseUrl,
-                models: editingProvider.models.map((model) => ({ id: model.id, reasoning: model.reasoning, vision: model.vision })),
-                thinkingFormat: editingProvider.thinkingFormat,
-              }
-        }
-        onCancel={editing === null ? undefined : () => setEditing(null)}
-      />
     </section>
   );
 }

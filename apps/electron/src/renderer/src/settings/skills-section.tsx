@@ -1,51 +1,82 @@
-import { copy } from '@/strings';
-import { ToggleSwitch } from '@paiapp/ui';
+import * as React from 'react';
+import { RefreshCw, Sparkles } from 'lucide-react';
+
 import type { SkillView } from '@paiapp/contracts';
+import { IconButton, ToggleSwitch } from '@paiapp/ui';
+
+import { copy } from '@/strings';
+
+import { SettingsCard } from './settings-card';
+import { SettingsPageHeader } from './settings-page-header';
+import { SettingsSearchInput } from './settings-search-input';
 
 type SkillsSectionProps = {
-  skills: readonly SkillView[]
-  /** 进分区时拉取（含禁用态全集，会话视角的 command/list 只见启用技能）。 */
-  onRefresh: () => void
+  list: readonly SkillView[]
   /** 启停：写 pi settings 后重开活跃会话生效。 */
   onToggle: (name: string, enabled: boolean) => Promise<boolean>
+  /** 进分区时拉取（含禁用态全集，会话视角的 command/list 只见启用技能）。 */
+  onRefresh: () => void
 }
 
-/** Skills 分区：用户级技能卡（等宽名称 + 描述 + 启用开关）；关闭的技能在会话中不可用。 */
-function SkillsSection({ skills, onRefresh, onToggle }: SkillsSectionProps) {
+/** 本地过滤：技能名称/描述包含匹配（大小写不敏感）。 */
+function skillMatchesQuery(skill: SkillView, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (q.length === 0) return true;
+  return skill.name.toLowerCase().includes(q) || (skill.description ?? '').toLowerCase().includes(q);
+}
+
+/** Skills 分区：搜索 + 用户级技能卡（描述 + 关闭徽章 + 启停开关）；关闭的技能在会话中不可用。 */
+function SkillsSection({ list, onToggle, onRefresh }: SkillsSectionProps) {
+  const [query, setQuery] = React.useState('');
+  const visibleSkills = list.filter((skill) => skillMatchesQuery(skill, query));
   return (
     <section>
-      <p className="pb-[10px] text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">{copy.settings.skillsTitle}</p>
-      <p className="pb-[8px] text-[11.5px] text-muted-foreground">{copy.settings.skillsHint}</p>
-      <div className="flex items-center gap-[10px] pb-[10px]">
-        {skills.length === 0 ? <p className="text-[12.5px] text-muted-foreground">{copy.settings.skillsEmpty}</p> : null}
-        <button type="button" onClick={onRefresh} className="cursor-pointer text-[11.5px] text-muted-foreground underline decoration-border underline-offset-2 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50">
-          {copy.settings.skillsRefresh}
-        </button>
-      </div>
-      {skills.map((skill) => (
-        <div
-          key={`${skill.origin}:${skill.name}`}
-          className="mb-[8px] flex items-start justify-between gap-[10px] rounded-[10px] border border-border px-[12px] py-[10px]"
-        >
-          <div className="min-w-0 flex-1">
-            <span className="min-w-0 truncate font-mono text-[12.5px] font-medium text-foreground">{skill.name}</span>
-            {skill.description !== null ? (
-              <p className="pt-[2px] text-[11.5px] leading-[16px] text-muted-foreground">{skill.description}</p>
-            ) : null}
-            {skill.enabled ? null : (
-              <p className="pt-[2px] text-[11px] leading-[15px] text-muted-foreground/80">{copy.settings.skillDisabledHint}</p>
-            )}
-          </div>
-          <ToggleSwitch
-            checked={skill.enabled}
-            onCheckedChange={(next) => void onToggle(skill.name, next)}
-            aria-label={`${copy.settings.skillToggleLabel(skill.name)}`}
-            className="mt-[2px]"
-          />
+      <SettingsPageHeader title={copy.settings.skillsTitle} description={copy.settings.skillsDesc} />
+      <div className="flex flex-col gap-[16px]">
+        <div className="flex items-center justify-end gap-[12px]">
+          <SettingsSearchInput value={query} onChange={setQuery} placeholder={copy.settings.searchSkills} className="w-[280px]" />
+          <IconButton label={copy.settings.skillsRefresh} onClick={onRefresh}>
+            <RefreshCw strokeWidth={1.75} />
+          </IconButton>
         </div>
-      ))}
+        <p className="max-w-[640px] text-[12px] leading-[17px] text-muted-foreground">{copy.settings.skillsHint}</p>
+        {list.length === 0 ? (
+          <p className="text-[12.5px] leading-[18px] text-muted-foreground">{copy.settings.skillsEmpty}</p>
+        ) : visibleSkills.length === 0 ? (
+          <p className="text-[12.5px] leading-[18px] text-muted-foreground">{copy.settings.searchNoResults}</p>
+        ) : (
+          <div className="flex flex-col gap-[12px]">
+            {visibleSkills.map((skill) => (
+              <SettingsCard key={`${skill.origin}:${skill.name}`} className="flex items-start gap-[14px] px-[16px] py-[14px] transition-colors hover:bg-accent/30">
+                <span aria-hidden="true" className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                  <Sparkles className="size-[18px]" strokeWidth={1.75} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-[8px]">
+                    <p className="min-w-0 truncate text-[13px] leading-[18px] font-medium text-foreground">{skill.name}</p>
+                    {skill.enabled ? null : (
+                      <span className="shrink-0 rounded-full border border-border px-2 py-[1px] text-[11px] leading-[16px] text-muted-foreground">
+                        {copy.settings.skillDisabledHint}
+                      </span>
+                    )}
+                  </div>
+                  {skill.description !== null ? (
+                    <p className="mt-[2px] line-clamp-2 text-[12px] leading-[17px] text-muted-foreground">{skill.description}</p>
+                  ) : null}
+                </div>
+                <ToggleSwitch
+                  checked={skill.enabled}
+                  onCheckedChange={(next) => void onToggle(skill.name, next)}
+                  aria-label={`${copy.settings.skillToggleLabel(skill.name)}`}
+                  className="mt-[2px]"
+                />
+              </SettingsCard>
+            ))}
+          </div>
+        )}
+      </div>
     </section>
-  )
+  );
 }
 
-export { SkillsSection }
+export { SkillsSection };

@@ -1,10 +1,10 @@
 import * as React from 'react';
 import { Brain, ChevronDown, Eye, X } from 'lucide-react';
 
-import { copy } from '@/strings';
 import type { ProviderModel, ThinkingFormat } from '@paiapp/contracts';
-
 import { MenuButton } from '@paiapp/ui';
+
+import { copy } from '@/strings';
 
 export type ProviderUpsertInput = {
   name: string;
@@ -22,10 +22,11 @@ type ProviderFormProps = {
   onCancel?: () => void;
 };
 
-const fieldClassName = 'h-[30px] rounded-[8px] border border-border bg-background px-[10px] text-[12px] outline-none focus:border-foreground/25';
+const fieldClassName =
+  'h-9 rounded-lg border border-border bg-background px-3 text-[13px] text-foreground outline-none placeholder:text-muted-foreground focus:border-foreground/30 disabled:cursor-not-allowed disabled:opacity-60';
 
 const thinkingFormatTriggerClassName =
-  'flex h-[30px] w-full cursor-pointer items-center justify-between gap-[6px] rounded-[8px] border border-border bg-background pr-[8px] pl-[10px] text-left text-[12px] text-foreground outline-none hover:border-foreground/25 focus-visible:border-foreground/25';
+  'flex h-9 w-full cursor-pointer items-center justify-between gap-[6px] rounded-lg border border-border bg-background px-3 text-left text-[13px] text-foreground outline-none hover:border-foreground/30 focus-visible:border-foreground/30 [&_svg]:shrink-0';
 
 /** 思考形态可选项（值域来自 contracts ThinkingFormat；文案单一真相在 strings）。 */
 const THINKING_FORMATS: readonly ThinkingFormat[] = ['default', 'zai', 'qwen', 'deepseek', 'openrouter', 'together', 'string-thinking', 'ant-ling'];
@@ -38,7 +39,7 @@ function parseModelIds(raw: string): string[] {
     .filter((id) => id.length > 0);
 }
 
-/** provider 表单：OpenAI 兼容接入（名称/地址/模型 chips（含思考能力开关）/思考参数形态/密钥）。key 输入不回显；编辑态附 Cancel。 */
+/** provider 表单（新增/编辑共用，onboarding 复用）：名称/地址/模型 chips（含思考·视觉开关）/思考参数形态/密钥。key 不回显；编辑态名称锁定。 */
 function ProviderForm({ onSubmit, initial = null, onCancel }: ProviderFormProps) {
   const [name, setName] = React.useState(initial?.name ?? '');
   const [baseUrl, setBaseUrl] = React.useState(initial?.baseUrl ?? '');
@@ -110,23 +111,32 @@ function ProviderForm({ onSubmit, initial = null, onCancel }: ProviderFormProps)
         event.preventDefault();
         void submit();
       }}
-      className="flex flex-col gap-[8px] rounded-[10px] border border-dashed border-border px-[12px] py-[12px]"
+      className="flex flex-col gap-[12px] rounded-xl border border-border bg-card px-[20px] py-[16px]"
     >
-      <p className="text-[11.5px] font-medium text-muted-foreground">{copy.settings.addProvider}</p>
+      <p className="text-[13.5px] leading-[19px] font-semibold text-foreground">
+        {initial !== null ? initial.name : copy.settings.addProvider}
+      </p>
       <input
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder={copy.settings.fieldName}
         disabled={initial !== null}
         title={initial !== null ? copy.settings.nameLocked : undefined}
+        aria-label={copy.settings.fieldName}
         className={fieldClassName}
       />
-      <input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder={copy.settings.fieldBaseUrl} className={fieldClassName} />
-      <div className="flex min-h-[30px] flex-wrap items-center gap-[5px] rounded-[8px] border border-border bg-background px-[8px] py-[4px] outline-none focus-within:border-foreground/25">
+      <input
+        value={baseUrl}
+        onChange={(e) => setBaseUrl(e.target.value)}
+        placeholder={copy.settings.fieldBaseUrl}
+        aria-label={copy.settings.fieldBaseUrl}
+        className={fieldClassName}
+      />
+      <div className="flex min-h-9 flex-wrap items-center gap-[5px] rounded-lg border border-border bg-background px-[10px] py-[5px] outline-none focus-within:border-foreground/30">
         {models.map((model) => (
           <span
             key={model.id}
-            className="flex items-center gap-[3px] rounded-[5px] border border-border py-[1px] pr-[3px] pl-[6px] font-mono text-[11px] leading-[15px] text-foreground"
+            className="flex items-center gap-[3px] rounded-md border border-border bg-muted/40 py-[1px] pr-[3px] pl-[7px] font-mono text-[11px] leading-[16px] text-foreground"
           >
             {model.id}
             <button
@@ -134,7 +144,7 @@ function ProviderForm({ onSubmit, initial = null, onCancel }: ProviderFormProps)
               aria-pressed={model.reasoning}
               title={model.reasoning ? copy.settings.modelThinkingOn : copy.settings.modelThinkingOff}
               onClick={() => toggleReasoning(model.id)}
-              className={`flex size-[16px] cursor-pointer items-center justify-center rounded-[3px] outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 ${
+              className={`flex size-4 cursor-pointer items-center justify-center rounded-[3px] outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 ${
                 model.reasoning ? 'text-foreground' : 'text-muted-foreground/50'
               }`}
             >
@@ -145,7 +155,7 @@ function ProviderForm({ onSubmit, initial = null, onCancel }: ProviderFormProps)
               aria-pressed={model.vision}
               title={model.vision ? copy.settings.modelVisionOn : copy.settings.modelVisionOff}
               onClick={() => toggleVision(model.id)}
-              className={`flex size-[16px] cursor-pointer items-center justify-center rounded-[3px] outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 ${
+              className={`flex size-4 cursor-pointer items-center justify-center rounded-[3px] outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 ${
                 model.vision ? 'text-foreground' : 'text-muted-foreground/50'
               }`}
             >
@@ -179,7 +189,8 @@ function ProviderForm({ onSubmit, initial = null, onCancel }: ProviderFormProps)
             setModelDraft('');
           }}
           placeholder={models.length === 0 ? copy.settings.fieldModels : undefined}
-          className="h-[20px] min-w-[120px] flex-1 border-none bg-transparent text-[12px] outline-none placeholder:text-muted-foreground"
+          aria-label={copy.settings.fieldModels}
+          className="h-[22px] min-w-[120px] flex-1 border-none bg-transparent text-[12px] outline-none placeholder:text-muted-foreground"
         />
       </div>
       <div className="flex flex-col gap-[4px]">
@@ -208,17 +219,25 @@ function ProviderForm({ onSubmit, initial = null, onCancel }: ProviderFormProps)
         value={apiKey}
         onChange={(e) => setApiKey(e.target.value)}
         placeholder={copy.settings.fieldKey}
+        aria-label={copy.settings.fieldKey}
         type="password"
         autoComplete="off"
         className={fieldClassName}
       />
-      {error !== null ? <p className="text-[11.5px] text-red-600">{error}</p> : null}
-      <div className="flex items-center gap-[10px] self-start">
-        <button type="submit" className="h-[30px] rounded-[8px] bg-foreground px-[14px] text-[12px] font-medium text-background hover:bg-foreground/90">
+      {error !== null ? <p className="text-[12px] leading-[16px] text-destructive">{error}</p> : null}
+      <div className="flex items-center gap-[10px]">
+        <button
+          type="submit"
+          className="h-9 cursor-pointer rounded-lg bg-foreground px-4 text-[13px] leading-none font-medium text-background outline-none select-none hover:opacity-90 focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
           {copy.settings.save}
         </button>
         {onCancel !== undefined ? (
-          <button type="button" onClick={onCancel} className="text-[11.5px] text-muted-foreground hover:text-foreground">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="cursor-pointer rounded-lg px-[6px] py-[6px] text-[12.5px] leading-none text-muted-foreground outline-none select-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
             {copy.settings.cancelEdit}
           </button>
         ) : null}
