@@ -1,7 +1,21 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync, truncateSync, statSync, appendFileSync, renameSync } from 'node:fs';
-import { dirname } from 'node:path';
+import {
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  existsSync,
+  truncateSync,
+  statSync,
+  appendFileSync,
+  renameSync,
+} from "node:fs";
+import { dirname } from "node:path";
 
-import { parseSettings, SettingsSchema, type ProviderConfig, type Settings } from '@paiapp/contracts';
+import {
+  parseSettings,
+  SettingsSchema,
+  type ProviderConfig,
+  type Settings,
+} from "@paiapp/contracts";
 
 /**
  * 设置读写：settings.json（无 key）+ provider-keys.json（safeStorage 加密）。
@@ -24,7 +38,7 @@ export function createFileSettings(settingsFile: string, keyStore: ProviderKeySt
     let parsed: unknown = {};
     try {
       if (existsSync(settingsFile)) {
-        parsed = JSON.parse(readFileSync(settingsFile, 'utf8')) as unknown;
+        parsed = JSON.parse(readFileSync(settingsFile, "utf8")) as unknown;
       }
     } catch {
       parsed = {};
@@ -64,12 +78,13 @@ export function createFileSettings(settingsFile: string, keyStore: ProviderKeySt
           name: input.name,
           baseUrl: input.baseUrl,
           api: input.api,
-          models: input.models.map((model) => ({ id: model.id, reasoning: model.reasoning, vision: model.vision })),
+          models: input.models.map((model) => ({ ...model })),
           thinkingFormat: input.thinkingFormat,
         },
       ].sort((a, b) => a.name.localeCompare(b.name));
       write({ ...current, providers });
-      if (input.apiKey !== undefined) keyStore.setKey(input.name, input.apiKey.length > 0 ? input.apiKey : null);
+      if (input.apiKey !== undefined)
+        keyStore.setKey(input.name, input.apiKey.length > 0 ? input.apiKey : null);
       return providers;
     },
     removeProvider(name: string): ProviderConfig[] {
@@ -98,8 +113,8 @@ export function createFileLogger(logFile: string, maxBytes = 1_024 * 1_024) {
         // 控制字符清洗（回车换行与 C0 控制区）：审计 message 可能含渲染层可控串，防伪造日志行
         const sanitized = Array.from(message)
           .filter((ch) => ch.charCodeAt(0) >= 0x20)
-          .join('')
-          .replace(/[\r\n]/g, ' ');
+          .join("")
+          .replace(/[\r\n]/g, " ");
         appendFileSync(logFile, `${new Date().toISOString()} ${sanitized}\n`);
       } catch {
         // 日志失败不影响主流程

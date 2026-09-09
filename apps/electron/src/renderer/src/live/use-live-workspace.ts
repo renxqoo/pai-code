@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import type { AgentDefinition, CommandView, CredentialView, PermissionRules, PreferencesView, ProviderConfigView, SessionStatsView, SessionView, SkillView } from '@paiapp/contracts';
+import type { AgentDefinition, CommandView, PermissionRules, PreferencesView, ProviderConfigView, SessionStatsView, SessionView, SkillView } from '@paiapp/contracts';
 import { useStore } from 'zustand';
 
 import type { SessionCardModel } from '@/sidebar/session-card-model';
@@ -77,8 +77,6 @@ export type LiveWorkspaceView = {
   notices: readonly { id: string; text: string }[];
   saved: ReadonlyArray<{ sessionPath: string; title: string; cwd: string; modifiedAt: number; messageCount: number }>;
   providers: readonly ProviderConfigView[];
-  /** hub 侧凭据目录（provider 名 + 凭据类型，永不含 key）。 */
-  credentials: readonly CredentialView[];
   /** 当前会话的斜杠命令/技能目录（补全数据源）。 */
   commands: readonly CommandView[];
   /** 子 agent 定义管理面（文件真相；进 Agents 分区时拉取）。 */
@@ -123,7 +121,6 @@ export function useLiveWorkspace(): LiveWorkspaceView {
   const savedRaw = useStore(store, (s) => s.saved);
   const models = useStore(store, (s) => s.models);
   const providers = useStore(store, (s) => s.providers);
-  const credentials = useStore(store, (s) => s.credentials);
   const preferences = useStore(store, (s) => s.preferences);
   const permissionRules = useStore(store, (s) => s.permissionRules);
   const sessionRules = useStore(store, (s) => s.sessionRules);
@@ -256,7 +253,6 @@ export function useLiveWorkspace(): LiveWorkspaceView {
       [savedRaw],
     ),
     providers,
-    credentials,
     commands,
     agentDefinitions,
     skills,

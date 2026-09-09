@@ -32,7 +32,6 @@
 | `session/setThinking` | `{threadId, level}` | `set_thinking_level` |
 | `session/compact` | `{threadId}` | `compact` |
 | `model/list` | `{}` → `ModelInfoView[]` | `get_models` |
-| `auth/list`·`auth/setKey`·`auth/removeKey` | 同协议 | `auth/*` |
 | `dialog/respond` | `{requestId, payload}` | `ui_response`（任何情况下必答） |
 | `subagent/steer` | `{threadId, subagentId, message}` | `subagent/steer` |
 

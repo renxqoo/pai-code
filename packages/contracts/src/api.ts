@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { PermissionRulesSchema } from './permissions';
-import { ThinkingFormatSchema } from './settings';
+import { ProviderModelSchema, ThinkingFormatSchema } from './settings';
 import { DiffFileViewSchema, SessionViewSchema } from './ui-events';
 
 /**
@@ -114,12 +114,6 @@ export const ThinkingLevelViewSchema = z.object({
 });
 export type ThinkingLevelView = z.infer<typeof ThinkingLevelViewSchema>;
 
-export const CredentialViewSchema = z.object({
-  provider: z.string(),
-  type: z.string(),
-});
-export type CredentialView = z.infer<typeof CredentialViewSchema>;
-
 /** 会话内斜杠命令/技能条目（get_commands 收窄；source 三源）。 */
 export const CommandViewSchema = z.object({
   name: z.string(),
@@ -165,7 +159,7 @@ export const ProviderConfigViewSchema = z.object({
   name: z.string(),
   baseUrl: z.string(),
   api: z.string(),
-  models: z.array(z.object({ id: z.string(), reasoning: z.boolean(), vision: z.boolean() }).strict()),
+  models: z.array(ProviderModelSchema),
   /** 思考参数形态（default = 不写 compat）。 */
   thinkingFormat: ThinkingFormatSchema,
   /** key 永不回传，只回传有无。 */
@@ -286,18 +280,6 @@ export const ApiSchemas = {
     params: empty,
     result: z.array(ModelInfoViewSchema),
   },
-  'auth/list': {
-    params: empty,
-    result: z.array(CredentialViewSchema),
-  },
-  'auth/setKey': {
-    params: z.object({ provider: z.string().min(1), apiKey: z.string().min(1) }).strict(),
-    result: z.null(),
-  },
-  'auth/removeKey': {
-    params: z.object({ provider: z.string().min(1) }).strict(),
-    result: z.null(),
-  },
   'dialog/respond': {
     params: z
       .object({
@@ -407,7 +389,7 @@ export const ApiSchemas = {
         name: z.string().min(1),
         baseUrl: z.string().min(1),
         api: z.string().min(1),
-        models: z.array(z.object({ id: z.string().min(1), reasoning: z.boolean(), vision: z.boolean() }).strict()).min(1),
+        models: z.array(ProviderModelSchema).min(1),
         thinkingFormat: ThinkingFormatSchema.optional(),
         /** 省略 = 保留既有 key。 */
         apiKey: z.string().optional(),
@@ -419,9 +401,9 @@ export const ApiSchemas = {
     params: z.object({ name: z.string().min(1) }).strict(),
     result: z.array(ProviderConfigViewSchema),
   },
-  /** 连接探活：主进程直发 OpenAI 兼容 1-token 请求，不经 hub、不落状态。 */
+  /** 连接探活：主进程直发指定模型的最小完成请求（缺省 = 渠道第一个模型），不经 hub、不落状态。 */
   'provider/test': {
-    params: z.object({ name: z.string().min(1) }).strict(),
+    params: z.object({ name: z.string().min(1), modelId: z.string().min(1).optional() }).strict(),
     result: z.object({ latencyMs: z.number().int().nonnegative() }).strict(),
   },
   /** 运行时诊断（M1）：host 相位/stderr 尾部/注册表会话数。 */

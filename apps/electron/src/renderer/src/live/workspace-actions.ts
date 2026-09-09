@@ -42,10 +42,7 @@ export type WorkspaceActions = {
   readonly cancelDialog: (requestId: string) => void;
   readonly dismissNotice: (id: string) => void;
   readonly refreshSaved: () => void;
-  readonly refreshCredentials: () => void;
   readonly refreshModels: () => void;
-  readonly setProviderKey: (provider: string, apiKey: string) => Promise<boolean>;
-  readonly removeProviderKey: (provider: string) => Promise<boolean>;
   readonly setDefaultModel: (value: string | null) => void;
   readonly completeOnboarding: () => void;
   /** 重跑新手引导：onboarded 置回 false（偏好推回后工作区切回引导屏）。 */
@@ -87,7 +84,7 @@ export type WorkspaceActions = {
   readonly showNotice: (text: string) => void;
   /** J2 通用偏好保存（trustedDefault / 宿主路径）。 */
   readonly saveGeneralPreferences: (patch: { trustedDefault?: boolean }) => Promise<boolean>;
-  readonly testProvider: (name: string) => Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }>;
+  readonly testProvider: (name: string, modelId: string | undefined) => Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }>;
   readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; thinkingFormat?: ThinkingFormat; apiKey?: string }) => Promise<boolean>;
   readonly removeProvider: (name: string) => Promise<boolean>;
   readonly renameSession: (threadId: string, name: string) => Promise<boolean>;
@@ -203,18 +200,7 @@ export function createWorkspaceActions(setDiagnostics: (value: WorkspaceDiagnost
     cancelDialog: (requestId) => void controller.cancelDialog(requestId),
     dismissNotice: (id) => store.getState().dismissNotice(id),
     refreshSaved: () => void controller.refreshSaved(),
-    refreshCredentials: () => void controller.refreshCredentials(),
     refreshModels: () => void controller.refreshModels(),
-    setProviderKey: async (provider, apiKey) => {
-      const reason = await controller.setProviderKey(provider, apiKey);
-      if (reason !== null) pushNotice(copy.settings.keySaveFailed(reason));
-      return reason === null;
-    },
-    removeProviderKey: async (provider) => {
-      const reason = await controller.removeProviderKey(provider);
-      if (reason !== null) pushNotice(copy.settings.keyRemoveFailed(reason));
-      return reason === null;
-    },
     setDefaultModel: (value) => {
       void controller.updatePreferences({ defaultModel: value }).then((next) => {
         if (next === null) pushNotice(copy.settings.preferenceSaveFailed);
@@ -233,7 +219,7 @@ export function createWorkspaceActions(setDiagnostics: (value: WorkspaceDiagnost
       }
       return true;
     },
-    testProvider: (name) => controller.testProvider(name),
+    testProvider: (name, modelId) => controller.testProvider(name, modelId),
     refreshPermissionRules: () => {
       void controller.refreshPermissionRules();
     },

@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 /**
  * 应用设置（主进程 settings.json 的形状）。
@@ -13,6 +13,10 @@ export const ProviderModelSchema = z
     reasoning: z.boolean(),
     /** pi models.json 的模型级 input 模态（true → ["text","image"]；自建多模态模型必须声明，否则发送时图片被剥成占位文本）。 */
     vision: z.boolean().default(false),
+    /** pi models.json 的模型级 contextWindow（compaction 触发阈值；缺省回落 pi 默认 128000）。 */
+    contextWindow: z.number().int().positive().optional(),
+    /** pi models.json 的模型级 maxTokens（单次输出上限；缺省回落 pi 默认 16384）。 */
+    maxTokens: z.number().int().positive().optional(),
   })
   .strict();
 export type ProviderModel = z.infer<typeof ProviderModelSchema>;
@@ -23,14 +27,14 @@ export type ProviderModel = z.infer<typeof ProviderModelSchema>;
  * 'default' = 不写 compat（OpenAI 风格 reasoning_effort 直发）。
  */
 export const ThinkingFormatSchema = z.enum([
-  'default',
-  'zai',
-  'qwen',
-  'deepseek',
-  'openrouter',
-  'together',
-  'string-thinking',
-  'ant-ling',
+  "default",
+  "zai",
+  "qwen",
+  "deepseek",
+  "openrouter",
+  "together",
+  "string-thinking",
+  "ant-ling",
 ]);
 export type ThinkingFormat = z.infer<typeof ThinkingFormatSchema>;
 
@@ -39,11 +43,11 @@ export type ThinkingFormat = z.infer<typeof ThinkingFormatSchema>;
  * 其余格式（azure/vertex/bedrock/codex/pi-messages）只能手写 models.json，不进选择器。
  */
 export const ApiFormatSchema = z.enum([
-  'openai-completions',
-  'openai-responses',
-  'anthropic-messages',
-  'google-generative-ai',
-  'mistral-conversations',
+  "openai-completions",
+  "openai-responses",
+  "anthropic-messages",
+  "google-generative-ai",
+  "mistral-conversations",
 ]);
 export type ApiFormat = z.infer<typeof ApiFormatSchema>;
 
@@ -67,7 +71,7 @@ export const ProviderConfigSchema = z
     api: z.string().min(1),
     models: z.array(ProviderModelSchema).min(1),
     /** 思考参数形态；default = 不写 compat。 */
-    thinkingFormat: ThinkingFormatSchema.default('default'),
+    thinkingFormat: ThinkingFormatSchema.default("default"),
   })
   .strict();
 export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
@@ -110,18 +114,21 @@ export function parseSettings(raw: unknown): Settings {
 }
 
 function migrateProviders(raw: unknown): unknown {
-  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return raw;
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return raw;
   const providers = (raw as { providers?: unknown }).providers;
   if (!Array.isArray(providers)) return raw;
   return {
     ...(raw as Record<string, unknown>),
     providers: providers.map((provider) => {
-      if (typeof provider !== 'object' || provider === null || Array.isArray(provider)) return provider;
+      if (typeof provider !== "object" || provider === null || Array.isArray(provider))
+        return provider;
       const models = (provider as { models?: unknown }).models;
       if (!Array.isArray(models)) return provider;
       return {
         ...(provider as Record<string, unknown>),
-        models: models.map((model) => (typeof model === 'string' ? { id: model, reasoning: false } : model)),
+        models: models.map((model) =>
+          typeof model === "string" ? { id: model, reasoning: false } : model,
+        ),
       };
     }),
   };

@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import type { AgentDefinition, CredentialView, PermissionRules, ProviderConfigView, ProviderModel, SkillView, ThinkingFormat } from '@paiapp/contracts';
+import type { AgentDefinition, PermissionRules, ProviderConfigView, ProviderModel, SkillView, ThinkingFormat } from '@paiapp/contracts';
 import { AGENT_TOOL_IDS } from '@paiapp/contracts';
 import type { Theme } from '@/components/theme-context';
 import { useTheme } from '@/components/use-theme';
@@ -54,13 +54,7 @@ export type SettingsScreenProps = {
     onUpsert: (input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; thinkingFormat: ThinkingFormat; apiKey?: string }) => Promise<boolean>;
     onRemove: (name: string) => Promise<boolean>;
     onSelectDefaultModel: (value: string | null) => void;
-    onTest: (name: string) => Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }>;
-  };
-  keys: {
-    credentials: readonly CredentialView[];
-    onSave: (provider: string, apiKey: string) => Promise<boolean>;
-    onRemove: (provider: string) => Promise<boolean>;
-    onRefresh: () => void;
+    onTest: (name: string, modelId?: string) => Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }>;
   };
   permissions: {
     rules: PermissionRules | null;
@@ -155,12 +149,6 @@ export function useSettingsScreen({ workspace, open, onClose }: UseSettingsScree
       onRemove: actions.removeProvider,
       onSelectDefaultModel: actions.setDefaultModel,
       onTest: actions.testProvider,
-    },
-    keys: {
-      credentials: workspace.credentials,
-      onSave: actions.setProviderKey,
-      onRemove: actions.removeProviderKey,
-      onRefresh: actions.refreshCredentials,
     },
     permissions: {
       rules: workspace.permissionRules,

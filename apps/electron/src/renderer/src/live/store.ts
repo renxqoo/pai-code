@@ -5,7 +5,6 @@ import type {
   SessionStatsView,
   SkillView,
   ApiData,
-  CredentialView,
   ModelInfoView,
   PermissionRules,
   PreferencesView,
@@ -45,8 +44,6 @@ export interface LiveStoreState {
   saved: readonly SavedSessionView[];
   models: readonly ModelInfoView[];
   providers: readonly ProviderConfigView[];
-  /** hub 侧 auth.json 凭据目录（永不含 key 本身）。 */
-  credentials: readonly CredentialView[];
   /** 应用偏好（默认模型 / 引导完成标志）。 */
   preferences: PreferencesView;
   /** 全局权限规则（null = 未加载；设置页打开时拉取）。 */
@@ -190,7 +187,6 @@ export function createLiveStore() {
             saved: data.saved,
             models: data.models,
             providers: data.providers,
-            credentials: state.credentials,
             // 偏好整体替换：bootstrap 只在启动时发生一次，晚于它写入的偏好不会被回滚；
             // 若未来引入重连 re-bootstrap，需改为字段级合并（滞后快照可能覆盖本地新写值）
             preferences: data.preferences,
@@ -287,7 +283,6 @@ function initialStoreState(): LiveStoreState {
     saved: [],
     models: [],
     providers: [],
-    credentials: [],
     agentDefinitions: [],
     skills: [],
     preferences: { defaultModel: null, onboarded: false, projectModels: {}, pinnedSessions: [], trustedDefault: false, hiddenProjects: [] },

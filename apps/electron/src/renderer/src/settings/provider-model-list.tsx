@@ -1,40 +1,88 @@
-import * as React from 'react';
-import { Plus } from 'lucide-react';
+import * as React from "react";
+import { Plus } from "lucide-react";
 
-import type { ProviderModel } from '@paiapp/contracts';
+import type { ProviderModel } from "@paiapp/contracts";
 
-import { copy } from '@/strings';
+import { copy } from "@/strings";
 
-import { FieldLabel } from './field-label';
-import { mergeModelIds, parseModelIds, toggleModelFlag } from './model-ids';
-import { ProviderModelRow } from './provider-model-row';
+import { FieldLabel } from "./field-label";
+import { toggleModelFlag } from "./model-ids";
+import { ProviderModelDialog } from "./provider-model-dialog";
+import { ProviderModelRow, type ModelTestState } from "./provider-model-row";
+import type { ProviderTestResult } from "./provider-test";
 
 type ProviderModelListProps = {
-  models: readonly ProviderModel[]
-  onModelsChange: (models: ProviderModel[]) => void
-  /** 未落表的输入草稿（保存时一并收编，避免「输入后直接点保存」被判缺失）。 */
-  draft: string
-  onDraftChange: (draft: string) => void
+  models: readonly ProviderModel[];
+  onModelsChange: (models: ProviderModel[]) => void;
+  /** 逐模型探活（编辑态注入；缺省不渲染行内测试按钮）。 */
+  onTest?: (modelId: string) => Promise<ProviderTestResult>;
 };
 
-/** 渠道模型清单：已有模型行（能力声明/移除）+ 底部新增输入（回车或逗号收编）。 */
-function ProviderModelList({ models, onModelsChange, draft, onDraftChange }: ProviderModelListProps): React.JSX.Element {
-  const addDraft = (): void => {
-    const ids = parseModelIds(draft);
-    if (ids.length === 0) return;
-    onModelsChange(mergeModelIds(models, ids));
-    onDraftChange('');
+/** 弹窗确认落表：新建（previousId = null）追加；编辑按原 id 原位替换（id 本身可能被改）。 */
+export function upsertModel(
+  models: readonly ProviderModel[],
+  model: ProviderModel,
+  previousId: string | null,
+): ProviderModel[] {
+  return previousId === null
+    ? [...models, model]
+    : models.map((existing) => (existing.id === previousId ? model : existing));
+}
+
+/** 弹窗会话：null = 关闭；打开期间挂载、关闭即卸载（重开必为 initial 干净表单）。 */
+type ModelDialogSession = { mode: "add" | "edit"; initial: ProviderModel | null };
+
+/** 渠道模型清单：已有模型行（测试/编辑/能力声明/移除）+ 添加按钮（弹窗录入 id/窗口/输出上限/模态）。
+ * 行内测试态由本组件持有（行纯展示）：testing 期间防重入，结果按模型 id 记忆（模型行卸载自然丢弃）。 */
+function ProviderModelList({
+  models,
+  onModelsChange,
+  onTest,
+}: ProviderModelListProps): React.JSX.Element {
+  const [session, setSession] = React.useState<ModelDialogSession | null>(null);
+  const [testStates, setTestStates] = React.useState<Record<string, ModelTestState>>({});
+
+  /** 丢弃某模型的行内测试态（删除/改名后旧结果不得复现到新行）。 */
+  const forgetTestState = (id: string): void => {
+    setTestStates((current) => {
+      const next: Record<string, ModelTestState> = {};
+      for (const [key, value] of Object.entries(current)) {
+        if (key !== id) next[key] = value;
+      }
+      return next;
+    });
   };
 
   const removeModel = (id: string): void => {
     onModelsChange(models.filter((model) => model.id !== id));
+    forgetTestState(id);
+  };
+
+  /** 弹窗确认：落表后关闭弹窗。 */
+  const confirmModel = (model: ProviderModel, previousId: string | null): void => {
+    onModelsChange(upsertModel(models, model, previousId));
+    if (previousId !== null && previousId !== model.id) forgetTestState(previousId);
+    setSession(null);
+  };
+
+  /** 行内测试：置 testing → 探活 → 落结果（失败也落，原因原样展示）。 */
+  const runModelTest = async (modelId: string): Promise<void> => {
+    if (onTest === undefined || testStates[modelId]?.phase === "testing") return;
+    setTestStates((current) => ({ ...current, [modelId]: { phase: "testing" } }));
+    const result = await onTest(modelId);
+    setTestStates((current) => ({ ...current, [modelId]: { phase: "done", result } }));
   };
 
   return (
     <div className="flex flex-col gap-[8px]">
-      <FieldLabel label={copy.settings.providerModelsLabel} hint={copy.settings.providerModelsHint} />
+      <FieldLabel
+        label={copy.settings.providerModelsLabel}
+        hint={copy.settings.providerModelsHint}
+      />
       {models.length === 0 ? (
-        <p className="text-[12px] leading-[17px] text-muted-foreground">{copy.settings.providerModelsEmpty}</p>
+        <p className="text-[12px] leading-[17px] text-muted-foreground">
+          {copy.settings.providerModelsEmpty}
+        </p>
       ) : (
         <div className="flex flex-col gap-[8px]">
           {models.map((model) => (
@@ -42,44 +90,36 @@ function ProviderModelList({ models, onModelsChange, draft, onDraftChange }: Pro
               key={model.id}
               model={model}
               onToggle={(flag) => onModelsChange(toggleModelFlag(models, model.id, flag))}
+              onEdit={() => setSession({ mode: "edit", initial: model })}
               onRemove={() => removeModel(model.id)}
+              onTest={onTest === undefined ? undefined : () => void runModelTest(model.id)}
+              testState={testStates[model.id]}
             />
           ))}
         </div>
       )}
-      <div className="flex items-center gap-[8px]">
-        <input
-          value={draft}
-          onChange={(event) => {
-            const value = event.target.value;
-            if (/[,，\n]/.test(value)) {
-              const ids = parseModelIds(value);
-              if (ids.length > 0) onModelsChange(mergeModelIds(models, ids));
-              onDraftChange('');
-            } else {
-              onDraftChange(value);
-            }
-          }}
-          onKeyDown={(event) => {
-            // 输入法组词中的回车是选字，不是提交
-            if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
-            if (draft.trim().length === 0) return;
-            event.preventDefault();
-            addDraft();
-          }}
-          aria-label={copy.settings.providerModelPlaceholder}
-          placeholder={copy.settings.providerModelPlaceholder}
-          className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-background px-3 font-mono text-[12.5px] leading-[18px] text-foreground outline-none placeholder:font-sans placeholder:text-muted-foreground focus:border-foreground/30"
-        />
+      <div>
         <button
           type="button"
-          onClick={addDraft}
-          className="flex h-9 shrink-0 cursor-pointer items-center gap-[6px] rounded-lg border border-border px-3 text-[12.5px] leading-none text-foreground outline-none select-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50"
+          onClick={() => setSession({ mode: "add", initial: null })}
+          className="flex h-9 cursor-pointer items-center gap-[6px] rounded-lg border border-border px-3 text-[12.5px] leading-none text-foreground outline-none select-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           <Plus className="size-[14px]" strokeWidth={2} />
           {copy.settings.providerModelAdd}
         </button>
       </div>
+      {session === null ? null : (
+        <ProviderModelDialog
+          open
+          mode={session.mode}
+          initial={session.initial}
+          existingIds={models
+            .filter((model) => model.id !== session.initial?.id)
+            .map((model) => model.id)}
+          onConfirm={confirmModel}
+          onClose={() => setSession(null)}
+        />
+      )}
     </div>
   );
 }

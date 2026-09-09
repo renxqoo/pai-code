@@ -9,19 +9,16 @@ import { createAgentDirFiles } from './agent-dir-files';
 import { createAgentDefinitionsStore } from './agent-definitions-store';
 import { createFileLogger, createFileSettings } from './file-settings';
 import { resolveHubPaths } from './hub-paths';
-import { resolveAppPaths } from './paths';
+import { resolveAppPaths, resolveUserDataDir } from './paths';
 import { createPaiRuntime } from './pai-runtime';
 import { createProviderKeyStore } from './provider-key-store';
 
 // 开启 Web 内容可访问性树（辅助技术 + 自动化验证都依赖它）
 app.commandLine.appendSwitch('force-renderer-accessibility');
 
-// 并行实例隔离（worktree 开发/自动化验证）：重定向 userData 即获得独立的
-// 单实例锁与数据区；未设置时行为不变（生产单实例语义保持）
-const isolatedUserDataDir = process.env['PAI_USER_DATA_DIR'];
-if (isolatedUserDataDir !== undefined && isolatedUserDataDir.length > 0) {
-  app.setPath('userData', isolatedUserDataDir);
-}
+// 数据根缺省 ~/.pai（PAI_USER_DATA_DIR 覆盖用于 worktree 并行隔离）；必须在
+// 单实例锁之前重定向——锁文件随 userData 走，重定向即获得独立锁与数据区
+app.setPath('userData', resolveUserDataDir(process.env, app.getPath('home')));
 
 // 单实例锁：双开会在 sqlite 注册表与 host 进程上互相踩踏，第二实例聚焦首实例后退出
 if (!app.requestSingleInstanceLock()) {

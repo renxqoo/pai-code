@@ -126,10 +126,10 @@ function Sidebar({
       )}
     >
       {/* 顶行由 fixed 标题覆盖块承担，这里只留等高占位 */}
-      <div aria-hidden="true" className="h-[46px] shrink-0  " />
+      <div aria-hidden="true" className="h-[46px] shrink-0 " />
       {projectFiles !== null ? (
         /* 项目文件面板：整个内容区让位（快捷区/搜索/Tab/列表不渲染），底部工具条同图不渲染 */
-        <div className="flex min-h-0 flex-1 flex-col px-2 pt-1 pb-2">
+        <div className="flex min-h-0 flex-1 flex-col pt-1 pb-2">
           <ProjectFilesPanel
             projectName={projectFiles.name}
             projectPath={projectFiles.path}
@@ -140,7 +140,8 @@ function Sidebar({
         </div>
       ) : (
         <>
-          <div className="flex min-h-0 flex-1 flex-col pt-1 ">
+            <div className="flex min-h-0 flex-1 flex-col pt-2 ">
+              <div className="px-2 ">
             <QuickActionsRow onNewThread={onNewThread} onOpenSearch={onOpenSearch} />
             {searchOpen ? (
               <div className="pt-1.5">
@@ -155,8 +156,10 @@ function Sidebar({
                 />
               </div>
               ) : null}
+              </div>
 
-          <div className='overflow-y-auto px-[4px] overflow-x-hidden'>
+                <div className='overflow-y-auto   overflow-x-hidden'>
+                <div  className='px-2' >
             <div className="pt-2.5">
               <ViewSwitchTabs view={view} onViewChange={onViewChange} onCollapseSidebar={onCollapseSidebar} />
             </div>
@@ -224,6 +227,7 @@ function Sidebar({
                 ) : null}
               </div>
                 )}
+                </div>
               </div>
           </div>
           <SidebarFooter actions={footerActions} refresh={refreshAction} />

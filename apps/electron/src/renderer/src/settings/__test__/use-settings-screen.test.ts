@@ -26,7 +26,7 @@ describe('按开即读派发', () => {
   });
 
   test('非目录分区不派发任何动作', () => {
-    for (const id of ['general', 'providers', 'keys', 'history'] as const) {
+    for (const id of ['general', 'providers', 'history'] as const) {
       const { actions, calls } = makeEnterActions();
       dispatchSectionEnter(id, actions);
       expect(calls).toEqual([]);

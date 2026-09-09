@@ -9,8 +9,8 @@ import { searchProjectFiles } from './file-search';
 import { buildSkillInventory, parseSkillPatterns, toggleSkillPatterns } from './skills-inventory';
 import type { AgentDirFiles } from './agent-dir-files';
 import type { AgentDefinitionsStore } from './agent-definitions-store';
-import { defaultPermissionRules, parsePermissionRules, type ThinkingFormat } from '@paiapp/contracts';
-import { ApiSchemas, type ApiMethod, type ApiOutcome, type ApiParams } from '@paiapp/contracts';
+import { defaultPermissionRules, parsePermissionRules, type ProviderModel, type ThinkingFormat } from '@paiapp/contracts';
+import { ApiSchemas, type ApiMethod, type ApiOutcome, type ApiParams, type ModelInfoView } from '@paiapp/contracts';
 
 import type { PaiRuntime } from './pai-runtime';
 import type { createFileSettings } from './file-settings';
@@ -22,6 +22,18 @@ import type { ProviderKeyStore } from './file-settings';
  */
 
 type FileSettings = ReturnType<typeof createFileSettings>;
+
+/**
+ * 模型清单的渠道真相域过滤：app 的唯一模型/凭据面是设置里的渠道
+ * （env 清洗 + $PAI_KEY_* 注入），hub 内置目录的模型不经渠道配置不可用，
+ * 不进选择面。
+ */
+export function channelScopedModels(
+  models: readonly ModelInfoView[],
+  channelNames: ReadonlySet<string>,
+): ModelInfoView[] {
+  return models.filter((model) => channelNames.has(model.provider));
+}
 
 export interface ApiRouteDeps {
   runtime: PaiRuntime;
@@ -115,12 +127,12 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     return [...merged.values()].sort((a, b) => b.modifiedAt - a.modifiedAt);
   };
 
-  const providersView = (): Array<{ name: string; baseUrl: string; api: string; models: { id: string; reasoning: boolean; vision: boolean }[]; thinkingFormat: ThinkingFormat; hasKey: boolean }> =>
+  const providersView = (): Array<{ name: string; baseUrl: string; api: string; models: ProviderModel[]; thinkingFormat: ThinkingFormat; hasKey: boolean }> =>
     deps.settings.listProviders().map((provider) => ({
       name: provider.name,
       baseUrl: provider.baseUrl,
       api: provider.api,
-      models: provider.models.map((model) => ({ id: model.id, reasoning: model.reasoning, vision: model.vision })),
+      models: provider.models.map((model) => ({ ...model })),
       thinkingFormat: provider.thinkingFormat,
       hasKey: deps.keyStore.getKey(provider.name) !== null,
     }));
@@ -172,6 +184,10 @@ export function createApiRoutes(deps: ApiRouteDeps) {
 
   type RouteTable = { [M in ApiMethod]: (params: ApiParams<M>) => Outcome<M> };
 
+  /** 渠道真相域过滤（纯函数见模块级 channelScopedModels）：model/list 与 bootstrap 同口径。 */
+  const channelModels = (models: readonly ModelInfoView[]): ModelInfoView[] =>
+    channelScopedModels(models, new Set(deps.settings.listProviders().map((provider) => provider.name)));
+
   const routes: RouteTable = {
     'app/bootstrap': async () => {
       runtime.markBootstrapped();
@@ -179,7 +195,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       const outcome = {
         sessions: runtime.sessions(),
         saved,
-        models: models.ok ? modelInfos(models.data) : [],
+        models: models.ok ? channelModels(modelInfos(models.data)) : [],
         providers: providersView(),
         preferences: preferencesView(),
         hostPhase: runtime.hostPhase(),
@@ -319,28 +335,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     },
     'model/list': async () => {
       const result = await command({ type: 'get_models' });
-      return result.ok ? { ok: true as const, data: modelInfos(result.data) } : fail(result.reason);
-    },
-    'auth/list': async () => {
-      const result = await command({ type: 'auth/list' });
-      if (!result.ok) return fail(result.reason);
-      const credentials = (result.data as { credentials?: unknown }).credentials;
-      const list = Array.isArray(credentials)
-        ? credentials
-            .map((item) => (typeof item === 'object' && item !== null ? item as Record<string, unknown> : null))
-            .filter((item): item is Record<string, unknown> => item !== null)
-            .map((item) => ({ provider: text(item['provider']), type: text(item['type']) }))
-            .filter((item) => item.provider.length > 0)
-        : [];
-      return { ok: true as const, data: list };
-    },
-    'auth/setKey': async (params) => {
-      const result = await command({ type: 'auth/set_api_key', provider: params.provider, apiKey: params.apiKey });
-      return result.ok ? { ok: true as const, data: null } : fail(result.reason);
-    },
-    'auth/removeKey': async (params) => {
-      const result = await command({ type: 'auth/remove_key', provider: params.provider });
-      return result.ok ? { ok: true as const, data: null } : fail(result.reason);
+      return result.ok ? { ok: true as const, data: channelModels(modelInfos(result.data)) } : fail(result.reason);
     },
     'dialog/respond': async (params) => {
       // 任何情况下都必答（晚到/未知 id 由 host 静默忽略并 ack）；权限应答落审计日志
@@ -481,7 +476,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
         name: params.name,
         baseUrl: params.baseUrl,
         api: params.api,
-        models: params.models.map((model) => ({ id: model.id, reasoning: model.reasoning, vision: model.vision })),
+        models: params.models.map((model) => ({ ...model })),
         thinkingFormat: params.thinkingFormat ?? 'default',
         apiKey: params.apiKey,
       });
@@ -494,7 +489,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       return { ok: true as const, data: providersView() };
     },
     'provider/test': async (params) => {
-      const outcome = await probe.probe(params.name);
+      const outcome = await probe.probe(params.name, params.modelId);
       return outcome.ok ? { ok: true as const, data: { latencyMs: outcome.latencyMs } } : fail(outcome.reason);
     },
     'app/diagnostics': () => {
@@ -536,8 +531,6 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     const allowed = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
     return allowed.includes(level as (typeof allowed)[number]) ? (level as (typeof allowed)[number]) : null;
   }
-
-  const text = (value: unknown): string => (typeof value === 'string' ? value : '');
 
   return {
     async invoke(method: string, params: unknown): Promise<unknown> {

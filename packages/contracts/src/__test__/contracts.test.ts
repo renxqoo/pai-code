@@ -9,6 +9,7 @@ import {
   SettingsSchema,
   ApiSchemas,
   API_METHODS,
+  ProviderConfigViewSchema,
   HistoryItemSchema,
   isValidAgentName,
   type HubCommand,
@@ -219,6 +220,37 @@ describe('API schema：每方法合法/非法样本', () => {
     }
   });
 
+  test('provider/upsert 模型参数全链合法：contextWindow/maxTokens 随条目通过，回读视图同构（回归：IPC strict 层曾剥掉新字段）', () => {
+    const params = ApiSchemas['provider/upsert'].params.parse({
+      name: 'glm',
+      baseUrl: 'https://x.example.com',
+      api: 'openai-completions',
+      models: [
+        { id: 'tuned', reasoning: true, vision: true, contextWindow: 200000, maxTokens: 8192 },
+        { id: 'defaulted', reasoning: false, vision: false },
+      ],
+    });
+    expect(params.models[0]).toEqual({ id: 'tuned', reasoning: true, vision: true, contextWindow: 200000, maxTokens: 8192 });
+    expect(params.models[1]).toEqual({ id: 'defaulted', reasoning: false, vision: false });
+    const view = ProviderConfigViewSchema.parse({
+      name: 'glm',
+      baseUrl: 'https://x.example.com',
+      api: 'openai-completions',
+      models: params.models,
+      thinkingFormat: 'default',
+      hasKey: false,
+    });
+    expect(view.models[0]?.contextWindow).toBe(200000);
+    expect(view.models[0]?.maxTokens).toBe(8192);
+  });
+
+  test('provider/test 指定模型：modelId 合法通过且可缺省；空串与未知键拒绝', () => {
+    expect(ApiSchemas['provider/test'].params.parse({ name: 'glm', modelId: 'glm-4.7' })).toEqual({ name: 'glm', modelId: 'glm-4.7' });
+    expect(ApiSchemas['provider/test'].params.parse({ name: 'glm' })).toEqual({ name: 'glm' });
+    expect(() => ApiSchemas['provider/test'].params.parse({ name: 'glm', modelId: '' })).toThrow();
+    expect(() => ApiSchemas['provider/test'].params.parse({ name: 'glm', nope: 1 })).toThrow();
+  });
+
   test('agent 定义管理三方法：definitions 空 params；upsert/remove 键位校验', () => {
     const definition = { name: 'search', description: 'd', systemPrompt: 'p', tools: null, model: null, scope: 'user', project: null };
     expect(ApiSchemas['agent/definitions'].params.parse({})).toEqual({});
@@ -238,7 +270,6 @@ describe('API schema：每方法合法/非法样本', () => {
     ['command/list 未知键', 'command/list', { threadId: 't', nope: 1 }],
     ['agent/upsert 未知键', 'agent/upsert', { definition: { name: 'a', description: 'd', systemPrompt: 'p', tools: null, model: null, scope: 'user', project: null }, previous: null, nope: 1 }],
     ['agent/remove 非法 scope', 'agent/remove', { file: 'a', scope: 'global', project: null }],
-    ['auth/setKey 空 key', 'auth/setKey', { provider: 'p', apiKey: '' }],
     ['session/prompt 空消息', 'session/prompt', { threadId: 't', message: '' }],
     ['session/prompt 非法 streamingBehavior', 'session/prompt', { threadId: 't', message: 'hi', streamingBehavior: 'queue' }],
     ['provider/upsert 空 models', 'provider/upsert', { name: 'p', baseUrl: 'u', api: 'openai-completions', models: [] }],

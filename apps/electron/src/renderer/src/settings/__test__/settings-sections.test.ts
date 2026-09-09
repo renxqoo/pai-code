@@ -10,7 +10,6 @@ import {
 const ALL_SECTIONS: readonly SettingsSectionId[] = [
   'general',
   'providers',
-  'keys',
   'permissions',
   'agents',
   'skills',

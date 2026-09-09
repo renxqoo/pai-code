@@ -75,18 +75,12 @@ export interface LiveController {
   readonly reopenSession: (threadId: string) => Promise<boolean>;
   /** 项目文件搜索（@ 引用；cwd 门禁在主进程，失败返回 null）。 */
   readonly searchFiles: (cwd: string, query: string) => Promise<string[] | null>;
-  /** hub 凭据目录刷新（auth/list，永不含 key 本身）。 */
-  readonly refreshCredentials: () => Promise<void>;
-  /** 写入官方 provider key（hub 侧 auth.json）；成功返回 null，失败返回原因。 */
-  readonly setProviderKey: (provider: string, apiKey: string) => Promise<string | null>;
-  /** 移除官方 provider key（OAuth 类凭据受 hub 保护拒绝）；成功返回 null。 */
-  readonly removeProviderKey: (provider: string) => Promise<string | null>;
   readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; thinkingFormat?: ThinkingFormat; apiKey?: string }) => Promise<boolean>;
   readonly removeProvider: (name: string) => Promise<boolean>;
   /** 应用偏好部分写（返回写后视图；失败返回 null，原因走通知条）。 */
   readonly updatePreferences: (patch: { defaultModel?: string | null; onboarded?: boolean; projectModels?: Record<string, string>; pinnedSessions?: string[]; trustedDefault?: boolean; hiddenProjects?: string[]; hubDev?: { bunPath: string | null; hubEntry: string | null } }) => Promise<PreferencesView | null>;
   /** provider 连接探活（主进程直发；结果原样透传给调用方做内联展示）。 */
-  readonly testProvider: (name: string) => Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }>;
+  readonly testProvider: (name: string, modelId: string | undefined) => Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }>;
   /** 直执行 bash（`!` 前缀）：成功返回 null；权威条目经对账进入对话流。 */
   readonly runBash: (threadId: string, command: string) => Promise<string | null>;
   readonly abortBash: (threadId: string) => Promise<void>;
@@ -251,8 +245,6 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       }
       if (outcome === null) return;
       store.getState().bootstrap(outcome.data);
-      // 凭据目录随启动刷新（auth/list 轻量、失败静默——设置页有手动刷新兜底）
-      void this.refreshCredentials();
       // 聚焦会话懒恢复：启动不再全量 resume，bootstrap 自动选中的会话若是 parked 占位需唤醒
       // （历史水化由工作区激活 effect 跟随 state 翻转完成，此处只负责唤活与激活）
       const active = store.getState().activeThreadId;
@@ -514,24 +506,6 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       const outcome = await client.invoke('file/search', { cwd, query });
       return outcome.ok ? outcome.data : null;
     },
-    async refreshCredentials(): Promise<void> {
-      const outcome = await client.invoke('auth/list', {});
-      if (outcome.ok) {
-        store.setState({ credentials: outcome.data });
-      }
-    },
-    async setProviderKey(provider: string, apiKey: string): Promise<string | null> {
-      const outcome = await client.invoke('auth/setKey', { provider, apiKey });
-      if (!outcome.ok) return outcome.reason;
-      await this.refreshCredentials();
-      return null;
-    },
-    async removeProviderKey(provider: string): Promise<string | null> {
-      const outcome = await client.invoke('auth/removeKey', { provider });
-      if (!outcome.ok) return outcome.reason;
-      await this.refreshCredentials();
-      return null;
-    },
     async upsertProvider(input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; thinkingFormat?: ThinkingFormat; apiKey?: string }): Promise<boolean> {
       const outcome = await client.invoke('provider/upsert', input);
       if (!outcome.ok) return false;
@@ -554,8 +528,8 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       store.setState({ preferences: outcome.data });
       return outcome.data;
     },
-    async testProvider(name: string): Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }> {
-      const outcome = await client.invoke('provider/test', { name });
+    async testProvider(name: string, modelId: string | undefined): Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }> {
+      const outcome = await client.invoke('provider/test', modelId === undefined ? { name } : { name, modelId });
       return outcome.ok ? { ok: true, latencyMs: outcome.data.latencyMs } : { ok: false, reason: outcome.reason };
     },
     async refreshStats(threadId: string): Promise<void> {

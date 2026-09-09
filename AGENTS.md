@@ -54,7 +54,7 @@ bun test          # 各模块 __test__ 单测 + T1 夹具回归
 - **调度与预算**：线程并发由 Electron 客户端限流（全局按内存动态 2..8、单对话 ≤3、排队可见优先）；BudgetTracker 按 `message_end` usage 计量，超预算熔断拒绝新 thread（调度/预算模块未落地：`packages/core`、`packages/api` 当前为空壳，落地任务见 `tasks/T4`）
 - **权限与沙箱**：权限判定、拦截、超时默认拒绝、OS 沙箱**全部在 hub**；Pai 只做 UI 交互与提交，不镜像判定逻辑、不经手 spawn 包裹；thread 默认 `trusted:false` 不加载项目扩展。全局规则的唯一通路是 hub 热读的 `agentDir/permission-rules.json`（协议的 `get/set_permission_rules` 仅每线程 sidecar）——Pai 主进程经固定文件名白名单 Port 原子写该文件（宽容解析镜像 hub normalizeRules），会话级规则走协议命令
 - **持久化**：会话真相源 = hub 管理的 session jsonl（agentDir/sessions）；`node:sqlite` 只存 UI 元数据与 thread 映射（恢复快照）；重水化首选协议（`thread/list` + `get_state`/`get_messages`）
-- **认证**：仅 API key（auth/list、set_api_key、remove_key，key 只经 stdin 进 hub 侧 auth.json，Electron 零接触零回显）；无 OAuth
+- **认证**：仅 API key，key 随渠道设置录入（`provider-keys.json` safeStorage 加密存储；hub 侧 models.json 只写 `$PAI_KEY_*` 引用，真值经 spawn env 注入，不落明文文件）；hub 的 `auth/*` 命令通路不使用；无 OAuth
 - **渲染层**：React + shadcn（`packages/ui`），只认识 contracts + Client 接口（mock/真 preload 可替换），不直接碰 IPC
 
 目录：`apps/electron/`（组合根 + 壳）、`packages/{contracts, adapter, core, infra, api, ui, testkit}`（全部 Electron-free；adapter = pai-cli 协议唯一认识者）、`tasks/`（任务方案）；hub 仓库在外部（`/Users/wrr/work/pi/app`）。

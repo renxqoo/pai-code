@@ -1,57 +1,67 @@
-import * as React from 'react';
-import { ChevronDown } from 'lucide-react';
+import * as React from "react";
+import { ChevronDown } from "lucide-react";
 
-import type { ProviderConfigView } from '@paiapp/contracts';
+import type { ProviderConfigView } from "@paiapp/contracts";
 
-import { PickerDialog } from '@/components/picker-dialog';
-import { groupModelOptions } from '@/components/group-model-options';
-import { copy } from '@/strings';
+import { PickerDialog } from "@/components/picker-dialog";
+import { groupModelOptions } from "@/components/group-model-options";
+import { copy } from "@/strings";
 
-import { ProviderDetail, type ProviderTestResult } from './provider-detail';
-import type { ProviderUpsertInput } from './provider-editor';
-import { filterProviders, providerListEmptyMessage } from './provider-list-filter';
-import { ProviderRow } from './provider-row';
-import { SettingsCard } from './settings-card';
-import { SettingsPageHeader } from './settings-page-header';
-import { SettingsRow } from './settings-row';
-import { SettingsSearchInput } from './settings-search-input';
+import { ProviderDetail } from "./provider-detail";
+import type { ProviderTestResult } from "./provider-test";
+import type { ProviderUpsertInput } from "./provider-editor";
+import { filterProviders, providerListEmptyMessage } from "./provider-list-filter";
+import { ProviderRow } from "./provider-row";
+import { SettingsCard } from "./settings-card";
+import { SettingsPageHeader } from "./settings-page-header";
+import { SettingsRow } from "./settings-row";
+import { SettingsSearchInput } from "./settings-search-input";
 
 type ProvidersSectionProps = {
-  list: readonly ProviderConfigView[]
-  defaultModel: string | null
-  modelOptions: readonly string[] // "provider/modelId" 形态
-  onUpsert: (input: ProviderUpsertInput) => Promise<boolean>
-  onRemove: (name: string) => Promise<boolean>
-  onSelectDefaultModel: (value: string | null) => void
-  onTest: (name: string) => Promise<ProviderTestResult>
+  list: readonly ProviderConfigView[];
+  defaultModel: string | null;
+  modelOptions: readonly string[]; // "provider/modelId" 形态
+  onUpsert: (input: ProviderUpsertInput) => Promise<boolean>;
+  onRemove: (name: string) => Promise<boolean>;
+  onSelectDefaultModel: (value: string | null) => void;
+  onTest: (name: string, modelId?: string) => Promise<ProviderTestResult>;
 };
 
-type ProvidersView = { kind: 'list' } | { kind: 'create' } | { kind: 'edit'; name: string };
+type ProvidersView = { kind: "list" } | { kind: "create" } | { kind: "edit"; name: string };
 
 /** 默认模型弹窗触发器：select 观感（描边胶囊 + chevron）。 */
 const defaultModelTriggerClassName =
-  'flex h-9 cursor-pointer items-center justify-between gap-[8px] rounded-lg border border-border bg-background px-3 text-left text-[13px] text-foreground outline-none select-none hover:border-foreground/30 aria-expanded:border-foreground/30 focus-visible:ring-3 focus-visible:ring-ring/50 [&_svg]:shrink-0';
+  "flex h-9 cursor-pointer items-center justify-between gap-[8px] rounded-lg border border-border bg-background px-3 text-left text-[13px] text-foreground outline-none select-none hover:border-foreground/30 aria-expanded:border-foreground/30 focus-visible:ring-3 focus-visible:ring-ring/50 [&_svg]:shrink-0";
 
 /** 「不使用默认模型」项的保留 id（双下划线前缀避免与真实模型名撞车），归一为 null 提交。 */
-const DEFAULT_MODEL_NONE_ID = '__none__';
+const DEFAULT_MODEL_NONE_ID = "__none__";
 
 /** 渠道分区：默认模型选择卡 + 渠道列表（搜索/添加/两步删除）↔ 渠道详情（钻入编辑，面包屑返回）。 */
-function ProvidersSection({ list, defaultModel, modelOptions, onUpsert, onRemove, onSelectDefaultModel, onTest }: ProvidersSectionProps) {
-  const [view, setView] = React.useState<ProvidersView>({ kind: 'list' });
-  const [query, setQuery] = React.useState('');
+function ProvidersSection({
+  list,
+  defaultModel,
+  modelOptions,
+  onUpsert,
+  onRemove,
+  onSelectDefaultModel,
+  onTest,
+}: ProvidersSectionProps) {
+  const [view, setView] = React.useState<ProvidersView>({ kind: "list" });
+  const [query, setQuery] = React.useState("");
   const [defaultPickerOpen, setDefaultPickerOpen] = React.useState(false);
   const [removeFailed, setRemoveFailed] = React.useState(false);
 
   const selectedDefault = defaultModel ?? copy.settings.defaultModelNone;
   // 默认模型已不在目录（渠道被删/改名）→ 触发器旁短标记 + 卡内联失效提示
   const defaultModelInvalid = defaultModel !== null && !modelOptions.includes(defaultModel);
-  const editingProvider = view.kind === 'edit' ? list.find((provider) => provider.name === view.name) : undefined;
+  const editingProvider =
+    view.kind === "edit" ? list.find((provider) => provider.name === view.name) : undefined;
   const visibleProviders = filterProviders(list, query);
   const emptyMessage = providerListEmptyMessage(list.length, visibleProviders.length);
 
   const backToList = (): void => {
     setRemoveFailed(false);
-    setView({ kind: 'list' });
+    setView({ kind: "list" });
   };
 
   const removeProvider = (name: string): Promise<boolean> => {
@@ -62,18 +72,18 @@ function ProvidersSection({ list, defaultModel, modelOptions, onUpsert, onRemove
     });
   };
 
-  if (view.kind === 'create' || editingProvider !== undefined) {
+  if (view.kind === "create" || editingProvider !== undefined) {
     return (
       <section>
         <ProviderDetail
-          key={view.kind === 'edit' ? view.name : 'new'}
+          key={view.kind === "edit" ? view.name : "new"}
           provider={editingProvider ?? null}
           onUpsert={onUpsert}
           onTest={onTest}
           onBack={backToList}
           onSaved={(name) => {
             // 新建保存后切到新渠道详情（可立即测试连接）；编辑保存后停留原地（编辑器内提示已保存）
-            if (view.kind === 'create') setView({ kind: 'edit', name });
+            if (view.kind === "create") setView({ kind: "edit", name });
           }}
         />
       </section>
@@ -82,7 +92,10 @@ function ProvidersSection({ list, defaultModel, modelOptions, onUpsert, onRemove
 
   return (
     <section>
-      <SettingsPageHeader title={copy.settings.providersTitle} description={copy.settings.providersDesc} />
+      <SettingsPageHeader
+        title={copy.settings.providersTitle}
+        description={copy.settings.providersDesc}
+      />
       <div className="flex flex-col gap-[16px]">
         <SettingsCard className="divide-y divide-border">
           <SettingsRow title={copy.settings.defaultModelTitle}>
@@ -125,17 +138,28 @@ function ProvidersSection({ list, defaultModel, modelOptions, onUpsert, onRemove
           ) : null}
         </SettingsCard>
         <div className="flex items-center gap-[12px]">
-          <span className="mr-auto text-[12.5px] leading-[18px] text-muted-foreground">{copy.settings.providersCount(list.length)}</span>
-          <SettingsSearchInput value={query} onChange={setQuery} placeholder={copy.settings.searchProviders} className="w-[240px]" />
+          <span className="mr-auto text-[12.5px] leading-[18px] text-muted-foreground">
+            {copy.settings.providersCount(list.length)}
+          </span>
+          <SettingsSearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder={copy.settings.searchProviders}
+            className="w-[240px]"
+          />
           <button
             type="button"
-            onClick={() => setView({ kind: 'create' })}
+            onClick={() => setView({ kind: "create" })}
             className="h-8 cursor-pointer rounded-lg bg-foreground px-3 text-[12.5px] leading-none font-medium text-background outline-none select-none hover:opacity-90 focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             {copy.settings.addProvider}
           </button>
         </div>
-        {removeFailed ? <p className="text-[12px] leading-[16px] text-destructive">{copy.settings.providerRemoveFailed}</p> : null}
+        {removeFailed ? (
+          <p className="text-[12px] leading-[16px] text-destructive">
+            {copy.settings.providerRemoveFailed}
+          </p>
+        ) : null}
         {emptyMessage !== null ? (
           <p className="text-[12.5px] leading-[18px] text-muted-foreground">{emptyMessage}</p>
         ) : (
@@ -144,7 +168,7 @@ function ProvidersSection({ list, defaultModel, modelOptions, onUpsert, onRemove
               <ProviderRow
                 key={provider.name}
                 provider={provider}
-                onOpen={() => setView({ kind: 'edit', name: provider.name })}
+                onOpen={() => setView({ kind: "edit", name: provider.name })}
                 onRemove={removeProvider}
               />
             ))}

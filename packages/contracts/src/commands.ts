@@ -27,9 +27,6 @@ export type PaiCommandType =
   | 'get_session_stats'
   | 'set_session_name'
   | 'get_commands'
-  | 'auth/list'
-  | 'auth/set_api_key'
-  | 'auth/remove_key'
   | 'ui_response'
   | 'subagent/steer'
   | 'agents/list'
@@ -63,9 +60,6 @@ export const PAI_COMMAND_TYPES = [
   'get_session_stats',
   'set_session_name',
   'get_commands',
-  'auth/list',
-  'auth/set_api_key',
-  'auth/remove_key',
   'ui_response',
   'subagent/steer',
   'agents/list',

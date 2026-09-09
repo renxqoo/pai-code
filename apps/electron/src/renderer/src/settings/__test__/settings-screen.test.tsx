@@ -40,7 +40,6 @@ function makeProps(overrides: Partial<SettingsScreenProps> = {}): SettingsScreen
       onSelectDefaultModel: noop,
       onTest: () => Promise.resolve({ ok: true as const, latencyMs: 1 }),
     },
-    keys: { credentials: [], onSave: ok, onRemove: ok, onRefresh: noop },
     permissions: {
       rules: defaultPermissionRules(),
       onSave: ok,
@@ -97,11 +96,10 @@ describe('设置页渲染冒烟', () => {
     expect(html).toContain(copy.settings.skillDisabledHint);
   });
 
-  test('八个分区各自渲染出大标题与特征内容', () => {
+  test('七个分区各自渲染出大标题与特征内容', () => {
     const cases: ReadonlyArray<{ section: SettingsScreenProps['section']; marks: readonly string[] }> = [
       { section: 'general', marks: [copy.settings.generalTitle, copy.settings.onboardingCardAction] },
       { section: 'providers', marks: [copy.settings.providersTitle, copy.settings.defaultModelTitle, copy.settings.addProvider] },
-      { section: 'keys', marks: [copy.settings.keysTitle, copy.settings.keysSave] },
       { section: 'permissions', marks: [copy.settings.permissionsTitle, copy.settings.permissionsSave] },
       { section: 'agents', marks: [copy.settings.agentsTitle, copy.settings.agentsEmpty] },
       { section: 'skills', marks: [copy.settings.skillsTitle, copy.settings.skillsEmpty] },
