@@ -37,14 +37,16 @@ describe('deriveDemoThread', () => {
     expect(thread.items[2]).toMatchObject({ kind: 'turn', turn: { id: 'turn-live', status: 'running' } });
   });
 
-  test('子代理平铺为面板列表（与流内简略行同一份数据）', () => {
+  test('子代理平铺为面板列表（数据面，不进轮内块）', () => {
     const thread = deriveDemoThread(spec, NOW, {});
     expect(thread.agents).toHaveLength(4);
-    const block = thread.items[2];
-    if (block?.kind !== 'turn') throw new Error('expected turn');
-    const subagents = block.turn.blocks.find((entry) => entry.kind === 'subagents');
-    if (subagents === undefined || subagents.kind !== 'subagents') throw new Error('expected subagents block');
-    expect(subagents.agents[0]).toBe(thread.agents[0]);
+    expect(thread.agents.map((agent) => agent.id)).toEqual([
+      'agent-adapters',
+      'agent-router',
+      'agent-middleware',
+      'agent-testing',
+    ]);
+    expect(thread.agents.every((agent) => agent.status === 'working')).toBe(true);
   });
 
   test('停止表命中时冻结该轮，未命中或未来时刻按未停止处理', () => {

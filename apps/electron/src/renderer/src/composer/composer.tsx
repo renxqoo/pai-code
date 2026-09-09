@@ -67,6 +67,10 @@ type ComposerProps = {
   onSelectEffort: (value: string) => void
   onSelectPermissionMode: (mode: PermissionRules['mode']) => void
   onFollowPermissionGlobal: () => void
+  /** 工作中子代理数（底行状态徽标；0 = 不展示）。 */
+  agentsWorking: number
+  /** 点击子代理状态徽标：打开 Agents 侧栏面板。 */
+  onOpenAgents: () => void
   /** 上下文条：当前工作目录（'' = 无会话目录，项目段不渲染） */
   cwd: string
   /** 上下文条：分支段呈现（真实 git 分支名 / 空形态文案 + 弱化态） */
@@ -114,6 +118,8 @@ function Composer({
   onSelectEffort,
   onSelectPermissionMode,
   onFollowPermissionGlobal,
+  agentsWorking,
+  onOpenAgents,
   cwd,
   branch,
 }: ComposerProps) {
@@ -178,6 +184,7 @@ function Composer({
             permissionFollowsGlobal={permissionFollowsGlobal}
             onSelectPermissionMode={onSelectPermissionMode}
             onFollowPermissionGlobal={onFollowPermissionGlobal}
+            agents={{ working: agentsWorking, onOpen: onOpenAgents }}
             session={{
               effort,
               effortOptions,

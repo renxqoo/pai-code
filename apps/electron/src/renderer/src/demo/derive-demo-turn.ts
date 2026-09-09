@@ -82,7 +82,10 @@ function deriveAgent(seed: DemoAgentSeed, blockRevealAt: number, clock: number, 
   };
 }
 
-function deriveBlock(spec: DemoBlockSpec, startedAt: number, clock: number, turnEnded: boolean): TurnBlock | null {
+/** 子代理不进轮内块——deriveLiveTurn 对 subagents spec 分流到 deriveSubagentAgents，本函数只见其余块形态。 */
+type BlockSpec = Exclude<DemoBlockSpec, { kind: 'subagents' }>;
+
+function deriveBlock(spec: BlockSpec, startedAt: number, clock: number, turnEnded: boolean): TurnBlock | null {
   const revealAt = startedAt + spec.atMs;
   // 还没到出现时刻的块不占位，避免提前露出尚未发生的正文与过程块
   if (clock < revealAt) return null;
@@ -96,19 +99,25 @@ function deriveBlock(spec: DemoBlockSpec, startedAt: number, clock: number, turn
       .map((entry) => deriveCommandStep(entry.step, `${spec.id}-${entry.index}`, revealAt + entry.step.atMs, clock, turnEnded));
     return { kind: 'tools', id: spec.id, calls };
   }
-  if (spec.kind === 'subagents') {
-    const agents = spec.agents
-      .filter((seed) => clock >= revealAt + seed.bornAtMs)
-      .map((seed) => deriveAgent(seed, revealAt, clock, turnEnded));
-    // 还没有子代理出生时不占行，避免出现 0 个子代理的空摘要
-    if (agents.length === 0) return null;
-    return { kind: 'subagents', id: spec.id, agents };
-  }
   return { kind: 'diff', id: spec.id, diff: spec.diff };
 }
 
+/** 观察时刻的子代理快照（面板数据源）：块出现后按出生偏移逐个现身。 */
+function deriveSubagentAgents(
+  spec: Extract<DemoBlockSpec, { kind: 'subagents' }>,
+  startedAt: number,
+  clock: number,
+  turnEnded: boolean,
+): SubagentModel[] {
+  const revealAt = startedAt + spec.atMs;
+  if (clock < revealAt) return [];
+  return spec.agents
+    .filter((seed) => clock >= revealAt + seed.bornAtMs)
+    .map((seed) => deriveAgent(seed, revealAt, clock, turnEnded));
+}
+
 /** 时刻 t 的进行中轮次快照；stopAtMs 非空表示用户已停止，冻结在那一刻。 */
-export function deriveLiveTurn(spec: LiveTurnSpec, now: number, stopAtMs: number | null): TurnModel {
+export function deriveLiveTurn(spec: LiveTurnSpec, now: number, stopAtMs: number | null): { turn: TurnModel; agents: SubagentModel[] } {
   const { turnId, startedAt, script } = spec;
   const autoEndAt = script.completeAtMs === null ? null : startedAt + script.completeAtMs;
   const scheduledEndAt = stopAtMs ?? autoEndAt;
@@ -117,16 +126,24 @@ export function deriveLiveTurn(spec: LiveTurnSpec, now: number, stopAtMs: number
   const clock = ended && scheduledEndAt !== null ? scheduledEndAt : observedAt;
   const status: TurnStatus = ended ? (stopAtMs !== null ? 'stopped' : 'completed') : 'running';
   const blocks: TurnBlock[] = [];
+  const agents: SubagentModel[] = [];
   for (const blockSpec of script.blocks) {
+    if (blockSpec.kind === 'subagents') {
+      agents.push(...deriveSubagentAgents(blockSpec, startedAt, clock, ended));
+      continue;
+    }
     const block = deriveBlock(blockSpec, startedAt, clock, ended);
     if (block === null) continue;
     blocks.push(block);
   }
   return {
-    id: turnId,
-    status,
-    startedAt,
-    endedAt: ended ? clock : null,
-    blocks,
+    turn: {
+      id: turnId,
+      status,
+      startedAt,
+      endedAt: ended ? clock : null,
+      blocks,
+    },
+    agents,
   };
 }

@@ -1,5 +1,4 @@
 import { DiffBlock } from './diff-block';
-import { SubagentsBlock } from './subagents-block';
 import { TextBlock } from './text-block';
 import type { StandaloneTurnBlock } from './process-runs';
 
@@ -7,20 +6,16 @@ import { copy } from '@/strings';
 
 type TurnBlockViewProps = {
   block: StandaloneTurnBlock
-  onOpenAgents: () => void
   onOpenDiff: () => void
 }
 
 /**
  * 独立块的展示分发：思考/工具块渲染期已聚合成过程组，不经过这里；
- * 只处理正文、子代理条、diff 卡与轮次异常提示。
+ * 只处理正文、diff 卡与轮次异常提示。
  */
-function TurnBlockView({ block, onOpenAgents, onOpenDiff }: TurnBlockViewProps) {
+function TurnBlockView({ block, onOpenDiff }: TurnBlockViewProps) {
   if (block.kind === 'text') {
     return <TextBlock text={block.text} />;
-  }
-  if (block.kind === 'subagents') {
-    return <SubagentsBlock agents={block.agents} onOpenAgents={onOpenAgents} />;
   }
   if (block.kind === 'turnFailure') {
     const label = block.stopReason === 'error' ? copy.thread.turnFailedLabel : copy.thread.turnAbortedLabel;

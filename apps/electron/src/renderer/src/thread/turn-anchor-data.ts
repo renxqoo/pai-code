@@ -29,8 +29,7 @@ export function truncateAnchorSummary(text: string, max: number = ANCHOR_SUMMARY
 /**
  * 历史轮锚点的摘要推导（tooltip 文本源）：
  * 最后一条非空文本块的首行（最终回答）→ 首个工具调用（名称 + 参数摘要）→
- * 首个子代理的报告摘要（缺失退工具名）→ 异常终态提示；全部缺失降级为空串，
- * 组件届时只展示轮次时刻。
+ * 异常终态提示；全部缺失降级为空串，组件届时只展示轮次时刻。
  */
 export function turnAnchorSummary(turn: Pick<TurnModel, 'blocks'>): string {
   for (let index = turn.blocks.length - 1; index >= 0; index -= 1) {
@@ -43,13 +42,6 @@ export function turnAnchorSummary(turn: Pick<TurnModel, 'blocks'>): string {
     if (block.kind !== 'tools') continue;
     for (const call of block.calls) {
       const preview = collapseWhitespace(`${call.name} ${call.argsPreview}`);
-      if (preview.length > 0) return truncateAnchorSummary(preview);
-    }
-  }
-  for (const block of turn.blocks) {
-    if (block.kind !== 'subagents') continue;
-    for (const agent of block.agents) {
-      const preview = collapseWhitespace(agent.summary.length > 0 ? agent.summary : agent.name);
       if (preview.length > 0) return truncateAnchorSummary(preview);
     }
   }

@@ -12,6 +12,7 @@ import { groupModelOptions } from '@/components/group-model-options';
 import { copy } from '@/strings';
 
 import { PermissionModeMenu } from './permission-mode-menu';
+import { AgentStatusButton } from './agent-status-button';
 import { menuTriggerClassName } from './menu-trigger-style';
 
 /** 会话面控件组：无会话（新任务页）传 null，三项都不渲染——不摆没有数据面的假控件。 */
@@ -52,6 +53,8 @@ type ComposerActionsRowProps = {
   permissionFollowsGlobal: boolean
   onSelectPermissionMode: (mode: PermissionRules['mode']) => void
   onFollowPermissionGlobal: () => void
+  /** 会话面：工作中子代理状态徽标（不传 = 无会话面，不渲染）。 */
+  agents?: { working: number; onOpen: () => void }
   /** 会话面控件（思考档 / 压缩 / 用量环） */
   session: SessionControls | null
 }
@@ -81,6 +84,7 @@ function ComposerActionsRow({
   permissionFollowsGlobal,
   onSelectPermissionMode,
   onFollowPermissionGlobal,
+  agents,
   session,
 }: ComposerActionsRowProps) {
   const [usageOpen, setUsageOpen] = React.useState(false);
@@ -98,6 +102,7 @@ function ComposerActionsRow({
           onFollowGlobal={onFollowPermissionGlobal}
         />
       ) : null}
+      {agents === undefined ? null : <AgentStatusButton count={agents.working} onOpen={agents.onOpen} />}
       <div className="ml-auto flex items-center gap-[9px]">
         {session === null ? null : (
           <>

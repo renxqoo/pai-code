@@ -51,7 +51,6 @@ export const en = {
     toggleMaximize: 'Toggle maximize',
     tabAdd: 'Add panel',
     openDiff: 'Open Diff',
-    openAgents: 'Open Agents',
     turnFailedLabel: 'Request failed',
     turnAbortedLabel: 'Aborted',
     openMenu: ['Open in Finder', 'Open in Terminal', 'Open in Editor'],
@@ -64,7 +63,6 @@ export const en = {
   },
   flow: {
     openDiff: 'Open Diff',
-    openAgents: 'Open Agents',
     closeDiffPanel: 'Close diff panel',
     steerPlaceholder: 'Steer this agent…',
     steerFailed: (reason: string): string => `Steering failed (${reason}).`,
@@ -75,9 +73,9 @@ export const en = {
     captionMaximize: 'Maximize',
     captionRestore: 'Restore',
     captionClose: 'Close',
-    /** 折叠摘要：Kicked off 4 subagents */
-    subagentsSummary: (count: number): string =>
-      count === 1 ? 'Kicked off 1 subagent' : `Kicked off ${count} subagents`,
+    /** 输入框徽标：工作子代理计数（按钮无障碍名） */
+    agentsWorking: (count: number): string =>
+      count === 1 ? '1 subagent working — open the Agents panel' : `${count} subagents working — open the Agents panel`,
     /** 折叠摘要：375 changed files */
     changedFiles: (count: number): string => (count === 1 ? '1 changed file' : `${count} changed files`),
     closeAgents: 'Close agents panel',
@@ -138,9 +136,6 @@ export const en = {
     /** 面板汇总：2 working 3 settled */
     panelWorking: (count: number): string => (count === 1 ? '1 working' : `${count} working`),
     panelSettled: (count: number): string => (count === 1 ? '1 settled' : `${count} settled`),
-    /** 通知条右侧：4 working Σ 196 */
-    notifySummary: (workingCount: number, tokens: number): string =>
-      `${workingCount === 1 ? '1 working' : `${workingCount} working`} Σ ${tokens}`,
     /** 面板右下角：Σ 6.6k tok */
     footerTokens: (tokens: string): string => `Σ ${tokens} tok`,
     /** 元信息段：51 tok / — tok */

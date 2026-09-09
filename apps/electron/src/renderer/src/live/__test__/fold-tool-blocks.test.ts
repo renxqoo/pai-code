@@ -122,7 +122,7 @@ describe('foldEvents · 工具块按消息归块', () => {
     expect(toolsBlocks[0]).toMatchObject({ id: 'tools-m', calls: [{ id: 'ghost' }] });
   });
 
-  test('子代理条恒挂轮末：后续消息块插到条之前（不掩埋）', () => {
+  test('子代理事件不占轮内块：面板数据源只在 state.agents', () => {
     let s = initialThreadState;
     s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(0) }), tick(0));
     s = foldThreadEvent(s, ev({ type: 'messageStarted', threadId: 't', messageId: 'a', at: tick(1) }), tick(1));
@@ -132,7 +132,8 @@ describe('foldEvents · 工具块按消息归块', () => {
     s = foldThreadEvent(s, ev({ type: 'thinkingDelta', threadId: 't', messageId: 'b', delta: '想' }), tick(5));
     const turn = liveTurn(s);
     if (turn?.kind !== 'turn') throw new Error('expected turn');
-    expect(turn.turn.blocks.map((block) => block.kind)).toEqual(['tools', 'thinking', 'subagents']);
+    expect(turn.turn.blocks.map((block) => block.kind)).toEqual(['tools', 'thinking']);
+    expect(s.agents.map((agent) => agent.id)).toEqual(['s1']);
   });
 
   test('settle 终态化残留 running 调用（auto-retry 弃置的半成品不再走表）', () => {

@@ -1,7 +1,7 @@
 import type { UiEvent } from '@paiapp/contracts';
 import type { ThreadItem, ToolCallModel, TurnBlock, TurnModel } from '@/thread/thread-model';
 
-import { attachTailSubagents, onSubagentEvent, syncSubagentsBlock } from './fold-subagents';
+import { onSubagentEvent } from './fold-subagents';
 import { hydrateItems, hydrateNewItems, mergeDiffFile } from './hydrate-items';
 import { capSeenIds, initialThreadState, noteCallStart, omitCallStart, type HydrateAction, type LiveThreadState } from './live-thread-state';
 import { clip, findTurn, updateTurn } from './turn-ops';
@@ -11,7 +11,7 @@ import { clip, findTurn, updateTurn } from './turn-ops';
  * 语义锚点：
  * - 流式只拼 delta；messageFinal 权威替换；turnSettled 恰好一次终态（agent_end 多次不驱动终态）；
  * - 块序即到达序：text/thinking/tools 块按消息 id 归块、按首次到达定位；
- *   diff/子代理条恒挂轮末（转写重建 buildTurnBlocks/attachTailSubagents 同一尾部语义）——
+ *   diff 恒挂轮末（转写重建 buildTurnBlocks 同一尾部语义）——
  *   settle 替换前后块序同构，视觉不重排；
  * - 用户停止意图（stopping）让 settle 后的轮次呈现 stopped；
  * - 条目（真相）与 live 轮次（装饰）共存：settle 后对账以 dropLiveTurn 替换。
@@ -81,9 +81,9 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
         state.stopping && state.agents.some((agent) => agent.status === 'working')
           ? state.agents.map((agent) => (agent.status === 'working' ? { ...agent, status: 'done' as const, endedAt: now } : agent))
           : state.agents;
-      if (state.liveTurnId === null) return syncSubagentsBlock({ ...state, streaming: false, retrying: null, stopping: false, agents });
+      if (state.liveTurnId === null) return { ...state, streaming: false, retrying: null, stopping: false, agents };
       const stopped = state.stopping;
-      return syncSubagentsBlock({
+      return {
         ...state,
         streaming: false,
         stopping: false,
@@ -100,7 +100,7 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
           );
           return { kind: 'turn', turn: { ...item.turn, status: stopped ? ('stopped' as const) : ('completed' as const), endedAt: now, blocks } };
         }),
-      });
+      };
     }
     case 'queueChanged':
       return { ...state, queue: { steering: [...event.steering], followUp: [...event.followUp] } };
@@ -183,9 +183,7 @@ export function foldHydrate(state: LiveThreadState, action: HydrateAction): Live
           }
         }
       }
-      // 转写条目无子代理形态：会话级子代理条随对话尾部重建（面板同一数据源，后台代理跨轮可见）
-      const withSubagents = attachTailSubagents(items, state.agents);
-      return { ...state, items: withSubagents, cursor: action.cursor, seenIds: capSeenIds(new Set(action.items.map((item) => item.id))), liveTurnId: null, liveMessageId: null, hydrateFailed: false };
+      return { ...state, items, cursor: action.cursor, seenIds: capSeenIds(new Set(action.items.map((item) => item.id))), liveTurnId: null, liveMessageId: null, hydrateFailed: false };
     }
     case 'hydrate/failed':
       return { ...state, hydrateFailed: true };
@@ -213,7 +211,7 @@ export function foldDeath(state: LiveThreadState, now: number): LiveThreadState 
             ? { kind: 'turn', turn: { ...item.turn, status: 'completed', endedAt: now } }
             : item,
         );
-  return syncSubagentsBlock({
+  return {
     ...state,
     items,
     agents: state.agents.map((agent) => (agent.status === 'working' ? { ...agent, status: 'done' as const, endedAt: now } : agent)),
@@ -225,7 +223,7 @@ export function foldDeath(state: LiveThreadState, now: number): LiveThreadState 
     bashRunning: false,
     bashTail: '',
     liveMessageId: null,
-  });
+  };
 }
 
 function onTurnStarted(state: LiveThreadState, at: number): LiveThreadState {
@@ -247,8 +245,7 @@ function onTurnStarted(state: LiveThreadState, at: number): LiveThreadState {
     endedAt: null,
     blocks: [],
   };
-  // 退役旧 live 轮会带走轮内的子代理条：sync 把条迁入新 live 轮（代理存在期间条不消失）
-  return syncSubagentsBlock({
+  return {
     ...state,
     items: [...items, { kind: 'turn', turn }],
     liveTurnId: turn.id,
@@ -256,7 +253,7 @@ function onTurnStarted(state: LiveThreadState, at: number): LiveThreadState {
     streaming: true,
     retrying: null,
     crashed: false,
-  });
+  };
 }
 
 function onToolEnded(
@@ -295,13 +292,11 @@ function onToolEnded(
             files,
           },
         };
-        // diff 旧块剥除后重挂轮末区（子代理条之前），与 attachTailSubagents 尾序 […, diff, subagents] 一致
+        // diff 旧块剥除后重挂轮末（唯一尾块语义）
         const withoutDiff = current.blocks.filter((block) => block.kind !== 'diff');
-        const beforeAgents = withoutDiff.findIndex((block) => block.kind === 'subagents');
-        const at = beforeAgents === -1 ? withoutDiff.length : beforeAgents;
         return {
           ...current,
-          blocks: [...withoutDiff.slice(0, at), diffBlock, ...withoutDiff.slice(at)],
+          blocks: [...withoutDiff, diffBlock],
         };
       });
     }
@@ -408,10 +403,10 @@ function appendToolCall(blocks: readonly TurnBlock[], call: ToolCallModel, messa
   return next;
 }
 
-/** 过程/正文新块原位插入：diff 与子代理条恒挂轮末（尾部不变式，与转写重建同构），
+/** 过程/正文新块原位插入：diff 恒挂轮末（尾部不变式，与转写重建同构），
  * 尾部块之后的到达块插到不变式区之前。 */
 function insertBlock(blocks: TurnBlock[], block: TurnBlock): void {
-  const tail = blocks.findIndex((existing) => existing.kind === 'diff' || existing.kind === 'subagents');
+  const tail = blocks.findIndex((existing) => existing.kind === 'diff');
   const at = tail === -1 ? blocks.length : tail;
   blocks.splice(at, 0, block);
 }

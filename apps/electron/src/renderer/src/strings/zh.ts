@@ -52,7 +52,6 @@ export const zh: typeof en = {
     toggleMaximize: '切换最大化',
     tabAdd: '添加面板',
     openDiff: '打开 Diff',
-    openAgents: '打开 Agents',
     turnFailedLabel: '请求失败',
     turnAbortedLabel: '已中止',
     openMenu: ['在访达中打开', '在终端中打开', '在编辑器中打开'],
@@ -65,7 +64,6 @@ export const zh: typeof en = {
   },
   flow: {
     openDiff: '打开 Diff',
-    openAgents: '打开 Agents',
     closeDiffPanel: '关闭 Diff 面板',
     steerPlaceholder: '向该子代理注入指令…',
     steerFailed: (reason: string): string => `改向失败（${reason}）。`,
@@ -75,7 +73,7 @@ export const zh: typeof en = {
     captionMaximize: '最大化',
     captionRestore: '还原',
     captionClose: '关闭',
-    subagentsSummary: (count: number): string => (count === 1 ? '启动了 1 个子代理' : `启动了 ${count} 个子代理`),
+    agentsWorking: (count: number): string => `${count} 个子代理工作中，打开 Agents 面板`,
     changedFiles: (count: number): string => (count === 1 ? '1 个文件变更' : `${count} 个文件变更`),
     closeAgents: '关闭子代理面板',
     toggleAgents: '切换子代理面板',
@@ -133,8 +131,6 @@ export const zh: typeof en = {
     toggleOutput: '展开/收起命令输出',
     panelWorking: (count: number): string => (count === 1 ? '1 个进行中' : `${count} 个进行中`),
     panelSettled: (count: number): string => (count === 1 ? '1 个已完成' : `${count} 个已完成`),
-    notifySummary: (workingCount: number, tokens: number): string =>
-      `${workingCount === 1 ? '1 个进行中' : `${workingCount} 个进行中`} Σ ${tokens}`,
     footerTokens: (tokens: string): string => `Σ ${tokens} tok`,
     metaTokens: (tokens: string | null): string => (tokens === null ? '— tok' : `${tokens} tok`),
     metaTools: (count: number): string | null => {

@@ -46,6 +46,8 @@ export type LiveWorkspaceView = {
   /** 对话执行中（streaming/直执行命令/压缩）：消息流尾部 loading 数据源。 */
   executing: boolean;
   agentsActive: boolean;
+  /** 工作中子代理数量（输入框徽标数据源；agentsActive 同源）。 */
+  agentsWorking: number;
   queueCount: number;
   /** 排队消息分组视图（hub 侧队列镜像；横幅计数数据源）。 */
   queueItems: { steering: readonly string[]; followUp: readonly string[] };
@@ -195,7 +197,8 @@ export function useLiveWorkspace(): LiveWorkspaceView {
    * 清除面由折叠层保证（settle / worker 死亡 / 宿主重启均已就地终态）；
    * 后台子代理跨轮运行不并入（父轮已结算，明细归 Agents 面板）。 */
   const executing = generating || bashRunning || compacting;
-  const agentsActive = summarizeAgents(activeThread.agents).workingCount > 0;
+  const agentsWorking = summarizeAgents(activeThread.agents).workingCount;
+  const agentsActive = agentsWorking > 0;
 
   // 走表 tick 随「活跃线程执行中或有 working 子代理」（子代理面板计时走表依赖 now 前进；
   // 后台线程活动仍不驱动任何渲染）；已结束轮 elapsed 冻结于 endedAt，不依赖 tick
@@ -226,6 +229,7 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     generating,
     executing,
     agentsActive,
+    agentsWorking,
     queueCount: queueItems.steering.length + queueItems.followUp.length,
     queueItems,
     queuedDrafts: queuedDraftsByThread,

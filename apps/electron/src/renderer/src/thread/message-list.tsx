@@ -20,7 +20,6 @@ type MessageListProps = {
   bottomInset: number
   emptyTitle: string
   emptyHint: string
-  onOpenAgents: () => void
   onOpenDiff: () => void
   onEditUserMessage: (text: string) => void
   onForkUserMessage?: (entryId: string, text: string, autoResend: boolean) => void
@@ -38,7 +37,7 @@ function itemTopMargin(index: number, item: ThreadItem): string {
 
 /** 消息内容列：用户气泡右对齐、轮次组左对齐，轮与轮之间落时间戳行；滚动与贴底跟随由页面滚动容器负责。
  * shrink-0 + min-h-full：列盒取自然高度（空态撑满视口居中），底部 padding（输入浮层避让）计入可滚动区域。 */
-function MessageList({ thread, now, loading, bottomInset, emptyTitle, emptyHint, onOpenAgents, onOpenDiff, onEditUserMessage, onForkUserMessage }: MessageListProps) {
+function MessageList({ thread, now, loading, bottomInset, emptyTitle, emptyHint, onOpenDiff, onEditUserMessage, onForkUserMessage }: MessageListProps) {
   const empty = thread.items.length === 0;
   return (
     <div className={`${CONVERSATION_COLUMN_CLASS} flex min-h-full shrink-0 flex-col pt-6 px-3`} style={{ paddingBottom: bottomInset }}>
@@ -71,7 +70,7 @@ function MessageList({ thread, now, loading, bottomInset, emptyTitle, emptyHint,
                   <TextBlock text={item.message.text} />
                 )
               ) : (
-                <TurnGroup turn={item.turn} now={now} onOpenAgents={onOpenAgents} onOpenDiff={onOpenDiff} />
+                <TurnGroup turn={item.turn} now={now} onOpenDiff={onOpenDiff} />
               )}
             </div>
           ))}

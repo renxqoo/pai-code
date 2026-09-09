@@ -416,7 +416,6 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
               hostDown={hostDown}
               bottomInset={bottomInset}
               onOpenSettings={openSettings}
-              onOpenAgents={openAgents}
               onOpenDiff={openDiff}
               onEditUserMessage={editUserMessage}
               onForkUserMessage={forkUserMessage}
@@ -481,6 +480,8 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
             onSelectEffort={workspace.actions.selectEffort}
             onSelectPermissionMode={selectPermissionMode}
             onFollowPermissionGlobal={followPermissionGlobal}
+            agentsWorking={workspace.agentsWorking}
+            onOpenAgents={openAgents}
           />
             </div>
           </>

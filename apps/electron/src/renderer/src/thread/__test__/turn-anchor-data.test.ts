@@ -25,12 +25,6 @@ function messageItem(id: string): ThreadItem {
   return { kind: 'message', message: { id, role: 'user', text: '你好', images: [] } };
 }
 
-/** 全空白子代理夹具（名称/摘要降级链路的垃圾输入形态） */
-const blankAgent = {
-  id: 's1', name: '', agentType: 'Explore', model: 'm', effort: 'low',
-  tokens: null, toolCount: 0, status: 'done' as const, startedAt: 0, endedAt: 1, tools: [],
-};
-
 describe('turnAnchorSummary（历史轮锚点 tooltip 摘要）', () => {
   test('取最后一条非空文本块的首行，中间文本与思考不参与', () => {
     const turn = {
@@ -69,17 +63,6 @@ describe('turnAnchorSummary（历史轮锚点 tooltip 摘要）', () => {
     expect(turnAnchorSummary(turn)).toBe('Bash bun run lint');
   });
 
-  test('无文本无工具 → 首个子代理的报告摘要；摘要为空退工具名', () => {
-    const agent = {
-      id: 's1', name: 'explore', agentType: 'Explore', model: 'm', effort: 'low',
-      tokens: 10, toolCount: 2, status: 'done' as const, startedAt: 0, endedAt: 1, tools: [],
-    };
-    const withSummary = { blocks: [{ kind: 'subagents', id: 's', agents: [{ ...agent, summary: '扫描完成' }] }] };
-    expect(turnAnchorSummary(withSummary)).toBe('扫描完成');
-    const nameOnly = { blocks: [{ kind: 'subagents', id: 's', agents: [{ ...agent, summary: '' }] }] };
-    expect(turnAnchorSummary(nameOnly)).toBe('explore');
-  });
-
   test('异常终态轮 → 终态提示文本', () => {
     const turn = { blocks: [{ kind: 'turnFailure', id: 'f', stopReason: 'error', message: '401 invalid api key' }] };
     expect(turnAnchorSummary(turn)).toBe('401 invalid api key');
@@ -91,7 +74,7 @@ describe('turnAnchorSummary（历史轮锚点 tooltip 摘要）', () => {
     expect(turnAnchorSummary({ blocks: [{ kind: 'thinking', id: 'b', text: '推理' }] })).toBe('');
   });
 
-  test('症状回归：工具/子代理条目存在但名称与摘要全空白，继续向后降级而不是误报空行', () => {
+  test('症状回归：工具条目存在但名称与摘要全空白，继续向后降级而不是误报空行', () => {
     const turn = {
       blocks: [
         {
@@ -99,7 +82,6 @@ describe('turnAnchorSummary（历史轮锚点 tooltip 摘要）', () => {
           id: 't',
           calls: [{ id: 'c1', name: '', argsPreview: ' ', output: '', exitCode: null, durationMs: null, status: 'running' }],
         },
-        { kind: 'subagents', id: 's', agents: [{ ...blankAgent, summary: ' ' }] },
         { kind: 'turnFailure', id: 'f', stopReason: 'aborted', message: null },
       ],
     };

@@ -22,7 +22,6 @@ type ThreadStageProps = {
   /** 底部输入浮层的避让高度：内容列底部 padding 与回底浮标定位共用。 */
   bottomInset: number
   onOpenSettings: () => void
-  onOpenAgents: () => void
   onOpenDiff: () => void
   onEditUserMessage: (text: string) => void
   onForkUserMessage?: (entryId: string, text: string, autoResend: boolean) => void
@@ -35,7 +34,7 @@ function noop(): void {}
  * 会话舞台（主区固定结构，以 fragment 挂进主区根）：全宽菜单栏 + 掉线横幅 +
  * 页面滚动消息流；菜单栏不随滚动，贴底跟随、轮次锚点带、回底浮标挂本层。
  */
-function ThreadStage({ workspace, activeThreadId, sidebarCollapsed, panel, onToggleSplitView, hostDown, bottomInset, onOpenSettings, onOpenAgents, onOpenDiff, onEditUserMessage, onForkUserMessage }: ThreadStageProps) {
+function ThreadStage({ workspace, activeThreadId, sidebarCollapsed, panel, onToggleSplitView, hostDown, bottomInset, onOpenSettings, onOpenDiff, onEditUserMessage, onForkUserMessage }: ThreadStageProps) {
   const { sessions } = workspace;
   /** 页面滚动：菜单栏固定，消息流独占滚动容器，贴底跟随挂在容器上 */
   const { containerRef: scrollRef, onScroll, atBottom, scrollToBottom } = useStickToBottom();
@@ -107,7 +106,6 @@ function ThreadStage({ workspace, activeThreadId, sidebarCollapsed, panel, onTog
           bottomInset={bottomInset}
           emptyTitle={copy.thread.emptyTitle}
           emptyHint={copy.thread.emptyHint}
-          onOpenAgents={onOpenAgents}
           onOpenDiff={onOpenDiff}
           onEditUserMessage={onEditUserMessage}
           onForkUserMessage={onForkUserMessage}

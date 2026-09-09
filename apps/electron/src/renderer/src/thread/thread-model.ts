@@ -72,7 +72,6 @@ export type TurnBlock =
   | { kind: 'text'; id: string; text: string }
   | { kind: 'thinking'; id: string; text: string }
   | { kind: 'tools'; id: string; calls: readonly ToolCallModel[] }
-  | { kind: 'subagents'; id: string; agents: readonly SubagentModel[] }
   | { kind: 'diff'; id: string; diff: DiffSummaryModel }
   /** 轮次异常终态（上游报错/中止）：收起态也保持可见的一行提示。 */
   | { kind: 'turnFailure'; id: string; stopReason: 'error' | 'aborted'; message: string | null };

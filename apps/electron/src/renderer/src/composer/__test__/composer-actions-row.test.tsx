@@ -89,3 +89,22 @@ describe('输入框底行模型选择（弹窗入口）', () => {
     expect(html).toContain(copy.composer.effortUnavailable);
   });
 });
+
+describe('输入框底行子代理状态徽标', () => {
+  test('不传 agents（新任务页无会话面）不渲染', () => {
+    const html = renderToStaticMarkup(<ComposerActionsRow {...makeProps()} />);
+    expect(html).not.toContain(copy.flow.agentsWorking(1));
+  });
+
+  test('working>0：图标按钮带数量，无障碍名含计数', () => {
+    const html = renderToStaticMarkup(<ComposerActionsRow {...makeProps({ agents: { working: 2, onOpen: noop } })} />);
+    expect(html).toContain(copy.flow.agentsWorking(2));
+    expect(html).toContain('>2<');
+  });
+
+  test('working=0：没有就不展示', () => {
+    const html = renderToStaticMarkup(<ComposerActionsRow {...makeProps({ agents: { working: 0, onOpen: noop } })} />);
+    expect(html).not.toContain(copy.flow.agentsWorking(0));
+    expect(html).not.toContain('>0<');
+  });
+});

@@ -15,17 +15,16 @@ import type { TurnModel } from './thread-model';
 type TurnGroupProps = {
   turn: TurnModel
   now: number
-  onOpenAgents: () => void
   onOpenDiff: () => void
 }
 
 /**
  * 单个轮次：状态行（走表/冻结，过程整体开合的唯一开关）+ 渲染段 + 结束时刻时间戳行。
- * 过程（思考/工具/子代理/diff/中间文本）作为整体展开或收起；收起时只留最后一条文本输出。
+ * 过程（思考/工具/diff/中间文本）作为整体展开或收起；收起时只留最后一条文本输出。
  * 展开时相邻思考/工具聚合为带竖轨的过程组，正文/diff 等独立呈现。
  * section 带 data-turn-id：锚点带（TurnAnchorRail）按它定位并跳转滚入视口。
  */
-function TurnGroup({ turn, now, onOpenAgents, onOpenDiff }: TurnGroupProps) {
+function TurnGroup({ turn, now, onOpenDiff }: TurnGroupProps) {
   const collapse = useTurnCollapse(turn);
   const elapsed = turnElapsedMs(turn, now);
   const label =
@@ -52,7 +51,7 @@ function TurnGroup({ turn, now, onOpenAgents, onOpenDiff }: TurnGroupProps) {
               running={isTurnRunning(turn)}
             />
           ) : (
-            <TurnBlockView key={run.block.id} block={run.block} onOpenAgents={onOpenAgents} onOpenDiff={onOpenDiff} />
+            <TurnBlockView key={run.block.id} block={run.block} onOpenDiff={onOpenDiff} />
           ),
         )}
       </div>
