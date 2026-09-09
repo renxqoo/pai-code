@@ -360,7 +360,11 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       return result.ok ? { ok: true as const, data: thinkingLevels(result.data) } : fail(result.reason);
     },
     'session/compact': async (params) => {
-      const result = await command({ type: 'compact', threadId: params.threadId });
+      const result = await command({
+        type: 'compact',
+        threadId: params.threadId,
+        customInstructions: params.customInstructions,
+      });
       return result.ok ? { ok: true as const, data: null } : fail(result.reason);
     },
     'model/list': async () => {

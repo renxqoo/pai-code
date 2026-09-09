@@ -22,7 +22,7 @@ import type { SidebarView } from '@/sidebar/sidebar-view';
 import type { SidebarFooterAction } from '@/sidebar/sidebar-footer';
 import { toggleGroupFold, expandGroup, type GroupFold } from '@/sidebar/group-collapse';
 import { buildSidebarViewModel } from '@/screens/sidebar-view-model';
-import { submitDraftText } from '@/screens/submit-draft';
+import { isImmediateSubmit, submitDraftText } from '@/screens/submit-draft';
 import { imagePayloadOf, type PendingImage } from '@/composer/read-image-file';
 import { queuedDrafts } from '@/composer/queued-drafts';
 import { branchSegmentOf } from '@/composer/branch-segment';
@@ -216,8 +216,9 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const submitDraft = React.useCallback(
     (text: string, attachments: readonly ComposerAttachment[]): Promise<boolean> => {
       const trimmed = text.trim();
-      // 生成中普通消息 = 本地暂存（默认轮后发送，轮自然结束冲刷）；`! ` 直执行不走暂存（bash 通道即时执行）
-      if (workspace.isThreadStreaming(activeThreadId) && trimmed.length > 0 && !trimmed.startsWith('! ')) {
+      // 生成中普通消息 = 本地暂存（默认轮后发送，轮自然结束冲刷）；直执行与内置命令
+      // 是即时操作不走暂存（词法单一真相在 submit-draft 的 isImmediateSubmit）
+      if (workspace.isThreadStreaming(activeThreadId) && trimmed.length > 0 && !isImmediateSubmit(text)) {
         queuedDrafts.stage(activeThreadId, activeSessionPath, trimmed, attachments.map(({ name, payload }) => ({ name, payload })));
         clearDraft();
         return Promise.resolve(true);
@@ -446,7 +447,6 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
             sendLabel={copy.composer.send}
             stopLabel={copy.composer.stop}
             contextUsageLabel={copy.composer.contextUsage}
-            compactLabel={copy.composer.compact}
             contextUsed={workspace.composer.contextUsed}
             model={workspace.composer.model}
             effort={workspace.composer.effort}
@@ -465,7 +465,6 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
             noModelsLabel={hostDown ? copy.composer.hostDownModels : copy.composer.noModels}
             effortUnavailableLabel={copy.composer.effortUnavailable}
             generating={workspace.generating}
-            compacting={workspace.compacting}
             queuedMessages={workspace.queuedDrafts[activeThreadId] ?? EMPTY_QUEUED_MESSAGES}
             onSendNowQueued={sendNowQueuedMessage}
             onEditQueued={editQueuedMessage}
@@ -474,7 +473,6 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
             onChange={setDraft}
             onSubmit={submitDraft}
             onStop={stopOrAbort}
-            onCompact={workspace.actions.compact}
             onOpenSettings={openSettings}
             onSelectModel={workspace.actions.selectModel}
             onSelectEffort={workspace.actions.selectEffort}

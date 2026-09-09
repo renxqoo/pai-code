@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ArrowUp, ChevronDown, FoldVertical, Plus } from 'lucide-react';
+import { ArrowUp, ChevronDown, Plus } from 'lucide-react';
 
 import type { PermissionRules, SessionStatsView } from '@paiapp/contracts';
 
@@ -24,11 +24,7 @@ type SessionControls = {
   /** 用量明细（I1）；null = 未拉取，环不可点。 */
   stats: SessionStatsView | null
   contextUsageLabel: string
-  /** 压缩进行中压缩键禁用，防止重复触发 */
-  compacting: boolean
-  compactLabel: string
   effortUnavailableLabel: string
-  onCompact: () => void
 }
 
 type ComposerActionsRowProps = {
@@ -64,8 +60,9 @@ function optionItems(options: readonly string[], selected: string) {
 }
 
 /**
- * 输入框底行：左侧附件与权限模式，右侧压缩 / 用量环 / 模型 / 思考档 / 发送（生成中为停止）。
+ * 输入框底行：左侧附件与权限模式，右侧用量环 / 模型 / 思考档 / 发送（生成中为停止）。
  * 模型选择走统一 CommandDialog 弹窗（T21）；思考档与用量环只在有会话时出现。
+ * 压缩入口是斜杠命令 /compact（按钮已下线，见 builtin-commands）。
  */
 function ComposerActionsRow({
   model,
@@ -106,9 +103,6 @@ function ComposerActionsRow({
       <div className="ml-auto flex items-center gap-[9px]">
         {session === null ? null : (
           <>
-            <IconButton label={session.compactLabel} size="sm" onClick={session.onCompact} disabled={session.compacting} className="text-muted-foreground/90">
-              <FoldVertical strokeWidth={1.75} />
-            </IconButton>
             <span className="relative flex items-center">
               {usageOpen && session.stats !== null ? <UsageDetails stats={session.stats} /> : null}
               {session.stats === null ? (

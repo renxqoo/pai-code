@@ -197,6 +197,16 @@ describe('API schema：每方法合法/非法样本', () => {
     expect(ApiSchemas['session/abortBash'].params.parse({ threadId: 't' })).toEqual({ threadId: 't' });
   });
 
+  test('session/compact：customInstructions 可选（缺省不带键）；空串与未知键拒绝', () => {
+    expect(ApiSchemas['session/compact'].params.parse({ threadId: 't' })).toEqual({ threadId: 't' });
+    expect(ApiSchemas['session/compact'].params.parse({ threadId: 't', customInstructions: '保留迁移重点' })).toEqual({
+      threadId: 't',
+      customInstructions: '保留迁移重点',
+    });
+    expect(() => ApiSchemas['session/compact'].params.parse({ threadId: 't', customInstructions: '' })).toThrow();
+    expect(() => ApiSchemas['session/compact'].params.parse({ threadId: 't', extra: 1 } as never)).toThrow();
+  });
+
   test('session/fork 与 clearQueue 样本', () => {
     expect(ApiSchemas['session/fork'].params.parse({ threadId: 't', entryId: 'e1' })).toEqual({ threadId: 't', entryId: 'e1' });
     expect(ApiSchemas['session/fork'].params.parse({ threadId: 't', entryId: 'e1', position: 'at' })).toEqual({ threadId: 't', entryId: 'e1', position: 'at' });

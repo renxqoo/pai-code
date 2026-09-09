@@ -18,10 +18,7 @@ const SESSION: SessionControls = {
   contextUsed: 0,
   stats: null,
   contextUsageLabel: copy.composer.contextUsage,
-  compacting: false,
-  compactLabel: copy.composer.compact,
   effortUnavailableLabel: copy.composer.effortUnavailable,
-  onCompact: noop,
 };
 
 function makeProps(overrides: Partial<Parameters<typeof ComposerActionsRow>[0]> = {}): Parameters<typeof ComposerActionsRow>[0] {
@@ -69,14 +66,12 @@ describe('输入框底行模型选择（弹窗入口）', () => {
     expect(html).not.toContain(copy.composer.noModels);
   });
 
-  test('会话面控件按 session 组渲染：有会话出思考档/压缩/用量环，无会话三项皆无（新任务页不摆假控件）', () => {
+  test('会话面控件按 session 组渲染：有会话出思考档/用量环，无会话两项皆无（新任务页不摆假控件）；压缩入口已下线为 /compact 命令', () => {
     const withSession = renderToStaticMarkup(<ComposerActionsRow {...makeProps()} />);
-    expect(withSession).toContain(copy.composer.compact);
     expect(withSession).toContain(copy.composer.contextUsage);
     expect(withSession).toContain('high');
 
     const withoutSession = renderToStaticMarkup(<ComposerActionsRow {...makeProps({ session: null })} />);
-    expect(withoutSession).not.toContain(copy.composer.compact);
     expect(withoutSession).not.toContain(copy.composer.contextUsage);
     expect(withoutSession).not.toContain(copy.composer.effortUnavailable);
     // 附件与发送仍在（新任务页可附图提交）

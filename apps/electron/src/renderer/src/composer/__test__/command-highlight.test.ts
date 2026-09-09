@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { commandTokenDeleteRange, leadingCommandHighlight, splitHighlight } from '../command-highlight';
+import { mergeCommands } from '../builtin-commands';
 import type { CommandView } from '@paiapp/contracts';
 
 const SKILL: CommandView = { name: 'skill:writer', description: null, source: 'skill' };
@@ -20,6 +21,12 @@ describe('leadingCommandHighlight', () => {
     ])
     expect(leadingCommandHighlight('/review 尽快', [{ name: 'review', description: null, source: 'prompt' }])).toEqual([
       { start: 0, end: 7, source: 'prompt' },
+    ])
+    // 内置命令（builtin 源）同一词法命中：附加指示文本不进高亮区间
+    const builtinCompact = mergeCommands([]).find((command) => command.source === 'builtin');
+    expect(builtinCompact).toBeDefined();
+    expect(leadingCommandHighlight('/compact 保留重点', builtinCompact === undefined ? [] : [builtinCompact])).toEqual([
+      { start: 0, end: 8, source: 'builtin' },
     ])
   })
 

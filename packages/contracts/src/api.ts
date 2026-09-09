@@ -283,7 +283,9 @@ export const ApiSchemas = {
     result: ThinkingLevelViewSchema,
   },
   'session/compact': {
-    params: threadOnly,
+    params: z
+      .object({ threadId: z.string().min(1), customInstructions: z.string().min(1).optional() })
+      .strict(),
     result: z.null(),
   },
   'model/list': {

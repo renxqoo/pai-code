@@ -49,10 +49,9 @@ describe('NewTaskScreen', () => {
     expect(html).toContain(copy.composer.branchLoading);
   });
 
-  test('无会话面控件：不渲染思考档/压缩/用量环（不摆没有数据面的假控件）', () => {
+  test('无会话面控件：不渲染思考档/用量环（不摆没有数据面的假控件）', () => {
     const html = renderScreen();
     expect(html).not.toContain(copy.composer.effortUnavailable);
-    expect(html).not.toContain(copy.composer.compact);
     expect(html).not.toContain(copy.composer.contextUsage);
     // 附件与发送保留（可附图提交）
     expect(html).toContain(copy.composer.attach);

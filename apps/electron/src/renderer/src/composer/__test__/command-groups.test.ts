@@ -29,6 +29,14 @@ describe('slashCommandGroups 斜杠命令分组', () => {
     expect(groups.map((group) => group.id)).toEqual(['skills']);
   });
 
+  test('内置命令（builtin 源）归命令组：与模板/扩展命令同组并列', () => {
+    const groups = slashCommandGroups(
+      [{ name: 'compact', description: 'd', source: 'builtin' as const }, cmd('goal', 'prompt'), cmd('skill:writer', 'skill')],
+      { commandTitle: '命令', skillTitle: '技能' },
+    );
+    expect(groups[0]?.items.map((item) => item.id)).toEqual(['builtin:compact', 'prompt:goal']);
+  });
+
   test('空目录：无组返回', () => {
     expect(slashCommandGroups([], { commandTitle: '命令', skillTitle: '技能' })).toEqual([]);
   });

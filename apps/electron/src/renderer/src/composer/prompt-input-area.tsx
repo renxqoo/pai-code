@@ -1,8 +1,8 @@
 import * as React from 'react';
 
-import type { CommandView } from '@paiapp/contracts';
 import { AutocompleteGroupList, type AutocompleteGroup } from '@paiapp/ui';
 
+import type { ComposerCommand } from '@/composer/builtin-commands';
 import { ComposerHighlightLayer } from '@/composer/composer-highlight-layer';
 import { leadingCommandHighlight, commandTokenDeleteRange } from '@/composer/command-highlight';
 import { activeTokenQuery, applyTokenSelection, filterTokenItems, type TokenTrigger } from '@/composer/token-trigger';
@@ -23,8 +23,8 @@ type PromptInputAreaProps = {
   placeholder: string
   /** 外部聚焦句柄：编辑重发回填草稿后聚焦输入框 */
   textareaRef?: React.Ref<HTMLTextAreaElement>
-  /** 会话内斜杠命令/技能目录（空 = 无会话：不启用 `/` 触发，仅 `@` 文件补全） */
-  commands: readonly CommandView[]
+  /** 会话内斜杠命令/技能目录（hub 三源 + 本地 builtin 合成；空 = 无会话：不启用 `/` 触发，仅 `@` 文件补全） */
+  commands: readonly ComposerCommand[]
   /** 补全弹层的无障碍名（命令 / 文件） */
   slashAriaLabel: string
   fileAriaLabel: string

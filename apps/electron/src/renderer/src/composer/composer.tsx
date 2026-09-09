@@ -1,6 +1,8 @@
 import * as React from 'react';
 
-import type { CommandView, PermissionRules, SessionStatsView } from '@paiapp/contracts';
+import type { PermissionRules, SessionStatsView } from '@paiapp/contracts';
+
+import type { ComposerCommand } from '@/composer/builtin-commands';
 
 import { CONVERSATION_COLUMN_CLASS } from '@/thread/conversation-column';
 import { ComposerActionsRow } from '@/composer/composer-actions-row';
@@ -21,7 +23,6 @@ type ComposerProps = {
   sendLabel: string
   stopLabel: string
   contextUsageLabel: string
-  compactLabel: string
   contextUsed: number
   model: string
   effort: string
@@ -32,7 +33,7 @@ type ComposerProps = {
   /** true = 生效规则来自全局文件（无会话 sidecar） */
   permissionFollowsGlobal: boolean
   /** 会话内斜杠命令/技能目录（补全数据源） */
-  commands: readonly CommandView[]
+  commands: readonly ComposerCommand[]
   /** 补全弹层的无障碍名（命令 / 文件） */
   slashAriaLabel: string
   fileAriaLabel: string
@@ -48,8 +49,6 @@ type ComposerProps = {
   effortUnavailableLabel: string
   /** 有生成任务时回车 = 排队消息（语义由父层按会话状态裁决），发送键仍为停止 */
   generating: boolean
-  /** 压缩进行中：压缩按钮禁用，横幅由 ThreadBanner 呈现 */
-  compacting: boolean
   /** 本地暂存的排队消息（旧→新；生成中显示为输入卡顶部的灰色卡片堆） */
   queuedMessages: readonly { id: number; text: string }[]
   onSendNowQueued: (id: number) => void
@@ -61,7 +60,6 @@ type ComposerProps = {
   /** 提交（文本 + 附件原样交出，投递语义由父层决定）；resolve true = 已发出（composer 据此清空附件） */
   onSubmit: (text: string, attachments: readonly ComposerAttachment[]) => Promise<boolean>
   onStop: () => void
-  onCompact: () => void
   onOpenSettings?: () => void
   onSelectModel: (value: string) => void
   onSelectEffort: (value: string) => void
@@ -86,7 +84,6 @@ function Composer({
   sendLabel,
   stopLabel,
   contextUsageLabel,
-  compactLabel,
   contextUsed,
   model,
   effort,
@@ -103,7 +100,6 @@ function Composer({
   noModelsLabel,
   effortUnavailableLabel,
   generating,
-  compacting,
   queuedMessages,
   onSendNowQueued,
   onEditQueued,
@@ -112,7 +108,6 @@ function Composer({
   onChange,
   onSubmit,
   onStop,
-  onCompact,
   onOpenSettings,
   onSelectModel,
   onSelectEffort,
@@ -192,10 +187,7 @@ function Composer({
               contextUsed,
               stats,
               contextUsageLabel,
-              compacting,
-              compactLabel,
               effortUnavailableLabel,
-              onCompact,
             }}
           />
         )}
