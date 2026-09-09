@@ -6,6 +6,7 @@ import { ChevronToggle } from '@paiapp/ui';
 import { copy } from '@/strings';
 import { cn } from '@/lib/utils';
 import { previewLine } from './preview-line';
+import { thinkingParagraphs } from './thinking-paragraphs';
 import { resolveOpen, type CollapsePref } from './collapse-state';
 
 type ThinkingBlockProps = {
@@ -55,8 +56,12 @@ function ThinkingBlock({ text, running }: ThinkingBlockProps) {
         </button>
       </div>
       {open ? (
-        <div className="mb-[4px] ml-[6px] border-l border-border py-[2px] pl-[14px] text-[12.5px] leading-[21px] text-muted-foreground">
-          <p className="whitespace-pre-wrap break-words">{text}</p>
+        <div className="mb-[4px] ml-[6px] flex flex-col gap-[6px] border-l border-border py-[2px] pl-[14px] text-[12.5px] leading-[21px] text-muted-foreground">
+          {thinkingParagraphs(text).map((paragraph, i) => (
+            <p key={i} className="whitespace-pre-wrap break-words">
+              {paragraph}
+            </p>
+          ))}
         </div>
       ) : null}
     </div>
