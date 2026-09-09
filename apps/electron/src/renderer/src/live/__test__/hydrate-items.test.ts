@@ -119,6 +119,77 @@ describe('hydrateNewItems · 对账增量', () => {
   });
 });
 
+describe('hydrateItems · 轮次计时锚定', () => {
+  test('症状回归：单 assistant 轮计时坍缩为 0s——startedAt 锚定触发 user 条目时刻而非首条 assistant', () => {
+    const items = hydrateItems([
+      { ...user('u1', '你好'), at: 1_000 },
+      { ...assistant('a1', { text: '你好！' }), at: 4_200 },
+    ]);
+    const turn = items[1];
+    if (turn?.kind !== 'turn') throw new Error('expected turn');
+    expect(turn.turn.startedAt).toBe(1_000);
+    expect(turn.turn.endedAt).toBe(4_200);
+    expect(turn.turn.endedAt - turn.turn.startedAt).toBeGreaterThan(0);
+  });
+
+  test('多轮各锚自己的触发消息，不沿用上一轮锚点', () => {
+    const items = hydrateItems([
+      { ...user('u1', '一'), at: 1_000 },
+      { ...assistant('a1', { text: '答一' }), at: 2_000 },
+      { ...user('u2', '二'), at: 5_000 },
+      { ...assistant('a2', { text: '答二' }), at: 7_500 },
+    ]);
+    const first = items[1];
+    const second = items[3];
+    if (first?.kind !== 'turn' || second?.kind !== 'turn') throw new Error('expected turns');
+    expect(first.turn.startedAt).toBe(1_000);
+    expect(second.turn.startedAt).toBe(5_000);
+  });
+
+  test('无前置 user 条目的组回退首条 assistant 时刻', () => {
+    const items = hydrateItems([{ ...assistant('a1', { text: '孤儿轮' }), at: 7_000 }]);
+    const turn = items[0];
+    if (turn?.kind !== 'turn') throw new Error('expected turn');
+    expect(turn.turn.startedAt).toBe(7_000);
+  });
+
+  test('锚点即用即弃：bash 隔断后的组不沿用更早的 user 时刻（避免夸大时长）', () => {
+    const items = hydrateItems([
+      { ...user('u1', '跑'), at: 1_000 },
+      { ...assistant('a1', { text: '先答' }), at: 2_000 },
+      { ...bash('b1', 'ls'), at: 3_000 },
+      { ...assistant('a2', { text: '后答' }), at: 9_000 },
+    ]);
+    const second = items[3];
+    if (second?.kind !== 'turn') throw new Error('expected turn');
+    expect(second.turn.startedAt).toBe(9_000);
+  });
+});
+
+describe('hydrateNewItems · 对账计时锚定', () => {
+  test('症状回归：对账重建的 assistant 组锚定前置 user 条目时刻', () => {
+    const groups = hydrateNewItems([
+      { ...user('u1', '你好'), at: 1_000 },
+      { ...assistant('a1', { text: '你好！' }), at: 4_200 },
+    ]);
+    const turn = groups[1]?.item;
+    if (turn?.kind !== 'turn') throw new Error('expected turn');
+    expect(turn.turn.startedAt).toBe(1_000);
+    expect(turn.turn.endedAt).toBe(4_200);
+  });
+
+  test('bash 清空锚点：其后无 user 前置的组回退首条 assistant 时刻', () => {
+    const groups = hydrateNewItems([
+      { ...user('u1', '跑'), at: 1_000 },
+      { ...bash('b1', 'ls'), at: 2_000 },
+      { ...assistant('a1', { text: '答' }), at: 6_000 },
+    ]);
+    const turn = groups[2]?.item;
+    if (turn?.kind !== 'turn') throw new Error('expected turn');
+    expect(turn.turn.startedAt).toBe(6_000);
+  });
+});
+
 describe('mergeDiffFile', () => {
   test('新路径追加；同路径替换计数', () => {
     const files: Array<{ path: string; additions: number; deletions: number }> = [];

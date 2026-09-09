@@ -5,18 +5,24 @@ import type { ThreadItem, TurnModel, TurnBlock, ToolCallModel } from '@/thread/t
  * HistoryItem[] → ThreadItem[]（转写真相 → 视图）。
  * 分组语义：两个用户消息之间的全部 assistant/bash 条目折叠为一个轮次；
  * bash 条目独立成单工具轮次。条目 id 参与生成稳定视图 id（对账去重依赖）。
+ * 轮次计时：startedAt 锚定触发本组的 user 条目时刻（即 prompt 提交时刻，覆盖模型响应延迟），
+ * 无前置 user 条目回退首条 assistant 时刻；锚点即用即弃，不跨无关条目沿用。
  */
 
 const MAX_TURN_BLOCK_CHARS = 4 * 1024 * 1024;
 
-export function hydrateItems(history: readonly HistoryItem[]): readonly ThreadItem[] {
+export function hydrateItems(history: readonly HistoryItem[], turnStartAt: number | null = null): readonly ThreadItem[] {
   const items: ThreadItem[] = [];
   let pending: { assistants: HistoryItem[] } | null = null;
+  // 触发当前 pending 组的 user 条目时刻；flushTurn 消费后清空
+  let anchor: number | null = turnStartAt;
 
   const flushTurn = (): void => {
     if (pending === null) return;
     const assistants = pending.assistants;
     pending = null;
+    const startAt = anchor;
+    anchor = null;
     if (assistants.length === 0) return;
     const first = assistants[0];
     const last = assistants[assistants.length - 1];
@@ -30,7 +36,7 @@ export function hydrateItems(history: readonly HistoryItem[]): readonly ThreadIt
     const turn: TurnModel = {
       id: `turn-${first.id}`,
       status: failure?.stopReason === 'aborted' ? 'stopped' : 'completed',
-      startedAt: first.kind === 'assistant' ? first.at : 0,
+      startedAt: startAt ?? (first.kind === 'assistant' ? first.at : 0),
       endedAt: last.kind === 'assistant' ? last.at : 0,
       blocks,
     };
@@ -49,10 +55,12 @@ export function hydrateItems(history: readonly HistoryItem[]): readonly ThreadIt
           images: item.images.map(({ data, mimeType }) => ({ data, mimeType })),
         },
       });
+      anchor = item.at;
       continue;
     }
     if (item.kind === 'bash') {
       flushTurn();
+      anchor = null;
       const call: ToolCallModel = {
         id: `call-${item.id}`,
         name: 'bash',
@@ -82,16 +90,20 @@ export function hydrateItems(history: readonly HistoryItem[]): readonly ThreadIt
 /** 追加条目（对账）：按条目 id 去重后转换（保持到达序）。 */
 export function hydrateNewItems(history: readonly HistoryItem[]): readonly { item: ThreadItem; entryIds: readonly string[] }[] {
   const out: Array<{ item: ThreadItem; entryIds: readonly string[] }> = [];
-  // 与 hydrateItems 同一分组语义，但需要保留组内条目 id 供去重
+  // 与 hydrateItems 同一分组语义，但需要保留组内条目 id 供去重；
+  // 组内不含 user 条目，计时锚点（前置 user 条目时刻）由外层跨组传递
   let group: HistoryItem[] = [];
   let groupIds: string[] = [];
+  let anchor: number | null = null;
 
   const flush = (): void => {
     if (group.length === 0) {
       groupIds = [];
       return;
     }
-    const converted = hydrateItems(group);
+    const startAt = anchor;
+    anchor = null;
+    const converted = hydrateItems(group, startAt);
     const turn = converted[0];
     if (turn !== undefined) out.push({ item: turn, entryIds: groupIds });
     group = [];
@@ -104,10 +116,12 @@ export function hydrateNewItems(history: readonly HistoryItem[]): readonly { ite
       const converted = hydrateItems([entry]);
       const message = converted[0];
       if (message !== undefined) out.push({ item: message, entryIds: [entry.id] });
+      anchor = entry.at;
       continue;
     }
     if (entry.kind === 'bash') {
       flush();
+      anchor = null;
       const converted = hydrateItems([entry]);
       const turn = converted[0];
       if (turn !== undefined) out.push({ item: turn, entryIds: [entry.id] });
