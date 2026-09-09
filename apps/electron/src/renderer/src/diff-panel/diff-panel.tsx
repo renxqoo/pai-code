@@ -5,6 +5,7 @@ import { IconButton } from '@paiapp/ui';
 
 import { WINDOWS_CAPTION_WIDTH } from '@/lib/platform';
 import { copy } from '@/strings';
+import { DiffFileList } from '@/thread/diff-file-list';
 import { formatDiffDelta } from '@/thread/format-count-unit';
 import type { DiffSummaryModel } from '@/thread/thread-model';
 
@@ -35,15 +36,7 @@ function DiffPanel({ diff, onClose }: DiffPanelProps) {
       ) : (
         <>
           <div className="min-h-0 flex-1 overflow-y-auto px-[14px] pt-[2px] pb-[10px]">
-            {diff.files.map((file) => (
-              <div key={file.path} className="flex h-[24px] items-center gap-[10px] font-mono text-[11px] leading-none">
-                <span className="min-w-0 flex-1 truncate text-muted-foreground" title={file.path}>
-                  {file.path}
-                </span>
-                <span className="shrink-0 tabular-nums text-diff-add">{formatDiffDelta('add', file.additions)}</span>
-                <span className="shrink-0 tabular-nums text-diff-del">{formatDiffDelta('del', file.deletions)}</span>
-              </div>
-            ))}
+            <DiffFileList files={diff.files} />
           </div>
           <div className="flex h-[30px] shrink-0 items-center gap-[12px] border-t border-border px-[14px]">
             <span className="text-[11px] leading-none text-muted-foreground">
