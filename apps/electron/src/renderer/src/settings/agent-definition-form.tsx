@@ -10,6 +10,7 @@ import { PickerDialog } from '@/components/picker-dialog';
 import { groupModelOptions } from '@/components/group-model-options';
 import { copy } from '@/strings';
 
+import { FieldLabel } from './field-label';
 import type { SettingsScreenProps } from './use-settings-screen';
 
 type AgentsSettingsProps = SettingsScreenProps['agents'];
@@ -38,22 +39,6 @@ const MODEL_INHERIT_ID = '__inherit__';
 /** 工具 chips 按词表顺序稳定输出（选中集合 → 提交数组）。 */
 function orderedSelectedTools(toolIds: readonly string[], selected: ReadonlySet<string>): string[] {
   return toolIds.filter((id) => selected.has(id));
-}
-
-/** 字段标签行：主标签 + 可选弱化 hint（hint 文案单一真相在 strings）。 */
-function fieldLabel(label: string, hint: string | undefined, htmlFor?: string): React.ReactElement {
-  return (
-    <div className="flex flex-wrap items-baseline gap-x-[8px] gap-y-[2px]">
-      {htmlFor === undefined ? (
-        <span className="text-[13px] leading-[18px] font-medium text-foreground">{label}</span>
-      ) : (
-        <label htmlFor={htmlFor} className="text-[13px] leading-[18px] font-medium text-foreground">
-          {label}
-        </label>
-      )}
-      {hint === undefined ? null : <span className="min-w-0 text-[11px] leading-[15px] text-muted-foreground">{hint}</span>}
-    </div>
-  );
 }
 
 /** 控件下方 hint 行（条件展示：模型继承/工具默认集/作用域差异）。 */
@@ -235,7 +220,7 @@ function AgentDefinitionForm({ initial, previous, knownProjects, modelOptions, t
         </div>
         <div className="flex items-start gap-[16px]">
           <div className="flex min-w-0 flex-1 flex-col gap-[6px]">
-            {fieldLabel(copy.settings.agentsFieldName, copy.settings.agentsFieldNameHint, 'agent-definition-name')}
+            <FieldLabel label={copy.settings.agentsFieldName} hint={copy.settings.agentsFieldNameHint} htmlFor="agent-definition-name" />
             <input
               id="agent-definition-name"
               type="text"
@@ -247,7 +232,7 @@ function AgentDefinitionForm({ initial, previous, knownProjects, modelOptions, t
             {nameInvalid ? <p className="text-[11px] leading-[15px] text-destructive">{copy.settings.agentsNameInvalid}</p> : null}
           </div>
           <div className="flex w-[260px] shrink-0 flex-col gap-[6px]">
-            {fieldLabel(copy.settings.agentsFieldModel, undefined, undefined)}
+            <FieldLabel label={copy.settings.agentsFieldModel} />
             <button
               type="button"
               aria-label={copy.settings.agentsFieldModel}
@@ -276,7 +261,7 @@ function AgentDefinitionForm({ initial, previous, knownProjects, modelOptions, t
           </div>
         </div>
         <div className="flex flex-col gap-[6px]">
-          {fieldLabel(copy.settings.agentsFieldDescription, copy.settings.agentsFieldDescriptionHint, 'agent-definition-description')}
+          <FieldLabel label={copy.settings.agentsFieldDescription} hint={copy.settings.agentsFieldDescriptionHint} htmlFor="agent-definition-description" />
           <input
             id="agent-definition-description"
             type="text"
@@ -286,7 +271,7 @@ function AgentDefinitionForm({ initial, previous, knownProjects, modelOptions, t
           />
         </div>
         <div className="flex flex-col gap-[8px]">
-          {fieldLabel(copy.settings.agentsFieldTools, copy.settings.agentsToolsAllHint, undefined)}
+          <FieldLabel label={copy.settings.agentsFieldTools} hint={copy.settings.agentsToolsAllHint} />
           <SegmentedControl
             value={toolsMode}
             onChange={changeToolsMode}
@@ -318,7 +303,7 @@ function AgentDefinitionForm({ initial, previous, knownProjects, modelOptions, t
           ) : null}
         </div>
         <div className="flex flex-col gap-[6px]">
-          {fieldLabel(copy.settings.agentsFieldPrompt, copy.settings.agentsFieldPromptHint, 'agent-definition-prompt')}
+          <FieldLabel label={copy.settings.agentsFieldPrompt} hint={copy.settings.agentsFieldPromptHint} htmlFor="agent-definition-prompt" />
           <textarea
             id="agent-definition-prompt"
             value={systemPrompt}

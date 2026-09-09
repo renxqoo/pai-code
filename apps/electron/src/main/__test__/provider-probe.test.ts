@@ -1,20 +1,27 @@
 import { expect, test } from 'bun:test';
 
-import { createProviderProbe, type ProviderProbeDeps } from '../provider-probe';
+import { buildProbeRequest, createProviderProbe, supportsProbe, type ProviderProbeDeps } from '../provider-probe';
 
-/** 探活回归：错误映射表、URL 归一、同名单飞、全局并发上限。 */
+/** 探活回归：错误映射表、按 API 格式构造请求、URL 归一、同名单飞、全局并发上限。 */
 
 type Responder = () => Response | Promise<Response>;
 
 function makeHarness() {
   const calls: Array<{ url: string; body: unknown }> = [];
   const responders: Responder[] = [];
-  const providers = new Map<string, { baseUrl: string; models: string[] }>([
-    ['glm', { baseUrl: 'https://api.example.com/v1/', models: [{ id: 'glm-4.7', reasoning: true }] }],
-    ['nokey', { baseUrl: 'https://api.example.com/v1', models: ['m'] }],
-    ['weird', { baseUrl: 'https://api.example.com/v1/?x=1#frag', models: ['m'] }],
+  const providers = new Map<string, { baseUrl: string; api: string; models: { id: string }[] }>([
+    ['glm', { baseUrl: 'https://api.example.com/v1/', api: 'openai-completions', models: [{ id: 'glm-4.7' }] }],
+    ['nokey', { baseUrl: 'https://api.example.com/v1', api: 'openai-completions', models: [{ id: 'm' }] }],
+    ['weird', { baseUrl: 'https://api.example.com/v1/?x=1#frag', api: 'openai-completions', models: [{ id: 'm' }] }],
+    ['nomodels', { baseUrl: 'https://api.example.com/v1', api: 'openai-completions', models: [] }],
+    ['private', { baseUrl: 'https://api.example.com/v1', api: 'pi-messages', models: [{ id: 'm' }] }],
   ]);
-  const keys = new Map<string, string>([['glm', 'sk-test'], ['weird', 'sk-test']]);
+  const keys = new Map<string, string>([
+    ['glm', 'sk-test'],
+    ['weird', 'sk-test'],
+    ['nomodels', 'sk-test'],
+    ['private', 'sk-test'],
+  ]);
   const deps: ProviderProbeDeps = {
     getProvider: (name) => providers.get(name),
     getKey: (name) => keys.get(name) ?? null,
@@ -33,18 +40,84 @@ function makeHarness() {
     deps,
     respond: (responder: Responder) => responders.push(responder),
     addProvider: (name: string) => {
-      providers.set(name, { baseUrl: `https://${name}.example.com`, models: ['m'] });
+      providers.set(name, { baseUrl: `https://${name}.example.com`, api: 'openai-completions', models: [{ id: 'm' }] });
       keys.set(name, 'sk');
     },
   };
 }
 
-test('未知 provider → provider_not_found；缺 key → key_missing（不发请求）', async () => {
+test('未知 provider → provider_not_found；缺 key → key_missing；空模型 → no_models（不发请求）', async () => {
   const h = makeHarness();
   const probe = createProviderProbe(h.deps);
   expect(await probe.probe('ghost')).toEqual({ ok: false, reason: 'provider_not_found' });
   expect(await probe.probe('nokey')).toEqual({ ok: false, reason: 'key_missing' });
+  expect(await probe.probe('nomodels')).toEqual({ ok: false, reason: 'no_models' });
   expect(h.calls).toEqual([]);
+});
+
+test('非词表 API 格式 → unsupported_api（不发请求，不假装连通）', async () => {
+  const h = makeHarness();
+  expect(await createProviderProbe(h.deps).probe('private')).toEqual({ ok: false, reason: 'unsupported_api' });
+  expect(h.calls).toEqual([]);
+  expect(supportsProbe('pi-messages')).toBe(false);
+  for (const api of ['openai-completions', 'openai-responses', 'anthropic-messages', 'google-generative-ai', 'mistral-conversations']) {
+    expect(supportsProbe(api)).toBe(true);
+  }
+});
+
+test.each([
+  [
+    'openai-completions',
+    'https://api.example.com/v1',
+    'https://api.example.com/v1/chat/completions',
+    { authorization: 'Bearer sk-test', 'content-type': 'application/json' },
+    { model: 'glm-4.7', max_tokens: 1, messages: [{ role: 'user', content: 'ping' }] },
+  ],
+  [
+    'mistral-conversations',
+    'https://api.example.com/v1/',
+    'https://api.example.com/v1/chat/completions',
+    { authorization: 'Bearer sk-test', 'content-type': 'application/json' },
+    { model: 'glm-4.7', max_tokens: 1, messages: [{ role: 'user', content: 'ping' }] },
+  ],
+  [
+    'openai-responses',
+    'https://api.example.com/v1',
+    'https://api.example.com/v1/responses',
+    { authorization: 'Bearer sk-test', 'content-type': 'application/json' },
+    { model: 'glm-4.7', input: 'ping', max_output_tokens: 16 },
+  ],
+  [
+    'anthropic-messages',
+    'https://api.example.com',
+    'https://api.example.com/messages',
+    { 'x-api-key': 'sk-test', 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    { model: 'glm-4.7', max_tokens: 1, messages: [{ role: 'user', content: 'ping' }] },
+  ],
+  [
+    'google-generative-ai',
+    'https://api.example.com/v1beta',
+    'https://api.example.com/v1beta/models/glm-4.7:generateContent?key=sk-test',
+    { 'content-type': 'application/json' },
+    { contents: [{ parts: [{ text: 'ping' }] }] },
+  ],
+])('buildProbeRequest %s：路径/鉴权/请求体按格式取值', (api, baseUrl, url, headers, body) => {
+  const request = buildProbeRequest({ baseUrl, api, modelId: 'glm-4.7', apiKey: 'sk-test' });
+  expect(request).not.toBeNull();
+  expect(request?.url.href).toBe(url);
+  expect(request?.headers).toEqual(headers);
+  expect(JSON.parse(request?.body ?? '')).toEqual(body);
+});
+
+test('buildProbeRequest：非词表格式返回 null；模型 id 特殊字符进 google 路径前 encode；带 models/ 前缀的官方 id 去前缀', () => {
+  expect(buildProbeRequest({ baseUrl: 'https://x.example.com', api: 'pi-messages', modelId: 'm', apiKey: 'k' })).toBeNull();
+  const request = buildProbeRequest({ baseUrl: 'https://x.example.com', api: 'google-generative-ai', modelId: 'models/gemini 2.0', apiKey: 'k' });
+  expect(request?.url.pathname).toBe('/models/gemini%202.0:generateContent');
+  expect(request?.url.search).toBe('?key=k');
+  // 官方文档给的 id（models/gemini-2.0-flash）不应拼成 /models/models%2F…
+  expect(buildProbeRequest({ baseUrl: 'https://x.example.com', api: 'google-generative-ai', modelId: 'models/gemini-2.0-flash', apiKey: 'k' })?.url.href).toBe(
+    'https://x.example.com/models/gemini-2.0-flash:generateContent?key=k',
+  );
 });
 
 test('200 → ok 且 latencyMs ≥ 0；URL 尾斜杠裁剪 + 1-token 请求体', async () => {
@@ -85,6 +158,29 @@ test('baseUrl 带 query/fragment：URL 归一去 fragment、保 query、拼对�
   const h = makeHarness();
   await createProviderProbe(h.deps).probe('weird');
   expect(h.calls[0]?.url).toBe('https://api.example.com/v1/chat/completions?x=1');
+});
+
+test('响应体读取失败（连接被重置）：只影响排空，不改变探活结果', async () => {
+  const h = makeHarness();
+  const response = new Response('{}', { status: 200 });
+  Object.defineProperty(response, 'arrayBuffer', { value: (): Promise<ArrayBuffer> => Promise.reject(new Error('ECONNRESET')) });
+  h.respond(() => response);
+  expect((await createProviderProbe(h.deps).probe('glm')).ok).toBe(true);
+});
+
+test('未注入 timeoutSignal 时用 AbortSignal.timeout 作为缺省超时信号（真机路径）', async () => {
+  const h = makeHarness();
+  let signal: AbortSignal | null = null;
+  const deps: ProviderProbeDeps = {
+    getProvider: (name) => h.deps.getProvider(name),
+    getKey: (name) => h.deps.getKey(name),
+    fetchFn: ((_url: string | URL | Request, init?: RequestInit) => {
+      signal = init?.signal ?? null;
+      return Promise.resolve(new Response('{}', { status: 200 }));
+    }) as typeof fetch,
+  };
+  expect((await createProviderProbe(deps).probe('glm')).ok).toBe(true);
+  expect(signal).toBeInstanceOf(AbortSignal);
 });
 
 test('同 provider 单飞：并发两次只发一次请求', async () => {

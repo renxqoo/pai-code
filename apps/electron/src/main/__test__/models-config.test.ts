@@ -73,6 +73,22 @@ test('reasoning:false 与 default 形态不写多余字段（生成面最小化�
   expect(glm.models).toEqual([{ id: 'm' }]);
 });
 
+test('症状回归：非 OpenAI 兼容格式写入 thinkingFormat 被忽略（compat 只对 openai-completions 生效）', () => {
+  const file = JSON.parse(
+    serializeModelsConfig([
+      provider({ api: 'anthropic-messages' }),
+      provider({ name: 'google', api: 'google-generative-ai' }),
+    ]),
+  ) as {
+    providers: Record<string, { compat?: unknown }>;
+  };
+  expect('compat' in (file.providers['glm'] ?? {})).toBe(false);
+  expect('compat' in (file.providers['google'] ?? {})).toBe(false);
+  // 同配置下 openai-completions 仍落 compat（对照组，证明门控只按 api 判定）
+  const openai = JSON.parse(serializeModelsConfig([provider()])) as { providers: Record<string, { compat?: { thinkingFormat: string } }> };
+  expect(openai.providers['glm']?.compat).toEqual({ thinkingFormat: 'zai' });
+});
+
 test('modelsConfigDiffers：能力/形态变更与文件缺失都判需重载；一致时判无需', () => {
   const dir = tempDir();
   mkdirSync(dir, { recursive: true });
@@ -89,4 +105,10 @@ test('modelsConfigDiffers：能力/形态变更与文件缺失都判需重载；
   expect(modelsConfigDiffers(dir, [provider({ thinkingFormat: 'qwen' })])).toBe(true);
   // 序列化稳定可作对比基准
   expect(serializeModelsConfig([provider()])).toBe(readFileSync(join(dir, 'models.json'), 'utf8'));
+});
+
+test('models.json 读取失败（同路径是目录）：判需重载而不是抛错阻断设置页', () => {
+  const dir = tempDir();
+  mkdirSync(join(dir, 'models.json'));
+  expect(modelsConfigDiffers(dir, [provider()])).toBe(true);
 });

@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Check } from 'lucide-react';
 
 import { copy } from '@/strings';
-import { ProviderForm, type ProviderUpsertInput } from '@/settings/provider-form';
+import { ProviderEditor, type ProviderUpsertInput } from '@/settings/provider-editor';
 import type { ProviderConfigView } from '@paiapp/contracts';
 
 export type OnboardingScreenProps = {
@@ -70,7 +70,7 @@ function OnboardingScreen({
           {step === 'provider' ? (
             <div className="flex flex-col gap-[12px]">
               <p className={stepTitleClassName}>{copy.onboarding.stepProvider}</p>
-              <ProviderForm onSubmit={onUpsertProvider} />
+              <ProviderEditor initial={null} onSubmit={onUpsertProvider} />
               {providers.length > 0 ? (
                 <div className="flex flex-col gap-[8px]">
                   {providers.map((provider) => (

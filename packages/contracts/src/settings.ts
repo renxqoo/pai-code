@@ -34,12 +34,36 @@ export const ThinkingFormatSchema = z.enum([
 ]);
 export type ThinkingFormat = z.infer<typeof ThinkingFormatSchema>;
 
+/**
+ * UI 可安全暴露的 API 格式子集（镜像 pi 的 KnownApi 中无需额外鉴权/私有协议的格式）。
+ * 其余格式（azure/vertex/bedrock/codex/pi-messages）只能手写 models.json，不进选择器。
+ */
+export const ApiFormatSchema = z.enum([
+  'openai-completions',
+  'openai-responses',
+  'anthropic-messages',
+  'google-generative-ai',
+  'mistral-conversations',
+]);
+export type ApiFormat = z.infer<typeof ApiFormatSchema>;
+
+/** 词表顺序即 UI 选项顺序（文案由 strings 提供）。 */
+export const API_FORMAT_IDS: readonly ApiFormat[] = ApiFormatSchema.options;
+
+/** 词表判定：UI 选择器据此决定「回退显示原值」还是「按词表展示」。 */
+export function isApiFormat(value: string): value is ApiFormat {
+  return (API_FORMAT_IDS as readonly string[]).includes(value);
+}
+
 export const ProviderConfigSchema = z
   .object({
     /** models.json 的 provider 键名。 */
     name: z.string().min(1),
     baseUrl: z.string().min(1),
-    /** pai-cli models.json 的 api 字段（如 openai-completions）。 */
+    /**
+     * pi models.json 的 api 字段。持久化面保持宽松：磁盘上手写的非词表格式
+     * （如 pi-messages）不得因 UI 词表收窄被判非法而整表降级丢配置。
+     */
     api: z.string().min(1),
     models: z.array(ProviderModelSchema).min(1),
     /** 思考参数形态；default = 不写 compat。 */

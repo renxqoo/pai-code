@@ -54,7 +54,7 @@ function appendPatterns(existing: readonly string[], raw: string): string[] {
   return next;
 }
 
-/** pattern chips 编辑器（与 provider-form 模型 chips 同交互同观感）；纯渲染片段，输入草稿态由父层持有。 */
+/** pattern chips 编辑器（与渠道编辑器模型清单同交互同观感）；纯渲染片段，输入草稿态由父层持有。 */
 function patternEditor(config: {
   patterns: readonly string[]
   inputDraft: string

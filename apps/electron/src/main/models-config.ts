@@ -10,7 +10,8 @@ import type { ProviderKeyStore } from './file-settings';
  * 自定义 provider 的 key 以 $PAI_KEY_<NAME> 引用（值经 env 注入，不落 models.json）；
  * 模型条目携带 reasoning 能力（决定思考档位可选）与 vision 模态（true 写 input:["text","image"]——
  * pi 对未声明视觉的自定义模型按纯文本处理，发送时图片会被剥成占位文本），
- * provider 级 compat.thinkingFormat 决定思考参数的线上形态（zai=thinking 开关、qwen=enable_thinking、…）。
+ * provider 级 compat.thinkingFormat 决定思考参数的线上形态（zai=thinking 开关、qwen=enable_thinking、…）；
+ * 该字段只对 OpenAI 兼容协议（openai-completions）有意义，其余格式不写（写入会被忽略且污染配置）。
  */
 
 interface ModelsFile {
@@ -30,7 +31,9 @@ export function serializeModelsConfig(providers: readonly ProviderConfig[]): str
       baseUrl: provider.baseUrl,
       api: provider.api,
       apiKey: `$${envVarNameForProvider(provider.name)}`,
-      ...(provider.thinkingFormat !== 'default' ? { compat: { thinkingFormat: provider.thinkingFormat } } : {}),
+      ...(provider.api === 'openai-completions' && provider.thinkingFormat !== 'default'
+        ? { compat: { thinkingFormat: provider.thinkingFormat } }
+        : {}),
       models: provider.models.map((model) => ({
         id: model.id,
         ...(model.reasoning ? { reasoning: true } : {}),

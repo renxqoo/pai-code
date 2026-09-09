@@ -1,28 +1,32 @@
 import * as React from 'react';
 import { ChevronDown } from 'lucide-react';
 
-import type { ProviderConfigView, ProviderModel, ThinkingFormat } from '@paiapp/contracts';
+import type { ProviderConfigView } from '@paiapp/contracts';
 
 import { PickerDialog } from '@/components/picker-dialog';
 import { groupModelOptions } from '@/components/group-model-options';
 import { copy } from '@/strings';
 
+import { ProviderDetail, type ProviderTestResult } from './provider-detail';
+import type { ProviderUpsertInput } from './provider-editor';
+import { filterProviders, providerListEmptyMessage } from './provider-list-filter';
+import { ProviderRow } from './provider-row';
 import { SettingsCard } from './settings-card';
 import { SettingsPageHeader } from './settings-page-header';
 import { SettingsRow } from './settings-row';
 import { SettingsSearchInput } from './settings-search-input';
-import { ProviderForm } from './provider-form';
-import { ProviderRow, type ProviderTestResult } from './provider-row';
 
 type ProvidersSectionProps = {
   list: readonly ProviderConfigView[]
   defaultModel: string | null
-  modelOptions: readonly string[]  // "provider/modelId" 形态
-  onUpsert: (input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; thinkingFormat: ThinkingFormat; apiKey?: string }) => Promise<boolean>
+  modelOptions: readonly string[] // "provider/modelId" 形态
+  onUpsert: (input: ProviderUpsertInput) => Promise<boolean>
   onRemove: (name: string) => Promise<boolean>
   onSelectDefaultModel: (value: string | null) => void
   onTest: (name: string) => Promise<ProviderTestResult>
-}
+};
+
+type ProvidersView = { kind: 'list' } | { kind: 'create' } | { kind: 'edit'; name: string };
 
 /** 默认模型弹窗触发器：select 观感（描边胶囊 + chevron）。 */
 const defaultModelTriggerClassName =
@@ -31,33 +35,50 @@ const defaultModelTriggerClassName =
 /** 「不使用默认模型」项的保留 id（双下划线前缀避免与真实模型名撞车），归一为 null 提交。 */
 const DEFAULT_MODEL_NONE_ID = '__none__';
 
-/** 本地过滤：provider 名称 / baseUrl / 模型 id 包含匹配（大小写不敏感）。 */
-function providerMatchesQuery(provider: ProviderConfigView, query: string): boolean {
-  const q = query.trim().toLowerCase();
-  if (q.length === 0) return true;
-  return (
-    provider.name.toLowerCase().includes(q) ||
-    provider.baseUrl.toLowerCase().includes(q) ||
-    provider.models.some((model) => model.id.toLowerCase().includes(q))
-  );
-}
-
-/** Providers 分区：默认模型选择卡 + 搜索 + provider 卡列表（编辑/测试/移除）+ 黑按钮展开新增表单。 */
+/** 渠道分区：默认模型选择卡 + 渠道列表（搜索/添加/两步删除）↔ 渠道详情（钻入编辑，面包屑返回）。 */
 function ProvidersSection({ list, defaultModel, modelOptions, onUpsert, onRemove, onSelectDefaultModel, onTest }: ProvidersSectionProps) {
-  const [editing, setEditing] = React.useState<string | null>(null);
-  const [adding, setAdding] = React.useState(false);
+  const [view, setView] = React.useState<ProvidersView>({ kind: 'list' });
   const [query, setQuery] = React.useState('');
   const [defaultPickerOpen, setDefaultPickerOpen] = React.useState(false);
-  const selectedDefault = defaultModel ?? copy.settings.defaultModelNone;
-  // 默认模型已不在目录（provider 被删/改名）→ 触发器旁短标记 + 卡内联失效提示
-  const defaultModelInvalid = defaultModel !== null && !modelOptions.includes(defaultModel);
-  const editingProvider = editing === null ? undefined : list.find((provider) => provider.name === editing);
-  const visibleProviders = list.filter((provider) => providerMatchesQuery(provider, query));
+  const [removeFailed, setRemoveFailed] = React.useState(false);
 
-  const openEdit = (name: string): void => {
-    setAdding(false);
-    setEditing(name);
+  const selectedDefault = defaultModel ?? copy.settings.defaultModelNone;
+  // 默认模型已不在目录（渠道被删/改名）→ 触发器旁短标记 + 卡内联失效提示
+  const defaultModelInvalid = defaultModel !== null && !modelOptions.includes(defaultModel);
+  const editingProvider = view.kind === 'edit' ? list.find((provider) => provider.name === view.name) : undefined;
+  const visibleProviders = filterProviders(list, query);
+  const emptyMessage = providerListEmptyMessage(list.length, visibleProviders.length);
+
+  const backToList = (): void => {
+    setRemoveFailed(false);
+    setView({ kind: 'list' });
   };
+
+  const removeProvider = (name: string): Promise<boolean> => {
+    setRemoveFailed(false);
+    return onRemove(name).then((ok) => {
+      if (!ok) setRemoveFailed(true);
+      return ok;
+    });
+  };
+
+  if (view.kind === 'create' || editingProvider !== undefined) {
+    return (
+      <section>
+        <ProviderDetail
+          key={view.kind === 'edit' ? view.name : 'new'}
+          provider={editingProvider ?? null}
+          onUpsert={onUpsert}
+          onTest={onTest}
+          onBack={backToList}
+          onSaved={(name) => {
+            // 新建保存后切到新渠道详情（可立即测试连接）；编辑保存后停留原地（编辑器内提示已保存）
+            if (view.kind === 'create') setView({ kind: 'edit', name });
+          }}
+        />
+      </section>
+    );
+  }
 
   return (
     <section>
@@ -103,50 +124,31 @@ function ProvidersSection({ list, defaultModel, modelOptions, onUpsert, onRemove
             </p>
           ) : null}
         </SettingsCard>
-        {list.length === 0 ? null : (
-          <div className="flex justify-end">
-            <SettingsSearchInput value={query} onChange={setQuery} placeholder={copy.settings.searchModels} className="w-[280px]" />
-          </div>
-        )}
-        {list.length === 0 ? (
-          <p className="text-[12.5px] leading-[18px] text-muted-foreground">{copy.settings.providersEmpty}</p>
-        ) : visibleProviders.length === 0 ? (
-          <p className="text-[12.5px] leading-[18px] text-muted-foreground">{copy.settings.searchNoResults}</p>
+        <div className="flex items-center gap-[12px]">
+          <span className="mr-auto text-[12.5px] leading-[18px] text-muted-foreground">{copy.settings.providersCount(list.length)}</span>
+          <SettingsSearchInput value={query} onChange={setQuery} placeholder={copy.settings.searchProviders} className="w-[240px]" />
+          <button
+            type="button"
+            onClick={() => setView({ kind: 'create' })}
+            className="h-8 cursor-pointer rounded-lg bg-foreground px-3 text-[12.5px] leading-none font-medium text-background outline-none select-none hover:opacity-90 focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            {copy.settings.addProvider}
+          </button>
+        </div>
+        {removeFailed ? <p className="text-[12px] leading-[16px] text-destructive">{copy.settings.providerRemoveFailed}</p> : null}
+        {emptyMessage !== null ? (
+          <p className="text-[12.5px] leading-[18px] text-muted-foreground">{emptyMessage}</p>
         ) : (
           <div className="flex flex-col gap-[12px]">
             {visibleProviders.map((provider) => (
               <ProviderRow
                 key={provider.name}
                 provider={provider}
-                onRemove={onRemove}
-                onEdit={() => openEdit(provider.name)}
-                onTest={() => onTest(provider.name)}
+                onOpen={() => setView({ kind: 'edit', name: provider.name })}
+                onRemove={removeProvider}
               />
             ))}
           </div>
-        )}
-        {editing !== null && editingProvider !== undefined ? (
-          <ProviderForm
-            key={`edit-${editing}`}
-            onSubmit={onUpsert}
-            initial={{
-              name: editingProvider.name,
-              baseUrl: editingProvider.baseUrl,
-              models: editingProvider.models.map((model) => ({ id: model.id, reasoning: model.reasoning, vision: model.vision })),
-              thinkingFormat: editingProvider.thinkingFormat,
-            }}
-            onCancel={() => setEditing(null)}
-          />
-        ) : adding ? (
-          <ProviderForm key="add" onSubmit={onUpsert} onCancel={() => setAdding(false)} />
-        ) : (
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            className="h-9 cursor-pointer self-start rounded-lg bg-foreground px-4 text-[13px] leading-none font-medium text-background outline-none select-none hover:opacity-90 focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
-            {copy.settings.addProvider}
-          </button>
         )}
       </div>
     </section>
