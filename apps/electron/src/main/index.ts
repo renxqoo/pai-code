@@ -224,13 +224,27 @@ void app.whenReady().then(async () => {
       void shell.openExternal(url);
     });
 
-    // caption 图标随最大化状态切换，经既有 pai:event 通道推送（即时单发，不进批推）
-    const publishMaximized = () => {
+    // 壳层状态初值：渲染层挂载时拉取一次（全屏恢复启动等无状态变更事件的场景也能对齐）
+    ipcMain.removeHandler('pai:window-get-state');
+    ipcMain.handle('pai:window-get-state', () => ({
+      maximized: win.isMaximized(),
+      fullscreen: win.isFullScreen(),
+    }));
+
+    // 壳层状态推送（最大化/全屏）：caption 图标切换与 macOS 全屏态标题块收窄共用；
+    // 经既有 pai:event 通道即时单发（不进批推）
+    const publishWindowState = () => {
       if (win.isDestroyed()) return;
-      win.webContents.send('pai:event', { kind: 'window-state', maximized: win.isMaximized() });
+      win.webContents.send('pai:event', {
+        kind: 'window-state',
+        maximized: win.isMaximized(),
+        fullscreen: win.isFullScreen(),
+      });
     };
-    win.on('maximize', publishMaximized);
-    win.on('unmaximize', publishMaximized);
+    win.on('maximize', publishWindowState);
+    win.on('unmaximize', publishWindowState);
+    win.on('enter-full-screen', publishWindowState);
+    win.on('leave-full-screen', publishWindowState);
 
     const devUrl = process.env['ELECTRON_RENDERER_URL'];
     if (devUrl?.startsWith('http://localhost:')) {

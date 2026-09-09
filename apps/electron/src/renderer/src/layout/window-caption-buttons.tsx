@@ -1,34 +1,15 @@
-import * as React from 'react';
-
 import { Copy, Minus, Square, X } from 'lucide-react';
 
+import { useWindowState } from '@/hooks/use-window-state';
 import { cn } from '@/lib/utils';
 import { copy } from '@/strings';
 
-type WindowStateEvent = { kind: 'window-state'; maximized: boolean };
-
-function isWindowStateEvent(event: unknown): event is WindowStateEvent {
-  return (
-    typeof event === 'object' &&
-    event !== null &&
-    (event as { kind?: unknown }).kind === 'window-state' &&
-    typeof (event as { maximized?: unknown }).maximized === 'boolean'
-  );
-}
-
 /**
  * Windows 自绘 caption 三键（hidden 标题栏下系统按钮不可用）：
- * 经 preload 桥驱动窗口动作，最大化状态由主进程经 pai:event 推送、图标随之切换。
+ * 经 preload 桥驱动窗口动作，最大化状态由主进程推送、图标随之切换。
  */
 function WindowCaptionButtons() {
-  const [maximized, setMaximized] = React.useState(false);
-
-  React.useEffect(() => {
-    const unsubscribe = window.pai?.subscribe((event: unknown) => {
-      if (isWindowStateEvent(event)) setMaximized(event.maximized);
-    });
-    return () => unsubscribe?.();
-  }, []);
+  const { maximized } = useWindowState();
 
   const buttons = [
     {

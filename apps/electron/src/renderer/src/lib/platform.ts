@@ -10,6 +10,9 @@ export const isWindowsPlatform = /Windows/.test(userAgent);
 /** 标题块左内边距：macOS 让位红绿灯（trafficLightPosition x=14），Windows 从边起 */
 export const TITLEBAR_LEFT_PADDING = isMacPlatform ? 83 : 10;
 
+/** 全屏态标题块左内边距：macOS 全屏时红绿灯隐藏（悬停才现），收窄让侧栏开关贴近左缘 */
+export const TITLEBAR_LEFT_PADDING_FULLSCREEN = 12;
+
 /** Windows caption 三键（最小化/最大化/关闭）占位宽，顶行内容右侧需避让 */
 export const WINDOWS_CAPTION_WIDTH = isWindowsPlatform ? 3 * 46 : 0;
 

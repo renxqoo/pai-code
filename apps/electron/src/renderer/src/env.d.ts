@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-import type { PaiBridge } from '../../../preload/index';
+import type { PaiBridge } from '../../preload/index';
 
 declare global {
   interface Window {

@@ -5,7 +5,8 @@ import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { IconButton } from '@paiapp/ui';
 
 import { useObservedWidth } from '@/hooks/use-observed-width';
-import { TITLEBAR_LEFT_PADDING } from '@/lib/platform';
+import { useWindowState } from '@/hooks/use-window-state';
+import { TITLEBAR_LEFT_PADDING, TITLEBAR_LEFT_PADDING_FULLSCREEN } from '@/lib/platform';
 
 type TitleBarLeftProps = {
   titleName: string
@@ -20,8 +21,10 @@ type TitleBarLeftProps = {
  * 标题覆盖块：fixed 在窗口左上（macOS 落在红绿灯右侧），不占布局行高——
  * 主区头部与它同排共享顶行。侧栏展开时宽度被钳制在侧栏内（不伸入主区），
  * 收起时保持内容宽并发布 --titlebar-left-w 供主区头部避让。
+ * 全屏态（macOS 红绿灯隐藏）左距收窄，侧栏开关贴近窗口左缘。
  */
 function TitleBarLeft({ titleName, titleSuffix, toggleLabel, collapsed, sidebarWidth, onToggle }: TitleBarLeftProps) {
+  const { fullscreen } = useWindowState();
   const publishWidth = React.useCallback((width: number) => {
     document.documentElement.style.setProperty('--titlebar-left-w', `${Math.round(width)}px`);
   }, []);
@@ -30,8 +33,11 @@ function TitleBarLeft({ titleName, titleSuffix, toggleLabel, collapsed, sidebarW
   return (
     <div
       ref={rootRef}
-      className="app-drag pointer-events-none fixed top-0 left-0 z-30 flex h-[46px] items-center gap-[14px] pr-4"
-      style={{ paddingLeft: TITLEBAR_LEFT_PADDING, maxWidth: collapsed ? undefined : sidebarWidth }}
+      className="app-drag pointer-events-none fixed top-0 left-0 z-30 flex h-[46px] items-center gap-[14px] pr-4 transition-[padding] duration-200 motion-reduce:transition-none"
+      style={{
+        paddingLeft: fullscreen ? TITLEBAR_LEFT_PADDING_FULLSCREEN : TITLEBAR_LEFT_PADDING,
+        maxWidth: collapsed ? undefined : sidebarWidth,
+      }}
     >
       <IconButton
         label={toggleLabel}

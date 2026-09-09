@@ -1,5 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
+import type { WindowState } from '../renderer/src/lib/window-state';
+
 const bridge = {
   invoke(method: string, params: unknown): Promise<unknown> {
     return ipcRenderer.invoke('pai:invoke', { method, params });
@@ -21,6 +23,9 @@ const bridge = {
     },
     openExternal(url: string): Promise<void> {
       return ipcRenderer.invoke('pai:window-open-external', url);
+    },
+    getState(): Promise<WindowState> {
+      return ipcRenderer.invoke('pai:window-get-state');
     },
   },
 };
