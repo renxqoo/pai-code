@@ -96,7 +96,7 @@ export const zh: typeof en = {
     labelList: '列目录',
     labelSubagent: '子代理',
     /** 思考单元收起态标签（运行中显 思考中） */
-    thought: '已思考',
+    thought: '思考',
     turnStoppedSummary: (elapsed: string): string => `已停止 · ${elapsed}`,
     /** 历史轮左缘锚点（无障碍名） */
     turnAnchorAria: (time: string): string => `查看 ${time} 结束的轮次`,
