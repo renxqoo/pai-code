@@ -63,7 +63,8 @@ function ProjectSection({
   };
   return (
     <section className="flex flex-col gap-[2px]">
-      <div className="group/row flex h-8 w-full items-center rounded-[8px] pr-[6px] select-none hover:bg-accent focus-within:ring-3 focus-within:ring-ring/50">
+      {/* 行级焦点环只随键盘聚焦出现（has(:focus-visible)）：鼠标点击行内钮后焦点留在行内，不再留下常驻边框 */}
+      <div className="group/row flex h-8 w-full items-center rounded-[8px] pr-[6px] select-none hover:bg-accent has-[button:focus-visible]:ring-3 has-[button:focus-visible]:ring-ring/50">
         <button
           type="button"
           aria-expanded={!collapsed}

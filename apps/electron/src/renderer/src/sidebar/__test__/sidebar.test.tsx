@@ -154,6 +154,14 @@ describe('Sidebar 渲染冒烟', () => {
     expect(grouped).not.toContain('更多操作');
   });
 
+  test('项目行无 focus-within 常驻边框（点击行内折叠钮后行周残留灰框的症状）：焦点环只随键盘聚焦出现', () => {
+    const html = renderToStaticMarkup(
+      <Sidebar {...makeProps({ view: 'projects', projectGroups: [makeGroup()] })} />,
+    );
+    expect(html).not.toContain('focus-within:ring-3');
+    expect(html).toContain('has-[button:focus-visible]:ring-3');
+  });
+
   test('项目文件面板打开：内容区整体让位（快捷区/底部工具条不渲染），返回行/搜索框/树在位', () => {
     const html = renderToStaticMarkup(
       <Sidebar
