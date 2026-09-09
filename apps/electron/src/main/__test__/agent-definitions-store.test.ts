@@ -37,11 +37,14 @@ beforeAll(() => {
 });
 
 describe('agent-definitions-store 门禁', () => {
-  test('非法 name（路径逃逸/空/超长）拒绝写；删路径按宽松主干校验（仅分隔符/点开头拒绝）', () => {
+  test('非法 name（路径逃逸/禁字符/点与空白开头结尾/超长）拒绝写；空格与 Unicode 名放行', () => {
     const { store } = makeStore();
-    for (const name of ['../evil', 'a/b', '', '.hidden', 'a b', `${'x'.repeat(65)}`]) {
+    for (const name of ['../evil', 'a/b', 'a\\b', '', '.hidden', 'a:b', 'a*b', 'trailing ', ' lead', `${'x'.repeat(65)}`]) {
       expect(store.upsert(makeDef({ name }), null, PROJECTS)).toEqual({ ok: false, reason: 'invalid_name' });
     }
+    // 空格/中文名 = 文件名合法形态（hub frontmatter name 本无约束）
+    expect(store.upsert(makeDef({ name: 'code reviewer' }), null, PROJECTS)).toEqual({ ok: true });
+    expect(store.upsert(makeDef({ name: '代码审查员' }), null, PROJECTS)).toEqual({ ok: true });
     for (const stem of ['../evil', 'a/b', '.hidden', '']) {
       expect(store.remove({ file: stem, scope: 'user', project: null }, PROJECTS)).toEqual({ ok: false, reason: 'invalid_file' });
     }

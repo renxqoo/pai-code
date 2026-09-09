@@ -10,6 +10,7 @@ import {
   ApiSchemas,
   API_METHODS,
   HistoryItemSchema,
+  isValidAgentName,
   type HubCommand,
   type PaiCommand,
   type UiEvent,
@@ -206,6 +207,16 @@ describe('API schema：每方法合法/非法样本', () => {
     expect(ApiSchemas['file/search'].params.parse({ cwd: '/w', query: 'ap' })).toEqual({ cwd: '/w', query: 'ap' });
     expect(() => ApiSchemas['file/search'].params.parse({ cwd: '', query: '' })).toThrow();
     expect(() => ApiSchemas['file/search'].params.parse({ cwd: '/w' })).toThrow();
+  });
+
+  test('isValidAgentName：文件名安全必要集（空格/Unicode 放行，分隔符/禁字符/首尾空白拒绝）', () => {
+    expect(isValidAgentName('code reviewer')).toBe(true);
+    expect(isValidAgentName('代码审查员')).toBe(true);
+    expect(isValidAgentName('a-b_c.d')).toBe(true);
+    expect(isValidAgentName('x'.repeat(64))).toBe(true);
+    for (const bad of ['', 'a/b', 'a\\b', 'a:b', 'a*b', 'a?b', 'a"b', 'a<b', 'a>b', 'a|b', '.hidden', 'trailing ', ' lead', 'x'.repeat(65), 'a\u0000b']) {
+      expect(isValidAgentName(bad)).toBe(false);
+    }
   });
 
   test('agent 定义管理三方法：definitions 空 params；upsert/remove 键位校验', () => {

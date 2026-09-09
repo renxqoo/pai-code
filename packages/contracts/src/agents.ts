@@ -8,13 +8,28 @@ export const AGENT_TOOL_IDS = ['read', 'bash', 'edit', 'write', 'grep', 'find', 
 export type AgentToolId = (typeof AGENT_TOOL_IDS)[number];
 
 /**
- * agent 名（同时是定义文件名主干）：字母/数字开头，仅含 字母数字 . _ -，
- * 长度 1..64。构造上排除路径分隔符与 ..，杜绝定义文件写入的路径逃逸。
+ * agent 名（同时是定义文件名主干）。校验边界 = 文件名安全的必要集，不是命名风格规范：
+ * 允许空格、中文等任意 Unicode（hub frontmatter name 本就无约束，"code reviewer" 这类
+ * 名字是常态）；禁止的是会让文件路径失去意义或跨平台出错的形态——
+ * 路径分隔符（/ \）与 Windows 禁字符（: * ? " < > |）、控制字符、点开头（. / ..
+ * 保留）、首尾空白（部分工具会剥尾空格造成文件不可达）。长度 ≤ 64 字符。
  */
-export const AGENT_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+const AGENT_NAME_FORBIDDEN = /[/\\:*?"<>|]/;
+
+function hasControlChar(value: string): boolean {
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    if (code < 0x20 || code === 0x7f) return true;
+  }
+  return false;
+}
 
 export function isValidAgentName(name: string): boolean {
-  return AGENT_NAME_PATTERN.test(name);
+  if (name.length === 0 || name.length > 64) return false;
+  if (name.startsWith('.') || name.endsWith(' ') || name.startsWith(' ')) return false;
+  if (name !== name.trim()) return false;
+  if (AGENT_NAME_FORBIDDEN.test(name)) return false;
+  return !hasControlChar(name);
 }
 
 /** 定义作用域：user = agentDir/agents（全局）；project = <项目>/.pi/agents（仅受信会话）。 */

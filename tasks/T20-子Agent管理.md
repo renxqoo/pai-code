@@ -21,10 +21,10 @@
 - **身份键 = 文件名主干（file）**（对抗审查 major 根治）：hub 只认 frontmatter name，手写文件 name 可与主干不等 → AgentDefinition 携带 `file`（枚举填充）；remove/upsert-previous 按 file 定位旧文件（宽松 stem 校验：无分隔符/非点开头）；upsert 新文件主干恒 = name（pattern 内），编辑手写文件即归一到「主干=name」不变式
 - **解析器覆盖 hub 合法全集**（对抗审查 major 根治）：flow 数组 tools（`[a, b]` / `[]`）、无引号标量尾注释（` #` 起剥，引号内 # 是内容）、BOM、栅栏行尾空格、symlink 定义文件、任意非空字符串 name（pattern 门禁只在写路径）；store 枚举含符号链接文件（hub isFile ∥ isSymbolicLink 同语义）
 - **安全门禁**：
-  - name → 文件名：`^[A-Za-z0-9][A-Za-z0-9._-]*$`（长度 ≤ 64），构造上排除路径逃逸；文件名恒为 `<name>.md`
+  - name → 文件名：文件名安全必要集（无 `/ \ : * ? " < > |` 与控制字符、非点/空白开头结尾、≤64 字符；空格与任意 Unicode 放行——hub frontmatter name 本无约束），构造上排除路径逃逸；文件名恒为 `<name>.md`
   - project 写入：cwd 必须 ∈ 已知项目集合；子路径固定 `.pi/agents`（不向上层目录搜索，写指定目录本身）；仅 `.md` 白名单后缀
   - 全部写/删动作 `deps.audit(...)`（permission_write 先例）
-- **契约新增**：`packages/contracts/src/agents.ts`（`AGENT_TOOL_IDS` 内置工具 id 常量、`AGENT_NAME_PATTERN`、`AgentScope`）；`AgentDefinitionSchema`（name/description/systemPrompt/tools nullable/model nullable/scope/project nullable/file 枚举填充）+ 三方法 schema（api.ts）
+- **契约新增**：`packages/contracts/src/agents.ts`（`AGENT_TOOL_IDS` 内置工具 id 常量、`isValidAgentName`、`AgentScope`）；`AgentDefinitionSchema`（name/description/systemPrompt/tools nullable/model nullable/scope/project nullable/file 枚举填充）+ 三方法 schema（api.ts）
 
 ## 问题域
 
@@ -51,7 +51,7 @@
 
 | 文件 | 职责 |
 | --- | --- |
-| `packages/contracts/src/agents.ts` | AGENT_TOOL_IDS/AGENT_NAME_PATTERN/AgentScope（工具 id 等协议字面量单一真相） |
+| `packages/contracts/src/agents.ts` | AGENT_TOOL_IDS/isValidAgentName/AgentScope（工具 id 词表与文件名安全校验的单一真相） |
 | `packages/contracts/src/api.ts` | AgentDefinitionSchema + agent/definitions·upsert·remove 方法 schema |
 | `apps/electron/src/main/agent-definition-file.ts` | md 编解码纯函数：parseAgentDefinition(text) / serializeAgentDefinition(def)（frontmatter YAML 手写序列化，数组 tools） |
 | `apps/electron/src/main/agent-definitions-store.ts` | 枚举（user 目录 + 已知项目 .pi/agents）/read/upsert（写新删旧）/remove + 路径解析门禁（name pattern、项目集合、固定子路径、.md 后缀）+ 原子写 |
