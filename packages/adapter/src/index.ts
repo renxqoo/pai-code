@@ -6,7 +6,6 @@ export { mapEntries } from './entries-mapper';
 export {
   threadListEntries,
   toSessionView,
-  sessionFromStartResponse,
   threadStateView,
   thinkingLevels,
   savedSessions,

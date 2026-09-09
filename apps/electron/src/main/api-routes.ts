@@ -1,4 +1,4 @@
-import { realpathSync } from 'node:fs';
+import { realpathSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename as baseName, dirname as dirnamePath, join as joinPaths, resolve as resolvePath, sep as pathSep } from 'node:path';
 
@@ -85,6 +85,15 @@ export function createApiRoutes(deps: ApiRouteDeps) {
 
   /** 按会话文件路径找注册表行（resume 缺省 trusted 的补全源）。 */
   const findRegistryRowByPath = (sessionPath: string) => runtime.registry.list().find((row) => row.sessionPath === sessionPath) ?? null;
+
+  /** 会话文件最后写入时刻（≈ 最后活动轮次）；不可读返回 null。 */
+  const fileMtimeMs = (path: string): number | null => {
+    try {
+      return statSync(path).mtimeMs;
+    } catch {
+      return null;
+    }
+  };
 
   /** 已知工作目录集合：活跃会话 + 注册表（list_saved 按目录过滤，需逐目录聚合）。 */
   const knownCwds = (): string[] => {
@@ -185,7 +194,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       const data = result.data as { threadId?: string; cwd?: string; sessionPath?: string | null };
       const threadId = data.threadId ?? '';
       if (threadId.length === 0) return fail('malformed_response');
-      const view = runtime.applyStartOutcome(threadId, data.cwd ?? params.cwd, data.sessionPath ?? null, runtime.defaultTitle, params.trusted ?? false);
+      const view = runtime.applyStartOutcome(threadId, data.cwd ?? params.cwd, data.sessionPath ?? null, runtime.defaultTitle, Date.now(), params.trusted ?? false);
       fillSessionMeta(threadId);
       return { ok: true as const, data: view };
     },
@@ -208,7 +217,12 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       const threadId = data.threadId ?? '';
       if (threadId.length === 0) return fail('malformed_response');
       // threadId 只信响应；标题沿用注册表行（占位视图/既有命名的延续，不回退默认标题）
-      const view = runtime.applyStartOutcome(threadId, data.cwd ?? known?.cwd ?? '', data.sessionPath ?? params.sessionPath, known?.title ?? runtime.defaultTitle, trusted);
+      // 恢复不是会话活动：活动时间 = max(注册表行, 会话文件 mtime)——await 窗口内到达的
+      // turn 事件可能已推进行/文件（帧同步派发先于本续体），不得用过期快照写回旧值；
+      // 双源皆不可得（无行且 stat 失败）降级当前时刻
+      const rowAtWrite = findRegistryRowByPath(params.sessionPath);
+      const lastActivityAt = Math.max(rowAtWrite?.updatedAt ?? 0, fileMtimeMs(params.sessionPath) ?? 0) || Date.now();
+      const view = runtime.applyStartOutcome(threadId, data.cwd ?? known?.cwd ?? '', data.sessionPath ?? params.sessionPath, known?.title ?? runtime.defaultTitle, lastActivityAt, trusted);
       if (known !== null && known.threadId !== threadId) {
         // 换 id 整行替换：旧行删除 + 旧 id 视图同步清出（与对账/启动链路同一不变量）
         runtime.removeSession(known.threadId);
@@ -368,7 +382,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       const data = result.data as { threadId?: string; cwd?: string; sessionPath?: string | null };
       const threadId = data.threadId ?? '';
       if (threadId.length === 0) return fail('malformed_response');
-      const view = runtime.applyStartOutcome(threadId, data.cwd ?? '', data.sessionPath ?? null, runtime.defaultTitle);
+      const view = runtime.applyStartOutcome(threadId, data.cwd ?? '', data.sessionPath ?? null, runtime.defaultTitle, Date.now());
       fillSessionMeta(threadId);
       return { ok: true as const, data: view };
     },

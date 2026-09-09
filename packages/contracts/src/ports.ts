@@ -51,6 +51,7 @@ export interface SessionRow {
   /** 会话信任态（thread/start|resume 的 trusted 生效值；null = 未记录，按非受信处理）。 */
   trusted: boolean | null;
   createdAt: number;
+  /** 会话最后活动时间（SessionView.lastActivityAt 的持久镜像）：只有新建/fork/turn 活动推进；恢复/改名等元数据写不推进。 */
   updatedAt: number;
 }
 

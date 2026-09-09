@@ -74,7 +74,7 @@ describe('thread_died 死亡终态折叠 streaming', () => {
     await runtime.start();
     runtime.markBootstrapped();
     runtime.emitBuffered();
-    runtime.applyStartOutcome('t1', '/w/app', '/w/app/sessions/t1.jsonl', '标题');
+    runtime.applyStartOutcome('t1', '/w/app', '/w/app/sessions/t1.jsonl', '标题', Date.now());
     runtime.touchSession('t1', { streaming: true });
     const streamingBefore = runtime.sessions().find((session) => session.threadId === 't1');
     expect(streamingBefore?.streaming).toBe(true);

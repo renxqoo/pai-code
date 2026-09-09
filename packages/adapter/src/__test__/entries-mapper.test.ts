@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { mapEntries } from '../entries-mapper';
 import { diffFromPatch } from '../diff-extract';
-import { sessionFromStartResponse, sessionStatsView, savedSessions, modelInfos, threadListEntries, threadStateView, thinkingLevels } from '../response-views';
+import { sessionStatsView, savedSessions, modelInfos, threadListEntries, threadStateView, thinkingLevels } from '../response-views';
 
 function messageEntry(id: string, message: Record<string, unknown>): Record<string, unknown> {
   return { type: 'message', id, parentId: null, timestamp: '2026-01-01T00:00:00Z', message };
@@ -183,11 +183,6 @@ describe('response-views', () => {
       { threadId: 't2', cwd: '/b', sessionPath: null, isStreaming: false, state: 'parked' },
     ]);
     expect(threadListEntries({})).toEqual([]);
-  });
-
-  test('sessionFromStartResponse：合法 + 缺 threadId → null', () => {
-    expect(sessionFromStartResponse({ threadId: 't9', cwd: '/w', sessionPath: '/s' }, '标题')).toMatchObject({ threadId: 't9', title: '标题', state: 'live' });
-    expect(sessionFromStartResponse({ cwd: '/w' }, 'x')).toBeNull();
   });
 
   test('threadStateView：model.id 收窄 + 缺省降级', () => {

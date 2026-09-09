@@ -57,20 +57,6 @@ export function toSessionView(input: SessionViewInput): SessionView {
   };
 }
 
-/** thread/start、thread/resume 响应 → SessionView（title 由注册表/调用方补）。 */
-export function sessionFromStartResponse(data: unknown, fallbackTitle: string): SessionView | null {
-  const d = recordOf(data);
-  const threadId = str(d.threadId);
-  if (threadId.length === 0) return null;
-  return toSessionView({
-    threadId,
-    cwd: str(d.cwd),
-    sessionPath: optStr(d.sessionPath) ?? null,
-    title: fallbackTitle,
-    lastActivityAt: Date.now(),
-  });
-}
-
 export function threadStateView(data: unknown): ThreadStateView {
   const d = recordOf(data);
   const model = recordOf(d.model);

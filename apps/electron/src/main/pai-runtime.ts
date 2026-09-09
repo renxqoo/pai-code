@@ -63,7 +63,8 @@ export interface PaiRuntime {
   defaultTitle: string;
   /** 启动/重启后的注册表对账（占位渲染，不 resume；懒恢复由渲染层发起）。 */
   reconcileSessions(): Promise<void>;
-  applyStartOutcome(threadId: string, cwd: string, sessionPath: string | null, title: string, trusted?: boolean): SessionView;
+  /** 落会话视图与注册表行；lastActivityAt 由调用方裁决（start/fork = now；resume = 保留既有活动时间）。 */
+  applyStartOutcome(threadId: string, cwd: string, sessionPath: string | null, title: string, lastActivityAt: number, trusted?: boolean): SessionView;
   removeSession(threadId: string): void;
   /** 仅摘内存视图（sessionRemoved）：内部重开链（trusted 重载/技能开关）的中间步骤，注册表行保留。 */
   detachSession(threadId: string): void;
@@ -98,28 +99,40 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
   };
 
   const persistSession = (view: SessionView, trusted?: boolean): void => {
+    const existing = registry.get(view.threadId);
     registry.upsert({
       threadId: view.threadId,
       sessionPath: view.sessionPath,
       cwd: view.cwd,
       title: view.title,
       // 未指定（缺省 resume 等同文件重开）沿用行内记录；显式指定则覆盖
-      trusted: trusted ?? registry.get(view.threadId)?.trusted ?? null,
-      createdAt: registry.get(view.threadId)?.createdAt ?? Date.now(),
-      updatedAt: Date.now(),
+      trusted: trusted ?? existing?.trusted ?? null,
+      createdAt: existing?.createdAt ?? Date.now(),
+      // updatedAt ≡ 会话最后活动时间：随视图走（新建/fork/turn 推进；恢复/改名不推进）。
+      // 单调钳制——帧事件与 resume 续体交错时不得把行内活动时间写回旧值
+      updatedAt: Math.max(existing?.updatedAt ?? 0, view.lastActivityAt),
     });
   };
 
   const applyUiEvents = (threadId: string, events: readonly UiEvent[]): void => {
     for (const event of events) {
       emit(event);
-      // 事件副作用：会话表派生字段（流式/最近活动）+ 标题改名落注册表
+      // 事件副作用：会话表派生字段（流式/最近活动）+ 标题改名落注册表；
+      // turn 是会话活动——内存视图与注册表行的活动时间同步推进
       if (event.type === 'turnStarted') {
         const view = sessions.get(threadId);
-        if (view !== undefined && !view.streaming) upsertSession({ ...view, streaming: true, lastActivityAt: event.at });
+        if (view !== undefined && !view.streaming) {
+          const next = { ...view, streaming: true, lastActivityAt: event.at };
+          upsertSession(next);
+          persistSession(next);
+        }
       } else if (event.type === 'turnSettled') {
         const view = sessions.get(threadId);
-        if (view?.streaming) upsertSession({ ...view, streaming: false, lastActivityAt: Date.now() });
+        if (view?.streaming) {
+          const next = { ...view, streaming: false, lastActivityAt: Date.now() };
+          upsertSession(next);
+          persistSession(next);
+        }
       } else if (event.type === 'sessionRenamed') {
         const view = sessions.get(threadId);
         if (view !== undefined && event.name !== null && event.name.length > 0) {
@@ -291,8 +304,8 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
       bootstrapped = true;
     },
     reconcileSessions,
-    applyStartOutcome(threadId: string, cwd: string, sessionPath: string | null, title: string, trusted?: boolean): SessionView {
-      const view = toSessionView({ threadId, cwd, sessionPath, title, lastActivityAt: Date.now() });
+    applyStartOutcome(threadId: string, cwd: string, sessionPath: string | null, title: string, lastActivityAt: number, trusted?: boolean): SessionView {
+      const view = toSessionView({ threadId, cwd, sessionPath, title, lastActivityAt });
       upsertSession(view);
       persistSession(view, trusted);
       return view;
