@@ -1,4 +1,4 @@
-import type { ImagePayload, PermissionRules, ProviderModel, ThinkingFormat } from '@paiapp/contracts';
+import type { AgentDefinition, ImagePayload, PermissionRules, ProviderModel, ThinkingFormat } from '@paiapp/contracts';
 
 import { copy } from '@/strings';
 import { pickSessionModel } from './pick-session-model';
@@ -54,7 +54,11 @@ export type WorkspaceActions = {
   readonly writeSessionRules: (rules: PermissionRules | null) => Promise<boolean>;
   /** 操作栏会话权限模式切换：当前生效规则为基线只改 mode；同模式无操作不写。 */
   readonly setSessionPermissionMode: (mode: PermissionRules['mode']) => Promise<boolean>;
-  readonly refreshAgents: () => void;
+  readonly refreshAgentDefinitions: () => void;
+  /** 子 agent 定义保存（新建/编辑/改名/移动统一）；失败 reason 交表单内联呈现。 */
+  readonly upsertAgentDefinition: (definition: AgentDefinition, previous: { file: string; scope: 'user' | 'project'; project: string | null } | null) => Promise<string | null>;
+  /** 子 agent 定义删除；失败 reason 交表单内联呈现。 */
+  readonly removeAgentDefinition: (key: { file: string; scope: 'user' | 'project'; project: string | null }) => Promise<string | null>;
   /** 技能目录刷新（设置页技能分区进入时）。 */
   readonly refreshSkills: () => void;
   /** 技能启停：落盘后重开全部活跃会话使新设置生效（失败 notice）。 */
@@ -265,9 +269,11 @@ export function createWorkspaceActions(setDiagnostics: (value: WorkspaceDiagnost
         if (!ok) pushNotice(copy.thread.reloadTrustFailed);
       });
     },
-    refreshAgents: () => {
-      void controller.refreshAgents(activeThreadOf().length > 0 ? activeThreadOf() : null);
+    refreshAgentDefinitions: () => {
+      void controller.refreshAgentDefinitions();
     },
+    upsertAgentDefinition: (definition, previous) => controller.upsertAgentDefinition(definition, previous),
+    removeAgentDefinition: (key) => controller.removeAgentDefinition(key),
     refreshSkills: () => {
       void controller.refreshSkills();
     },

@@ -1,6 +1,7 @@
 import * as React from 'react';
 
-import type { AgentView, CredentialView, PermissionRules, ProviderConfigView, ProviderModel, SkillView, ThinkingFormat } from '@paiapp/contracts';
+import type { AgentDefinition, CredentialView, PermissionRules, ProviderConfigView, ProviderModel, SkillView, ThinkingFormat } from '@paiapp/contracts';
+import { AGENT_TOOL_IDS } from '@paiapp/contracts';
 import type { Theme } from '@/components/theme-context';
 import { useTheme } from '@/components/use-theme';
 import type { LiveWorkspaceView } from '@/live/use-live-workspace';
@@ -14,10 +15,10 @@ type SavedSession = { sessionPath: string; title: string; cwd: string; modifiedA
  * 按开即读派发：分区目录/文件面无推送，每次进入都拉取；其余分区 no-op。
  * 分区 ↔ 动作映射在这里集中（导航层不认识 workspace 动作面）。
  */
-export function dispatchSectionEnter(id: SettingsSectionId, actions: Pick<WorkspaceActions, 'refreshPermissionRules' | 'refreshAgents' | 'refreshSkills' | 'fetchDiagnostics'>): void {
+export function dispatchSectionEnter(id: SettingsSectionId, actions: Pick<WorkspaceActions, 'refreshPermissionRules' | 'refreshAgentDefinitions' | 'refreshSkills' | 'fetchDiagnostics'>): void {
   if (!FETCH_ON_ENTER_SECTIONS.has(id)) return;
   if (id === 'permissions') actions.refreshPermissionRules();
-  else if (id === 'agents') actions.refreshAgents();
+  else if (id === 'agents') actions.refreshAgentDefinitions();
   else if (id === 'skills') actions.refreshSkills();
   else actions.fetchDiagnostics();
 }
@@ -68,7 +69,21 @@ export type SettingsScreenProps = {
     onLoadSession: () => void;
     onSaveSession: (rules: PermissionRules | null) => Promise<boolean>;
   };
-  agents: { list: readonly AgentView[]; onRefresh: () => void };
+  /** 子 agent 定义键位（作用域 + 项目 + 文件名主干）；upsert 的 previous 与 remove 共用。 */
+  agents: {
+    definitions: readonly AgentDefinition[];
+    /** 可指定为 project 作用域的项目目录（已保存会话 cwd 去重）。 */
+    knownProjects: readonly string[];
+    modelOptions: readonly string[];
+    /** 可选工具 id 词表（contracts 单一真相的副本）。 */
+    toolIds: readonly string[];
+    onRefresh: () => void;
+    onSave: (
+      definition: AgentDefinition,
+      previous: { file: string; scope: 'user' | 'project'; project: string | null } | null,
+    ) => Promise<string | null>;
+    onRemove: (key: { file: string; scope: 'user' | 'project'; project: string | null }) => Promise<string | null>;
+  };
   skills: { list: readonly SkillView[]; onToggle: (name: string, enabled: boolean) => Promise<boolean>; onRefresh: () => void };
   history: {
     saved: readonly SavedSession[];
@@ -154,7 +169,15 @@ export function useSettingsScreen({ workspace, open, onClose }: UseSettingsScree
       onLoadSession: actions.readSessionRules,
       onSaveSession: actions.writeSessionRules,
     },
-    agents: { list: workspace.agents, onRefresh: actions.refreshAgents },
+    agents: {
+      definitions: workspace.agentDefinitions,
+      knownProjects: projects,
+      modelOptions: workspace.composer.modelOptions,
+      toolIds: [...AGENT_TOOL_IDS],
+      onRefresh: actions.refreshAgentDefinitions,
+      onSave: (definition, previous) => actions.upsertAgentDefinition(definition, previous),
+      onRemove: (key) => actions.removeAgentDefinition(key),
+    },
     skills: { list: workspace.skills, onToggle: actions.setSkillEnabled, onRefresh: actions.refreshSkills },
     history: {
       saved: workspace.saved,

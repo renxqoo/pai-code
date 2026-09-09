@@ -2,12 +2,13 @@ import { realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename as baseName, dirname as dirnamePath, join as joinPaths, resolve as resolvePath, sep as pathSep } from 'node:path';
 
-import { agentViews, mapEntries, modelInfos, savedSessions, sessionCommands, sessionStatsView, threadStateView, thinkingLevels } from '@paiapp/adapter';
+import { mapEntries, modelInfos, savedSessions, sessionCommands, sessionStatsView, threadStateView, thinkingLevels } from '@paiapp/adapter';
 import { envVarNameForProvider } from './models-config';
 import { createProviderProbe } from './provider-probe';
 import { searchProjectFiles } from './file-search';
 import { buildSkillInventory, parseSkillPatterns, toggleSkillPatterns } from './skills-inventory';
 import type { AgentDirFiles } from './agent-dir-files';
+import type { AgentDefinitionsStore } from './agent-definitions-store';
 import { defaultPermissionRules, parsePermissionRules, type ThinkingFormat } from '@paiapp/contracts';
 import { ApiSchemas, type ApiMethod, type ApiOutcome, type ApiParams } from '@paiapp/contracts';
 
@@ -30,6 +31,8 @@ export interface ApiRouteDeps {
   audit: (message: string) => void;
   /** agentDir 受控文件面（固定文件名白名单，原子写）。 */
   agentDirFiles: AgentDirFiles;
+  /** 子 agent 定义文件面（user 目录 + 已知项目 .pi/agents 的 CRUD）。 */
+  agentDefinitions: AgentDefinitionsStore;
   /** agentDir 根（skills 目录解析）。 */
   agentDir: string;
   /** 用户级技能目录源（默认 agentDir/skills + ~/.agents/skills；测试注入替身）。 */
@@ -341,9 +344,23 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       const result = await command({ type: 'get_commands', threadId: params.threadId });
       return result.ok ? { ok: true as const, data: sessionCommands(result.data) } : fail(result.reason);
     },
-    'agent/list': async (params) => {
-      const result = await command({ type: 'agents/list', threadId: params.threadId });
-      return result.ok ? { ok: true as const, data: agentViews(result.data) } : fail(result.reason);
+    'agent/definitions': () => {
+      // 管理面走主进程文件面（不经 hub：需要 systemPrompt 原文与全部已知项目的定义）
+      return Promise.resolve({ ok: true as const, data: deps.agentDefinitions.list(knownCwds()) });
+    },
+    'agent/upsert': (params) => {
+      const result = deps.agentDefinitions.upsert(params.definition, params.previous, knownCwds());
+      if (!result.ok) return Promise.resolve(fail(result.reason));
+      const scope = params.definition.scope === 'project' ? `project(${params.definition.project})` : 'user';
+      deps.audit(`agent_upsert: ${scope}/${params.definition.name}`);
+      return Promise.resolve({ ok: true as const, data: null });
+    },
+    'agent/remove': (params) => {
+      const result = deps.agentDefinitions.remove(params, knownCwds());
+      if (!result.ok) return Promise.resolve(fail(result.reason));
+      const scope = params.scope === 'project' ? `project(${params.project})` : 'user';
+      deps.audit(`agent_remove: ${scope}/${params.file}`);
+      return Promise.resolve({ ok: true as const, data: null });
     },
     'session/fork': async (params) => {
       const result = await command({ type: 'fork', threadId: params.threadId, entryId: params.entryId, position: params.position });

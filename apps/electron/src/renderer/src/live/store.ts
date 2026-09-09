@@ -1,7 +1,7 @@
 import { createStore } from 'zustand/vanilla';
 
 import type {
-  AgentView,
+  AgentDefinition,
   SessionStatsView,
   SkillView,
   ApiData,
@@ -53,8 +53,8 @@ export interface LiveStoreState {
   permissionRules: PermissionRules | null;
   /** 会话级规则（null = 未加载）。 */
   sessionRules: { rules: PermissionRules; source: 'thread' | 'global' } | null;
-  /** agent 定义目录（进 Agents 分区时拉取）。 */
-  agents: readonly AgentView[];
+  /** 子 agent 定义管理面（文件真相；进 Agents 分区时拉取）。 */
+  agentDefinitions: readonly AgentDefinition[];
   /** 用户级技能目录（进技能分区时拉取；启停真相在 pi settings）。 */
   skills: readonly SkillView[];
   threads: Readonly<Record<string, LiveThreadState>>;
@@ -287,7 +287,7 @@ function initialStoreState(): LiveStoreState {
     models: [],
     providers: [],
     credentials: [],
-    agents: [],
+    agentDefinitions: [],
     skills: [],
     preferences: { defaultModel: null, onboarded: false, projectModels: {}, pinnedSessions: [], trustedDefault: false, hiddenProjects: [] },
     permissionRules: null,

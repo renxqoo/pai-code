@@ -128,15 +128,26 @@ export const CommandViewSchema = z.object({
 });
 export type CommandView = z.infer<typeof CommandViewSchema>;
 
-/** agent 定义条目（agents/list 收窄；project 级仅受信会话可见）。 */
-export const AgentViewSchema = z.object({
-  name: z.string(),
-  description: z.string(),
-  source: z.enum(['user', 'project']),
-  tools: z.array(z.string()).nullable(),
-  model: z.string().nullable(),
-});
-export type AgentView = z.infer<typeof AgentViewSchema>;
+/**
+ * agent 定义的管理面形态（主进程文件面读写；tools/model 为 null = 不写 frontmatter
+ * 字段 = hub 运行期继承语义：模型继承父对话，工具用默认集）。
+ * file = 定义文件名主干（hub 只认 frontmatter name，手写文件可与其不等）：枚举结果必带
+ * （定位/删除的身份键）；upsert 提交时忽略——服务端恒以 name 为新文件主干（pattern 内）。
+ */
+export const AgentDefinitionSchema = z
+  .object({
+    name: z.string().min(1),
+    description: z.string(),
+    systemPrompt: z.string(),
+    tools: z.array(z.string()).nullable(),
+    model: z.string().nullable(),
+    scope: z.enum(['user', 'project']),
+    /** scope=project 时的项目绝对路径（写入门禁：必须是本应用已知项目）。 */
+    project: z.string().nullable(),
+    file: z.string().optional(),
+  })
+  .strict();
+export type AgentDefinition = z.infer<typeof AgentDefinitionSchema>;
 
 /** 用户级技能视图（skills/list 与 skills/setEnabled 共用形态）。 */
 export const SkillViewSchema = z
@@ -306,10 +317,27 @@ export const ApiSchemas = {
     params: z.object({ threadId: z.string().min(1) }).strict(),
     result: z.array(CommandViewSchema),
   },
-  /** agent 定义枚举（host 级；带 threadId 时含该会话受信可见的项目级）。 */
-  'agent/list': {
-    params: z.object({ threadId: z.string().min(1).optional() }).strict(),
-    result: z.array(AgentViewSchema),
+  /** agent 定义管理枚举（主进程文件面：user 目录 + 已知项目 .pi/agents，含 systemPrompt 原文）。 */
+  'agent/definitions': {
+    params: empty,
+    result: z.array(AgentDefinitionSchema),
+  },
+  /** agent 定义新建/编辑（previous 给定时含改名与作用域移动：写新文件后删旧文件；键位 file = 旧文件名主干）。 */
+  'agent/upsert': {
+    params: z
+      .object({
+        definition: AgentDefinitionSchema,
+        previous: z.object({ file: z.string().min(1), scope: z.enum(['user', 'project']), project: z.string().nullable() }).nullable(),
+      })
+      .strict(),
+    result: z.null(),
+  },
+  /** agent 定义删除（删定义文件；file = 文件名主干，运行中的子代理不受影响）。 */
+  'agent/remove': {
+    params: z
+      .object({ file: z.string().min(1), scope: z.enum(['user', 'project']), project: z.string().nullable() })
+      .strict(),
+    result: z.null(),
   },
   /** 项目文件搜索（@ 引用数据源；cwd 必须是本应用已知会话目录）。 */
   'file/search': {

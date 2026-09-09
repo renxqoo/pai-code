@@ -48,7 +48,7 @@ function makeProps(overrides: Partial<SettingsScreenProps> = {}): SettingsScreen
       onLoadSession: noop,
       onSaveSession: () => Promise.resolve(true),
     },
-    agents: { list: [], onRefresh: noop },
+    agents: { definitions: [], knownProjects: [], modelOptions: [], toolIds: [], onRefresh: noop, onSave: () => Promise.resolve(null), onRemove: () => Promise.resolve(null) },
     skills: { list: [], onToggle: ok, onRefresh: noop },
     history: {
       saved: [],

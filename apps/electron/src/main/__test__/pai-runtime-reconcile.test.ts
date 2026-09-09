@@ -7,6 +7,7 @@ import type { HostCommandOutcome, HostPhase, HostProcessPort, HubFrame, PaiComma
 
 import { createApiRoutes } from '../api-routes';
 import { createAgentDirFiles } from '../agent-dir-files';
+import { createAgentDefinitionsStore } from '../agent-definitions-store';
 import { createFileSettings, type ProviderKeyStore } from '../file-settings';
 import { createPaiRuntime, type PaiRuntime } from '../pai-runtime';
 
@@ -114,6 +115,7 @@ function makeRoutes(work: string, reply: (cmd: PaiCommand) => Reply) {
     keyStore: emptyKeyStore,
     audit: () => undefined,
     agentDirFiles: createAgentDirFiles(fixture.agentDir),
+    agentDefinitions: createAgentDefinitionsStore(fixture.agentDir),
     agentDir: fixture.agentDir,
     revealPath: () => undefined,
     pickDirectory: () => Promise.resolve(null),

@@ -5,6 +5,7 @@ import { join } from 'node:path';
 
 import { createApiRoutes } from '../api-routes';
 import { createAgentDirFiles } from '../agent-dir-files';
+import { createAgentDefinitionsStore } from '../agent-definitions-store';
 import { createFileSettings, type ProviderKeyStore } from '../file-settings';
 import { createPaiRuntime } from '../pai-runtime';
 
@@ -41,7 +42,7 @@ function makeRoutes(work: string) {
     emit: () => undefined,
   });
   const audits: string[] = [];
-  const routes = createApiRoutes({ runtime, settings, keyStore, audit: (m) => audits.push(m), agentDirFiles: createAgentDirFiles(agentDir), revealPath: () => undefined,
+  const routes = createApiRoutes({ runtime, settings, keyStore, audit: (m) => audits.push(m), agentDirFiles: createAgentDirFiles(agentDir), agentDefinitions: createAgentDefinitionsStore(agentDir), revealPath: () => undefined,
     pickDirectory: () => Promise.resolve(null) });
   return { routes, audits, agentDir };
 }
@@ -208,6 +209,7 @@ describe('api-routes 门禁（第三波审查补：file/search 与 reveal）', (
       keyStore,
       audit: () => undefined,
       agentDirFiles: createAgentDirFiles(agentDir),
+      agentDefinitions: createAgentDefinitionsStore(agentDir),
       revealPath: (path) => revealed.push(path),
     });
     const outside = (await routes.invoke('session/reveal', { sessionPath: '/etc/passwd' })) as { ok: boolean; reason?: string };
@@ -216,5 +218,26 @@ describe('api-routes 门禁（第三波审查补：file/search 与 reveal）', (
     const inside = (await routes.invoke('session/reveal', { sessionPath: sessionFile })) as { ok: boolean };
     expect(inside.ok).toBe(true);
     expect(revealed).toEqual([sessionFile]);
+  });
+});
+
+describe('api-routes agent 定义面（T20）', () => {
+  test('upsert user 级落位 + audit；project 未知目录拒绝（已知集合为空）；remove 落 audit', async () => {
+    const work = mkdtempSync(join(tmpdir(), 'pai-sec-agent-'));
+    const { routes, audits, agentDir } = makeRoutes(work);
+    const definition = { name: 'search', description: 'd', systemPrompt: 'p', tools: null, model: null, scope: 'user', project: null };
+    const upsert = (await routes.invoke('agent/upsert', { definition, previous: null })) as { ok: boolean };
+    expect(upsert.ok).toBe(true);
+    expect(readFileSync(join(agentDir, 'agents', 'search.md'), 'utf8')).toContain("name: 'search'");
+    // host 未启动 → 已知项目集合为空 → project 作用域一律拒绝
+    const rejected = (await routes.invoke('agent/upsert', {
+      definition: { ...definition, scope: 'project', project: '/nowhere' },
+      previous: null,
+    })) as { ok: boolean; reason?: string };
+    expect(rejected).toEqual({ ok: false, reason: 'invalid_project' });
+    const removed = (await routes.invoke('agent/remove', { file: 'search', scope: 'user', project: null })) as { ok: boolean };
+    expect(removed.ok).toBe(true);
+    expect(audits).toContain('agent_upsert: user/search');
+    expect(audits).toContain('agent_remove: user/search');
   });
 });

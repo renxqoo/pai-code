@@ -151,17 +151,22 @@ test('reloadSessionTrusted：重开前非活跃会话——成功后不劫持 ac
   expect(store.getState().activeThreadId).toBe('t2');
 });
 
-test('refreshAgents 判活：请求发出后会话已切换则丢弃响应', async () => {
+test('agent 定义管理面：upsert/remove 透传 reason 并刷新快照', async () => {
+  const definition = { name: 'search', description: 'd', systemPrompt: 'p', tools: null, model: null, scope: 'user', project: null };
   const client = makeClient({
-    'agent/list': { ok: true, data: [{ name: 'reviewer', description: '', source: 'user', tools: null, model: null }] },
+    'agent/definitions': { ok: true, data: [definition] },
+    'agent/upsert': { ok: false, reason: 'name_exists' },
+    'agent/remove': { ok: true, data: null },
   });
   const store = createLiveStore();
   const controller = createLiveController(client, store);
-  const pending = controller.refreshAgents('t1');
-  // 响应到达前切走
-  store.getState().setActiveThread('t2');
-  await pending;
-  expect(store.getState().agents).toEqual([]);
+  const key = { file: 'search', scope: 'user' as const, project: null };
+  // upsert 失败：reason 透传（表单内联），不刷新快照
+  expect(await controller.upsertAgentDefinition(definition, null)).toBe('name_exists');
+  expect(store.getState().agentDefinitions).toEqual([]);
+  // remove 成功：reason null + 快照刷新
+  expect(await controller.removeAgentDefinition(key)).toBeNull();
+  expect(store.getState().agentDefinitions).toEqual([definition]);
 });
 
 test('会话级规则读取/写入/清除透传（sidecar）', async () => {

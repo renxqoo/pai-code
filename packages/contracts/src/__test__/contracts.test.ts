@@ -208,9 +208,12 @@ describe('API schema：每方法合法/非法样本', () => {
     expect(() => ApiSchemas['file/search'].params.parse({ cwd: '/w' })).toThrow();
   });
 
-  test('agent/list 合法样本：带与不带 threadId', () => {
-    expect(ApiSchemas['agent/list'].params.parse({})).toEqual({});
-    expect(ApiSchemas['agent/list'].params.parse({ threadId: 't1' })).toEqual({ threadId: 't1' });
+  test('agent 定义管理三方法：definitions 空 params；upsert/remove 键位校验', () => {
+    const definition = { name: 'search', description: 'd', systemPrompt: 'p', tools: null, model: null, scope: 'user', project: null };
+    expect(ApiSchemas['agent/definitions'].params.parse({})).toEqual({});
+    expect(ApiSchemas['agent/upsert'].params.parse({ definition, previous: null })).toEqual({ definition, previous: null });
+    expect(ApiSchemas['agent/upsert'].params.parse({ definition, previous: { file: 'old', scope: 'user', project: null } }).previous).toEqual({ file: 'old', scope: 'user', project: null });
+    expect(ApiSchemas['agent/remove'].params.parse({ file: 'search', scope: 'project', project: '/w' })).toEqual({ file: 'search', scope: 'project', project: '/w' });
   });
 
   test.each([
@@ -222,7 +225,8 @@ describe('API schema：每方法合法/非法样本', () => {
     ['provider/test 空 name', 'provider/test', { name: '' }],
     ['command/list 缺 threadId', 'command/list', {}],
     ['command/list 未知键', 'command/list', { threadId: 't', nope: 1 }],
-    ['agent/list 未知键', 'agent/list', { nope: 1 }],
+    ['agent/upsert 未知键', 'agent/upsert', { definition: { name: 'a', description: 'd', systemPrompt: 'p', tools: null, model: null, scope: 'user', project: null }, previous: null, nope: 1 }],
+    ['agent/remove 非法 scope', 'agent/remove', { file: 'a', scope: 'global', project: null }],
     ['auth/setKey 空 key', 'auth/setKey', { provider: 'p', apiKey: '' }],
     ['session/prompt 空消息', 'session/prompt', { threadId: 't', message: '' }],
     ['session/prompt 非法 streamingBehavior', 'session/prompt', { threadId: 't', message: 'hi', streamingBehavior: 'queue' }],

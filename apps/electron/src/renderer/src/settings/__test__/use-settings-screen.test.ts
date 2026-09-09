@@ -9,7 +9,7 @@ function makeEnterActions(): { actions: EnterActions; calls: string[] } {
   const calls: string[] = [];
   const actions = {
     refreshPermissionRules: () => calls.push('permissions'),
-    refreshAgents: () => calls.push('agents'),
+    refreshAgentDefinitions: () => calls.push('agents'),
     refreshSkills: () => calls.push('skills'),
     fetchDiagnostics: () => calls.push('diagnostics'),
   } satisfies EnterActions;
@@ -36,7 +36,7 @@ describe('按开即读派发', () => {
   test('派发动作签名与 WorkspaceActions 面对齐（编译期防漂移）', () => {
     const check: Record<keyof EnterActions, keyof WorkspaceActions> = {
       refreshPermissionRules: 'refreshPermissionRules',
-      refreshAgents: 'refreshAgents',
+      refreshAgentDefinitions: 'refreshAgentDefinitions',
       refreshSkills: 'refreshSkills',
       fetchDiagnostics: 'fetchDiagnostics',
     };

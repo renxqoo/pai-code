@@ -6,6 +6,7 @@ import { ApiSchemas, type UiEvent } from '@paiapp/contracts';
 
 import { createApiRoutes } from './api-routes';
 import { createAgentDirFiles } from './agent-dir-files';
+import { createAgentDefinitionsStore } from './agent-definitions-store';
 import { createFileLogger, createFileSettings } from './file-settings';
 import { resolveHubPaths } from './hub-paths';
 import { resolveAppPaths } from './paths';
@@ -136,6 +137,7 @@ void app.whenReady().then(async () => {
       keyStore,
       audit: (message) => logger.log(`audit:${message}`),
       agentDirFiles: createAgentDirFiles(paths.agentDir),
+      agentDefinitions: createAgentDefinitionsStore(paths.agentDir),
       agentDir: paths.agentDir,
       revealPath: (path) => shell.showItemInFolder(path),
       // 对话框单飞：在途时再调用直接按取消返回（防被攻陷渲染层并发叠弹多个模态面板）

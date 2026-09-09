@@ -1,4 +1,4 @@
-import type { ImagePayload, PermissionRules, PreferencesView, ProviderModel, SkillView, ThinkingFormat, UiEvent } from '@paiapp/contracts';
+import type { AgentDefinition, ImagePayload, PermissionRules, PreferencesView, ProviderModel, SkillView, ThinkingFormat, UiEvent } from '@paiapp/contracts';
 
 import { copy } from '@/strings';
 import type { BridgeClient } from './client-invoke';
@@ -58,8 +58,12 @@ export interface LiveController {
   /** 运行时诊断（M1）。 */
   readonly fetchDiagnostics: () => Promise<{ hostPhase: 'starting' | 'ready' | 'restarting' | 'failed' | null; stderrTail: string; registrySessions: number } | null>;
   readonly restartHost: () => void;
-  /** agent 定义目录刷新（带 threadId 时含受信可见的项目级；失败静默保持旧值）。 */
-  readonly refreshAgents: (threadId: string | null) => Promise<void>;
+  /** 子 agent 定义管理面刷新（主进程文件面快照；失败静默保持旧值）。 */
+  readonly refreshAgentDefinitions: () => Promise<void>;
+  /** 子 agent 定义新建/编辑/改名/移动（previous 非空时含旧文件清理）；成功返回 null。 */
+  readonly upsertAgentDefinition: (definition: AgentDefinition, previous: { file: string; scope: 'user' | 'project'; project: string | null } | null) => Promise<string | null>;
+  /** 子 agent 定义删除（删定义文件，file = 文件名主干）；成功返回 null。 */
+  readonly removeAgentDefinition: (key: { file: string; scope: 'user' | 'project'; project: string | null }) => Promise<string | null>;
   /** 用户级技能目录刷新（含启用态）。 */
   readonly refreshSkills: () => Promise<void>;
   /** 技能启停：写 pi settings skills overrides；返回写后清单（失败 null + 原因）。 */
@@ -109,6 +113,11 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
   const reconciling = new Set<string>();
 
   const now = (): number => Date.now();
+
+  const refreshAgentDefinitions = async (): Promise<void> => {
+    const outcome = await client.invoke('agent/definitions', {});
+    if (outcome.ok) store.setState({ agentDefinitions: outcome.data });
+  };
 
   const fetchEntries = async (threadId: string, since: string | null, dropLiveTurn: boolean): Promise<void> => {
     if (reconciling.has(`${threadId}:${dropLiveTurn}`)) return;
@@ -387,7 +396,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     async readSessionRules(threadId: string): Promise<{ rules: PermissionRules; source: 'thread' | 'global' } | null> {
       const outcome = await client.invoke('permission/sessionRead', { threadId });
       if (!outcome.ok) return null;
-      // 判活：请求在途期间活跃会话已切换则丢弃（防旧会话规则覆盖新会话视图；与 refreshAgents 同型）
+      // 判活：请求在途期间活跃会话已切换则丢弃（防旧会话规则覆盖新会话视图；与目录刷新同型）
       if (store.getState().activeThreadId !== threadId) return null;
       // 引用幂等：内容相同不换引用（下游草稿重置 effect 依赖引用，防刷新循环击穿用户编辑）
       const current = store.getState().sessionRules;
@@ -414,14 +423,21 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     restartHost(): void {
       void client.invoke('app/restartHost', {}).then(() => undefined);
     },
-    async refreshAgents(threadId: string | null): Promise<void> {
-      const outcome = await client.invoke('agent/list', threadId === null ? {} : { threadId });
-      if (!outcome.ok) return;
-      // 判活：请求发出后会话已切换则丢弃（防陈旧目录覆盖新会话视角）
-      if (threadId !== null && store.getState().activeThreadId !== threadId) return;
-      store.setState({ agents: outcome.data });
+    async refreshAgentDefinitions(): Promise<void> {
+      await refreshAgentDefinitions();
     },
-    async refreshSkills(): Promise<void> {
+    async upsertAgentDefinition(definition, previous): Promise<string | null> {
+      const outcome = await client.invoke('agent/upsert', { definition, previous });
+      if (!outcome.ok) return outcome.reason;
+      await refreshAgentDefinitions();
+      return null;
+    },
+    async removeAgentDefinition(key): Promise<string | null> {
+      const outcome = await client.invoke('agent/remove', key);
+      if (!outcome.ok) return outcome.reason;
+      await refreshAgentDefinitions();
+      return null;
+    },    async refreshSkills(): Promise<void> {
       const outcome = await client.invoke('skills/list', {});
       if (outcome.ok) store.setState({ skills: outcome.data });
     },

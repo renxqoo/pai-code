@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import type { AgentView, CommandView, CredentialView, PermissionRules, PreferencesView, ProviderConfigView, SessionStatsView, SessionView, SkillView } from '@paiapp/contracts';
+import type { AgentDefinition, CommandView, CredentialView, PermissionRules, PreferencesView, ProviderConfigView, SessionStatsView, SessionView, SkillView } from '@paiapp/contracts';
 import { useStore } from 'zustand';
 
 import type { SessionCardModel } from '@/sidebar/session-card-model';
@@ -72,8 +72,8 @@ export type LiveWorkspaceView = {
   credentials: readonly CredentialView[];
   /** 当前会话的斜杠命令/技能目录（补全数据源）。 */
   commands: readonly CommandView[];
-  /** agent 定义目录（进 Agents 分区时拉取）。 */
-  agents: readonly AgentView[];
+  /** 子 agent 定义管理面（文件真相；进 Agents 分区时拉取）。 */
+  agentDefinitions: readonly AgentDefinition[];
   /** 用户级技能目录（含启用态；进技能分区时拉取）。 */
   skills: readonly SkillView[];
   preferences: PreferencesView;
@@ -115,7 +115,7 @@ export function useLiveWorkspace(): LiveWorkspaceView {
   const preferences = useStore(store, (s) => s.preferences);
   const permissionRules = useStore(store, (s) => s.permissionRules);
   const sessionRules = useStore(store, (s) => s.sessionRules);
-  const agentDefs = useStore(store, (s) => s.agents);
+  const agentDefinitions = useStore(store, (s) => s.agentDefinitions);
   const skills = useStore(store, (s) => s.skills);
   const stats = useStore(store, (s) => s.stats);
   const notices = useStore(store, (s) => s.notices);
@@ -138,7 +138,7 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     // （sessionRules 的清空在 store.setActiveThread 内同步完成，防渲染帧残留一帧）
     setEffortLevels([]);
     setCommands([]);
-    store.setState({ agents: [] });
+    store.setState({ agentDefinitions: [] });
     // parked 占位：懒恢复完成（state 翻转为 live）后本 effect 重跑再拉取，
     // 避免对未恢复线程发注定失败的水化/档位/命令/规则请求
     if (activeThreadId.length === 0 || activeSessionState === 'parked') return;
@@ -226,7 +226,7 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     providers,
     credentials,
     commands,
-    agents: agentDefs,
+    agentDefinitions,
     skills,
     preferences,
     permissionRules,
