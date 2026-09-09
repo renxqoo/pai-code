@@ -38,7 +38,7 @@ const existing: AgentDefinition = {
 };
 
 describe('agent 定义表单渲染冒烟', () => {
-  test('新建：面包屑 + 大标题/副标题 + 六字段 + 工具词表全量', () => {
+  test('新建：面包屑 + 大标题/副标题 + 六字段 + 工具模式分段（默认所有 = 隐藏工具列表）', () => {
     const html = renderToStaticMarkup(<AgentDefinitionForm {...makeFormProps()} />);
     expect(html).toContain(copy.settings.agentsFormTitleNew);
     expect(html).toContain(copy.settings.agentsFormSubtitleNew);
@@ -46,21 +46,25 @@ describe('agent 定义表单渲染冒烟', () => {
     for (const label of [copy.settings.agentsFieldName, copy.settings.agentsFieldDescription, copy.settings.agentsFieldPrompt, copy.settings.agentsFieldModel, copy.settings.agentsFieldTools, copy.settings.agentsFieldScope]) {
       expect(html).toContain(label);
     }
-    for (const tool of AGENT_TOOL_IDS) expect(html).toContain(tool);
+    expect(html).toContain(copy.settings.agentsToolsModeAll);
+    expect(html).toContain(copy.settings.agentsToolsModeCustom);
+    // 新建默认「默认所有工具」：工具词表不渲染（隐藏工具列表）
+    for (const tool of AGENT_TOOL_IDS) expect(html).not.toContain(`>${tool}<`);
     expect(html).toContain(copy.settings.agentsModelInherit);
     expect(html).toContain(copy.settings.agentsScopeUser);
     expect(html).toContain(copy.settings.agentsScopeProject);
   });
 
-  test('编辑：预填名称/描述/提示词/模型，面包屑末段与编辑标题', () => {
+  test('编辑带 tools 回填「自定义工具」：工具词表渲染，预填名称/描述/提示词/模型', () => {
     const html = renderToStaticMarkup(
-      <AgentDefinitionForm {...makeFormProps({ initial: existing, previous: { name: 'search', scope: 'user', project: null } })} />,
+      <AgentDefinitionForm {...makeFormProps({ initial: existing, previous: { file: 'search', scope: 'user', project: null } })} />,
     );
     expect(html).toContain('search');
     expect(html).toContain('联网搜索专员');
     expect(html).toContain('你是搜索专员。');
     expect(html).toContain('glm/glm-4.7');
     expect(html).toContain(copy.settings.agentsFormTitleEdit);
+    for (const tool of AGENT_TOOL_IDS) expect(html).toContain(tool);
   });
 
   test('无已知项目：不渲染「指定项目」段（作用域只剩用户）', () => {

@@ -60,8 +60,8 @@ function fieldHint(text: string): React.ReactElement {
 }
 
 /**
- * 子 agent 定义表单（新建/编辑共用）：名称/描述/模型/工具 chips/系统提示词/作用域。
- * tools 空集与 model 空选在提交时归一为 null（= 不写 frontmatter = hub 继承语义）；
+ * 子 agent 定义表单（新建/编辑共用）：名称/描述/模型/工具（默认所有 | 自定义多选）/系统提示词/作用域。
+ * 工具「默认所有」与 model 空选在提交时归一为 null（= 不写 frontmatter = hub 继承语义）；
  * 保存结果经 onSave 的 reason 反馈：null 成功回列表，'name_exists'/'invalid_name'/其余
  * 分别映射同名内联错误。
  */
@@ -70,6 +70,7 @@ function AgentDefinitionForm({ initial, previous, knownProjects, modelOptions, t
   const [description, setDescription] = React.useState(initial?.description ?? '');
   const [systemPrompt, setSystemPrompt] = React.useState(initial?.systemPrompt ?? '');
   const [model, setModel] = React.useState<string | null>(initial?.model ?? null);
+  const [toolsMode, setToolsMode] = React.useState<'all' | 'custom'>(initial?.tools != null ? 'custom' : 'all');
   const [selectedTools, setSelectedTools] = React.useState<ReadonlySet<string>>(() => new Set(initial?.tools ?? []));
   const [scope, setScope] = React.useState<'user' | 'project'>(initial?.scope ?? 'user');
   const [project, setProject] = React.useState<string | null>(
@@ -94,6 +95,15 @@ function AgentDefinitionForm({ initial, previous, knownProjects, modelOptions, t
     // 无已知项目时不提供项目段（无落点的项目作用域是死路）
     ...(projectOptions.length > 0 ? [{ value: 'project' as const, label: copy.settings.agentsScopeProject }] : []),
   ];
+
+  const toolsModeOptions: readonly SegmentedControlOption<'all' | 'custom'>[] = [
+    { value: 'all', label: copy.settings.agentsToolsModeAll },
+    { value: 'custom', label: copy.settings.agentsToolsModeCustom },
+  ];
+
+  const changeToolsMode = (next: 'all' | 'custom'): void => {
+    setToolsMode(next);
+  };
 
   const toggleTool = (id: string): void => {
     setSelectedTools((prev) => {
@@ -128,13 +138,17 @@ function AgentDefinitionForm({ initial, previous, knownProjects, modelOptions, t
       setError(copy.settings.agentsFormIncomplete);
       return;
     }
-    // 空选集归一为 null：不写 frontmatter tools = hub 运行期默认工具集
-    const nextTools = orderedSelectedTools(toolIds, selectedTools);
+    // 「默认所有」= null（不写 frontmatter tools，hub 用全部内置工具）；自定义须至少选一个
+    const nextTools = toolsMode === 'all' ? null : orderedSelectedTools(toolIds, selectedTools);
+    if (nextTools?.length === 0) {
+      setError(copy.settings.agentsToolsPickEmpty);
+      return;
+    }
     const definition: AgentDefinition = {
       name: nextName,
       description: nextDescription,
       systemPrompt,
-      tools: nextTools.length > 0 ? nextTools : null,
+      tools: nextTools,
       model,
       scope,
       project: scope === 'user' ? null : project,
@@ -262,29 +276,36 @@ function AgentDefinitionForm({ initial, previous, knownProjects, modelOptions, t
           />
         </div>
         <div className="flex flex-col gap-[8px]">
-          {fieldLabel(copy.settings.agentsFieldTools, copy.settings.agentsToolsDefaultHint, undefined)}
-          <div className="flex flex-wrap gap-[8px]">
-            {toolIds.map((id) => {
-              const selected = selectedTools.has(id);
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  aria-pressed={selected}
-                  onClick={() => toggleTool(id)}
-                  className={cn(
-                    'cursor-pointer rounded-full border px-3 py-[5px] font-mono text-[11.5px] leading-[16px] outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/50',
-                    selected
-                      ? 'border-foreground bg-foreground text-background'
-                      : 'border-border bg-background text-muted-foreground hover:border-foreground/30 hover:text-foreground',
-                  )}
-                >
-                  {id}
-                </button>
-              );
-            })}
-          </div>
-          {selectedTools.size === 0 ? fieldHint(copy.settings.agentsToolsDefaultHint) : null}
+          {fieldLabel(copy.settings.agentsFieldTools, copy.settings.agentsToolsAllHint, undefined)}
+          <SegmentedControl
+            value={toolsMode}
+            onChange={changeToolsMode}
+            options={toolsModeOptions}
+            aria-label={copy.settings.agentsFieldTools}
+          />
+          {toolsMode === 'custom' ? (
+            <div className="flex flex-wrap gap-[8px] pt-[2px]">
+              {toolIds.map((id) => {
+                const selected = selectedTools.has(id);
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => toggleTool(id)}
+                    className={cn(
+                      'cursor-pointer rounded-full border px-3 py-[5px] font-mono text-[11.5px] leading-[16px] outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/50',
+                      selected
+                        ? 'border-foreground bg-foreground text-background'
+                        : 'border-border bg-background text-muted-foreground hover:border-foreground/30 hover:text-foreground',
+                    )}
+                  >
+                    {id}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
         <div className="flex flex-col gap-[6px]">
           {fieldLabel(copy.settings.agentsFieldPrompt, copy.settings.agentsFieldPromptHint, 'agent-definition-prompt')}
