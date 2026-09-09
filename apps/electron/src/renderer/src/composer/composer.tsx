@@ -118,14 +118,11 @@ function Composer({
 }: ComposerProps) {
   const canSend = value.trim().length > 0;
 
-  /** 首部命令 token 高亮：命中时 textarea 文字转透明，可见文本由镜像层渲染。
-   * 镜像层只复刻受控 value——输入法组合文本（React 组合期不回写 value，由原生渲染）
-   * 与选区高亮只在原生层可见，组合/选中期间必须整体交还原生渲染：
-   * 组合中文不可见、选区底色盖字、光标相对可见文字错位。 */
+  /** 首部命令 token 高亮：镜像层只画半透明底色带（垫在文字下），textarea
+   * 文字保持原生渲染——textarea 与 div 的文本布局存在亚像素级差异，文字层
+   * 镜像无法像素对齐；底色带误差视觉无感，光标/选区/输入法组合全部原生正确。 */
   const commandRanges = React.useMemo(() => leadingCommandHighlight(value, commands), [value, commands]);
-  const [composing, setComposing] = React.useState(false);
-  const [selecting, setSelecting] = React.useState(false);
-  const highlighting = commandRanges.length > 0 && !composing && !selecting;
+  const highlighting = commandRanges.length > 0;
   const [inputScrollTop, setInputScrollTop] = React.useState(0);
 
   /** 图片附件态：读取与持有都在本组件（提交成功才清空）；预览用 data URL，无对象 URL 生命周期。 */
@@ -258,7 +255,6 @@ function Composer({
   const syncCaret = (element: HTMLTextAreaElement): void => {
     userValueRef.current = element.value;
     setCaret(element.selectionStart ?? 0);
-    setSelecting((element.selectionStart ?? 0) !== (element.selectionEnd ?? 0));
   };
 
   return (
@@ -307,12 +303,6 @@ function Composer({
             onKeyUp={(event) => syncCaret(event.currentTarget)}
             onClick={(event) => syncCaret(event.currentTarget)}
             onFocus={(event) => syncCaret(event.currentTarget)}
-            onSelect={(event) => syncCaret(event.currentTarget)}
-            onCompositionStart={() => setComposing(true)}
-            onCompositionEnd={(event) => {
-              setComposing(false);
-              syncCaret(event.currentTarget);
-            }}
             onPaste={(event) => {
               const files = Array.from(event.clipboardData?.items ?? [])
                 .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
@@ -378,7 +368,7 @@ function Composer({
             className={cn(
               TEXTAREA_CLASS,
               INPUT_METRICS_CLASS,
-              highlighting ? 'text-transparent caret-foreground' : 'text-foreground',
+              'text-foreground',
             )}
           />
         </div>

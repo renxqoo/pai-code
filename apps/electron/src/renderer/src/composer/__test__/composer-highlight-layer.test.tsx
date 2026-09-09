@@ -13,13 +13,17 @@ function renderLayer(scrollTop = 0): string {
 }
 
 describe('ComposerHighlightLayer', () => {
-  test('镜像层渲染可见文本：命中段高亮（dot-active + medium），其余普通；aria-hidden 纯装饰', () => {
+  test('底色带方案：镜像文字全透明只占位，命中段画半透明色带；aria-hidden 纯装饰', () => {
     const html = renderLayer();
     expect(html).toContain('aria-hidden="true"')
     expect(html).toContain('pointer-events-none')
-    expect(html).toContain('text-dot-active')
+    // 镜像层文字透明（不产生可见文字——textarea 原生文字才是可见层）
+    expect(html).toContain('text-transparent')
+    // 命中段为底色带而非改字色/字重（textarea 与 div 字形位置存在亚像素差，
+    // 文字层镜像无法像素对齐，只有底色带可容忍 1-2px 误差）
+    expect(html).toContain('bg-dot-active/15')
+    expect(html).toContain('rounded-[5px]')
     expect(html).toContain('/skill:writer')
-    expect(html).toContain('写一段')
     // 排版度量与 textarea 共用同一份常量
     expect(html).toContain('leading-[19px]')
   })

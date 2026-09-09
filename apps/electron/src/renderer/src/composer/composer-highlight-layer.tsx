@@ -11,17 +11,20 @@ type ComposerHighlightLayerProps = {
 }
 
 /**
- * 输入框高亮镜像层：命中命令 token 时由 Composer 挂载，textarea 自身文字转
- * 透明、由本层渲染可见文本与高亮段；aria-hidden 纯装饰层，可访问性输入仍由
- * 原生 textarea 承担。排版度量与 textarea 完全一致（共用 metricsClassName）。
+ * 输入框命令高亮底色层：镜像全文布局定位命中区间，文字全透明只占位，
+ * 命中段画半透明色带垫在文字下面。不做「可见文字镜像」——Chromium 的
+ * textarea 内部文本布局与普通 div 存在亚像素级字形位置差（红蓝叠加显影
+ * 实测不可对齐），文字镜像永远无法像素级重合；而底色带的 1-2px 度量差
+ * 视觉无感。textarea 文字保持原生不透明渲染：光标、选区、输入法组合
+ * 全部原生正确（组合文本/选区高亮只在原生层可见）。
  */
 function ComposerHighlightLayer({ text, ranges, scrollTop, metricsClassName }: ComposerHighlightLayerProps) {
   return (
-    <div aria-hidden="true" className={cn('pointer-events-none absolute inset-0 overflow-hidden', metricsClassName)}>
+    <div aria-hidden="true" className={cn('pointer-events-none absolute inset-0 overflow-hidden text-transparent', metricsClassName)}>
       <div className="whitespace-pre-wrap break-words" style={{ transform: `translateY(${-scrollTop}px)` }}>
         {splitHighlight(text, ranges).map((segment, index) =>
           segment.highlighted ? (
-            <span key={index} className="font-medium text-dot-active">
+            <span key={index} className="box-decoration-clone rounded-[5px] bg-dot-active/15">
               {segment.text}
             </span>
           ) : (
