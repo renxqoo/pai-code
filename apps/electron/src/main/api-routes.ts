@@ -6,6 +6,7 @@ import { mapEntries, modelInfos, savedSessions, sessionCommands, sessionStatsVie
 import { envVarNameForProvider } from './models-config';
 import { createProviderProbe } from './provider-probe';
 import { searchProjectFiles } from './file-search';
+import { createGitBranches, type GitBranches } from './git-branches';
 import { buildSkillInventory, parseSkillPatterns, toggleSkillPatterns } from './skills-inventory';
 import type { AgentDirFiles } from './agent-dir-files';
 import type { AgentDefinitionsStore } from './agent-definitions-store';
@@ -53,6 +54,10 @@ export interface ApiRouteDeps {
   revealPath: (path: string) => void;
   /** 系统目录选择对话框（装配层注入 Electron dialog；缺省返回「不可用」）。 */
   pickDirectory: (defaultPath: string | null) => Promise<string | null>;
+  /** 本地 git 分支能力（装配层可注入执行器替身；缺省走真实 git）。 */
+  git?: GitBranches;
+  /** 额外放行的工作目录（本次运行中经系统选择器选过的目录）。 */
+  extraCwds?: () => readonly string[];
 }
 
 type Outcome<M extends ApiMethod> = Promise<ApiOutcome<M>>;
@@ -115,6 +120,31 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     }
     return [...cwds];
   };
+
+  /**
+   * 目录门禁：只允许本应用已知项目目录（活跃会话 + 注册表 + 本次系统选择器选过的目录），
+   * 缩小文件枚举与工作树写入面（已知目录集合本身由 session/start 决定，见 T23 挂账），
+   * 不是对任意路径的硬边界；符号链接按 realpath 归一。
+   */
+  const isKnownCwd = (cwd: string): boolean => {
+    const root = resolvePath(cwd);
+    let rootReal = root;
+    try {
+      rootReal = realpathSync(root);
+    } catch {
+      // 目录不存在：保留 resolve 形态（调用侧按空结果/报错降级）
+    }
+    return [...knownCwds(), ...(deps.extraCwds?.() ?? [])].some((known) => {
+      try {
+        const base = realpathSync(known);
+        return base === rootReal || rootReal.startsWith(`${base}${pathSep}`);
+      } catch {
+        return resolvePath(known) === root;
+      }
+    });
+  };
+
+  const git = deps.git ?? createGitBranches();
 
   const savedAcrossCwds = async (cwd?: string): Promise<ReturnType<typeof savedSessions>> => {
     const targets = cwd !== undefined ? [cwd] : knownCwds();
@@ -420,24 +450,19 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       return result.ok ? { ok: true as const, data: null } : fail(result.reason);
     },
     'file/search': (params) => {
-      // 目录门禁：只允许扫描本应用已知会话目录（活跃会话 + 注册表），防被攻陷渲染层任意枚举
-      const root = resolvePath(params.cwd);
-      let rootReal = root;
-      try {
-        rootReal = realpathSync(root);
-      } catch {
-        // 目录不存在：保留 resolve 形态（扫描侧按空结果降级）
-      }
-      const allowed = knownCwds().some((known) => {
-        try {
-          const base = realpathSync(known);
-          return base === rootReal || rootReal.startsWith(`${base}${pathSep}`);
-        } catch {
-          return resolvePath(known) === root;
-        }
-      });
-      if (!allowed) return Promise.resolve(fail('cwd_forbidden'));
+      // 目录门禁：只允许扫描本应用已知会话目录（活跃会话 + 注册表），缩小枚举面（见 T23 挂账）
+      if (!isKnownCwd(params.cwd)) return Promise.resolve(fail('cwd_forbidden'));
       return Promise.resolve({ ok: true as const, data: searchProjectFiles(params.cwd, params.query) });
+    },
+    'git/branches': (params) => {
+      if (!isKnownCwd(params.cwd)) return Promise.resolve(fail('cwd_not_allowed'));
+      return git.list(params.cwd);
+    },
+    'git/checkout': (params) => {
+      // 工作树是独占资源：门禁与串行都在主进程侧（渲染层只做按钮 busy 态）
+      if (!isKnownCwd(params.cwd)) return Promise.resolve(fail('cwd_not_allowed'));
+      deps.audit(`git_checkout:${params.cwd}:${params.branch}:${params.create ? 'create' : 'switch'}`);
+      return git.checkout(params.cwd, params.branch, params.create);
     },
     'permission/read': () => {
       // 宽容解析镜像 hub 热读语义（字段可省/未知键忽略），部分规则完整呈现不清档

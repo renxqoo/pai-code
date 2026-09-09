@@ -116,6 +116,8 @@ void app.whenReady().then(async () => {
   let routes: ReturnType<typeof createApiRoutes> | null = null;
   // 目录选择对话框单飞标志（createApiRoutes 注入面闭包引用）
   let directoryPickerInFlight = false;
+  // 本次运行中经系统选择器选过的目录：新任务页对尚无会话的目录也要能读分支/切分支
+  const pickedDirectories = new Set<string>();
   try {
     const keyStore = createProviderKeyStore(paths.providerKeysFile);
     const settings = createFileSettings(paths.settingsFile, keyStore);
@@ -137,6 +139,7 @@ void app.whenReady().then(async () => {
       agentDefinitions: createAgentDefinitionsStore(paths.agentDir),
       agentDir: paths.agentDir,
       revealPath: (path) => shell.showItemInFolder(path),
+      extraCwds: () => [...pickedDirectories],
       // 对话框单飞：在途时再调用直接按取消返回（防被攻陷渲染层并发叠弹多个模态面板）
       pickDirectory: async (defaultPath) => {
         if (directoryPickerInFlight) return null;
@@ -149,6 +152,7 @@ void app.whenReady().then(async () => {
           // attach 到主窗口（模态）；窗口尚未创建时退化为应用级对话框
           const target = mainWindow !== null && !mainWindow.isDestroyed() ? mainWindow : undefined;
           const picked = target !== undefined ? await dialog.showOpenDialog(target, options) : await dialog.showOpenDialog(options);
+          if (!picked.canceled && picked.filePaths[0] !== undefined) pickedDirectories.add(picked.filePaths[0]);
           return picked.canceled ? null : (picked.filePaths[0] ?? null);
         } finally {
           directoryPickerInFlight = false;

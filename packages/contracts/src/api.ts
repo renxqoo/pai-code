@@ -189,6 +189,16 @@ export const BootstrapViewSchema = z.object({
 });
 export type BootstrapView = z.infer<typeof BootstrapViewSchema>;
 
+/** 本地 git 分支视图（新建任务页分支选择）：非 git 目录 isRepo=false + 空列表（降级不报错）。 */
+export const GitBranchesViewSchema = z
+  .object({
+    isRepo: z.boolean(),
+    current: z.string().nullable(),
+    branches: z.array(z.string()),
+  })
+  .strict();
+export type GitBranchesView = z.infer<typeof GitBranchesViewSchema>;
+
 // ---------------------------------------------------------------------------
 // 方法 schema（单一真相）：api 服务端做参数校验，渲染层类型从此推导
 // ---------------------------------------------------------------------------
@@ -340,6 +350,16 @@ export const ApiSchemas = {
   'dialog/pickDirectory': {
     params: z.object({ defaultPath: z.string().min(1).optional() }).strict(),
     result: z.string().nullable(),
+  },
+  /** 本地 git 分支列表（新建任务页分支选择）；非 git 目录返回空形态（不报错）。 */
+  'git/branches': {
+    params: z.object({ cwd: z.string().min(1) }).strict(),
+    result: GitBranchesViewSchema,
+  },
+  /** 切换分支（create=true 为创建并检出）；cwd 必须是本应用已知项目目录，脏工作区拒绝。 */
+  'git/checkout': {
+    params: z.object({ cwd: z.string().min(1), branch: z.string().min(1), create: z.boolean().default(false) }).strict(),
+    result: z.object({ branch: z.string() }).strict(),
   },
   /** 用户级技能目录（含启用态；启停真相 = agentDir/settings.json 的 skills overrides）。 */
   'skills/list': {

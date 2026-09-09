@@ -277,6 +277,14 @@ describe('API schema：每方法合法/非法样本', () => {
     ['provider/upsert 非法思考形态', 'provider/upsert', { name: 'p', baseUrl: 'u', api: 'openai-completions', models: [{ id: 'm', reasoning: true }], thinkingFormat: 'chat-template' }],
     ['dialog/pickDirectory 未知键', 'dialog/pickDirectory', { defaultPath: '/w', extra: 1 }],
     ['dialog/pickDirectory 空 defaultPath', 'dialog/pickDirectory', { defaultPath: '' }],
+    ['git/branches 缺 cwd', 'git/branches', {}],
+    ['git/branches 空 cwd', 'git/branches', { cwd: '' }],
+    ['git/branches 未知键', 'git/branches', { cwd: '/w', extra: 1 }],
+    ['git/checkout 缺 cwd', 'git/checkout', { branch: 'main' }],
+    ['git/checkout 空 cwd', 'git/checkout', { cwd: '', branch: 'main' }],
+    ['git/checkout 空 branch', 'git/checkout', { cwd: '/w', branch: '' }],
+    ['git/checkout 非法 create 类型', 'git/checkout', { cwd: '/w', branch: 'main', create: 'yes' }],
+    ['git/checkout 未知键', 'git/checkout', { cwd: '/w', branch: 'main', extra: 1 }],
   ])('拒绝：%s', (_name: string, method: string, bad: unknown) => {
     expect(() => ApiSchemas[method as keyof typeof ApiSchemas].params.parse(bad)).toThrow();
   });
@@ -291,6 +299,35 @@ describe('dialog/pickDirectory 契约（新会话目录选择）', () => {
     expect(parsed).toEqual(params);
     expect(ApiSchemas['dialog/pickDirectory'].result.nullable().parse(null)).toBeNull();
     expect(ApiSchemas['dialog/pickDirectory'].result.parse('/w/proj')).toBe('/w/proj');
+  });
+});
+
+describe('git 分支契约（新建任务页项目/分支选择）', () => {
+  test('git/branches 参数与空形态结果', () => {
+    expect(ApiSchemas['git/branches'].params.parse({ cwd: '/w/proj' })).toEqual({ cwd: '/w/proj' });
+    const empty = ApiSchemas['git/branches'].result.parse({ isRepo: false, current: null, branches: [] });
+    expect(empty).toEqual({ isRepo: false, current: null, branches: [] });
+    expect(ApiSchemas['git/branches'].result.parse({ isRepo: true, current: 'main', branches: ['dev', 'main'] })).toEqual({
+      isRepo: true,
+      current: 'main',
+      branches: ['dev', 'main'],
+    });
+    expect(() => ApiSchemas['git/branches'].result.parse({ isRepo: true, current: null })).toThrow();
+  });
+
+  test('git/checkout create 缺省为 false，结果只含 branch', () => {
+    expect(ApiSchemas['git/checkout'].params.parse({ cwd: '/w/proj', branch: 'main' })).toEqual({
+      cwd: '/w/proj',
+      branch: 'main',
+      create: false,
+    });
+    expect(ApiSchemas['git/checkout'].params.parse({ cwd: '/w/proj', branch: 'feat/x', create: true })).toEqual({
+      cwd: '/w/proj',
+      branch: 'feat/x',
+      create: true,
+    });
+    expect(ApiSchemas['git/checkout'].result.parse({ branch: 'feat/x' })).toEqual({ branch: 'feat/x' });
+    expect(() => ApiSchemas['git/checkout'].result.parse({ branch: 'feat/x', cwd: '/w' })).toThrow();
   });
 });
 
