@@ -10,6 +10,9 @@ import { clip, findTurn, updateTurn } from './turn-ops';
  * 事件折叠状态机（纯函数）：UiEvent + 对账动作 → 视图状态。
  * 语义锚点：
  * - 流式只拼 delta；messageFinal 权威替换；turnSettled 恰好一次终态（agent_end 多次不驱动终态）；
+ * - 块序即到达序：text/thinking/tools 块按消息 id 归块、按首次到达定位；
+ *   diff/子代理条恒挂轮末（转写重建 buildTurnBlocks/attachTailSubagents 同一尾部语义）——
+ *   settle 替换前后块序同构，视觉不重排；
  * - 用户停止意图（stopping）让 settle 后的轮次呈现 stopped；
  * - 条目（真相）与 live 轮次（装饰）共存：settle 后对账以 dropLiveTurn 替换。
  */
@@ -59,10 +62,11 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
         durationMs: null,
         status: 'running',
       };
+      const messageId = resolveMessageId(withTurn, event.messageId);
       const withStart = { ...withTurn, callStarts: noteCallStart(withTurn.callStarts, event.call.id, now) };
       return updateTurn(withStart, turn.id, (current) => ({
         ...current,
-        blocks: appendToolCall(current.blocks, call, current.id),
+        blocks: appendToolCall(current.blocks, call, messageId),
       }));
     }
     case 'toolUpdated':
@@ -86,11 +90,16 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
         retrying: null,
         agents,
         liveMessageId: null,
-        items: state.items.map((item) =>
-          item.kind === 'turn' && item.turn.id === state.liveTurnId && item.turn.status === 'running'
-            ? { kind: 'turn', turn: { ...item.turn, status: stopped ? 'stopped' : 'completed', endedAt: now } }
-            : item,
-        ),
+        items: state.items.map((item) => {
+          if (item.kind !== 'turn' || item.turn.id !== state.liveTurnId || item.turn.status !== 'running') return item;
+          // 轮入终态：流式中断残留的 running 调用（如 auto-retry 弃置的半成品）一并定格，不再走表
+          const blocks = item.turn.blocks.map((block) =>
+            block.kind === 'tools' && block.calls.some((call) => call.status === 'running')
+              ? { ...block, calls: block.calls.map((call) => (call.status === 'running' ? { ...call, status: 'stopped' as const } : call)) }
+              : block,
+          );
+          return { kind: 'turn', turn: { ...item.turn, status: stopped ? ('stopped' as const) : ('completed' as const), endedAt: now, blocks } };
+        }),
       });
     }
     case 'queueChanged':
@@ -276,21 +285,23 @@ function onToolEnded(
           if (block.kind === 'diff') files.push(...block.diff.files.map((file) => ({ ...file })));
         }
         for (const file of diff) mergeDiffFile(files, file.path, file.additions, file.deletions);
+        const diffBlock: TurnBlock = {
+          kind: 'diff',
+          id: `diff-${current.id}`,
+          diff: {
+            changedFiles: files.length,
+            additions: files.reduce((sum, file) => sum + file.additions, 0),
+            deletions: files.reduce((sum, file) => sum + file.deletions, 0),
+            files,
+          },
+        };
+        // diff 旧块剥除后重挂轮末区（子代理条之前），与 attachTailSubagents 尾序 […, diff, subagents] 一致
+        const withoutDiff = current.blocks.filter((block) => block.kind !== 'diff');
+        const beforeAgents = withoutDiff.findIndex((block) => block.kind === 'subagents');
+        const at = beforeAgents === -1 ? withoutDiff.length : beforeAgents;
         return {
           ...current,
-          blocks: [
-            ...current.blocks.filter((block) => block.kind !== 'diff'),
-            {
-              kind: 'diff',
-              id: `diff-${current.id}`,
-              diff: {
-                changedFiles: files.length,
-                additions: files.reduce((sum, file) => sum + file.additions, 0),
-                deletions: files.reduce((sum, file) => sum + file.deletions, 0),
-                files,
-              },
-            },
-          ],
+          blocks: [...withoutDiff.slice(0, at), diffBlock, ...withoutDiff.slice(at)],
         };
       });
     }
@@ -322,10 +333,10 @@ function onMessageFinal(
     });
     // 权威正文/思考若没有对应流式块（如零 delta 直接 message_end），补块
     if (event.message.text.length > 0 && !blocks.some((block) => block.kind === 'text' && block.id === `text-${event.message.id}`)) {
-      blocks.push({ kind: 'text', id: `text-${event.message.id}`, text: clip(event.message.text) });
+      insertBlock(blocks, { kind: 'text', id: `text-${event.message.id}`, text: clip(event.message.text) });
     }
     if (event.message.thinking.length > 0 && !blocks.some((block) => block.kind === 'thinking' && block.id === `think-${event.message.id}`)) {
-      blocks.push({ kind: 'thinking', id: `think-${event.message.id}`, text: clip(event.message.thinking) });
+      insertBlock(blocks, { kind: 'thinking', id: `think-${event.message.id}`, text: clip(event.message.thinking) });
     }
     // 流式未见的 toolCall（错过增量）补为完成态
     for (const call of event.message.toolCalls) {
@@ -333,7 +344,7 @@ function onMessageFinal(
         blocks = appendToolCall(
           blocks,
           { id: call.id, name: call.name, argsPreview: call.argsPreview, output: '', exitCode: null, durationMs: null, status: 'running' },
-          current.id,
+          event.message.id,
         );
       }
     }
@@ -350,7 +361,8 @@ function appendDelta(state: LiveThreadState, messageId: string, kind: 'text' | '
     const blocks = [...current.blocks];
     const index = blocks.findIndex((block) => block.id === blockId);
     if (index === -1) {
-      blocks.push(kind === 'text' ? { kind: 'text', id: blockId, text: clip(delta) } : { kind: 'thinking', id: blockId, text: clip(delta) });
+      const block = kind === 'text' ? { kind: 'text' as const, id: blockId, text: clip(delta) } : { kind: 'thinking' as const, id: blockId, text: clip(delta) };
+      insertBlock(blocks, block);
     } else {
       const block = blocks[index];
       if (block !== undefined && (block.kind === 'text' || block.kind === 'thinking')) {
@@ -379,11 +391,14 @@ function mapLiveCall(state: LiveThreadState, callId: string, patch: (call: ToolC
   }));
 }
 
-function appendToolCall(blocks: readonly TurnBlock[], call: ToolCallModel, turnId: string): TurnBlock[] {
+/** 工具调用按消息归块（tools-${messageId}）：同一 assistant 消息内的调用并入同块，
+ * 跨消息的块按到达序穿插——与转写重建（buildTurnBlocks）同构，settle 替换不重排视觉顺序。 */
+function appendToolCall(blocks: readonly TurnBlock[], call: ToolCallModel, messageId: string): TurnBlock[] {
   const next = [...blocks];
-  const index = next.findIndex((block) => block.kind === 'tools' && block.id === `tools-${turnId}`);
+  const blockId = `tools-${messageId}`;
+  const index = next.findIndex((block) => block.kind === 'tools' && block.id === blockId);
   if (index === -1) {
-    next.push({ kind: 'tools', id: `tools-${turnId}`, calls: [call] });
+    insertBlock(next, { kind: 'tools', id: blockId, calls: [call] });
   } else {
     const block = next[index];
     if (block?.kind === 'tools') {
@@ -391,6 +406,14 @@ function appendToolCall(blocks: readonly TurnBlock[], call: ToolCallModel, turnI
     }
   }
   return next;
+}
+
+/** 过程/正文新块原位插入：diff 与子代理条恒挂轮末（尾部不变式，与转写重建同构），
+ * 尾部块之后的到达块插到不变式区之前。 */
+function insertBlock(blocks: TurnBlock[], block: TurnBlock): void {
+  const tail = blocks.findIndex((existing) => existing.kind === 'diff' || existing.kind === 'subagents');
+  const at = tail === -1 ? blocks.length : tail;
+  blocks.splice(at, 0, block);
 }
 
 function insertBeforeLiveTurn(items: readonly ThreadItem[], item: ThreadItem, liveTurnId: string | null): ThreadItem[] {
