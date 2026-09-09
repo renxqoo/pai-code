@@ -30,6 +30,12 @@ export const zh: typeof en = {
     collapseGroup: '展开/折叠项目分组',
     noMatches: '没有匹配的会话',
     emptyTasks: (hotkey: string): string => `暂无任务，按 ${hotkey} 开始`,
+    removeProject: '移除项目',
+    viewProjectFiles: '查看项目文件',
+    projectFilesEmpty: '没有可展示的文件',
+    projectFilesLoading: '正在读取项目文件…',
+    closeProjectFiles: '关闭',
+    projectFilesCount: (count: number): string => `${count} 个文件`,
     age: {
       justNow: '刚刚',
       minutes: (value: number): string => `${value}分钟`,

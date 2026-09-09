@@ -12,6 +12,7 @@ export type EscAction =
   | { kind: 'dismiss-dialogs' }
   | { kind: 'close-sidebar-search' }
   | { kind: 'close-usage' }
+  | { kind: 'close-project-files' }
   | { kind: 'close-new-thread' }
   | { kind: 'close-settings' }
   | { kind: 'close-panel' }
@@ -25,6 +26,8 @@ export type EscState = {
   /** 侧栏搜索可见且展开（侧栏未收起、无更高层覆盖时由调用方算出）：内联层，覆盖层全部收起后才轮到它。 */
   sidebarSearchOpen: boolean;
   usageOpen: boolean;
+  /** 项目文件面板（侧栏内嵌层：面板可见〔侧栏未收起〕才参与链，先于侧栏搜索）。 */
+  projectFilesOpen: boolean;
   /** 新会话弹窗优先于底层动作：Esc 只关弹窗，不穿透触发停止/清队列。 */
   newThreadOpen: boolean;
   settingsOpen: boolean;
@@ -41,8 +44,9 @@ export function escActionFor(state: EscState): EscAction {
   if (state.usageOpen) return { kind: 'close-usage' };
   if (state.newThreadOpen) return { kind: 'close-new-thread' };
   if (state.settingsOpen) return { kind: 'close-settings' };
-  // 侧栏搜索是内联层：位于全屏覆盖（Usage/新会话/设置）之下，且只有可见时才参与链
-  // （不可见搜索不得吞掉一拍 Esc；调用方传「可见搜索」语义）
+  // 项目文件面板与侧栏搜索同为侧栏内联层：位于全屏覆盖（Usage/新会话/设置）之下，
+  // 只有可见（侧栏未收起）时才参与链；面板替换列表区，先于搜索收起
+  if (state.projectFilesOpen) return { kind: 'close-project-files' };
   if (state.sidebarSearchOpen) return { kind: 'close-sidebar-search' };
   if (state.panel !== null) return { kind: 'close-panel' };
   if (state.bashRunning) return { kind: 'abort-bash' };

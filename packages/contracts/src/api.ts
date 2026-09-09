@@ -169,6 +169,7 @@ export const PreferencesViewSchema = z.object({
   projectModels: z.record(z.string(), z.string()),
   pinnedSessions: z.array(z.string()),
   trustedDefault: z.boolean(),
+  hiddenProjects: z.array(z.string()),
 });
 export type PreferencesView = z.infer<typeof PreferencesViewSchema>;
 
@@ -420,6 +421,7 @@ export const ApiSchemas = {
         projectModels: z.record(z.string(), z.string()).optional(),
         pinnedSessions: z.array(z.string()).optional(),
         trustedDefault: z.boolean().optional(),
+        hiddenProjects: z.array(z.string()).optional(),
       })
       .strict()
       .refine(
@@ -428,7 +430,8 @@ export const ApiSchemas = {
           value.onboarded !== undefined ||
           value.projectModels !== undefined ||
           value.pinnedSessions !== undefined ||
-          value.trustedDefault !== undefined,
+          value.trustedDefault !== undefined ||
+          value.hiddenProjects !== undefined,
         { message: 'empty_preference' },
       ),
     result: PreferencesViewSchema,

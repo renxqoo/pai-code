@@ -29,6 +29,12 @@ export const en = {
     collapseGroup: 'Toggle project group',
     noMatches: 'No matching conversations',
     emptyTasks: (hotkey: string): string => `No tasks yet — press ${hotkey} to start`,
+    removeProject: 'Remove project',
+    viewProjectFiles: 'View project files',
+    projectFilesEmpty: 'No files to show',
+    projectFilesLoading: 'Loading project files…',
+    closeProjectFiles: 'Close',
+    projectFilesCount: (count: number): string => `${count} ${count === 1 ? 'file' : 'files'}`,
     age: {
       justNow: 'now',
       minutes: (value: number): string => `${value}m`,

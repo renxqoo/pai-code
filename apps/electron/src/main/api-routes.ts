@@ -121,6 +121,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       projectModels: { ...settings.projectModels },
       pinnedSessions: [...settings.pinnedSessions],
       trustedDefault: settings.trustedDefault,
+      hiddenProjects: [...settings.hiddenProjects],
     };
   };
 
@@ -483,12 +484,13 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       return Promise.resolve({ ok: true as const, data: null });
     },
     'app/setPreference': (params) => {
-      const patch: { defaultModel?: string | null; onboarded?: boolean; projectModels?: Record<string, string>; pinnedSessions?: string[]; trustedDefault?: boolean } = {};
+      const patch: { defaultModel?: string | null; onboarded?: boolean; projectModels?: Record<string, string>; pinnedSessions?: string[]; trustedDefault?: boolean; hiddenProjects?: string[] } = {};
       if (params.defaultModel !== undefined) patch.defaultModel = params.defaultModel;
       if (params.onboarded !== undefined) patch.onboarded = params.onboarded;
       if (params.projectModels !== undefined) patch.projectModels = { ...params.projectModels };
       if (params.pinnedSessions !== undefined) patch.pinnedSessions = [...params.pinnedSessions];
       if (params.trustedDefault !== undefined) patch.trustedDefault = params.trustedDefault;
+      if (params.hiddenProjects !== undefined) patch.hiddenProjects = [...params.hiddenProjects];
       deps.settings.patch(patch);
       return Promise.resolve({ ok: true as const, data: preferencesView() });
     },

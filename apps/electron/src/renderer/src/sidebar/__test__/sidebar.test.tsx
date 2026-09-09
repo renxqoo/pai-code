@@ -65,6 +65,11 @@ function makeProps(overrides: Partial<SidebarProps> = {}): SidebarProps {
     onCollapseSidebar: noop,
     onSelectSession: noop,
     onTogglePin: noop,
+    onNewTaskInProject: noop,
+    onRemoveProject: noop,
+    onProjectFiles: noop,
+    projectFiles: null,
+    onCloseProjectFiles: noop,
     footerActions: [
       { label: '设置', onSelect: noop },
       { label: '工作流', onSelect: noop },
@@ -137,6 +142,46 @@ describe('Sidebar 渲染冒烟', () => {
     expect(html).toContain('刚刚');
     expect(html).toContain('aria-expanded="true"');
     expect(html).toContain('展开/折叠项目分组 · pai');
+  });
+
+  test('项目视图：文件夹行带「更多」菜单触发器（三条线图标，hover 展开三项菜单）', () => {
+    const projects = renderToStaticMarkup(
+      <Sidebar {...makeProps({ view: 'projects', projectGroups: [makeGroup()] })} />,
+    );
+    expect(projects).toContain('aria-label="更多操作"');
+    expect(projects).toContain('lucide-list-tree');
+    const grouped = renderToStaticMarkup(<Sidebar {...makeProps({ view: 'grouped' })} />);
+    expect(grouped).not.toContain('更多操作');
+  });
+
+  test('项目文件面板打开：内容区整体让位（快捷区/底部工具条不渲染），返回行/搜索框/树在位', () => {
+    const html = renderToStaticMarkup(
+      <Sidebar
+        {...makeProps({
+          projectFiles: {
+            name: 'side-proj',
+            path: '/tmp/side-proj',
+            tree: [
+              {
+                name: 'src',
+                path: 'src',
+                kind: 'dir',
+                children: [{ name: 'main.ts', path: 'src/main.ts', kind: 'file', children: [] }],
+              },
+            ],
+            loading: false,
+          },
+        })}
+      />,
+    );
+    expect(html).toContain('side-proj');
+    expect(html).toContain('/tmp/side-proj');
+    expect(html).toContain('aria-label="关闭"'); // 返回钮
+    expect(html).toContain('<input'); // 面板搜索框
+    expect(html).toContain('padding-left:22px'); // 树第二层缩进
+    expect(html).not.toContain('自动化'); // 快捷区让位
+    expect(html).not.toContain('插件市场');
+    expect(html).not.toContain('设置'); // 底部工具条让位
   });
 
   test('显示更多：total 超过可见条数时出现，展开后消失', () => {

@@ -34,6 +34,7 @@ test('patch 部分写：只动目标字段，其余保留；落盘可再读', ()
   settings.patch({ onboarded: true, defaultModel: 'glm/glm-4.7' });
 
   settings.patch({ projectModels: { '/w': 'glm/glm-4.7' }, pinnedSessions: ['/a.jsonl'] });
+  settings.patch({ hiddenProjects: ['/w/gone'] });
 
   expect(settings.get()).toEqual({
     hubDev: { bunPath: null, hubEntry: null },
@@ -43,6 +44,7 @@ test('patch 部分写：只动目标字段，其余保留；落盘可再读', ()
     onboarded: true,
     projectModels: { '/w': 'glm/glm-4.7' },
     pinnedSessions: ['/a.jsonl'],
+    hiddenProjects: ['/w/gone'],
   });
 
   // 新实例从盘读回（缓存不背书）
@@ -67,6 +69,7 @@ test('空输入落到 schema 默认值（含新增偏好字段）', () => {
   expect(parsed.defaultModel).toBeNull();
   expect(parsed.onboarded).toBe(false);
   expect(parsed.trustedDefault).toBe(false);
+  expect(parsed.hiddenProjects).toEqual([]);
   expect(parsed.providers).toEqual([]);
 });
 

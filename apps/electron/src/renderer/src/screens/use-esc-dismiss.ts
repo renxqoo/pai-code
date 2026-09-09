@@ -7,6 +7,7 @@ type UseEscDismissInput = {
   dialogCount: number;
   sidebarSearchOpen: boolean;
   usageOpen: boolean;
+  projectFilesOpen: boolean;
   newThreadOpen: boolean;
   settingsOpen: boolean;
   panel: SidePanel;
@@ -18,6 +19,7 @@ type UseEscDismissInput = {
   stopActiveTurn: WorkspaceActions['stopActiveTurn'];
   onSidebarSearchClose: () => void;
   onUsageClose: () => void;
+  onProjectFilesClose: () => void;
   onNewThreadClose: () => void;
   onSettingsClose: () => void;
   onPanelClose: () => void;
@@ -27,18 +29,21 @@ type UseEscDismissInput = {
 /** Esc 键全局分发（语义裁决在 escActionFor 纯函数，本 hook 只做动作映射）。
  * 裁决输入与分发函数全量进依赖：actions 稳定化后本 effect 不再每渲染重挂，漏依赖即闭包陈旧。 */
 export function useEscDismiss(input: UseEscDismissInput): void {
-  const { dialogCount, sidebarSearchOpen, usageOpen, newThreadOpen, settingsOpen, panel, bashRunning, confirmStop, generating, agentsActive } = input;
-  const { abortBash, stopActiveTurn, onSidebarSearchClose, onUsageClose, onNewThreadClose, onSettingsClose, onPanelClose, onConfirmStopChange } = input;
+  const { dialogCount, sidebarSearchOpen, usageOpen, projectFilesOpen, newThreadOpen, settingsOpen, panel, bashRunning, confirmStop, generating, agentsActive } = input;
+  const { abortBash, stopActiveTurn, onSidebarSearchClose, onUsageClose, onProjectFilesClose, onNewThreadClose, onSettingsClose, onPanelClose, onConfirmStopChange } = input;
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') return;
-      const action = escActionFor({ dialogCount, sidebarSearchOpen, usageOpen, newThreadOpen, settingsOpen, panel, bashRunning, confirmStop, generating, agentsActive });
+      const action = escActionFor({ dialogCount, sidebarSearchOpen, usageOpen, projectFilesOpen, newThreadOpen, settingsOpen, panel, bashRunning, confirmStop, generating, agentsActive });
       switch (action.kind) {
         case 'close-sidebar-search':
           onSidebarSearchClose();
           break;
         case 'close-usage':
           onUsageClose();
+          break;
+        case 'close-project-files':
+          onProjectFilesClose();
           break;
         case 'close-new-thread':
           onNewThreadClose();
@@ -68,5 +73,5 @@ export function useEscDismiss(input: UseEscDismissInput): void {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [dialogCount, sidebarSearchOpen, usageOpen, newThreadOpen, settingsOpen, panel, bashRunning, confirmStop, generating, agentsActive, abortBash, stopActiveTurn, onSidebarSearchClose, onUsageClose, onNewThreadClose, onSettingsClose, onPanelClose, onConfirmStopChange]);
+  }, [dialogCount, sidebarSearchOpen, usageOpen, projectFilesOpen, newThreadOpen, settingsOpen, panel, bashRunning, confirmStop, generating, agentsActive, abortBash, stopActiveTurn, onSidebarSearchClose, onUsageClose, onProjectFilesClose, onNewThreadClose, onSettingsClose, onPanelClose, onConfirmStopChange]);
 }

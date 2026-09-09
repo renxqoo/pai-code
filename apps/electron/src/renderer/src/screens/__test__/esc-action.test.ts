@@ -7,6 +7,7 @@ function base(overrides: Partial<EscState> = {}): EscState {
     dialogCount: 0,
     sidebarSearchOpen: false,
     usageOpen: false,
+    projectFilesOpen: false,
     newThreadOpen: false,
     settingsOpen: false,
     panel: null,
@@ -39,6 +40,13 @@ describe('escActionFor', () => {
   test('症状回归（T17 测试轮）：全屏覆盖层开着时不先收被遮挡的侧栏搜索（不吞 Esc 一拍）', () => {
     expect(escActionFor(base({ settingsOpen: true, sidebarSearchOpen: true }))).toEqual({ kind: 'close-settings' });
     expect(escActionFor(base({ newThreadOpen: true, sidebarSearchOpen: true }))).toEqual({ kind: 'close-new-thread' });
+  });
+
+  test('项目文件面板（T18）：全屏覆盖层之后、侧栏内联层之内优先于搜索收起', () => {
+    expect(escActionFor(base({ usageOpen: true, projectFilesOpen: true }))).toEqual({ kind: 'close-usage' });
+    expect(escActionFor(base({ settingsOpen: true, projectFilesOpen: true }))).toEqual({ kind: 'close-settings' });
+    expect(escActionFor(base({ projectFilesOpen: true, newThreadOpen: true }))).toEqual({ kind: 'close-new-thread' });
+    expect(escActionFor(base({ projectFilesOpen: true, sidebarSearchOpen: true }))).toEqual({ kind: 'close-project-files' });
   });
 
   test('侧栏搜索可见时 Esc 先收搜索，不穿透触发停止/中止', () => {

@@ -1,7 +1,7 @@
 import * as React from 'react';
-import { Folder } from 'lucide-react';
+import { Folder, ListTree } from 'lucide-react';
 
-import { ChevronToggle } from '@paiapp/ui';
+import { ChevronToggle, MenuButton, type MenuItemDef } from '@paiapp/ui';
 
 import { copy } from '@/strings';
 import type { ProjectGroup } from '@/sidebar/build-project-groups';
@@ -21,9 +21,26 @@ type ProjectSectionProps = {
   onRename?: (sessionId: string, name: string) => void
   /** 置顶切换（键为 sessionPath）；sessionPath 为 null 的行无置顶入口。 */
   onTogglePin?: (sessionPath: string) => void
-}
+  /** 项目行菜单：基于该项目新建任务（键为项目 cwd）。 */
+  onNewTaskInProject: (cwd: string) => void
+  /** 项目行菜单：移除项目（键为项目 cwd）。 */
+  onRemoveProject: (cwd: string) => void
+  /** 项目行菜单：打开项目文件面板（键为项目 cwd）。 */
+  onProjectFiles: (cwd: string) => void
+};
 
-/** 项目分组：文件夹行（折叠切换）+ 缩进会话行 + 组末「显示更多」。 */
+/** 项目行「更多」菜单：id 为稳定英文标识，映射在 onSelect；文案取自 strings。 */
+const projectMenuItems: readonly MenuItemDef[] = [
+  { kind: 'item', id: 'new-task', label: copy.sidebar.newTask },
+  { kind: 'item', id: 'remove-project', label: copy.sidebar.removeProject },
+  { kind: 'item', id: 'view-files', label: copy.sidebar.viewProjectFiles },
+];
+
+/** 项目行内动作钮：与 SessionRow 行内按钮同一形态。 */
+const moreTriggerClass =
+  'flex size-5 cursor-pointer items-center justify-center rounded-[5px] text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50';
+
+/** 项目分组：文件夹行（折叠切换 + hover「更多」菜单）+ 缩进会话行 + 组末「显示更多」。 */
 function ProjectSection({
   group,
   collapsed,
@@ -35,22 +52,44 @@ function ProjectSection({
   onClose,
   onRename,
   onTogglePin,
+  onNewTaskInProject,
+  onRemoveProject,
+  onProjectFiles,
 }: ProjectSectionProps) {
+  const selectMenuAction = (id: string): void => {
+    if (id === 'new-task') onNewTaskInProject(group.key);
+    else if (id === 'remove-project') onRemoveProject(group.key);
+    else if (id === 'view-files') onProjectFiles(group.key);
+  };
   return (
     <section className="flex flex-col gap-[2px]">
-      <button
-        type="button"
-        aria-expanded={!collapsed}
-        aria-label={`${copy.sidebar.collapseGroup} · ${group.projectName}`}
-        onClick={() => onToggleCollapse(group.key)}
-        className="flex h-8 w-full cursor-pointer items-center gap-[7px] rounded-[8px] px-2 text-left outline-none select-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50"
-      >
-        <ChevronToggle open={!collapsed} variant="disclose" />
-        <Folder className="size-[14px] shrink-0 text-muted-foreground/80" strokeWidth={1.75} />
-        <span className="min-w-0 truncate text-[12.5px] leading-none font-medium text-foreground">
-          {group.projectName}
+      <div className="group/row flex h-8 w-full items-center rounded-[8px] pr-[6px] select-none hover:bg-accent focus-within:ring-3 focus-within:ring-ring/50">
+        <button
+          type="button"
+          aria-expanded={!collapsed}
+          aria-label={`${copy.sidebar.collapseGroup} · ${group.projectName}`}
+          onClick={() => onToggleCollapse(group.key)}
+          className="flex h-8 min-w-0 flex-1 cursor-pointer items-center gap-[7px] rounded-[8px] px-2 text-left outline-none"
+        >
+          <ChevronToggle open={!collapsed} variant="disclose" />
+          <Folder className="size-[14px] shrink-0 text-muted-foreground/80" strokeWidth={1.75} />
+          <span className="min-w-0 truncate text-[12.5px] leading-none font-medium text-foreground">
+            {group.projectName}
+          </span>
+        </button>
+        {/* 菜单打开中即使鼠标已移出行也要保持锚点可见（data-popup-open 由 Base UI 落在触发器上） */}
+        <span className="hidden shrink-0 items-center group-hover/row:flex group-focus-within/row:flex group-has-data-[popup-open]/row:flex">
+          <MenuButton
+            aria-label={copy.thread.addAction}
+            align="end"
+            popupMinWidth={148}
+            trigger={<ListTree className="size-3" strokeWidth={1.75} />}
+            triggerClassName={moreTriggerClass}
+            items={projectMenuItems}
+            onSelect={selectMenuAction}
+          />
         </span>
-      </button>
+      </div>
       {collapsed
         ? null
         : group.visible.map((session) => (

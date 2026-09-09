@@ -65,6 +65,10 @@ export type WorkspaceActions = {
   /** 系统目录选择对话框；null = 取消（新会话弹窗浏览入口）。 */
   readonly pickDirectory: (defaultPath: string | null) => Promise<string | null>;
   readonly togglePinnedSession: (sessionPath: string) => void;
+  /** 移除项目 = 隐藏该 cwd 的全部会话（同目录新建任务解除）。 */
+  readonly removeProject: (cwd: string) => void;
+  /** 项目文件清单（空查询全量 ≤200 条相对路径；cwd 须为已知会话目录）。 */
+  readonly listProjectFiles: (cwd: string) => Promise<string[] | null>;
   readonly forkFromEntry: (entryId: string) => Promise<string | null>;
   readonly reloadSessionTrusted: (threadId: string, trusted: boolean) => void;
   readonly steerSubagent: (subagentId: string, message: string) => void;
@@ -146,8 +150,16 @@ export function createWorkspaceActions(setDiagnostics: (value: WorkspaceDiagnost
         active?.model ?? fallback,
       );
       return controller.createSession(cwd, selected, trusted).then((reason) => {
-        if (reason !== null) pushNotice(copy.newThread.createFailed(reason));
-        return reason === null;
+        if (reason !== null) {
+          pushNotice(copy.newThread.createFailed(reason));
+          return false;
+        }
+        // 同目录新建任务 = 解除项目隐藏（移除项目的恢复通路）
+        const hidden = store.getState().preferences.hiddenProjects;
+        if (hidden.includes(cwd)) {
+          void controller.updatePreferences({ hiddenProjects: hidden.filter((path) => path !== cwd) });
+        }
+        return true;
       });
     },
     openSavedSession: (sessionPath) => controller.openSavedSession(sessionPath),
@@ -281,6 +293,17 @@ export function createWorkspaceActions(setDiagnostics: (value: WorkspaceDiagnost
       }
       return outcome.data;
     },
+    removeProject: (cwd) => {
+      const current = store.getState().preferences.hiddenProjects;
+      if (current.includes(cwd)) return;
+      void controller.updatePreferences({ hiddenProjects: [...current, cwd] }).then((next) => {
+        if (next === null) pushNotice(copy.settings.preferenceSaveFailed);
+      });
+    },
+    listProjectFiles: (cwd) => bridgeClient.invoke('file/search', { cwd, query: '' }).then((outcome) => {
+      if (!outcome.ok) return null;
+      return outcome.data;
+    }),
     togglePinnedSession: (sessionPath) => {
       const current = store.getState().preferences.pinnedSessions;
       const pinnedSessions = current.includes(sessionPath)

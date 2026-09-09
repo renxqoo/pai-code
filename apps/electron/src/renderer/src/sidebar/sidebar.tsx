@@ -1,8 +1,10 @@
 import * as React from 'react';
 
 import { copy } from '@/strings';
+import type { ProjectFileNode } from '@/sidebar/build-file-tree';
 import type { ProjectGroup } from '@/sidebar/build-project-groups';
 import { PinnedSection } from '@/sidebar/pinned-section';
+import { ProjectFilesPanel } from '@/project-files/project-files-panel';
 import { ProjectSection } from '@/sidebar/project-section';
 import { QuickActionsRow } from '@/sidebar/quick-actions-row';
 import { SessionRow } from '@/sidebar/session-row';
@@ -56,6 +58,21 @@ type SidebarProps = {
   onRenameSession?: (sessionId: string, name: string) => void
   /** 置顶切换（键为 sessionPath）；sessionPath 为 null 的行无置顶入口。 */
   onTogglePin: (sessionPath: string) => void
+  /** 项目行菜单：基于该项目新建任务（键为项目 cwd）。 */
+  onNewTaskInProject: (cwd: string) => void
+  /** 项目行菜单：移除项目（键为项目 cwd）。 */
+  onRemoveProject: (cwd: string) => void
+  /** 项目行菜单：打开项目文件面板（键为项目 cwd）。 */
+  onProjectFiles: (cwd: string) => void
+  /** 项目文件面板数据；null = 未打开（侧栏内容照常）。 */
+  projectFiles: {
+    name: string
+    path: string
+    tree: readonly ProjectFileNode[]
+    loading: boolean
+  } | null
+  /** 返回任务列表（关闭项目文件面板）。 */
+  onCloseProjectFiles: () => void
   footerActions: readonly [SidebarFooterAction, SidebarFooterAction, SidebarFooterAction]
   refreshAction: SidebarFooterAction
 }
@@ -88,6 +105,11 @@ function Sidebar({
   onCloseSession,
   onRenameSession,
   onTogglePin,
+  onNewTaskInProject,
+  onRemoveProject,
+  onProjectFiles,
+  projectFiles,
+  onCloseProjectFiles,
   footerActions,
   refreshAction,
 }: SidebarProps) {
@@ -105,84 +127,102 @@ function Sidebar({
     >
       {/* 顶行由 fixed 标题覆盖块承担，这里只留等高占位 */}
       <div aria-hidden="true" className="h-[46px] shrink-0" />
-      <div className="flex min-h-0 flex-1 flex-col px-2 pt-1">
-        <QuickActionsRow onNewThread={onNewThread} onOpenSearch={onOpenSearch} />
-        {searchOpen ? (
-          <div className="pt-1.5">
-            <SidebarSearchInput
-              query={searchQuery}
-              focusToken={searchFocusToken}
-              onQueryChange={onSearchQueryChange}
-              onClose={() => {
-                onSearchQueryChange('');
-                onSearchOpenChange(false);
-              }}
-            />
-          </div>
-        ) : null}
-        <div className="pt-2.5">
-          <ViewSwitchTabs view={view} onViewChange={onViewChange} onCollapseSidebar={onCollapseSidebar} />
+      {projectFiles !== null ? (
+        /* 项目文件面板：整个内容区让位（快捷区/搜索/Tab/列表不渲染），底部工具条同图不渲染 */
+        <div className="flex min-h-0 flex-1 flex-col px-2 pt-1 pb-2">
+          <ProjectFilesPanel
+            projectName={projectFiles.name}
+            projectPath={projectFiles.path}
+            tree={projectFiles.tree}
+            loading={projectFiles.loading}
+            onClose={onCloseProjectFiles}
+          />
         </div>
-        {filtering && listEmpty ? (
-          <p className="px-2 pt-6 text-center text-[11.5px] leading-[16px] text-muted-foreground/80">
-            {filterEmptyLabel}
-          </p>
-        ) : !filtering && listEmpty ? (
-          <p className="px-2 pt-6 text-center text-[11.5px] leading-[16px] text-muted-foreground/80">
-            {emptyTasksLabel}
-          </p>
-        ) : (
-          <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pt-2 pb-2">
-            {pinned.length > 0 ? (
-              <PinnedSection
-                sessions={pinned}
-                ages={ages}
-                activeSessionId={activeSessionId}
-                onSelect={onSelectSession}
-                onClose={onCloseSession}
-                onRename={onRenameSession}
-                onTogglePin={onTogglePin}
-              />
-            ) : null}
-            {view === 'grouped' ? (
-              timeList.map((session) => (
-                <SessionRow
-                  key={session.id}
-                  session={session}
-                  age={ages[session.id] ?? ''}
-                  active={session.id === activeSessionId}
-                  onSelect={onSelectSession}
-                  onClose={onCloseSession}
-                  onRename={onRenameSession}
-                  onTogglePin={onTogglePin}
+      ) : (
+        <>
+          <div className="flex min-h-0 flex-1 flex-col px-2 pt-1">
+            <QuickActionsRow onNewThread={onNewThread} onOpenSearch={onOpenSearch} />
+            {searchOpen ? (
+              <div className="pt-1.5">
+                <SidebarSearchInput
+                  query={searchQuery}
+                  focusToken={searchFocusToken}
+                  onQueryChange={onSearchQueryChange}
+                  onClose={() => {
+                    onSearchQueryChange('');
+                    onSearchOpenChange(false);
+                  }}
                 />
-              ))
-            ) : projectGroups.length > 0 ? (
-              <>
-                <div className="px-2 pt-1 pb-[2px] text-[11.5px] leading-none text-muted-foreground">
-                  {copy.sidebar.viewProjects}
-                </div>
-                {projectGroups.map((group) => (
-                  <ProjectSection
-                    key={group.key}
-                    group={group}
-                    collapsed={collapsedGroups.has(group.key)}
+              </div>
+            ) : null}
+            <div className="pt-2.5">
+              <ViewSwitchTabs view={view} onViewChange={onViewChange} onCollapseSidebar={onCollapseSidebar} />
+            </div>
+            {filtering && listEmpty ? (
+              <p className="px-2 pt-6 text-center text-[11.5px] leading-[16px] text-muted-foreground/80">
+                {filterEmptyLabel}
+              </p>
+            ) : !filtering && listEmpty ? (
+              <p className="px-2 pt-6 text-center text-[11.5px] leading-[16px] text-muted-foreground/80">
+                {emptyTasksLabel}
+              </p>
+            ) : (
+              <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pt-2 pb-2">
+                {pinned.length > 0 ? (
+                  <PinnedSection
+                    sessions={pinned}
                     ages={ages}
                     activeSessionId={activeSessionId}
-                    onToggleCollapse={onToggleGroupCollapse}
-                    onExpand={onExpandGroup}
                     onSelect={onSelectSession}
                     onClose={onCloseSession}
                     onRename={onRenameSession}
                     onTogglePin={onTogglePin}
                   />
-                ))}
-              </>
-            ) : null}
+                ) : null}
+                {view === 'grouped' ? (
+                  timeList.map((session) => (
+                    <SessionRow
+                      key={session.id}
+                      session={session}
+                      age={ages[session.id] ?? ''}
+                      active={session.id === activeSessionId}
+                      onSelect={onSelectSession}
+                      onClose={onCloseSession}
+                      onRename={onRenameSession}
+                      onTogglePin={onTogglePin}
+                    />
+                  ))
+                ) : projectGroups.length > 0 ? (
+                  <>
+                    <div className="px-2 pt-1 pb-[2px] text-[11.5px] leading-none text-muted-foreground">
+                      {copy.sidebar.viewProjects}
+                    </div>
+                    {projectGroups.map((group) => (
+                      <ProjectSection
+                        key={group.key}
+                        group={group}
+                        collapsed={collapsedGroups.has(group.key)}
+                        ages={ages}
+                        activeSessionId={activeSessionId}
+                        onToggleCollapse={onToggleGroupCollapse}
+                        onExpand={onExpandGroup}
+                        onSelect={onSelectSession}
+                        onClose={onCloseSession}
+                        onRename={onRenameSession}
+                        onTogglePin={onTogglePin}
+                        onNewTaskInProject={onNewTaskInProject}
+                        onRemoveProject={onRemoveProject}
+                        onProjectFiles={onProjectFiles}
+                      />
+                    ))}
+                  </>
+                ) : null}
+              </div>
+            )}
           </div>
-        )}
-      </div>
-      <SidebarFooter actions={footerActions} refresh={refreshAction} />
+          <SidebarFooter actions={footerActions} refresh={refreshAction} />
+        </>
+      )}
     </aside>
   );
 }
