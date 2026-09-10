@@ -5,13 +5,14 @@ import { escActionFor, type EscState } from '../esc-action';
 function base(overrides: Partial<EscState> = {}): EscState {
   return {
     dialogCount: 0,
+    paletteOpen: false,
     sidebarSearchOpen: false,
     runtimeOpen: false,
     usageOpen: false,
     projectFilesOpen: false,
     newTaskOpen: false,
     settingsOpen: false,
-    panel: null,
+    panelOpen: false,
     bashRunning: false,
     confirmStop: false,
     generating: false,
@@ -30,13 +31,15 @@ describe('escActionFor', () => {
   });
 
 
-  test('逐层收起优先级：对话框 → Usage → 新建任务页 → 设置 → 可见侧栏搜索 → 面板 → bash/停止', () => {
+  test('逐层收起优先级：对话框 → 命令面板 → Usage → 新建任务页 → 设置 → 可见侧栏搜索 → 面板 → bash/停止', () => {
+    expect(escActionFor(base({ dialogCount: 1, paletteOpen: true, usageOpen: true }))).toEqual({ kind: 'dismiss-dialogs' });
+    expect(escActionFor(base({ paletteOpen: true, usageOpen: true, settingsOpen: true }))).toEqual({ kind: 'close-palette' });
     expect(escActionFor(base({ dialogCount: 1, sidebarSearchOpen: true, usageOpen: true, settingsOpen: true }))).toEqual({ kind: 'dismiss-dialogs' });
     expect(escActionFor(base({ usageOpen: true, newTaskOpen: true, sidebarSearchOpen: true }))).toEqual({ kind: 'close-usage' });
     expect(escActionFor(base({ newTaskOpen: true, settingsOpen: true, sidebarSearchOpen: true }))).toEqual({ kind: 'close-new-task' });
     expect(escActionFor(base({ settingsOpen: true, sidebarSearchOpen: true }))).toEqual({ kind: 'close-settings' });
-    expect(escActionFor(base({ sidebarSearchOpen: true, panel: 'diff' }))).toEqual({ kind: 'close-sidebar-search' });
-    expect(escActionFor(base({ panel: 'agents', bashRunning: true }))).toEqual({ kind: 'close-panel' });
+    expect(escActionFor(base({ sidebarSearchOpen: true, panelOpen: true }))).toEqual({ kind: 'close-sidebar-search' });
+    expect(escActionFor(base({ panelOpen: true, bashRunning: true }))).toEqual({ kind: 'close-panel' });
   });
 
   test('症状回归（T17 测试轮）：全屏覆盖层开着时不先收被遮挡的侧栏搜索（不吞 Esc 一拍）', () => {

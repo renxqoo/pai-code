@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { PermissionRulesSchema } from './permissions';
+import { RuntimeSnapshotViewSchema } from './runtime';
 import { ProviderModelSchema, ThinkingFormatSchema } from './settings';
 import { DiffFileViewSchema, SessionViewSchema, SubagentSpawnViewSchema } from './ui-events';
 import { IdleRecycleMinutesSchema } from './settings';
@@ -184,6 +185,7 @@ export const PreferencesViewSchema = z.object({
   hiddenProjects: z.array(z.string()),
   /** worker 闲置自动回收档位（分钟）。 */
   idleRecycleMinutes: IdleRecycleMinutesSchema,
+  archivedSessions: z.array(z.string()),
 });
 export type PreferencesView = z.infer<typeof PreferencesViewSchema>;
 
@@ -212,81 +214,9 @@ export type GitBranchesView = z.infer<typeof GitBranchesViewSchema>;
 // 运行状态面（T29：监控页快照与其组成视图）
 // ---------------------------------------------------------------------------
 
-/** get_host_info 收窄（hub v0.6 形状；垃圾输入在 adapter 降级）。 */
-export const HostInfoViewSchema = z.object({
-  version: z.string(),
-  piVersion: z.string(),
-  bunVersion: z.string(),
-  pid: z.number().int(),
-  uptimeMs: z.number().int().nonnegative(),
-  rssBytes: z.number().int().nonnegative(),
-  threads: z.object({ live: z.number().int(), parked: z.number().int(), dead: z.number().int() }),
-  subagents: z.object({ running: z.number().int().nonnegative() }),
-  limits: z.object({
-    maxThreads: z.number().int().positive(),
-    idleRetireMs: z.number().int().positive(),
-    workerStaleMs: z.number().int().positive(),
-    workerExitTimeoutMs: z.number().int().positive(),
-    maxSubagents: z.number().int().positive(),
-    bashTimeoutMs: z.number().int().nonnegative(),
-  }),
-  backend: z.object({ id: z.string(), version: z.string(), capabilities: z.array(z.string()) }),
-});
-export type HostInfoView = z.infer<typeof HostInfoViewSchema>;
 
-/** thread/list 行收窄（worker 表：hub 是进程态真相）。 */
-export const WorkerRowViewSchema = z.object({
-  threadId: z.string(),
-  cwd: z.string(),
-  sessionPath: z.string().nullable(),
-  state: z.enum(['live', 'parked', 'dead']),
-  isStreaming: z.boolean(),
-  idleMs: z.number().int().nonnegative(),
-  subagents: z.number().int().nonnegative(),
-  rssBytes: z.number().int().nullable(),
-  keepalive: z.boolean(),
-});
-export type WorkerRowView = z.infer<typeof WorkerRowViewSchema>;
-
-/** 资源采样点（主进程 2s 采样环；null = 该来源当次不可得）。 */
-export const ResourceSampleViewSchema = z.object({
-  at: z.number().int(),
-  appRssBytes: z.number().int().nullable(),
-  appCpuPercent: z.number().nullable(),
-  hubRssBytes: z.number().int().nullable(),
-  hubCpuPercent: z.number().nullable(),
-  workersRssBytes: z.number().int().nullable(),
-  systemTotalBytes: z.number().int().nullable(),
-  systemAvailableBytes: z.number().int().nullable(),
-});
-export type ResourceSampleView = z.infer<typeof ResourceSampleViewSchema>;
-
-/** 监督事件（主进程内存环 ≤200 条；kind 词表 = 宿主监督面 + worker 生命周期）。 */
-export const RuntimeEventViewSchema = z.object({
-  at: z.number().int(),
-  level: z.enum(['info', 'warn', 'error']),
-  kind: z.enum(['host_phase', 'host_restart', 'heartbeat_stale', 'host_exit', 'frame_dropped', 'worker_recycled', 'worker_died', 'spawn_error', 'policy_sync_failed']),
-  detail: z.string(),
-});
-export type RuntimeEventView = z.infer<typeof RuntimeEventViewSchema>;
-
-/** 运行状态快照（app/runtime 2s 轮询；不含 stderr——带宽纪律，按需 app/diagnosticLog）。 */
-export const RuntimeSnapshotViewSchema = z.object({
-  hostPhase: z.enum(['starting', 'ready', 'restarting', 'failed']).nullable(),
-  hostInfo: HostInfoViewSchema.nullable(),
-  /** 最近一次宿主心跳距今（ms）；null = 从未收到心跳。 */
-  heartbeatAgeMs: z.number().int().nullable(),
-  restarts: z.object({ count: z.number().int().nonnegative(), lastCause: z.string().nullable(), lastAt: z.number().int().nullable() }),
-  workers: z.array(WorkerRowViewSchema),
-  latest: ResourceSampleViewSchema.nullable(),
-  /** 近 30 分钟降采样（≤180 点）。 */
-  history: z.array(ResourceSampleViewSchema),
-  /** 最近监督事件（≤50 条，新在尾）。 */
-  events: z.array(RuntimeEventViewSchema),
-  idleRecycleMinutes: IdleRecycleMinutesSchema,
-  appVersion: z.string(),
-});
-export type RuntimeSnapshotView = z.infer<typeof RuntimeSnapshotViewSchema>;
+export { HostInfoViewSchema, WorkerRowViewSchema, ResourceSampleViewSchema, RuntimeEventViewSchema, RuntimeSnapshotViewSchema } from './runtime';
+export type { HostInfoView, WorkerRowView, ResourceSampleView, RuntimeEventView, RuntimeSnapshotView } from './runtime';
 
 // ---------------------------------------------------------------------------
 // 方法 schema（单一真相）：api 服务端做参数校验，渲染层类型从此推导
@@ -436,6 +366,26 @@ export const ApiSchemas = {
     params: z.object({ cwd: z.string().min(1), query: z.string() }).strict(),
     result: z.array(z.string()),
   },
+  /**
+   * 读取项目文件文本（代码查看器/Markdown 预览数据源）：只读、相对路径、
+   * 点前缀段拒绝（与 file/search 枚举面一致，越界 cwd 同为 cwd_forbidden）；
+   * size 为磁盘真实字节数，超过读取上限时截断并 truncated=true。
+   */
+  'file/read': {
+    params: z.object({ cwd: z.string().min(1), path: z.string().min(1) }).strict(),
+    result: z
+      .object({
+        content: z.string(),
+        truncated: z.boolean(),
+        size: z.number().int().nonnegative(),
+      })
+      .strict(),
+  },
+  /** 在系统工具中打开已知项目目录（访达/文件管理器、终端、编辑器）；动作落审计。 */
+  'shell/open': {
+    params: z.object({ cwd: z.string().min(1), target: z.enum(['finder', 'terminal', 'editor']) }).strict(),
+    result: z.null(),
+  },
   /** 从历史条目分叉（position before|at，默认 before）→ 新会话视图。 */
   'session/fork': {
     params: z.object({ threadId: z.string().min(1), entryId: z.string().min(1), position: z.enum(['before', 'at']).optional() }).strict(),
@@ -576,6 +526,7 @@ export const ApiSchemas = {
         pinnedSessions: z.array(z.string()).optional(),
         trustedDefault: z.boolean().optional(),
         hiddenProjects: z.array(z.string()).optional(),
+        archivedSessions: z.array(z.string()).optional(),
       })
       .strict()
       .refine(
@@ -585,7 +536,8 @@ export const ApiSchemas = {
           value.projectModels !== undefined ||
           value.pinnedSessions !== undefined ||
           value.trustedDefault !== undefined ||
-          value.hiddenProjects !== undefined,
+          value.hiddenProjects !== undefined ||
+          value.archivedSessions !== undefined,
         { message: 'empty_preference' },
       ),
     result: PreferencesViewSchema,

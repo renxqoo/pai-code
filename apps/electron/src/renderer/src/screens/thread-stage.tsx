@@ -5,37 +5,35 @@ import { HostDownBanner } from '@/screens/host-down-banner';
 import { MessageList } from '@/thread/message-list';
 import { ScrollToBottomButton } from '@/thread/scroll-to-bottom-button';
 import { ThreadHeader } from '@/thread/thread-header';
+import { projectMenuItems, sessionMenuItems, viewMenuItems } from '@/thread/header-menus';
+import { threadStatus } from '@/thread/thread-status';
 import { TurnAnchorRail } from '@/thread/turn-anchor-rail';
 import { turnAnchors } from '@/thread/turn-anchor-data';
 import { useStickToBottom } from '@/thread/use-stick-to-bottom';
-import type { SidePanel } from '@/screens/esc-action';
 import type { LiveWorkspaceView } from '@/live/use-live-workspace';
 
 type ThreadStageProps = {
   workspace: LiveWorkspaceView
   activeThreadId: string
   sidebarCollapsed: boolean
-  panel: SidePanel
-  onToggleSplitView: () => void
   /** 宿主掉线（从未构建或 failed）：置顶横幅与输入区模型位共用同一真相。 */
   hostDown: boolean
   /** 底部输入浮层的避让高度：内容列底部 padding 与回底浮标定位共用。 */
   bottomInset: number
   onOpenSettings: () => void
   onOpenDiff: () => void
+  onNewTask: () => void
+  onViewAction: (id: string) => void
   onEditUserMessage: (text: string) => void
   onForkUserMessage?: (entryId: string, text: string, images: ReadonlyArray<{ data: string; mimeType: string }>, autoResend: boolean) => void
 }
-
-/** 尚未接线/不适用当前会话的动作统一落到空实现，接线点保持稳定。 */
-function noop(): void {}
 
 /**
  * 会话舞台（主区固定结构，以 fragment 挂进主区根）：全宽菜单栏 + 掉线横幅 +
  * 页面滚动消息流；菜单栏不随滚动，贴底跟随、轮次锚点带、回底浮标挂本层。
  */
-function ThreadStage({ workspace, activeThreadId, sidebarCollapsed, panel, onToggleSplitView, hostDown, bottomInset, onOpenSettings, onOpenDiff, onEditUserMessage, onForkUserMessage }: ThreadStageProps) {
-  const { sessions } = workspace;
+function ThreadStage({ workspace, activeThreadId, sidebarCollapsed, hostDown, bottomInset, onOpenSettings, onOpenDiff, onNewTask, onViewAction, onEditUserMessage, onForkUserMessage }: ThreadStageProps) {
+  const { sessions, actions } = workspace;
   /** 页面滚动：菜单栏固定，消息流独占滚动容器，贴底跟随挂在容器上 */
   const { containerRef: scrollRef, onScroll, atBottom, scrollToBottom } = useStickToBottom();
   const turnAnchorList = React.useMemo(() => turnAnchors(workspace.activeThread.items), [workspace.activeThread.items]);
@@ -52,45 +50,101 @@ function ThreadStage({ workspace, activeThreadId, sidebarCollapsed, panel, onTog
   const toggleMaximize = React.useCallback(() => {
     void window.pai?.window.toggleMaximize();
   }, []);
-  const onOpenMenuSelect = React.useCallback(
-    (label: string) => {
-      // 受信重开：stop → 同文件 resume(trusted)；其余装饰项维持原空操作
-      if (label === copy.thread.reloadTrusted) {
-        workspace.actions.reloadSessionTrusted(activeThreadId, true);
-      } else if (label === copy.thread.reloadUntrusted) {
-        workspace.actions.reloadSessionTrusted(activeThreadId, false);
+
+  const activeSession = sessions.find((session) => session.id === activeThreadId);
+  const status = threadStatus({
+    permissionWaiting: workspace.dialogs.some((dialog) => dialog.threadId === activeThreadId),
+    compacting: workspace.compacting,
+    generating: workspace.generating,
+    queueCount: workspace.queueCount,
+  });
+  const projectMenu = React.useMemo(
+    () => projectMenuItems({ openMenu: copy.thread.openMenu, copyPath: copy.thread.copyPath }),
+    [],
+  );
+  /** ThreadHeader 是 memo 边界：labels 对象 memo 化（statusLabel 随状态变，其余为模块常量）。 */
+  const headerLabels = React.useMemo(
+    () => ({
+      newTask: copy.thread.newTask,
+      toggleMaximize: copy.thread.toggleMaximize,
+      viewMenuAria: copy.thread.viewMenuAria,
+      changes: copy.thread.changes,
+      statusAria: copy.thread.statusAria,
+      renameTitleAria: copy.thread.renameTitleAria,
+      projectMenuAria: copy.thread.projectMenuAria,
+      sessionMenuAria: copy.thread.sessionMenuAria,
+      statusLabel: copy.thread.status[status],
+    }),
+    [status],
+  );
+  const viewMenu = React.useMemo(
+    () => viewMenuItems({ openFile: copy.panel.file.openPickerTitle, diff: copy.panel.tabDiff, agents: copy.panel.tabAgents }),
+    [],
+  );
+  const sessionMenu = React.useMemo(
+    () =>
+      sessionMenuItems(
+        {
+          rename: copy.thread.sessionRename,
+          copyId: copy.thread.sessionCopyId,
+          reloadTrusted: copy.thread.reloadTrusted,
+          reloadUntrusted: copy.thread.reloadUntrusted,
+          archive: copy.thread.sessionArchive,
+          close: copy.thread.sessionClose,
+        },
+        workspace.generating,
+      ),
+    [workspace.generating],
+  );
+  const cwd = workspace.activeCwd;
+  const onProjectAction = React.useCallback(
+    (id: string) => {
+      if (id === 'copyPath') {
+        void actions.copyText(cwd);
+        return;
       }
+      if (id === 'finder' || id === 'terminal' || id === 'editor') void actions.openInSystem(cwd, id);
     },
-    [workspace.actions, activeThreadId],
+    [actions, cwd],
+  );
+  const onRenameTitle = React.useCallback(
+    (name: string) => {
+      void actions.renameSession(activeThreadId, name);
+    },
+    [actions, activeThreadId],
+  );
+  const onSessionAction = React.useCallback(
+    (id: string) => {
+      if (id === 'copyId') void actions.copyText(activeThreadId);
+      else if (id === 'reloadTrusted') actions.reloadSessionTrusted(activeThreadId, true);
+      else if (id === 'reloadUntrusted') actions.reloadSessionTrusted(activeThreadId, false);
+      else if (id === 'archive') actions.archiveSession(activeThreadId);
+      else if (id === 'close') actions.closeSession(activeThreadId);
+    },
+    [actions, activeThreadId],
   );
 
   return (
     <>
       {/* 固定头区：菜单栏全宽不随页面滚动（拖拽区连续无侧栏间隙断档），掉线横幅保持内容列节奏 */}
       <ThreadHeader
-        projectName={sessions.find((session) => session.id === activeThreadId)?.projectName ?? ''}
-        sessionTitle={sessions.find((session) => session.id === activeThreadId)?.title ?? ''}
+        projectName={activeSession?.projectName ?? ''}
+        sessionTitle={activeSession?.title ?? ''}
         sidebarCollapsed={sidebarCollapsed}
-        labels={{
-          addAction: copy.thread.addAction,
-          open: copy.thread.open,
-          commitPushPr: copy.thread.commitPushPr,
-          toggleSplitView: copy.thread.toggleSplitView,
-          toggleMaximize: copy.thread.toggleMaximize,
-        }}
-        tabs={{
-          addLabel: copy.thread.tabAdd,
-          onAdd: noop,
-        }}
-        activePanel={panel}
-        openMenu={[...(workspace.generating ? [] : [copy.thread.reloadTrusted, copy.thread.reloadUntrusted]), ...copy.thread.openMenu]}
-        commitMenu={copy.thread.commitMenu}
-        onAddAction={noop}
-        onOpen={noop}
-        onCommit={noop}
-        onOpenMenuSelect={onOpenMenuSelect}
-        onCommitMenuSelect={noop}
-        onToggleSplitView={onToggleSplitView}
+        status={status}
+        additions={workspace.threadDiff.additions}
+        deletions={workspace.threadDiff.deletions}
+        labels={headerLabels}
+        projectMenu={projectMenu}
+        sessionMenu={sessionMenu}
+        viewMenu={viewMenu}
+        onProjectAction={onProjectAction}
+        onViewAction={onViewAction}
+        onRenameTitle={onRenameTitle}
+        onStatusJump={scrollToBottom}
+        onOpenChanges={onOpenDiff}
+        onSessionAction={onSessionAction}
+        onNewTask={onNewTask}
         onToggleMaximize={toggleMaximize}
       />
       {hostDown ? (

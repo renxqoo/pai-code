@@ -49,7 +49,7 @@ function makeWorkspace(overrides: { hydrateFailed?: boolean; retryHydration?: ()
     commands: [],
     agentDefinitions: [],
     skills: [],
-    preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } as LiveWorkspaceView['preferences'],
+    preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [], trustedDefault: false, hiddenProjects: [], archivedSessions: [] } as LiveWorkspaceView['preferences'],
     permissionRules: null,
     sessionRules: null,
     thinkingLevels: [],
@@ -64,12 +64,12 @@ function renderStage(workspace: LiveWorkspaceView): string {
       workspace={workspace}
       activeThreadId="t1"
       sidebarCollapsed={false}
-      panel={{ kind: 'none' }}
-      onToggleSplitView={() => undefined}
       hostDown={false}
       bottomInset={0}
       onOpenSettings={() => undefined}
       onOpenDiff={() => undefined}
+      onNewTask={() => undefined}
+      onViewAction={() => undefined}
       onEditUserMessage={() => undefined}
     />,
   );

@@ -91,11 +91,14 @@ export type SettingsScreenProps = {
   history: {
     saved: readonly SavedSession[];
     pinned: ReadonlySet<string>;
+    archived: ReadonlySet<string>;
     projects: readonly string[];
     onTogglePin: (sessionPath: string) => void;
     onReveal: (sessionPath: string) => void;
     onOpenSaved: (sessionPath: string) => void;
     onRefresh: () => void;
+    onRestore: (sessionPath: string) => void;
+    onOpenArchived: (sessionPath: string) => void;
   };
 };
 
@@ -103,6 +106,8 @@ export type UseSettingsScreenInput = {
   workspace: LiveWorkspaceView;
   open: boolean;
   onClose: () => void;
+  /** 打开时进入的分区（命令面板跳转；缺省回首分区）。 */
+  initialSection?: SettingsSectionId;
 };
 
 /**
@@ -110,8 +115,8 @@ export type UseSettingsScreenInput = {
  * 语言/主题/重跑引导），workspace-main 只剩一行接线。语言切换经 changeLocaleSetting
  * 广播（app 根重挂载后本 hook 状态回到首分区，与既有行为一致）。
  */
-export function useSettingsScreen({ workspace, open, onClose }: UseSettingsScreenInput): SettingsScreenProps {
-  const [section, setSection] = React.useState<SettingsSectionId>(SETTINGS_FIRST_SECTION);
+export function useSettingsScreen({ workspace, open, onClose, initialSection }: UseSettingsScreenInput): SettingsScreenProps {
+  const [section, setSection] = React.useState<SettingsSectionId>(initialSection ?? SETTINGS_FIRST_SECTION);
   const [localeSetting, setLocaleSettingState] = React.useState<LocaleSetting>(getLocaleSetting());
   const { theme, setTheme } = useTheme();
   const { actions } = workspace;
@@ -122,8 +127,8 @@ export function useSettingsScreen({ workspace, open, onClose }: UseSettingsScree
     open && section === 'runtime',
   );
   React.useEffect(() => {
-    if (open) setSection(SETTINGS_FIRST_SECTION);
-  }, [open]);
+    if (open) setSection(initialSection ?? SETTINGS_FIRST_SECTION);
+  }, [open, initialSection]);
 
   const onSelectSection = React.useCallback((id: SettingsSectionId) => {
     dispatchSectionEnter(id, actions);
@@ -187,6 +192,7 @@ export function useSettingsScreen({ workspace, open, onClose }: UseSettingsScree
     history: {
       saved: workspace.saved,
       pinned,
+      archived: new Set(workspace.preferences.archivedSessions),
       projects,
       onTogglePin: actions.togglePinnedSession,
       onReveal: actions.revealSession,
@@ -195,6 +201,13 @@ export function useSettingsScreen({ workspace, open, onClose }: UseSettingsScree
         onClose();
       },
       onRefresh: actions.refreshSaved,
+      onRestore: actions.unarchiveSession,
+      onOpenArchived: (sessionPath) => {
+        // 打开即恢复：归档语义 = 不在列表，resume 后应重新可见
+        actions.unarchiveSession(sessionPath);
+        void actions.openSavedSession(sessionPath);
+        onClose();
+      },
     },
     runtime: {
       snapshot: runtimePanel.snapshot,

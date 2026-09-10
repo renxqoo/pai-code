@@ -1,3 +1,4 @@
+import { excludeArchivedSessions } from '@/sidebar/exclude-archived';
 import { excludeHiddenProjects } from '@/sidebar/hidden-projects';
 import { filterSessions } from '@/sidebar/filter-sessions';
 import { buildPinnedList } from '@/sidebar/build-pinned-list';
@@ -20,10 +21,11 @@ export function buildSidebarViewModel(
   sessions: readonly SessionCardModel[],
   hiddenProjects: ReadonlySet<string>,
   pinnedPaths: ReadonlySet<string>,
+  archivedPaths: ReadonlySet<string>,
   query: string,
   expanded: ReadonlySet<string>,
 ): SidebarViewModel {
-  const visible = filterSessions(excludeHiddenProjects(sessions, hiddenProjects), query);
+  const visible = filterSessions(excludeHiddenProjects(excludeArchivedSessions(sessions, archivedPaths), hiddenProjects), query);
   return {
     visible,
     pinned: buildPinnedList(visible, pinnedPaths),

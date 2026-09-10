@@ -23,7 +23,7 @@ import type { SidebarFooterAction } from '@/sidebar/sidebar-footer';
 import { toggleGroupFold, expandGroup, type GroupFold } from '@/sidebar/group-collapse';
 import { buildSidebarViewModel } from '@/screens/sidebar-view-model';
 import { isImmediateSubmit, submitDraftText } from '@/screens/submit-draft';
-import { imagePayloadOf, type PendingImage } from '@/composer/read-image-file';
+import { imagePayloadOf } from '@/composer/read-image-file';
 import { queuedDrafts } from '@/composer/queued-drafts';
 import { branchSegmentOf } from '@/composer/branch-segment';
 import type { ComposerAttachment } from '@/composer/prompt-card';
@@ -33,11 +33,14 @@ import { useProjectFiles } from '@/hooks/use-project-files';
 import { useSettingsScreen } from '@/settings/use-settings-screen';
 import { StopConfirmBar } from '@/thread/stop-confirm-bar';
 import { UsageScreen } from '@/screens/usage-screen';
-import type { SidePanel } from '@/screens/esc-action';
 import { useEscDismiss } from '@/screens/use-esc-dismiss';
 import { ThreadBanner } from '@/thread/thread-banner';
-import { AgentPanel } from '@/agent-panel/agent-panel';
-import { DiffPanel } from '@/diff-panel/diff-panel';
+import { PanelLayer } from '@/screens/panel-layer';
+import { usePanelTabs } from '@/screens/use-panel-tabs';
+import { CommandPalette } from '@/palette/command-palette';
+import { useCommandPalette } from '@/screens/use-command-palette';
+import { useForkMessage } from '@/screens/use-fork-message';
+import type { SettingsSectionId } from '@/settings/settings-sections';
 import { ThreadStage } from '@/screens/thread-stage';
 import type { LiveWorkspaceView } from '@/live/use-live-workspace';
 
@@ -88,7 +91,6 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const [confirmStop, setConfirmStop] = React.useState(false);
   /** Usage 总览页（I2；侧栏 footer 入口） */
   const usagePanel = useUsagePanel(workspace.sessions, workspace.statsById, workspace.actions.refreshAllStats);
-  const [panel, setPanel] = React.useState<SidePanel>(null);
   /** 输入浮层实际高度：消息流底部避让（贴底内容完整可见，上翻内容滑入浮层后面）。 */
   const [bottomInset, setBottomInset] = React.useState(160);
   const composerLayerRef = useObservedHeight<HTMLDivElement>((height) => {
@@ -134,9 +136,18 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const usageOpen = usagePanel.usageOpen;
   const closeUsage = usagePanel.closeUsage;
   const openSettings = React.useCallback(() => setSettingsOpen(true), []);
-  const closeSettings = React.useCallback(() => setSettingsOpen(false), []);
+  const closeSettings = React.useCallback(() => {
+    setSettingsOpen(false);
+    setSettingsEntry(null);
+  }, []);
+  /** 命令面板跳设置分区：进入分区经一次性 entry（关闭即清，普通打开不受影响）。 */
+  const [settingsEntry, setSettingsEntry] = React.useState<SettingsSectionId | null>(null);
+  const openSettingsAt = React.useCallback((section: SettingsSectionId) => {
+    setSettingsEntry(section);
+    setSettingsOpen(true);
+  }, []);
   /** 界面语言与全部设置页数据/动作经 use-settings-screen 装配（语言广播后 app 根重挂载） */
-  const settings = useSettingsScreen({ workspace, open: settingsOpen, onClose: closeSettings });
+  const settings = useSettingsScreen({ workspace, open: settingsOpen, onClose: closeSettings, initialSection: settingsEntry ?? undefined });
   /** 首条消息未投出时回填到新会话草稿槽（新建任务页退出后仍可重发） */
   const restoreNewTaskDraft = React.useCallback((threadId: string, text: string) => {
     setDrafts((current) => ({ ...current, [threadId]: text }));
@@ -176,43 +187,17 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     },
     [projectFilesView, closeSidebarSearch],
   );
-  /** 全局 ⌘N/⌘K 在任一模态覆盖/对话框开着时不劫持（模态层优先于全局热键）。 */
-  const hotkeysEnabled =
-    workspace.dialogs.length === 0 && !newTask.open && !usageOpen && !settingsOpen && projectFilesView.target === null;
-  useCmdHotkeys({ onNewThread: openNewTask, onSearch: openSidebarSearch }, hotkeysEnabled);
+  /** 面板系统（多标签 + 会话记忆 + 文件查看 + 打开文件弹窗）单一装配面。 */
+  const panels = usePanelTabs(activeThreadId, workspace.activeCwd, workspace.actions.searchFilesIn);
+  const { panel, openAgents, openDiff, toggleAgentsPane, toggleDiffPane, closePanel, openFilePicker } = panels;
+
+  /** 分叉重发与草稿回填装配（消息行编辑/重试与排队编辑共用）。 */
+  const forkMessage = useForkMessage({ actions: workspace.actions, restoreDraft: restoreNewTaskDraft, setDraft, composerTextRef });
+  const { forkUserMessage, editUserMessage, restore } = forkMessage;
+
 
   /** 分叉重发（B2/A5）：fork 到该用户消息之前；autoResend=true 原样重发（含图片），
    * 否则回填草稿与附件。仅水化消息可分叉（live 回显是 UUID，对账后才有协议 entryId）。 */
-  const forkUserMessage = (entryId: string, text: string, images: ReadonlyArray<{ data: string; mimeType: string }>, autoResend: boolean) => {
-    void workspace.actions.forkFromEntry(entryId).then((newThreadId) => {
-      if (newThreadId === null) return;
-      const payloads = images.map((image) => ({ type: 'image' as const, data: image.data, mimeType: image.mimeType }));
-      if (autoResend) {
-        // submitDraft 调用时读 store 真相（已是分叉线程）
-        void workspace.actions.submitDraft(text, payloads);
-      } else {
-        // 回填到分叉线程的草稿槽（不得写旧会话键）；图片经一次性 restore 信号并入 composer
-        setDrafts((current) => ({ ...current, [newThreadId]: text }));
-        if (images.length > 0) {
-          restoreSeqRef.current += 1;
-          setRestore({
-            token: restoreSeqRef.current,
-            images: images.map((image, index) => ({ name: copy.flow.forkedImageName(index + 1), payload: image })),
-          });
-        }
-        composerTextRef.current?.focus();
-      }
-    });
-  };
-
-  const editUserMessage = (text: string) => {
-    setDraft(text);
-    composerTextRef.current?.focus();
-  };
-
-  /** 排队消息编辑回填的一次性图片信号（token 自增；composer 按并入处理） */
-  const [restore, setRestore] = React.useState<{ token: number; images: readonly { name: string; payload: PendingImage }[] } | null>(null);
-  const restoreSeqRef = React.useRef(0);
   /** 立即改向/编辑/移除共用的暂存投递（单一真相在 useLiveWorkspace 装配面） */
   const submitQueuedDraft = workspace.submitQueuedDraft;
   /** 活跃会话文件路径（暂存记录路径——重开换 id 时按路径改绑） */
@@ -247,8 +232,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
       const draft = queuedDrafts.take(activeThreadId, id);
       if (draft === null) return;
       setDraft(draft.text);
-      restoreSeqRef.current += 1;
-      setRestore({ token: restoreSeqRef.current, images: draft.images });
+      forkMessage.takeQueuedImages(draft.images);
       composerTextRef.current?.focus();
     },
     [activeThreadId, setDraft],
@@ -267,35 +251,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     [activeThreadId],
   );
 
-  const openAgents = React.useCallback(() => setPanel('agents'), []);
-  const openDiff = React.useCallback(() => setPanel('diff'), []);
-  const closePanel = React.useCallback(() => setPanel(null), []);
 
-  useEscDismiss({
-    /** 本地浮层也算对话框：浮层自行消费 Esc，全局链不穿透关闭整页 */
-    dialogCount: workspace.dialogs.length + (newTask.dialogOpen ? 1 : 0),
-    /** 可见搜索才参与 Esc 链：收起态下的搜索不得吞掉一拍 Esc（过滤词保留，展开后恢复） */
-    sidebarSearchOpen: searchOpen && !sidebarCollapsed,
-    /** 面板同样以可见性参与（替换侧栏内容区，先于侧栏搜索收起） */
-    projectFilesOpen: projectFilesView.target !== null && !sidebarCollapsed,
-    usageOpen,
-    newTaskOpen: newTask.open,
-    settingsOpen,
-    panel,
-    bashRunning: workspace.bashRunning,
-    confirmStop,
-    generating: workspace.generating,
-    agentsActive: workspace.agentsActive,
-    abortBash: workspace.actions.abortBash,
-    stopActiveTurn: workspace.actions.stopActiveTurn,
-    onSidebarSearchClose: closeSidebarSearch,
-    onProjectFilesClose: projectFilesView.close,
-    onUsageClose: closeUsage,
-    onNewTaskClose: closeNewTask,
-    onSettingsClose: closeSettings,
-    onPanelClose: closePanel,
-    onConfirmStopChange: setConfirmStop,
-  });
 
   const refreshSaved = workspace.actions.refreshSaved;
   const refreshAction = React.useMemo(() => ({ label: copy.sidebar.refresh, onSelect: refreshSaved }), [refreshSaved]);
@@ -308,9 +264,14 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     () => new Set(workspace.preferences.hiddenProjects),
     [workspace.preferences.hiddenProjects],
   );
+  /** 已归档会话（sessionPath 键）：侧栏过滤与设置页历史分区共用同一真相。 */
+  const archivedSessions = React.useMemo(
+    () => new Set(workspace.preferences.archivedSessions),
+    [workspace.preferences.archivedSessions],
+  );
   const sidebarLists = React.useMemo(
-    () => buildSidebarViewModel(sessions, hiddenProjects, pinnedSessions, sidebarQuery, groupFold.expanded),
-    [sessions, hiddenProjects, pinnedSessions, sidebarQuery, groupFold],
+    () => buildSidebarViewModel(sessions, hiddenProjects, pinnedSessions, archivedSessions, sidebarQuery, groupFold.expanded),
+    [sessions, hiddenProjects, pinnedSessions, archivedSessions, sidebarQuery, groupFold],
   );
   const { pinned: pinnedList, timeList, projectGroups } = sidebarLists;
   const ages = useSessionAges(sessions);
@@ -335,11 +296,77 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         closeNewTask,
         selectSession: workspace.actions.selectSession,
         openSavedSession: (sessionPath) => void workspace.actions.openSavedSession(sessionPath),
-        closePanel,
         closeSettings,
       }),
-    [closeNewTask, workspace.actions, closePanel, closeSettings],
+    [closeNewTask, workspace.actions, closeSettings],
   );
+  /** 命令面板（⌘P）装配：开关/条目/派发（hub 对话框模态期间不唤起）。 */
+  const commandPalette = useCommandPalette({
+    workspace,
+    activeThreadId,
+    sessions,
+    openNewTask,
+    panels,
+    openSettings,
+    openSettingsAt,
+    openUsage: usagePanel.openUsage,
+    navigateSession: navigation.onSelectSession,
+    drafts,
+    composerDraft,
+    setDraft,
+    composerTextRef,
+  });
+  const { open: paletteOpen, close: closePalette, toggle: togglePalette, items: paletteItems, onSelect: onPaletteSelect } = commandPalette;
+  /** 面板 props 引用恒定：CommandPalette 是 memo 边界，内联箭头/对象会被流式批推击穿并重置文件搜索去抖（T30 审查 高-2）。 */
+  const paletteCwd = workspace.activeCwd;
+  const searchFilesIn = workspace.actions.searchFilesIn;
+  const paletteFileSearch = React.useCallback((query: string) => searchFilesIn(paletteCwd, query), [searchFilesIn, paletteCwd]);
+  const paletteLabels = React.useMemo(
+    () => ({ aria: copy.palette.aria, placeholder: copy.palette.placeholder, empty: copy.palette.empty, groups: copy.palette.groups }),
+    [],
+  );
+
+  /** 全局 ⌘N/⌘K 在任一模态覆盖/对话框开着时不劫持（模态层优先于全局热键）。 */
+  const hotkeysEnabled =
+    workspace.dialogs.length === 0 && !paletteOpen && !newTask.open && !usageOpen && !settingsOpen && projectFilesView.target === null;
+  // ⌘P 独立门控：hub 对话框之外，整页覆盖（设置/用量/新建任务）开着也不唤起——
+  // 它们的层级盖住面板但 autoFocus 已抢焦点，会变成「不可见地执行动作」（T30 审查 高-3）
+  const paletteHotkeyEnabled =
+    workspace.dialogs.length === 0 && !newTask.open && !usageOpen && !settingsOpen;
+  useCmdHotkeys(
+    { onNewThread: openNewTask, onSearch: openSidebarSearch, onToggleDiff: toggleDiffPane, onToggleAgents: toggleAgentsPane, onPalette: togglePalette },
+    hotkeysEnabled,
+    paletteHotkeyEnabled,
+  );
+
+  useEscDismiss({
+    /** 本地浮层也算对话框：浮层自行消费 Esc，全局链不穿透关闭整页 */
+    dialogCount: workspace.dialogs.length + (newTask.dialogOpen ? 1 : 0),
+    paletteOpen,
+    onPaletteClose: closePalette,
+    /** 可见搜索才参与 Esc 链：收起态下的搜索不得吞掉一拍 Esc（过滤词保留，展开后恢复） */
+    sidebarSearchOpen: searchOpen && !sidebarCollapsed,
+    /** 面板同样以可见性参与（替换侧栏内容区，先于侧栏搜索收起） */
+    projectFilesOpen: projectFilesView.target !== null && !sidebarCollapsed,
+    usageOpen,
+    newTaskOpen: newTask.open,
+    settingsOpen,
+    panelOpen: panel.activeId !== null,
+    bashRunning: workspace.bashRunning,
+    confirmStop,
+    generating: workspace.generating,
+    agentsActive: workspace.agentsActive,
+    abortBash: workspace.actions.abortBash,
+    stopActiveTurn: workspace.actions.stopActiveTurn,
+    onSidebarSearchClose: closeSidebarSearch,
+    onProjectFilesClose: projectFilesView.close,
+    onUsageClose: closeUsage,
+    onNewTaskClose: closeNewTask,
+    onSettingsClose: closeSettings,
+    onPanelClose: closePanel,
+    onConfirmStopChange: setConfirmStop,
+  });
+
   const onSelectSession = navigation.onSelectSession;
   const onRenameSession = React.useCallback(
     (sessionId: string, name: string) => {
@@ -355,7 +382,15 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     ],
     [openSettings],
   );
-  const onToggleSplitView = React.useCallback(() => setPanel((current) => (current === 'agents' ? null : 'agents')), []);
+  /** 「+视图」菜单：打开并聚焦对应面板 tab（toggle 语义只保留给快捷键）。 */
+  const onViewAction = React.useCallback(
+    (id: string) => {
+      if (id === 'diff') openDiff();
+      else if (id === 'agents') openAgents();
+      else if (id === 'openFile') openFilePicker();
+    },
+    [openDiff, openAgents, openFilePicker],
+  );
   /** 停止/中止：bash 在途→中止；有在途子代理→先确认；否则直接停止（与 Esc 链同语义） */
   const stopOrAbort = React.useCallback(() => {
     if (workspace.bashRunning) {
@@ -423,12 +458,12 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
               workspace={workspace}
               activeThreadId={activeThreadId}
               sidebarCollapsed={sidebarCollapsed}
-              panel={panel}
-              onToggleSplitView={onToggleSplitView}
               hostDown={hostDown}
               bottomInset={bottomInset}
               onOpenSettings={openSettings}
               onOpenDiff={openDiff}
+              onNewTask={openNewTask}
+              onViewAction={onViewAction}
               onEditUserMessage={editUserMessage}
               onForkUserMessage={forkUserMessage}
             />
@@ -499,10 +534,15 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         )}
       </div>
       {usageOpen ? <UsageScreen entries={usagePanel.entries} onClose={closeUsage} /> : null}
-      {panel === 'agents' ? (
-        <AgentPanel agents={workspace.activeThread.agents} now={workspace.now} onClose={closePanel} onSteer={workspace.actions.steerSubagent} />
-      ) : null}
-      {panel === 'diff' ? <DiffPanel diff={workspace.threadDiff} onClose={closePanel} /> : null}
+      <CommandPalette
+        open={paletteOpen}
+        onClose={closePalette}
+        items={paletteItems}
+        searchFiles={paletteFileSearch}
+        labels={paletteLabels}
+        onSelect={onPaletteSelect}
+      />
+      <PanelLayer panels={panels} workspace={workspace} />
       <TitleBarLeft
         titleName={copy.appTitle.name}
         titleSuffix={copy.appTitle.suffix}

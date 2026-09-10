@@ -104,6 +104,7 @@ describe('Settings zod：round-trip 与拒绝表', () => {
       pinnedSessions: ['/a.jsonl'],
       hiddenProjects: ['/w/gone'],
       idleRecycleMinutes: 15,
+      archivedSessions: ['/b.jsonl'],
     };
     expect(SettingsSchema.parse(input)).toEqual(input);
   });

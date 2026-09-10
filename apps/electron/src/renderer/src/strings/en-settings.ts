@@ -77,6 +77,8 @@ export const enSettings = {
     runtimeDesc: 'System monitoring, worker management and diagnostics. Polls live while this section is open.',
     runtimeAttention: 'Attention: host not ready or a worker faulted',
     historyTitle: 'History',
+    historyArchivedTitle: 'Archived',
+    historyRestore: 'Restore',
     historyDesc: 'Saved sessions to resume or manage.',
     historyEmpty: 'No saved sessions yet.',
     historyFilterAll: 'All projects',

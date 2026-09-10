@@ -24,19 +24,25 @@ type SavedSession = {
 type HistorySectionProps = {
   saved: ReadonlyArray<SavedSession>
   pinned: ReadonlySet<string>
+  /** 已归档会话（sessionPath 键）：单独分区展示，可恢复。 */
+  archived: ReadonlySet<string>
   /** cwd 去重列表，作为过滤菜单选项 */
   projects: readonly string[]
   onTogglePin: (sessionPath: string) => void
   onReveal: (sessionPath: string) => void
   onOpenSaved: (sessionPath: string) => void
   onRefresh: () => void
+  /** 恢复归档（留在历史列表，不直接打开）。 */
+  onRestore: (sessionPath: string) => void
+  /** 打开并恢复（归档行点击）。 */
+  onOpenArchived: (sessionPath: string) => void
 }
 
 const filterTriggerClassName =
   'flex h-9 cursor-pointer items-center gap-[6px] rounded-lg border border-border bg-background px-3 text-left text-[13px] text-foreground outline-none select-none hover:border-foreground/30 aria-expanded:border-foreground/30 focus-visible:ring-3 focus-visible:ring-ring/50 [&_svg]:shrink-0';
 
 /** History 分区：项目过滤 + 已保存会话卡列表（点击 resume），置顶卡排前，hover 出现置顶/显示操作。 */
-function HistorySection({ saved, pinned, projects, onTogglePin, onReveal, onOpenSaved, onRefresh }: HistorySectionProps) {
+function HistorySection({ saved, pinned, archived, projects, onTogglePin, onReveal, onOpenSaved, onRefresh, onRestore, onOpenArchived }: HistorySectionProps) {
   const now = Date.now();
   /** 当前项目过滤；null = 全部 */
   const [projectFilter, setProjectFilter] = React.useState<string | null>(null);
@@ -57,10 +63,12 @@ function HistorySection({ saved, pinned, projects, onTogglePin, onReveal, onOpen
   };
 
   const visibleSessions = projectFilter === null ? saved : saved.filter((session) => session.cwd === projectFilter);
+  const activeSessions = visibleSessions.filter((session) => !archived.has(session.sessionPath));
+  const archivedSessions = visibleSessions.filter((session) => archived.has(session.sessionPath));
   // 置顶在前，其余保持传入顺序（分区各自保序）
   const orderedSessions = [
-    ...visibleSessions.filter((session) => pinned.has(session.sessionPath)),
-    ...visibleSessions.filter((session) => !pinned.has(session.sessionPath)),
+    ...activeSessions.filter((session) => pinned.has(session.sessionPath)),
+    ...activeSessions.filter((session) => !pinned.has(session.sessionPath)),
   ];
 
   return (
@@ -128,6 +136,34 @@ function HistorySection({ saved, pinned, projects, onTogglePin, onReveal, onOpen
                 </SettingsCard>
               );
             })}
+          </div>
+        )}
+        {archivedSessions.length === 0 ? null : (
+          <div className="flex flex-col gap-[10px]">
+            <h3 className="text-[12px] leading-[17px] font-medium text-muted-foreground">{copy.settings.historyArchivedTitle}</h3>
+            {archivedSessions.map((session) => (
+              <SettingsCard key={session.sessionPath} className="group/archived-row relative transition-colors hover:bg-accent/30">
+                <button
+                  type="button"
+                  onClick={() => onOpenArchived(session.sessionPath)}
+                  className="flex w-full cursor-pointer flex-col items-start gap-[3px] rounded-xl px-[16px] py-[12px] text-left outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                >
+                  <span className="w-full truncate text-[13px] leading-[18px] text-foreground">{session.title}</span>
+                  <span className="w-full truncate text-[11.5px] leading-[16px] text-muted-foreground">
+                    {session.cwd} · {formatRelativeAge(now, session.modifiedAt)} · {session.messageCount} {copy.settings.historyMsgs}
+                  </span>
+                </button>
+                <div className="absolute top-1/2 right-[10px] hidden -translate-y-1/2 items-center rounded-lg bg-background px-[6px] py-[3px] group-focus-within/archived-row:flex group-hover/archived-row:flex">
+                  <button
+                    type="button"
+                    onClick={() => onRestore(session.sessionPath)}
+                    className="cursor-pointer rounded-md px-[4px] py-[3px] text-[11.5px] leading-none text-muted-foreground outline-none select-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+                  >
+                    {copy.settings.historyRestore}
+                  </button>
+                </div>
+              </SettingsCard>
+            ))}
           </div>
         )}
       </div>

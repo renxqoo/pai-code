@@ -18,13 +18,12 @@ const DIFF: DiffSummaryModel = {
 const EMPTY: DiffSummaryModel = { changedFiles: 0, additions: 0, deletions: 0, files: [] };
 
 function render(diff: DiffSummaryModel): string {
-  return renderToStaticMarkup(<DiffPanel diff={diff} onClose={() => undefined} />);
+  return renderToStaticMarkup(<DiffPanel diff={diff} />);
 }
 
 describe('DiffPanel 侧栏面板', () => {
   test('有变更时逐行列出文件，底部汇总文件数与总增删量', () => {
     const html = render(DIFF);
-    expect(html).toContain('文件变更');
     expect(html).toContain('diff-block.tsx');
     expect(html).toContain('packages/contracts/src/api.ts');
     expect(html).toContain('2 个文件变更');

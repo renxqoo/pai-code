@@ -79,6 +79,8 @@ export const zhSettings: typeof enSettings = {
     runtimeDesc: '系统监控、Worker 管理与诊断。分区打开期间实时轮询。',
     runtimeAttention: '注意：宿主未就绪或存在异常 worker',
     historyTitle: '历史',
+    historyArchivedTitle: '已归档',
+    historyRestore: '恢复',
     historyDesc: '恢复或管理已保存会话。',
     historyEmpty: '还没有已保存的会话。',
     historyFilterAll: '全部项目',

@@ -158,10 +158,10 @@ describe('Sidebar 渲染冒烟', () => {
     const projects = renderToStaticMarkup(
       <Sidebar {...makeProps({ view: 'projects', projectGroups: [makeGroup()] })} />,
     );
-    expect(projects).toContain('aria-label="更多操作"');
+    expect(projects).toContain('aria-label="项目操作"');
     expect(projects).toContain('lucide-list-tree');
     const grouped = renderToStaticMarkup(<Sidebar {...makeProps({ view: 'grouped' })} />);
-    expect(grouped).not.toContain('更多操作');
+    expect(grouped).not.toContain('项目操作');
   });
 
   test('项目行 hover 标题位移症状：「更多」触发器常驻占位淡入，不再流内 hidden/flex 切换；菜单打开中保持可见', () => {

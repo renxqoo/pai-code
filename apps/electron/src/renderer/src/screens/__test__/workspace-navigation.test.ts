@@ -19,10 +19,10 @@ function makeDeps() {
 }
 
 describe('createNavigationHandlers', () => {
-  test('侧栏选择会话：先退出新建任务页 → 切会话 → 收面板', () => {
+  test('侧栏选择会话：先退出新建任务页 → 切会话；不清面板（面板按会话记忆，导航侧清面板会把存档覆盖成空——T30 审查 高-1 回归）', () => {
     const { deps, calls } = makeDeps();
     createNavigationHandlers(deps).onSelectSession('t1');
-    expect(calls).toEqual(['closeNewTask', 'selectSession:t1', 'closePanel']);
+    expect(calls).toEqual(['closeNewTask', 'selectSession:t1']);
   });
 
   test('设置页历史打开会话：先退出新建任务页 → 打开会话 → 关设置页', () => {
