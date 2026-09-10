@@ -89,7 +89,7 @@ function ToolCallRow({ call }: ToolCallRowProps) {
         aria-hidden="true"
         className="absolute top-[3px] -left-[26px] flex h-[18px] w-[26px] shrink-0 items-center justify-center bg-background"
       >
-        <ToolStatusIcon status={call.status} />
+        <ToolStatusIcon status={call.status} kind={kind} />
       </span>
       <div className="flex min-h-[26px] items-center">
         {expandable ? (
