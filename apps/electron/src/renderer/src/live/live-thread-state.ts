@@ -31,6 +31,9 @@ export type LiveThreadState = {
   stopping: boolean;
   /** worker 异常死亡横幅（下条命令自动恢复，收到 turnStarted 清除）。 */
   crashed: boolean;
+  /** fork 换轨终态：旧 id 已被 hub 移除（会话文件保留可懒恢复），运行面
+   * 就地收敛且不再有任何事件驱动——排队冲刷等轮结算侦测必须排除。 */
+  parked: boolean;
   /** 水化失败（重试入口提示）。 */
   hydrateFailed: boolean;
   /** 是否已成功水化过（空会话 cursor 为 null，不能以 cursor 判定）。 */
@@ -55,6 +58,7 @@ export const initialThreadState: LiveThreadState = {
   retrying: null,
   stopping: false,
   crashed: false,
+  parked: false,
   hydrateFailed: false,
   hydrated: false,
   bashRunning: false,

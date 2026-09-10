@@ -24,7 +24,7 @@ type ThreadStageProps = {
   onOpenSettings: () => void
   onOpenDiff: () => void
   onEditUserMessage: (text: string) => void
-  onForkUserMessage?: (entryId: string, text: string, autoResend: boolean) => void
+  onForkUserMessage?: (entryId: string, text: string, images: ReadonlyArray<{ data: string; mimeType: string }>, autoResend: boolean) => void
 }
 
 /** 尚未接线/不适用当前会话的动作统一落到空实现，接线点保持稳定。 */

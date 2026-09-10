@@ -114,6 +114,8 @@ export const en = {
     editRerun: 'Edit & rerun (fork)',
     retryFromHere: 'Retry from here',
     forkFailed: 'Forking the conversation failed. Try again.',
+    forkCancelled: 'The fork was cancelled by an extension; the conversation is unchanged.',
+    forkedImageName: (index: number): string => `Image ${index}`,
     resumeFailed: 'Resuming the conversation failed. Try again.',
     stopConfirmTitle: 'Stop everything?',
     stopConfirmHint: 'This terminates all foreground and background subagents and cannot be undone.',

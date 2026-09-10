@@ -379,9 +379,13 @@ export function createWorkspaceActions(setDiagnostics: (value: WorkspaceDiagnost
       });
     },
     forkFromEntry: async (entryId) => {
-      const newThreadId = await controller.forkSession(activeThreadOf(), entryId);
-      if (newThreadId === null) pushNotice(copy.flow.forkFailed);
-      return newThreadId;
+      const outcome = await controller.forkSession(activeThreadOf(), entryId);
+      if (!outcome.ok) {
+        // 扩展拦截不是瞬时故障：重试无意义，文案与「请重试」区分
+        pushNotice(outcome.reason === 'fork_cancelled' ? copy.flow.forkCancelled : copy.flow.forkFailed);
+        return null;
+      }
+      return outcome.threadId;
     },
     upsertProvider: (input) => controller.upsertProvider(input),
     removeProvider: (name) => controller.removeProvider(name),

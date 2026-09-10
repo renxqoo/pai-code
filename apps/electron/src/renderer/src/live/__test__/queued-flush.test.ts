@@ -100,6 +100,26 @@ describe('queued-flush 连接器', () => {
     disconnect();
   });
 
+  test('fork 换轨（旧线程 parkThread 终态）不冲刷：不得向已被 hub 移除的旧 id 投递', async () => {
+    const store = createLiveStore();
+    const log: SubmitLog = [];
+    const disconnect = connectQueuedDraftFlush(store, (threadId, draft, mode) => {
+      log.push({ threadId, text: draft.text, mode });
+      return Promise.resolve(null);
+    });
+    stage('t1', '/w/a.jsonl', '生成中排队的消息');
+    store.getState().applyEvent({ type: 'sessionUpdated', session: session('t1', '/w/a.jsonl') }, 1);
+    store.getState().applyEvent({ type: 'turnStarted', threadId: 't1', at: 1 }, 1);
+    // fork 成功：旧线程镜像终态化 + 会话行转 parked（sessionPath 保留旧文件）
+    store.getState().parkThread('t1');
+    store.getState().applyEvent({ type: 'sessionUpdated', session: { ...session('t1', '/w/a.jsonl'), state: 'parked' } }, 2);
+    await drain();
+    expect(log).toEqual([]);
+    // 卡片保留在旧 path 下：待用户从 History 重开旧会话文件时按路径改绑接续
+    expect(queuedDrafts.snapshot().t1?.map((draft) => draft.text)).toEqual(['生成中排队的消息']);
+    disconnect();
+  });
+
   test('重开换 id：移除间隙暂存保留（已落盘即宿主），新会话注册后改绑并立即冲刷', async () => {
     const store = createLiveStore();
     const log: SubmitLog = [];

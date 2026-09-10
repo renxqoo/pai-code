@@ -102,8 +102,8 @@ export interface LiveController {
   readonly abortBash: (threadId: string) => Promise<void>;
   /** 在系统文件管理器中显示会话文件（主进程白名单校验）。 */
   readonly revealSession: (sessionPath: string) => Promise<void>;
-  /** 从历史条目分叉（position=before）→ 激活新会话；返回新 threadId（失败 null）。 */
-  readonly forkSession: (threadId: string, entryId: string) => Promise<string | null>;
+  /** 从历史条目分叉（position=before）→ 旧线程镜像终态 + 激活新会话；失败带原因（cancelled 拦截单列）。 */
+  readonly forkSession: (threadId: string, entryId: string) => Promise<{ ok: true; threadId: string } | { ok: false; reason: string }>;
   readonly refreshStats: (threadId: string) => Promise<void>;
   readonly ensureHydrated: (threadId: string) => Promise<void>;
   /** 懒恢复（T16）：parked 占位 → session/resume（在途按 sessionPath 去重）。
@@ -290,7 +290,8 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       mode: 'auto' | 'steer' | 'followUp' = 'auto',
     ): Promise<string | null> {
       const text = message.trim();
-      if (text.length === 0) return 'empty_message';
+      // 纯图消息合法投递（fork 重试带图）：文本与图片都空才是空消息
+      if (text.length === 0 && (images === undefined || images.length === 0)) return 'empty_message';
       const session = store.getState().sessions[threadId];
       if (session?.state === 'parked' && !client.available) return 'bridge_unavailable';
       // 懒恢复兜底：目标会话还是 parked 占位（启动对账/重启回落）时先唤活再投递；
@@ -531,12 +532,14 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     async revealSession(sessionPath: string): Promise<void> {
       await client.invoke('session/reveal', { sessionPath });
     },
-    async forkSession(threadId: string, entryId: string): Promise<string | null> {
+    async forkSession(threadId: string, entryId: string): Promise<{ ok: true; threadId: string } | { ok: false; reason: string }> {
       const outcome = await client.invoke('session/fork', { threadId, entryId, position: 'before' });
-      if (!outcome.ok) return null;
+      if (!outcome.ok) return { ok: false, reason: outcome.reason };
+      // fork 是原地换轨：旧 id 已失效且不再有事件，运行面镜像就地终态
+      store.getState().parkThread(threadId);
       activate(outcome.data.threadId);
       await hydrateFull(outcome.data.threadId).catch(() => undefined);
-      return outcome.data.threadId;
+      return { ok: true, threadId: outcome.data.threadId };
     },
     searchFiles: (cwd: string, query: string) => searchFiles(client, cwd, query),
     listGitBranches: (cwd: string) => listGitBranches(client, cwd),

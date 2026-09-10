@@ -13,10 +13,10 @@ type UserMessageRowProps = {
   message: SessionMessage
   /** 编辑重发：把原文回填草稿并聚焦输入框 */
   onEdit: (text: string) => void
-  /** 编辑并重开：fork 到该消息之前并回填（用户改完手动发，落在分叉线程） */
-  onEditRerun?: (text: string) => void
-  /** 从这里重试：fork 到该消息之前并自动原样重发 */
-  onRetry?: (text: string) => void
+  /** 编辑并重开：fork 到该消息之前并回填（用户改完手动发，落在分叉线程）；图片随回填 */
+  onEditRerun?: (text: string, images: ReadonlyArray<{ data: string; mimeType: string }>) => void
+  /** 从这里重试：fork 到该消息之前并自动原样重发（含图片） */
+  onRetry?: (text: string, images: ReadonlyArray<{ data: string; mimeType: string }>) => void
 }
 
 /** 用户消息行：右对齐气泡 + hover 浮出的复制/编辑操作。
@@ -25,6 +25,7 @@ type UserMessageRowProps = {
 function UserMessageRow({ message, onEdit, onEditRerun, onRetry }: UserMessageRowProps) {
   const invocation = parseSkillInvocation(message.text);
   const editSource = invocation === null ? message.text : toSkillInvocationInput(invocation);
+  const editImages = message.images;
   return (
     <div className="group flex flex-col items-end">
       {message.images.length > 0 ? (
@@ -63,7 +64,7 @@ function UserMessageRow({ message, onEdit, onEditRerun, onRetry }: UserMessageRo
           <IconButton
             label={copy.flow.editRerun}
             size="xs"
-            onClick={() => onEditRerun(editSource)}
+            onClick={() => onEditRerun(editSource, editImages)}
             className="text-muted-foreground/85"
           >
             <GitBranch className="size-3.5" strokeWidth={1.75} />
@@ -73,7 +74,7 @@ function UserMessageRow({ message, onEdit, onEditRerun, onRetry }: UserMessageRo
           <IconButton
             label={copy.flow.retryFromHere}
             size="xs"
-            onClick={() => onRetry(editSource)}
+            onClick={() => onRetry(editSource, editImages)}
             className="text-muted-foreground/85"
           >
             <RotateCcw className="size-3.5" strokeWidth={1.75} />

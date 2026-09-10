@@ -3,6 +3,8 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { createFrameDecoder, encodeCommand } from '@paiapp/adapter';
 import type { HostPhase, HostProcessPort, HostRuntimeConfig, HostCommandOutcome, HubFrame, PaiCommand } from '@paiapp/contracts';
 
+import { hubSpawnEnv } from './spawn-env';
+
 /**
  * pai-cli host 进程管理：spawn、心跳监督（>hangAfterMs 无心跳判挂死）、
  * 挂死/崩溃重启（SIGKILL 进程组 → 重spawn → onRestart 恢复回调）、
@@ -133,7 +135,9 @@ export function createHostProcess(deps: HostProcessDeps): HostProcessPort {
     sawFirstHeartbeat = false;
     spawnStartedAt = Date.now();
     lastHeartbeatAt = spawnStartedAt;
-    const env: Record<string, string> = { ...process.env, ...config.buildEnv(), PI_CODING_AGENT_DIR: config.agentDir };
+    // 白名单继承：第三方渠道凭据（宿主 shell 的 OPENAI_API_KEY 等）不得透传，
+    // 渠道真相只来自 buildEnv 注入的 $PAI_KEY_*（见 spawn-env 模块注释）。
+    const env: Record<string, string> = { ...hubSpawnEnv(process.env), ...config.buildEnv(), PI_CODING_AGENT_DIR: config.agentDir };
     const proc = spawn(config.bunPath, [config.hubEntry], {
       cwd: config.cwd ?? process.cwd(),
       env,

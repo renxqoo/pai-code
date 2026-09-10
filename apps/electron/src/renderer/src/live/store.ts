@@ -66,6 +66,8 @@ export interface LiveStoreState {
 export interface LiveStoreActions {
   applyEvent(event: UiEvent, now: number): void;
   hydrate(threadId: string, action: HydrateAction): void;
+  /** fork 换轨后旧线程运行面终态化（streaming/queue 镜像不再有事件驱动收敛）。 */
+  parkThread(threadId: string): void;
   stopIntent(threadId: string): void;
   bootstrap(data: ApiData<'app/bootstrap'>): void;
   bootstrapFailed(reason: string): void;
@@ -161,6 +163,15 @@ export function createLiveStore() {
           // 幽灵守卫：会话已移除（重开/停止后迟到的对账定时器）不再在 threads 表复活条目
           if (threadId !== state.activeThreadId && !(threadId in state.sessions)) return state;
           return { threads: { ...state.threads, [threadId]: foldHydrate(threadOf(state, threadId), action) } };
+        });
+      },
+      parkThread(threadId) {
+        set((state) => {
+          const thread = state.threads[threadId];
+          if (thread === undefined) return state;
+          // fork 换轨：旧 id 不再有任何事件，运行面就地终态防 streaming/queue 镜像滞留；
+          // parked 标志让轮结算侦测（排队冲刷）把这次翻转排除在「自然结算」外
+          return { threads: { ...state.threads, [threadId]: { ...foldDeath(thread, Date.now()), parked: true } } };
         });
       },
       stopIntent(threadId) {

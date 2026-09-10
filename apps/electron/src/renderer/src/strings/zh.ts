@@ -111,6 +111,8 @@ export const zh: typeof en = {
     editRerun: '编辑并重开（分叉）',
     retryFromHere: '从这里重试',
     forkFailed: '分叉会话失败，请重试。',
+    forkCancelled: '分叉被扩展拦截，会话未变化。',
+    forkedImageName: (index: number): string => `图片 ${index}`,
     resumeFailed: '会话恢复失败，请重试。',
     stopConfirmTitle: '停止全部任务？',
     stopConfirmHint: '将终止全部前台与后台子代理，且不可恢复。',

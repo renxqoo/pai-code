@@ -31,7 +31,8 @@ export function submitDraftText(
   mode: 'auto' | 'steer' | 'followUp' = 'auto',
 ): Promise<boolean> {
   const trimmed = text.trim();
-  if (trimmed.length === 0) return Promise.resolve(false);
+  // 纯图消息合法投递（文本与图片全空才拦，与 contracts 的 prompt 校验同口径）
+  if (trimmed.length === 0 && (images?.length ?? 0) === 0) return Promise.resolve(false);
   if (trimmed.startsWith('! ')) {
     // trim 后以 '! ' 开头 ⇒ 命令体必非空（尾随空白已被 trim 吃掉），无空命令分支
     const command = trimmed.slice(2).trim();

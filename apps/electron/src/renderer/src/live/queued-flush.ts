@@ -28,7 +28,13 @@ export function connectQueuedDraftFlush(store: LiveStore, submit: QueuedDraftSub
         void queuedDrafts.flush(session.threadId, submit);
       }
     }
-    for (const threadId of flush) void queuedDrafts.flush(threadId, submit);
+    // 冲刷只对 live 会话：fork 换轨把旧线程镜像终态化（parked）不是轮自然结算，
+    // 不得向已被 hub 移除的旧 id 投递；卡片保留待按路径改绑（旧会话文件可从
+    // History 重开接续）
+    for (const threadId of flush) {
+      if (state.sessions[threadId]?.state !== 'live') continue;
+      void queuedDrafts.flush(threadId, submit);
+    }
     for (const threadId of drop) {
       if (queuedDrafts.pathOf(threadId) === null) queuedDrafts.dropThread(threadId);
     }

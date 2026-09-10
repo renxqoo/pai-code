@@ -196,6 +196,18 @@ describe('API schema：每方法合法/非法样本', () => {
     ).toThrow();
   });
 
+  test('session/prompt 纯图消息（message 空但带 images）过闸；文本图片全空拒绝', () => {
+    // fork 重试带图消息的形态：hub 协议不要求 message 非空
+    const imageOnly = ApiSchemas['session/prompt'].params.parse({
+      threadId: 't',
+      message: '',
+      images: [{ type: 'image', data: 'aGk=', mimeType: 'image/png' }],
+    });
+    expect(imageOnly.message).toBe('');
+    expect(() => ApiSchemas['session/prompt'].params.parse({ threadId: 't', message: '' })).toThrow();
+    expect(() => ApiSchemas['session/prompt'].params.parse({ threadId: 't', message: '', images: [] })).toThrow();
+  });
+
   test('session/bash 与 abortBash 样本', () => {
     expect(ApiSchemas['session/bash'].params.parse({ threadId: 't', command: 'git status' })).toEqual({ threadId: 't', command: 'git status' });
     expect(() => ApiSchemas['session/bash'].params.parse({ threadId: 't', command: '' })).toThrow();

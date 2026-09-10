@@ -411,10 +411,17 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     'session/fork': async (params) => {
       const result = await command({ type: 'fork', threadId: params.threadId, entryId: params.entryId, position: params.position });
       if (!result.ok) return fail(result.reason);
-      const data = result.data as { threadId?: string; cwd?: string; sessionPath?: string | null };
+      const data = result.data as { threadId?: string; previousThreadId?: string; sessionPath?: string | null; cancelled?: boolean };
+      // 扩展拦截（协议 cancelled 形状）：会话未变化，threadId 字段无效，不得当新会话登记
+      if (data.cancelled === true) return fail('fork_cancelled');
       const threadId = data.threadId ?? '';
-      if (threadId.length === 0) return fail('malformed_response');
-      const view = runtime.applyStartOutcome(threadId, data.cwd ?? '', data.sessionPath ?? null, runtime.defaultTitle, Date.now());
+      // previousThreadId 必须就是被分叉的会话：换轨响应对不上请求即坏形状（防 ABA）
+      if (threadId.length === 0 || data.previousThreadId !== params.threadId) return fail('malformed_response');
+      // 响应不带 cwd/标题：从被分叉会话继承（项目分组与侧栏语义跟原会话走）
+      const source = runtime.sessions().find((session) => session.threadId === params.threadId);
+      // fork 是原地换轨：旧 id 已从 hub 移除（会话文件保留、可懒恢复），旧行转 parked
+      runtime.parkSession(params.threadId);
+      const view = runtime.applyStartOutcome(threadId, source?.cwd ?? '', data.sessionPath ?? null, source?.title ?? runtime.defaultTitle, Date.now());
       fillSessionMeta(threadId);
       return { ok: true as const, data: view };
     },

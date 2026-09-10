@@ -69,6 +69,9 @@ export interface PaiRuntime {
   removeSession(threadId: string): void;
   /** 仅摘内存视图（sessionRemoved）：内部重开链（trusted 重载/技能开关）的中间步骤，注册表行保留。 */
   detachSession(threadId: string): void;
+  /** fork 换轨后旧 threadId 的终态化：hub 已移除该 id（会话文件保留、可懒恢复），
+   * 视图转 parked 不得留 live 僵尸（僵尸行上的任何命令都打向已失效 id）。 */
+  parkSession(threadId: string): void;
   renameSession(threadId: string, name: string): void;
   touchSession(threadId: string, patch: Partial<Pick<SessionView, 'streaming' | 'model' | 'thinkingLevel' | 'state'>>): void;
   autoTitleOnPrompt(threadId: string, message: string): Promise<void>;
@@ -319,6 +322,13 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
     detachSession(threadId: string): void {
       sessions.delete(threadId);
       emit({ type: 'sessionRemoved', threadId });
+    },
+    parkSession(threadId: string): void {
+      const view = sessions.get(threadId);
+      if (view === undefined || view.state === 'parked') return;
+      const parked = { ...view, state: 'parked' as const, streaming: false };
+      upsertSession(parked);
+      persistSession(parked);
     },
     renameSession(threadId: string, name: string): void {
       const view = sessions.get(threadId);

@@ -240,14 +240,18 @@ export const ApiSchemas = {
     result: z.array(SavedSessionViewSchema),
   },
   'session/prompt': {
+    // 纯图消息合法（message 与 images 至少其一非空）：fork 重试带图消息无文本形态
     params: z
       .object({
         threadId: z.string().min(1),
-        message: z.string().min(1),
+        message: z.string(),
         streamingBehavior: z.enum(['steer', 'followUp']).optional(),
         images: z.array(imagePayload).optional(),
       })
-      .strict(),
+      .strict()
+      .refine((params) => params.message.length > 0 || (params.images?.length ?? 0) > 0, {
+        message: 'message_or_images_required',
+      }),
     result: z.null(),
   },
   'session/abort': {

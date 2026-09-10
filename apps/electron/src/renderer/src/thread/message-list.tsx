@@ -22,7 +22,7 @@ type MessageListProps = {
   emptyHint: string
   onOpenDiff: () => void
   onEditUserMessage: (text: string) => void
-  onForkUserMessage?: (entryId: string, text: string, autoResend: boolean) => void
+  onForkUserMessage?: (entryId: string, text: string, images: ReadonlyArray<{ data: string; mimeType: string }>, autoResend: boolean) => void
 }
 
 /** 水化消息 id（msg-<entryId>）→ 协议 entryId；live 回显（UUID）不可分叉返回 null。 */
@@ -56,12 +56,12 @@ function MessageList({ thread, now, loading, bottomInset, emptyTitle, emptyHint,
                     onEditRerun={
                       onForkUserMessage === undefined || entryIdOf(item.message.id) === null
                         ? undefined
-                        : (text) => onForkUserMessage(entryIdOf(item.message.id) ?? '', text, false)
+                        : (text, images) => onForkUserMessage(entryIdOf(item.message.id) ?? '', text, images, false)
                     }
                     onRetry={
                       onForkUserMessage === undefined || entryIdOf(item.message.id) === null
                         ? undefined
-                        : (text) => onForkUserMessage(entryIdOf(item.message.id) ?? '', text, true)
+                        : (text, images) => onForkUserMessage(entryIdOf(item.message.id) ?? '', text, images, true)
                     }
                   />
                 ) : item.message.role === 'system' ? (

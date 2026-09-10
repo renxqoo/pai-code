@@ -181,17 +181,25 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     workspace.dialogs.length === 0 && !newTask.open && !usageOpen && !settingsOpen && projectFilesView.target === null;
   useCmdHotkeys({ onNewThread: openNewTask, onSearch: openSidebarSearch }, hotkeysEnabled);
 
-  /** 分叉重发（B2/A5）：fork 到该用户消息之前；autoResend=true 原样重发，否则回填草稿。
-   * 仅水化消息可分叉（live 回显是 UUID，对账后才有协议 entryId）。 */
-  const forkUserMessage = (entryId: string, text: string, autoResend: boolean) => {
+  /** 分叉重发（B2/A5）：fork 到该用户消息之前；autoResend=true 原样重发（含图片），
+   * 否则回填草稿与附件。仅水化消息可分叉（live 回显是 UUID，对账后才有协议 entryId）。 */
+  const forkUserMessage = (entryId: string, text: string, images: ReadonlyArray<{ data: string; mimeType: string }>, autoResend: boolean) => {
     void workspace.actions.forkFromEntry(entryId).then((newThreadId) => {
       if (newThreadId === null) return;
+      const payloads = images.map((image) => ({ type: 'image' as const, data: image.data, mimeType: image.mimeType }));
       if (autoResend) {
         // submitDraft 调用时读 store 真相（已是分叉线程）
-        void workspace.actions.submitDraft(text);
+        void workspace.actions.submitDraft(text, payloads);
       } else {
-        // 回填到分叉线程的草稿槽（不得写旧会话键）
+        // 回填到分叉线程的草稿槽（不得写旧会话键）；图片经一次性 restore 信号并入 composer
         setDrafts((current) => ({ ...current, [newThreadId]: text }));
+        if (images.length > 0) {
+          restoreSeqRef.current += 1;
+          setRestore({
+            token: restoreSeqRef.current,
+            images: images.map((image, index) => ({ name: copy.flow.forkedImageName(index + 1), payload: image })),
+          });
+        }
         composerTextRef.current?.focus();
       }
     });

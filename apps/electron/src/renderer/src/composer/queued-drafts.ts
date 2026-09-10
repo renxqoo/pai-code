@@ -170,13 +170,13 @@ export function createQueuedDrafts(): QueuedDrafts {
 /** 应用级单例：语言切换触发的根级重挂载不丢暂存（会话内暂存，不落盘——hub 无处托管编辑态）。 */
 export const queuedDrafts = createQueuedDrafts();
 
-export type ThreadRunState = { streaming: boolean; stopping: boolean; crashed: boolean };
+export type ThreadRunState = { streaming: boolean; stopping: boolean; crashed: boolean; parked: boolean };
 
 /** 线程运行面投影（订阅侦测用，只取结算判定字段）。 */
 export function runStateOf(threads: Readonly<Record<string, ThreadRunState>>): Record<string, ThreadRunState> {
   const out: Record<string, ThreadRunState> = {};
   for (const [threadId, thread] of Object.entries(threads)) {
-    out[threadId] = { streaming: thread.streaming, stopping: thread.stopping, crashed: thread.crashed };
+    out[threadId] = { streaming: thread.streaming, stopping: thread.stopping, crashed: thread.crashed, parked: thread.parked };
   }
   return out;
 }
@@ -184,7 +184,8 @@ export function runStateOf(threads: Readonly<Record<string, ThreadRunState>>): R
 /**
  * 轮结束侦测：streaming true→false 的自然结算 → flush。
  * 不冲刷：用户停止意图（stopping，含 Esc/停止按钮/确认条——全部经 stopActiveTurn
- * 记录）与 worker/宿主死亡（crashed）造成的结算——卡片保留由用户处置。
+ * 记录）、worker/宿主死亡（crashed）与 fork 换轨终态（parked，旧 id 已被 hub
+ * 移除，投递必失败——卡片保留待按路径改绑）造成的结算——卡片保留由用户处置。
  * 线程离开 threads 且会话不复存在（sessionRemoved/reset）→ drop（是否真丢由
  * 调用方按会话路径宿主再判定——重开换 id 的间隙暂存须保留待改绑）。
  */
@@ -198,7 +199,7 @@ export function diffSettledThreads(
   for (const [threadId, after] of Object.entries(next)) {
     const before = prev[threadId];
     if (before === undefined) continue;
-    if (before.streaming && !after.streaming && !before.stopping && !after.crashed) flush.push(threadId);
+    if (before.streaming && !after.streaming && !before.stopping && !after.crashed && !after.parked) flush.push(threadId);
   }
   for (const threadId of Object.keys(prev)) {
     if (next[threadId] === undefined && liveSessions[threadId] === undefined) drop.push(threadId);
