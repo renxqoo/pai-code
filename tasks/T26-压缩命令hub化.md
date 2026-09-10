@@ -119,3 +119,10 @@
 ## 与 T25 的关系
 
 T25 状态推进「已核销」并加注：裁决①经用户裁决推翻，渲染层拦截桥（builtin-commands）由本任务 T26 B2 整体下线；T25 的 customInstructions 契约扩展随调用链删除（hub-protocol 镜像保留）。本任务定稿后同一提交内先改 T25 文档再动代码。
+
+## B3 联调记录（2026-09-10）
+
+- hub 侧真机 e2e（GLM，opt-in real 门）：ALL PASS——e2e.mjs 11b 节钉死 prompt 通路 `/compact`：行首命令不达模型、compaction_start/end 流出、response 后于 compaction_end（compact 时序，真实栈）；本轮会话量级触发 too small 守卫（双合规容错口径同 compact 命令节）。
+- hub `t26-compact-hub` 已合并 pi 仓库 main（merge `2dc5f1d35`，与 v0.10 sandbox 批次 `ae11a0cae` 合流零冲突）；合并后 hub 全量门禁：oxlint 0/0 / tsc / build / 单测 418/0 / smoke ALL PASS / e2e-mock **16/16**（含 sandbox-enforcement 修复后全绿）/ conformance 4/4。
+- 待人工确认（Pai 桌面 × hub 真机联跑）：压缩中横幅与 summary 回显、携图 `/compact` 端到端失败文案、压缩中重复提交的用户可见路径（'Compaction already in progress' → sendFailed 通知）。
+- 开发分支处置：本仓库 `t26-compact-hub`（adef393/61571db，独立 worktree 会话产出）已被 `05abda9` 精修落地取代，未合并、可删；其独有的 B3 清单细节以本节为准。
