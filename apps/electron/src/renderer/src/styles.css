@@ -258,15 +258,15 @@
 }
 /*
  * 对话正文 markdown（chat-markdown，见 markdown-text.tsx）外观校准，对标基准：
- * 正文 14px/24px 单级字号；标题四级递减（18.5/16.5/15/14）加粗分级（700/650/600），
+ * 正文 12px/20px 单级字号；标题四级递减（16.5/14.5/13/12）加粗分级（700/650/600），
  * h5/h6 弱色小字，标题上间距大于下间距表达「从属于后文」；章节前 24-30px / 其后 8-14px；
- * 引用块非斜体弱色 + 左侧竖条；行内代码为无色调灰底 chip（--muted，13px）；
- * 代码块沿用对话几何（--surface-subtle，13px/20px）；表格单层描边卡片，
- * 表体 13.5px/20px、表头小字弱化。颜色全部走 token，亮暗两态经变量自动跟随；
+ * 引用块非斜体弱色 + 左侧竖条；行内代码为无色调灰底 chip（--muted，11px）；
+ * 代码块沿用对话几何（--surface-subtle，11px/17px）；表格单层描边卡片，
+ * 表体 11.5px/18px、表头小字弱化。颜色全部走 token，亮暗两态经变量自动跟随；
  * 链接样式由 components.a 覆写组件（streamdown-link.tsx）内联提供，不在此处。
  * 非层叠规则优先于 streamdown 写进 utilities 层的默认类。
  *
- * 垂直节奏（正文 14px/24px）：兄弟块基础间距 14px——段落/列表由 markdown-text 的
+ * 垂直节奏（正文 12px/20px）：兄弟块基础间距 14px——段落/列表由 markdown-text 的
  * space-y-[14px] 供给，代码块/表格/引用/分隔线各自声明 margin-block 16-24px
  * （相邻兄弟纵向 margin 折叠取 max）；标题开启新章节，一律前大后小。
  * 首尾元素由边界守卫清零，不在消息气泡内产生悬空空隙。
@@ -279,34 +279,34 @@
 }
 .chat-markdown [data-streamdown='heading-1'] {
   margin-block: 30px 14px;
-  font-size: 18.5px;
-  line-height: 27px;
+  font-size: 16.5px;
+  line-height: 24px;
   font-weight: 700;
   letter-spacing: -0.014em;
 }
 .chat-markdown [data-streamdown='heading-2'] {
   margin-block: 26px 12px;
-  font-size: 16.5px;
-  line-height: 24px;
+  font-size: 14.5px;
+  line-height: 21px;
   font-weight: 650;
 }
 .chat-markdown [data-streamdown='heading-3'] {
   margin-block: 20px 10px;
-  font-size: 15px;
-  line-height: 22px;
+  font-size: 13px;
+  line-height: 19px;
   font-weight: 600;
 }
 .chat-markdown [data-streamdown='heading-4'],
 .chat-markdown [data-streamdown='heading-5'] {
   margin-block: 18px 8px;
-  font-size: 14px;
-  line-height: 21px;
+  font-size: 12px;
+  line-height: 18px;
   font-weight: 600;
 }
 .chat-markdown [data-streamdown='heading-6'] {
   margin-block: 16px 8px;
-  font-size: 13.5px;
-  line-height: 20px;
+  font-size: 11.5px;
+  line-height: 17px;
   font-weight: 600;
   color: var(--muted-foreground);
 }
@@ -382,8 +382,8 @@
   border: 0;
   background-color: transparent;
   padding: 2px 4px 0;
-  font-size: 13px;
-  line-height: 20px;
+  font-size: 11px;
+  line-height: 17px;
 }
 /* pre 默认带 shiki 主题背景色（--sdm-bg/--shiki-dark-bg），统一透出卡片底色 */
 .chat-markdown [data-streamdown='code-block-body'] pre {
@@ -395,8 +395,8 @@
   border-radius: 6px;
   background-color: var(--muted);
   padding: 0 6px;
-  font-size: 13px;
-  line-height: 20px;
+  font-size: 11px;
+  line-height: 18px;
 }
 /*
  * 表格：单层描边卡片——去掉 streamdown 的卡片套卡片底色，操作行浮在正文底上，
@@ -438,18 +438,18 @@
 .chat-markdown [data-streamdown='table-header'] [data-streamdown='table-row'] {
   border-top: 0;
 }
-/* 表头小字弱化（12.5px 常规体 + --muted-foreground），表体 13.5px/20px 比正文半级 */
+/* 表头小字弱化（10.5px 常规体 + --muted-foreground），表体 11.5px/18px 比正文半级 */
 .chat-markdown [data-streamdown='table-header-cell'] {
   padding: 11px 12px;
-  font-size: 12.5px;
-  line-height: 19px;
+  font-size: 10.5px;
+  line-height: 16px;
   font-weight: 400;
   color: var(--muted-foreground);
 }
 .chat-markdown [data-streamdown='table-cell'] {
   padding: 8px 12px;
-  font-size: 13.5px;
-  line-height: 20px;
+  font-size: 11.5px;
+  line-height: 18px;
 }
 .chat-markdown blockquote {
   margin-block: 16px;
