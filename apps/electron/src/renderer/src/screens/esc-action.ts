@@ -8,6 +8,7 @@
 export type EscAction =
   | { kind: 'none' }
   | { kind: 'dismiss-dialogs' }
+  | { kind: 'close-palette' }
   | { kind: 'close-sidebar-search' }
   | { kind: 'close-usage' }
   | { kind: 'close-project-files' }
@@ -21,6 +22,8 @@ export type EscAction =
 
 export type EscState = {
   dialogCount: number;
+  /** 命令面板开着（⌘P 浮层；模态对话框仍优先于它）。 */
+  paletteOpen: boolean;
   /** 侧栏搜索可见且展开（侧栏未收起、无更高层覆盖时由调用方算出）：内联层，覆盖层全部收起后才轮到它。 */
   sidebarSearchOpen: boolean;
   usageOpen: boolean;
@@ -40,6 +43,7 @@ export type EscState = {
 
 export function escActionFor(state: EscState): EscAction {
   if (state.dialogCount > 0) return { kind: 'dismiss-dialogs' };
+  if (state.paletteOpen) return { kind: 'close-palette' };
   if (state.usageOpen) return { kind: 'close-usage' };
   if (state.newTaskOpen) return { kind: 'close-new-task' };
   if (state.settingsOpen) return { kind: 'close-settings' };

@@ -39,7 +39,7 @@ function render(cwd: string, path: string, read: (cwd: string, path: string) => 
 
 describe('FilePane 静态渲染（读取前 loading 态）', () => {
   test('路径常显 + loading 文案；Markdown 文件带预览/源码切换', () => {
-    const pending = () => new Promise<ApiOutcome<'file/read'>>>(() => undefined);
+    const pending = () => Promise.resolve({ ok: false as const, reason: 'not_found' });
     const html = render('/w', 'docs/readme.md', pending);
     expect(html).toContain('docs/readme.md');
     expect(html).toContain(copy.panel.file.loading);

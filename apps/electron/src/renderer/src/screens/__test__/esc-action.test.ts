@@ -5,6 +5,7 @@ import { escActionFor, type EscState } from '../esc-action';
 function base(overrides: Partial<EscState> = {}): EscState {
   return {
     dialogCount: 0,
+    paletteOpen: false,
     sidebarSearchOpen: false,
     usageOpen: false,
     projectFilesOpen: false,
@@ -28,7 +29,9 @@ describe('escActionFor', () => {
     expect(escActionFor(base({ bashRunning: true }))).toEqual({ kind: 'abort-bash' });
   });
 
-  test('逐层收起优先级：对话框 → Usage → 新建任务页 → 设置 → 可见侧栏搜索 → 面板 → bash/停止', () => {
+  test('逐层收起优先级：对话框 → 命令面板 → Usage → 新建任务页 → 设置 → 可见侧栏搜索 → 面板 → bash/停止', () => {
+    expect(escActionFor(base({ dialogCount: 1, paletteOpen: true, usageOpen: true }))).toEqual({ kind: 'dismiss-dialogs' });
+    expect(escActionFor(base({ paletteOpen: true, usageOpen: true, settingsOpen: true }))).toEqual({ kind: 'close-palette' });
     expect(escActionFor(base({ dialogCount: 1, sidebarSearchOpen: true, usageOpen: true, settingsOpen: true }))).toEqual({ kind: 'dismiss-dialogs' });
     expect(escActionFor(base({ usageOpen: true, newTaskOpen: true, sidebarSearchOpen: true }))).toEqual({ kind: 'close-usage' });
     expect(escActionFor(base({ newTaskOpen: true, settingsOpen: true, sidebarSearchOpen: true }))).toEqual({ kind: 'close-new-task' });

@@ -95,6 +95,8 @@ export type UseSettingsScreenInput = {
   workspace: LiveWorkspaceView;
   open: boolean;
   onClose: () => void;
+  /** 打开时进入的分区（命令面板跳转；缺省回首分区）。 */
+  initialSection?: SettingsSectionId;
 };
 
 /**
@@ -102,14 +104,14 @@ export type UseSettingsScreenInput = {
  * 语言/主题/重跑引导），workspace-main 只剩一行接线。语言切换经 changeLocaleSetting
  * 广播（app 根重挂载后本 hook 状态回到首分区，与既有行为一致）。
  */
-export function useSettingsScreen({ workspace, open, onClose }: UseSettingsScreenInput): SettingsScreenProps {
-  const [section, setSection] = React.useState<SettingsSectionId>(SETTINGS_FIRST_SECTION);
+export function useSettingsScreen({ workspace, open, onClose, initialSection }: UseSettingsScreenInput): SettingsScreenProps {
+  const [section, setSection] = React.useState<SettingsSectionId>(initialSection ?? SETTINGS_FIRST_SECTION);
   const [localeSetting, setLocaleSettingState] = React.useState<LocaleSetting>(getLocaleSetting());
   const { theme, setTheme } = useTheme();
   const { actions } = workspace;
   // 每次打开回到首分区（重进分区会重触发按开即读）
   React.useEffect(() => {
-    if (open) setSection(SETTINGS_FIRST_SECTION);
+    if (open) setSection(initialSection ?? SETTINGS_FIRST_SECTION);
   }, [open]);
 
   const onSelectSection = React.useCallback((id: SettingsSectionId) => {

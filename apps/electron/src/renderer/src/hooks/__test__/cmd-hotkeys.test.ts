@@ -20,6 +20,12 @@ test('⌘⇧D/⌘⇧A 切换面板（shift 大小写两种形态；Ctrl 平台�
   expect(resolveCmdHotkey({ meta: false, ctrl: true, alt: false, shift: true }, 'd')).toBe('toggleDiff');
 });
 
+test('⌘P 命令面板（大小写两形态）；裸 shift+P 不命中', () => {
+  expect(resolveCmdHotkey(NOMOD, 'p')).toBe('palette');
+  expect(resolveCmdHotkey(NOMOD, 'P')).toBe('palette');
+  expect(resolveCmdHotkey(SHIFT, 'p')).toBeNull();
+});
+
 test('shift 只认 D/A；裸 ⌘D/⌘A 不劫持（编辑器/系统语义）', () => {
   expect(resolveCmdHotkey(SHIFT, 'n')).toBeNull();
   expect(resolveCmdHotkey(SHIFT, 'k')).toBeNull();
