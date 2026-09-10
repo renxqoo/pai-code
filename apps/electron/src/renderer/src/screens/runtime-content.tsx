@@ -27,6 +27,8 @@ export type RuntimeScreenActions = Pick<
 
 type RuntimeContentProps = {
   snapshot: RuntimeSnapshotView | null
+  /** 拉取失败（无快照时显示失败态而非无限等待帧）。 */
+  fetchFailed: boolean
   rows: readonly RuntimeWorkerRow[]
   diagnosticLog: string | null
   actions: RuntimeScreenActions
@@ -35,7 +37,7 @@ type RuntimeContentProps = {
   onOpenSession: (threadId: string) => void
 }
 
-function RuntimeContent({ snapshot, rows, diagnosticLog, actions, onLoadDiagnosticLog, onOpenSession }: RuntimeContentProps) {
+function RuntimeContent({ snapshot, fetchFailed, rows, diagnosticLog, actions, onLoadDiagnosticLog, onOpenSession }: RuntimeContentProps) {
   const health = snapshot === null ? 'degraded' : runtimeHealthLevel(snapshot);
   const hostDown = snapshot !== null && (snapshot.hostPhase === null || snapshot.hostPhase === 'failed');
   const copySummary = (): void => {
@@ -70,7 +72,9 @@ function RuntimeContent({ snapshot, rows, diagnosticLog, actions, onLoadDiagnost
       <div>
         <div className="flex w-full flex-col gap-[12px] pb-[8px]">
           {snapshot === null ? (
-            <p className="py-[120px] text-center text-[12px] text-muted-foreground">{copy.runtime.emptyHistory}</p>
+            <p className="py-[120px] text-center text-[12px] text-muted-foreground">
+              {fetchFailed ? copy.runtime.fetchFailed : copy.runtime.emptyHistory}
+            </p>
           ) : (
             <>
               <div className="grid grid-cols-3 gap-[10px]">

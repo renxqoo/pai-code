@@ -337,6 +337,7 @@ export const zh: typeof en = {
     hostUnavailable: '宿主不可用——排障起点',
     noWorkers: '暂无会话',
     emptyHistory: '正在采集资源样本…',
+    fetchFailed: '运行状态快照拉取失败——请确认应用进程为最新版本（重启应用）；切换分区可重试。',
     recycleFailed: '回收失败',
     keepaliveFailed: '常驻设置失败',
     recycleSettingFailed: '回收档位设置失败',

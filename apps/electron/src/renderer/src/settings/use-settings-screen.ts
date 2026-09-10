@@ -198,6 +198,7 @@ export function useSettingsScreen({ workspace, open, onClose }: UseSettingsScree
     },
     runtime: {
       snapshot: runtimePanel.snapshot,
+      fetchFailed: runtimePanel.fetchFailed,
       rows: runtimePanel.rows,
       diagnosticLog: runtimePanel.diagnosticLog,
       actions,

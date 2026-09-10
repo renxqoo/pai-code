@@ -345,6 +345,7 @@ export const en = {
     hostUnavailable: 'Host unavailable — start of troubleshooting',
     noWorkers: 'No conversations yet',
     emptyHistory: 'Collecting resource samples…',
+    fetchFailed: 'Runtime snapshot unavailable — is the app process up to date? Retry by switching sections.',
     recycleFailed: 'Recycle failed',
     keepaliveFailed: 'Keep-alive toggle failed',
     recycleSettingFailed: 'Failed to apply recycle setting',

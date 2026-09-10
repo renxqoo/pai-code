@@ -93,6 +93,7 @@ function renderScreen(overrides: Partial<Parameters<typeof RuntimeContent>[0]> =
   return renderToStaticMarkup(
     <RuntimeContent
       snapshot={snapshot()}
+      fetchFailed={false}
       rows={[]}
       diagnosticLog={null}
       actions={actions}
@@ -142,6 +143,12 @@ describe('RuntimeContent', () => {
     expect(html).toContain(copy.runtime.keepaliveOn);
     expect(html).toContain(copy.runtime.parked);
     expect(html).toContain(copy.runtime.dead);
+  });
+
+  test('快照拉取失败显示失败态（静默等待帧会掩盖主进程/IPC 断链）', () => {
+    const html = renderScreen({ snapshot: null, fetchFailed: true });
+    expect(html).toContain(copy.runtime.fetchFailed);
+    expect(html).not.toContain(copy.runtime.emptyHistory);
   });
 
   test('空 worker 表显示空态；stderr 已加载时展示 pre 块', () => {

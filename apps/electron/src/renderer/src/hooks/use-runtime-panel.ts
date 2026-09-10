@@ -21,6 +21,8 @@ export interface RuntimePanelView {
 
 export interface RuntimePanel {
   snapshot: RuntimeSnapshotView | null;
+  /** 最近一次拉取失败（快照 null 时区分「采集中」与「拉取失败」——静默等待帧会掩盖主进程/IPC 断链）。 */
+  fetchFailed: boolean;
   rows: readonly RuntimeWorkerRow[];
   diagnosticLog: string | null;
   loadDiagnosticLog: () => void;
@@ -28,6 +30,7 @@ export interface RuntimePanel {
 
 export function useRuntimePanel(actions: Pick<WorkspaceActions, 'fetchRuntime' | 'fetchDiagnosticLog'>, view: RuntimePanelView, open: boolean): RuntimePanel {
   const [snapshot, setSnapshot] = React.useState<RuntimeSnapshotView | null>(null);
+  const [fetchFailed, setFetchFailed] = React.useState(false);
   const [diagnosticLog, setDiagnosticLog] = React.useState<string | null>(null);
 
   React.useEffect(() => {
@@ -35,7 +38,13 @@ export function useRuntimePanel(actions: Pick<WorkspaceActions, 'fetchRuntime' |
     let cancelled = false;
     const tick = (): void => {
       void actions.fetchRuntime().then((next) => {
-        if (!cancelled && next !== null) setSnapshot(next);
+        if (cancelled) return;
+        if (next !== null) {
+          setSnapshot(next);
+          setFetchFailed(false);
+        } else {
+          setFetchFailed(true);
+        }
       });
     };
     tick();
@@ -66,6 +75,7 @@ export function useRuntimePanel(actions: Pick<WorkspaceActions, 'fetchRuntime' |
 
   return {
     snapshot,
+    fetchFailed,
     rows,
     diagnosticLog,
     loadDiagnosticLog,
