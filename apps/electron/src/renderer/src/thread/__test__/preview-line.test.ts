@@ -19,4 +19,13 @@ describe('previewLine', () => {
     expect(out).toHaveLength(120);
     expect(out.endsWith('…')).toBe(true);
   });
+
+  test('自定义上限：跑马灯预览取更长文本，非正数降级回默认上限', () => {
+    const long = 'b'.repeat(300);
+    const wide = previewLine(long, 240);
+    expect(wide).toHaveLength(240);
+    expect(wide.endsWith('…')).toBe(true);
+    expect(previewLine(long, 0)).toHaveLength(120);
+    expect(previewLine(long, -5)).toHaveLength(120);
+  });
 });

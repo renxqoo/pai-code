@@ -1,28 +1,33 @@
 import * as React from 'react';
 import { BrainCircuit } from 'lucide-react';
 
-import { ChevronToggle } from '@paiapp/ui';
+import { ChevronToggle, TickerText } from '@paiapp/ui';
 
 import { copy } from '@/strings';
 import { cn } from '@/lib/utils';
 import { previewLine } from './preview-line';
 import { thinkingParagraphs } from './thinking-paragraphs';
+import { useStickToBottom } from './use-stick-to-bottom';
 import { resolveOpen, type CollapsePref } from './collapse-state';
+
+/** 跑马灯预览取用的文本上限：足够铺满任意行宽，又不让 DOM 节点失控 */
+const TICKER_PREVIEW_CHARS = 240;
 
 type ThinkingBlockProps = {
   text: string;
-  /** 轮次是否仍在走表：运行中流式展开且文字带波纹，结束后收起为单行摘要 */
+  /** 轮次是否仍在走表：驱动标签加载态、收起预览滚动与展开区贴底跟随 */
   running: boolean;
 };
 
 /**
- * 思考单元：状态图标骑在过程组竖轨上，开合 = 手动意图优先，
- * 无意图时跟随轮次（运行中展开看流式推理，结束收起只留首行摘要）；
- * 运行中的标签与摘要以文字波纹呈现加载态。
+ * 思考单元：展示开关只听用户手动（默认收起，展开与否完全由用户决定）。
+ * 运行中：标签呈波纹加载态；收起时预览行以跑马灯滑动呈现流式输出；
+ * 展开时正文限高滚动，流式追加期间贴底跟随最新推理，上翻即让位。
  */
 function ThinkingBlock({ text, running }: ThinkingBlockProps) {
   const [pref, setPref] = React.useState<CollapsePref>(null);
-  const open = resolveOpen(pref, running);
+  const open = resolveOpen(pref, false);
+  const stick = useStickToBottom({ enabled: open && running });
   if (text.length === 0) return null;
   return (
     <div className="flex flex-col">
@@ -48,20 +53,21 @@ function ThinkingBlock({ text, running }: ThinkingBlockProps) {
             {running ? copy.flow.thinking : copy.flow.thought}
           </span>
           {open ? null : (
-            <span
-              className={cn(
-                'min-w-0 flex-1 truncate text-[12.5px] leading-[20px]',
-                running ? 'shimmer-text' : 'text-meta-faint',
-              )}
-            >
-              {previewLine(text)}
-            </span>
+            <TickerText
+              active={running}
+              text={previewLine(text, TICKER_PREVIEW_CHARS)}
+              className="min-w-0 flex-1 text-[12.5px] leading-[20px] text-meta-faint"
+            />
           )}
           <ChevronToggle open={open} className={cn('shrink-0 opacity-70', open && 'ml-auto')} />
         </button>
       </div>
       {open ? (
-        <div className="mb-[4px] ml-[6px] flex flex-col gap-[6px] border-l border-border py-[2px] pl-[14px] text-[13px] leading-[21px] text-muted-foreground">
+        <div
+          ref={stick.containerRef}
+          onScroll={stick.onScroll}
+          className="scroll-thin mb-[4px] ml-[6px] flex max-h-[200px] flex-col gap-[6px] overflow-y-auto border-l border-border py-[2px] pl-[14px] text-[13px] leading-[21px] text-muted-foreground"
+        >
           {thinkingParagraphs(text).map((paragraph, i) => (
             <p key={i} className="whitespace-pre-wrap break-words">
               {paragraph}
