@@ -24,6 +24,8 @@ const DEFAULT_HISTORY_LIMIT = 900;
 const DEFAULT_EVENT_LIMIT = 200;
 const SNAPSHOT_MAX_HISTORY = 180;
 const SNAPSHOT_MAX_EVENTS = 50;
+/** 心跳新鲜窗：超过视为宿主资源数据停更（1Hz 心跳的 3 个周期）。 */
+const HEARTBEAT_FRESH_MS = 3_000;
 
 export interface RuntimeMonitorDeps {
   /** host 未构建（装配失败/未启动）返回 null——监控器降级运行。 */
@@ -36,6 +38,8 @@ export interface RuntimeMonitorDeps {
   intervalMs?: number;
   historyLimit?: number;
   eventLimit?: number;
+  /** 时钟注入缝（测试用）；缺省 Date.now。 */
+  now?: () => number;
   /** 每次成功轮询后交付 hub 线程表（消费方做状态漂移纠正/keepalive 对账）。 */
   onWorkersPolled?(rows: readonly WorkerRowView[]): void;
 }
@@ -64,6 +68,7 @@ export interface RuntimeMonitor {
 
 export function createRuntimeMonitor(deps: RuntimeMonitorDeps): RuntimeMonitor {
   const intervalMs = deps.intervalMs ?? DEFAULT_INTERVAL_MS;
+  const now = deps.now ?? Date.now;
   const samples = createSampleRing<ResourceSampleView>(deps.historyLimit ?? DEFAULT_HISTORY_LIMIT);
   const events = createSupervisionLog(deps.eventLimit ?? DEFAULT_EVENT_LIMIT);
   let hostInfo: HostInfoView | null = null;
@@ -75,13 +80,15 @@ export function createRuntimeMonitor(deps: RuntimeMonitorDeps): RuntimeMonitor {
   const pushSample = (): void => {
     const app = deps.appMetrics();
     const system = deps.systemMemory();
+    // 心跳超龄（宿主挂死/重启窗口）不再把死进程资源当现势值——样本记 null，
+    // 图表呈断点而非「平稳假象」；hostInfo.rssBytes 仍由快照独立呈现
+    const heartbeatFresh = heartbeat !== null && now() - heartbeat.at <= HEARTBEAT_FRESH_MS;
     samples.push({
-      at: Date.now(),
+      at: now(),
       appRssBytes: app.rssBytes,
       appCpuPercent: app.cpuPercent,
-      // 心跳是 1Hz 推送（比 2s 轮询新鲜）；get_host_info 的 rss 作无心跳时兜底
-      hubRssBytes: heartbeat?.rssBytes ?? hostInfo?.rssBytes ?? null,
-      hubCpuPercent: heartbeat?.cpuPercent ?? null,
+      hubRssBytes: heartbeatFresh ? heartbeat?.rssBytes ?? null : null,
+      hubCpuPercent: heartbeatFresh ? heartbeat?.cpuPercent ?? null : null,
       workersRssBytes: workers.reduce((total, row) => total + (row.rssBytes ?? 0), 0) || null,
       systemTotalBytes: system.totalBytes,
       systemAvailableBytes: system.availableBytes,
@@ -114,7 +121,9 @@ export function createRuntimeMonitor(deps: RuntimeMonitorDeps): RuntimeMonitor {
         ]);
         if (infoOutcome.ok) hostInfo = hostInfoView(infoOutcome.data);
         if (listOutcome.ok) workers = threadListRows(listOutcome.data);
-        if (infoOutcome.ok || listOutcome.ok) deps.onWorkersPolled?.([...workers]);
+        // workers 证据只在 thread/list 成功时投递——半成功（仅 host_info）投递的
+        // 是上一轮缓存行，会被漂移纠正误读为现势
+        if (listOutcome.ok) deps.onWorkersPolled?.([...workers]);
         pushSample();
       } finally {
         polling = false;
@@ -122,7 +131,7 @@ export function createRuntimeMonitor(deps: RuntimeMonitorDeps): RuntimeMonitor {
     },
     noteHeartbeat(frame: HeartbeatFrame): void {
       heartbeat = {
-        at: Date.now(),
+        at: now(),
         rssBytes: frame.rssBytes ?? null,
         cpuPercent: frame.cpuPercent ?? null,
         subagents: frame.subagents ?? 0,
@@ -130,7 +139,7 @@ export function createRuntimeMonitor(deps: RuntimeMonitorDeps): RuntimeMonitor {
     },
     noteHostPhase(phase: HostPhase): void {
       events.record({
-        at: Date.now(),
+        at: now(),
         level: phase === 'failed' ? 'error' : phase === 'restarting' ? 'warn' : 'info',
         kind: 'host_phase',
         detail: phase,
@@ -141,10 +150,10 @@ export function createRuntimeMonitor(deps: RuntimeMonitorDeps): RuntimeMonitor {
       if (event !== null) events.record(event);
     },
     noteWorkerRecycled(threadId: string, reason: 'idle' | 'manual'): void {
-      events.record({ at: Date.now(), level: 'info', kind: 'worker_recycled', detail: `${threadId} (${reason})` });
+      events.record({ at: now(), level: 'info', kind: 'worker_recycled', detail: `${threadId} (${reason})` });
     },
     noteWorkerDied(threadId: string, reason: string): void {
-      events.record({ at: Date.now(), level: 'error', kind: 'worker_died', detail: `${threadId}: ${reason}` });
+      events.record({ at: now(), level: 'error', kind: 'worker_died', detail: `${threadId}: ${reason}` });
     },
     snapshot(): RuntimeSnapshotView {
       const host = deps.host();
@@ -161,7 +170,7 @@ export function createRuntimeMonitor(deps: RuntimeMonitorDeps): RuntimeMonitor {
       return {
         hostPhase: host?.phase ?? null,
         hostInfo,
-        heartbeatAgeMs: heartbeat === null ? null : Math.max(0, Date.now() - heartbeat.at),
+        heartbeatAgeMs: heartbeat === null ? null : Math.max(0, now() - heartbeat.at),
         restarts: {
           count: diagnostics?.restartCount ?? 0,
           lastCause: diagnostics?.lastRestartCause ?? null,

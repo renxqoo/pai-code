@@ -102,10 +102,10 @@ describe('threadListRows（thread/list 行收窄）', () => {
     expect(rows[1]).toMatchObject({ threadId: 't2', state: 'parked', rssBytes: null });
   });
 
-  test('缺 threadId 丢弃；非数组降级空；非法 state 收窄 dead', () => {
-    expect(threadListRows({ threads: [{ cwd: '/w' }, { threadId: 'ok', state: 'weird' }] }).length).toBe(1);
+  test('缺 threadId 或未知 state 的行丢弃（未来 hub 新状态不误读为 dead）；非数组降级空', () => {
+    expect(threadListRows({ threads: [{ cwd: '/w' }, { threadId: 'ok', state: 'weird' }] }).length).toBe(0);
     expect(threadListRows({})).toEqual([]);
     expect(threadListRows(null)).toEqual([]);
-    expect(threadListRows({ threads: [{ threadId: 't', state: 'weird' }] })[0]?.state).toBe('dead');
+    expect(threadListRows({ threads: [{ threadId: 't', state: 'weird' }] })).toEqual([]);
   });
 });

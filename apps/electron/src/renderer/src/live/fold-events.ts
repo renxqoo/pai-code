@@ -125,8 +125,9 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
       return { ...foldDeath(state, now), crashed: true };
     case 'sessionParked':
       // worker 收编（闲置/手动）：进程面随 worker 消亡就地终态，但不是崩溃——
-      // 停留态可浏览（T27 只读历史），发消息自动唤醒
-      return foldDeath(state, now);
+      // 停留态可浏览（T27 只读历史），发消息自动唤醒；在途回合按 stopped 冻结
+      // （retire 强收编打断的生成不得呈现为自然完成）
+      return foldDeath(state, now, 'stopped');
     case 'bashOutput':
       // 直执行 bash 流式输出：只留尾部 2000 字符（横幅预览；权威条目经对账到达）
       return { ...state, bashTail: (state.bashTail + event.delta).slice(-2000) };
@@ -205,16 +206,17 @@ export function foldStopIntent(state: LiveThreadState): LiveThreadState {
   return { ...state, stopping: true };
 }
 
-/** 会话运行面随宿主/worker 死亡就地终态：此后不会再有任何事件（settle/queue_update/compaction_end），
+/** 会话运行面随宿主/worker 消亡就地终态：此后不会再有任何事件（settle/queue_update/compaction_end），
  * 滞留的 streaming 会把空闲会话的新消息判成生成中投递进永不消费的队列，队列/压缩/bash 同随进程消亡。
- * running 轮冻结为 completed（与 onTurnStarted 对错过 settle 轮的处理一致，权威内容由下次对账替换）。 */
-export function foldDeath(state: LiveThreadState, now: number): LiveThreadState {
+ * running 轮按 frozenStatus 冻结：崩溃/宿主死亡 = completed（错过 settle 的缺省形态），
+ * 回收（sessionParked）= stopped——被回收打断的生成不得伪装成自然完成。权威内容由下次对账替换。 */
+export function foldDeath(state: LiveThreadState, now: number, frozenStatus: 'completed' | 'stopped' = 'completed'): LiveThreadState {
   const items: readonly ThreadItem[] =
     state.liveTurnId === null
       ? state.items
       : state.items.map((item): ThreadItem =>
           item.kind === 'turn' && item.turn.id === state.liveTurnId && item.turn.status === 'running'
-            ? { kind: 'turn', turn: { ...item.turn, status: 'completed', endedAt: now, streamingThinkingBlockId: null } }
+            ? { kind: 'turn', turn: { ...item.turn, status: frozenStatus, endedAt: now, streamingThinkingBlockId: null } }
             : item,
         );
   return {

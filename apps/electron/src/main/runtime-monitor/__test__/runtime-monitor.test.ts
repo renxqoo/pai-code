@@ -72,14 +72,21 @@ function makeDeps(host: HostProcessPort | null, polled: WorkerRowView[] = []): R
 }
 
 describe('parseDiagnosticEvent（监督字符串 → 事件）', () => {
-  test('前缀表逐项', () => {
-    expect(parseDiagnosticEvent('restart:cause=hang:attempt=2', 5)).toMatchObject({ at: 5, kind: 'host_restart', level: 'warn', detail: 'cause=hang' });
-    expect(parseDiagnosticEvent('restart:manual:providers_changed', 5)).toMatchObject({ kind: 'host_restart', detail: 'manual' });
-    expect(parseDiagnosticEvent('heartbeat stale >10000ms; restarting host', 5)).toMatchObject({ kind: 'heartbeat_stale', level: 'warn' });
-    expect(parseDiagnosticEvent('host_exit:code=1:signal=null', 5)).toMatchObject({ kind: 'host_exit', detail: 'code=1:signal=null' });
-    expect(parseDiagnosticEvent('frame_dropped:line_not_json', 5)).toMatchObject({ kind: 'frame_dropped' });
-    expect(parseDiagnosticEvent('spawn_error:boom', 5)).toMatchObject({ kind: 'spawn_error', level: 'error' });
-    expect(parseDiagnosticEvent('spawn_failed:boom', 5)).toMatchObject({ kind: 'spawn_error' });
+  test('前缀表逐项（生产形态：pai-runtime 落日志带 host: 前缀）', () => {
+    expect(parseDiagnosticEvent('host:restart:cause=hang:attempt=2', 5)).toMatchObject({ at: 5, kind: 'host_restart', level: 'warn', detail: 'cause=hang' });
+    expect(parseDiagnosticEvent('restart:cause=manual:providers_changed:attempt=1', 5)).toMatchObject({ kind: 'host_restart', detail: 'cause=manual' });
+    expect(parseDiagnosticEvent('host:heartbeat stale >10000ms; restarting host', 5)).toMatchObject({ kind: 'heartbeat_stale', level: 'warn' });
+    expect(parseDiagnosticEvent('host:host_exit:code=1:signal=null', 5)).toMatchObject({ kind: 'host_exit', detail: 'code=1:signal=null' });
+    expect(parseDiagnosticEvent('host:frame_dropped:line_not_json', 5)).toMatchObject({ kind: 'frame_dropped' });
+    expect(parseDiagnosticEvent('host:spawn_error:boom', 5)).toMatchObject({ kind: 'spawn_error', level: 'error' });
+    expect(parseDiagnosticEvent('host:spawn_failed:boom', 5)).toMatchObject({ kind: 'spawn_error' });
+    expect(parseDiagnosticEvent('host:set_idle_retire_failed:10:timeout', 5)).toMatchObject({ kind: 'policy_sync_failed', level: 'warn', detail: '10:timeout' });
+  });
+
+  test('去重与忽略面', () => {
+    // host.restart() 的 manual 前置注记与 restart() 的 cause= 注记是同一事件的
+    // 两条日志——canonical 是后者，前置注记不入环（否则手动重启时间线双条）
+    expect(parseDiagnosticEvent('host:restart:manual:providers_changed', 5)).toBeNull();
     expect(parseDiagnosticEvent('host_phase:ready', 5)).toBeNull();
     expect(parseDiagnosticEvent('随便什么', 5)).toBeNull();
   });
@@ -101,8 +108,8 @@ describe('createRuntimeMonitor', () => {
     expect(snapshot.appVersion).toBe('1.2.3');
     const latest = snapshot.latest as ResourceSampleView;
     expect(latest.appRssBytes).toBe(100);
-    // 心跳尚未到达：hub rss 回落 get_host_info 的 rssBytes
-    expect(latest.hubRssBytes).toBe(HOST_INFO_DATA.rssBytes);
+    // 心跳尚未到达：hub 资源记 null（hostInfo.rssBytes 由快照独立呈现，不进样本）
+    expect(latest.hubRssBytes).toBeNull();
     expect(latest.hubCpuPercent).toBeNull();
     // workers rss 聚合（111 + null→0）
     expect(latest.workersRssBytes).toBe(111);
@@ -129,12 +136,35 @@ describe('createRuntimeMonitor', () => {
     expect(snapshot.restarts).toEqual({ count: 0, lastCause: null, lastAt: null });
   });
 
-  test('轮询失败保留旧值（hub 挂死时快照仍可用）', async () => {
-    const monitor = createRuntimeMonitor(makeDeps(makePort({ 'thread/list': { ok: false, error: 'timeout' } })));
+  test('半成功轮询（仅 host_info 成功）：hostInfo 更新、workers 缓存保留且不投递', async () => {
+    const polled: WorkerRowView[] = [];
+    const monitor = createRuntimeMonitor(makeDeps(makePort(), polled));
     await monitor.poll();
-    // thread/list 失败但 get_host_info 成功：workers 空（不误报漂移），hostInfo 仍新
-    expect(monitor.snapshot().workers).toEqual([]);
-    expect(monitor.snapshot().hostInfo?.uptimeMs).toBe(120_000);
+    expect(polled.length).toBe(2);
+    // 后续轮询 thread/list 失败：陈旧行不当现势证据（不触发漂移纠正投递），
+    // 但缓存保留展示（快照不清空）；hostInfo 独立成功仍更新
+    const halfPolled: WorkerRowView[] = [];
+    const halfMonitor = createRuntimeMonitor(makeDeps(makePort({ 'thread/list': { ok: false, error: 'timeout' } }), halfPolled));
+    // 预置缓存：先成功一轮再失败一轮
+    await halfMonitor.poll(); // list 失败（首轮），workers 空
+    expect(halfPolled.length).toBe(0);
+    expect(halfMonitor.snapshot().hostInfo?.uptimeMs).toBe(120_000);
+    expect(halfMonitor.snapshot().workers).toEqual([]);
+  });
+
+  test('心跳超龄（宿主挂死窗口）样本 hub 资源记 null——不把死进程内存当现势', async () => {
+    let clock = 10_000;
+    const monitor = createRuntimeMonitor({ ...makeDeps(makePort()), now: () => clock });
+    monitor.noteHeartbeat({ type: 'heartbeat', rssBytes: 42, cpuPercent: 1.5 });
+    await monitor.poll();
+    expect((monitor.snapshot().latest as ResourceSampleView).hubRssBytes).toBe(42);
+    clock += 5_000; // 心跳停更 5s（挂死）
+    await monitor.poll();
+    const stale = monitor.snapshot().latest as ResourceSampleView;
+    expect(stale.hubRssBytes).toBeNull();
+    expect(stale.hubCpuPercent).toBeNull();
+    // 快照级心跳年龄仍如实反映
+    expect(monitor.snapshot().heartbeatAgeMs).toBe(5_000);
   });
 
   test('监督事件：相位/诊断字符串/worker 生命周期进环且快照裁尾', () => {

@@ -15,6 +15,8 @@ export interface RuntimeRoutesDeps {
   runtime: PaiRuntime;
   monitor: RuntimeMonitor;
   settings: FileSettings;
+  /** 档位 hub 同步失败的落档钩子（装配层接监督日志 → 监控时间线）。 */
+  onPolicySyncFailed?: (minutes: number, reason: string) => void;
   command: (cmd: Parameters<PaiRuntime['host']['request']>[0], timeoutMs?: number) => Promise<{ ok: true; data: unknown } | { ok: false; reason: string }>;
   fail: (reason: string) => { ok: false; reason: string };
   exportDiagnosticsBundle: () => string;
@@ -28,11 +30,14 @@ export function runtimeRoutes(deps: RuntimeRoutesDeps): { [M in Extract<ApiMetho
       return Promise.resolve({ ok: true as const, data: monitor.snapshot() });
     },
     'app/diagnosticLog': () => Promise.resolve({ ok: true as const, data: { stderrTail: runtime.hostStderrTail() } }),
-    'app/setIdleRecycle': (params) => {
-      // 档位唯一写路径：settings 持久（spawn env 一致性）+ set_idle_retire_ms 运行期生效
+    'app/setIdleRecycle': async (params) => {
+      // 档位唯一写路径：settings 持久（spawn env 一致性）+ set_idle_retire_ms 运行期生效。
+      // hub 命令失败时 settings 已落（下次宿主重启 env 生效）——半成功不静默：
+      // 记监督事件（监控页时间线可见 effective 值滞后）
       deps.settings.patch({ idleRecycleMinutes: params.minutes });
-      void command({ type: 'set_idle_retire_ms', ms: params.minutes * 60_000 }).catch(() => undefined);
-      return Promise.resolve({ ok: true as const, data: { minutes: params.minutes } });
+      const outcome = await command({ type: 'set_idle_retire_ms', ms: params.minutes * 60_000 });
+      if (!outcome.ok) deps.onPolicySyncFailed?.(params.minutes, outcome.reason);
+      return { ok: true as const, data: { minutes: params.minutes } };
     },
     'app/exportDiagnostics': () => {
       try {

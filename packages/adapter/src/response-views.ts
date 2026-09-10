@@ -197,7 +197,8 @@ export function threadListRows(data: unknown): WorkerRowView[] {
     const t = recordOf(item);
     const threadId = str(t.threadId);
     if (threadId.length === 0) continue;
-    const state = t.state === 'live' || t.state === 'parked' || t.state === 'dead' ? t.state : 'dead';
+    const state = t.state;
+    if (state !== 'live' && state !== 'parked' && state !== 'dead') continue;
     out.push({
       threadId,
       cwd: str(t.cwd),

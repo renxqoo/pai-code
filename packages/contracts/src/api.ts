@@ -263,7 +263,7 @@ export type ResourceSampleView = z.infer<typeof ResourceSampleViewSchema>;
 export const RuntimeEventViewSchema = z.object({
   at: z.number().int(),
   level: z.enum(['info', 'warn', 'error']),
-  kind: z.enum(['host_phase', 'host_restart', 'heartbeat_stale', 'host_exit', 'frame_dropped', 'worker_recycled', 'worker_died', 'spawn_error']),
+  kind: z.enum(['host_phase', 'host_restart', 'heartbeat_stale', 'host_exit', 'frame_dropped', 'worker_recycled', 'worker_died', 'spawn_error', 'policy_sync_failed']),
   detail: z.string(),
 });
 export type RuntimeEventView = z.infer<typeof RuntimeEventViewSchema>;

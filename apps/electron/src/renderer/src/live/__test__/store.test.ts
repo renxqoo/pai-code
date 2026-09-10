@@ -293,6 +293,10 @@ describe('sessionParked 收编折叠（T29：worker 回收后侧栏即时转 par
     expect(store.getState().dialogs.length).toBe(0);
     expect(store.getState().threads['t1']?.crashed).toBe(false);
     expect(store.getState().threads['t1']?.streaming).toBe(false);
+    // 回收打断的在途回合冻结为 stopped——不得伪装成自然完成（对比 sessionDied 的 completed）
+    const items = store.getState().threads['t1']?.items ?? [];
+    const turn = items.find((item) => item.kind === 'turn');
+    expect(turn !== undefined && turn.kind === 'turn' ? turn.turn.status : null).toBe('stopped');
     // 未知线程（表外会话）不崩溃、不落视图
     store.getState().applyEvent({ type: 'sessionParked', threadId: 'ghost', reason: 'manual' }, 4);
     expect(store.getState().sessions['ghost']).toBeUndefined();

@@ -123,7 +123,6 @@ void app.whenReady().then(async () => {
   // 装配段整体兜底：任何一步失败都继续开窗（渲染层经 bootstrap 失败态进设置引导），绝不静默悬挂
   let runtime: ReturnType<typeof createPaiRuntime> | null = null;
   let routes: ReturnType<typeof createApiRoutes> | null = null;
-  let runtimeReady = false;
   let monitor: ReturnType<typeof createRuntimeMonitor> | null = null;
   // 目录选择对话框单飞标志（createApiRoutes 注入面闭包引用）
   let directoryPickerInFlight = false;
@@ -136,7 +135,15 @@ void app.whenReady().then(async () => {
     // 运行状态监控器（T29）：2s 轮询 host 本地观测面 + Electron/os 资源采样；
     // host 未构建时降级运行（快照字段安全为 null）
     monitor = createRuntimeMonitor({
-      host: () => (runtimeReady ? runtime?.host ?? null : null),
+      // host 存在即订阅面可用（含 start 抛错但宿主已构建的降级形态——监控页
+      // 恰恰在宿主起不来时最该工作）；未构建/装配失败安全返回 null
+      host: () => {
+        try {
+          return runtime === null ? null : runtime.host;
+        } catch {
+          return null;
+        }
+      },
       appMetrics: () => {
         let rssBytes = 0;
         let cpuPercent = 0;
@@ -152,6 +159,9 @@ void app.whenReady().then(async () => {
       },
       idleRecycleMinutes: () => settings.get().idleRecycleMinutes,
       appVersion: () => app.getVersion(),
+      // 2s 轮询的漂移纠正：hub 报 parked/dead 而内存仍 live 的会话就地折叠
+      // （thread_parked/thread_died 帧丢失的兜底对账）
+      onWorkersPolled: (rows) => runtime?.reconcileWorkerStates(rows),
     });
     const monitorRef = monitor;
     monitorRef.start();
@@ -176,6 +186,9 @@ void app.whenReady().then(async () => {
       settings,
       keyStore,
       monitor: monitorRef,
+      onPolicySyncFailed: (minutes, reason) => {
+        loggingToMonitor.log(`set_idle_retire_failed:${minutes}:${reason}`);
+      },
       exportDiagnosticsBundle: () => {
         const snapshot = monitorRef.snapshot();
         const directory = writeDiagnosticsBundle(diagnosticsRoot, {
@@ -213,20 +226,23 @@ void app.whenReady().then(async () => {
       },
     });
     await runtime.start();
-    runtimeReady = true;
-    // 监控器订阅宿主观测流：心跳资源折叠 + worker 收编/死亡进时间线；
-    // 相位事件走同一条线（phase 推送在 runtime 内已折叠为 UiEvent）
-    // 订阅随宿主进程生命周期存续（单宿主常驻，无需退订句柄）
-    runtime.host.onFrame((frame) => {
-      if (frame.type === 'heartbeat') monitorRef.noteHeartbeat(frame);
-      else if (frame.type === 'thread_parked') monitorRef.noteWorkerRecycled(frame.threadId, frame.reason);
-      else if (frame.type === 'thread_died') monitorRef.noteWorkerDied(frame.threadId, frame.reason);
-    });
-    monitorRef.noteHostPhase(runtime.host.phase);
-    runtime.host.onPhase((phase) => monitorRef.noteHostPhase(phase));
   } catch (error) {
     logger.log(`runtime_start_failed:${error instanceof Error ? error.message : String(error)}`);
     // host 未就绪也继续开窗：渲染层展示设置引导（配置 provider/宿主路径）
+  }
+
+  // 监控器订阅宿主观测流：心跳资源折叠 + worker 收编/死亡进时间线；相位事件
+  // 走同一条线。订阅只要求宿主已构建（含 start 超时/失败的降级形态），随宿主
+  // 进程生命周期存续（单宿主常驻，无需退订句柄）
+  if (monitor !== null && runtime !== null && runtime.hostPhase() !== null) {
+    const host = runtime.host;
+    host.onFrame((frame) => {
+      if (frame.type === 'heartbeat') monitor.noteHeartbeat(frame);
+      else if (frame.type === 'thread_parked') monitor.noteWorkerRecycled(frame.threadId, frame.reason);
+      else if (frame.type === 'thread_died') monitor.noteWorkerDied(frame.threadId, frame.reason);
+    });
+    monitor.noteHostPhase(host.phase);
+    host.onPhase((phase) => monitor.noteHostPhase(phase));
   }
 
   ipcMain.handle('pai:invoke', (_event, payload: unknown) => {

@@ -135,3 +135,47 @@ describe('常驻链（registry 持久真相 → hub re-assert）', () => {
     expect(commands.filter((command) => command.type === 'thread/set_keepalive').length).toBeGreaterThan(before);
   });
 });
+
+
+describe('reconcileWorkerStates（轮询漂移纠正：帧丢失兜底）', () => {
+  test('hub 报 parked/dead 而内存仍 live → 折叠 + sessionUpdated 广播；其余不动', async () => {
+    const { runtime, events } = makeFixture();
+    await runtime.start();
+    runtime.markBootstrapped();
+    runtime.emitBuffered();
+    runtime.applyStartOutcome('t1', '/w', '/w/t1.jsonl', 'A', Date.now());
+    runtime.applyStartOutcome('t2', '/w', '/w/t2.jsonl', 'B', Date.now());
+    runtime.applyStartOutcome('t3', '/w', '/w/t3.jsonl', 'C', Date.now());
+    runtime.touchSession('t1', { streaming: true });
+    const updatesBefore = events.filter((event) => event.type === 'sessionUpdated').length;
+
+    runtime.reconcileWorkerStates([
+      { threadId: 't1', state: 'parked' },
+      { threadId: 't2', state: 'dead' },
+      { threadId: 't3', state: 'live' },
+      { threadId: 'ghost', state: 'parked' },
+    ]);
+
+    const t1 = runtime.sessions().find((session) => session.threadId === 't1');
+    const t2 = runtime.sessions().find((session) => session.threadId === 't2');
+    const t3 = runtime.sessions().find((session) => session.threadId === 't3');
+    expect(t1?.state).toBe('parked');
+    expect(t1?.streaming).toBe(false);
+    expect(t2?.state).toBe('dead');
+    expect(t3?.state).toBe('live');
+    // 恰好两条新广播（t1/t2），live 与表外不动
+    expect(events.filter((event) => event.type === 'sessionUpdated').length).toBe(updatesBefore + 2);
+  });
+
+  test('重复对账幂等（已折叠不再广播）', async () => {
+    const { runtime, events } = makeFixture();
+    await runtime.start();
+    runtime.markBootstrapped();
+    runtime.emitBuffered();
+    runtime.applyStartOutcome('t1', '/w', '/w/t1.jsonl', 'A', Date.now());
+    runtime.reconcileWorkerStates([{ threadId: 't1', state: 'parked' }]);
+    const after = events.filter((event) => event.type === 'sessionUpdated').length;
+    runtime.reconcileWorkerStates([{ threadId: 't1', state: 'parked' }]);
+    expect(events.filter((event) => event.type === 'sessionUpdated').length).toBe(after);
+  });
+});

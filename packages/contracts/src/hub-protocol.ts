@@ -60,7 +60,7 @@ export interface ThreadRetireCmd {
   threadId: string;
 }
 
-/** v0.13：表项「免闲置收编」标志（host 本地零 worker；不持久化，客户端注册表是持久真相）。 */
+/** v0.13：表项「免闲置收编」标志（host 本地零 worker；只豁免闲置 sweep，stale 心跳强杀照旧；不持久化，客户端注册表是持久真相，fork 不继承）。 */
 export interface ThreadSetKeepaliveCmd {
   type: 'thread/set_keepalive';
   threadId: string;
@@ -483,7 +483,7 @@ export interface ThreadListEntry {
   subagents: number;
   /** worker 内存（心跳上报；未上报 = null）。 */
   rssBytes: number | null;
-  /** 表项「免闲置收编」标志。 */
+  /** 表项「免闲置收编」标志（sweep 只跳过标记的 live worker）。 */
   keepalive: boolean;
 }
 

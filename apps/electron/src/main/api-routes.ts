@@ -59,6 +59,8 @@ export interface ApiRouteDeps {
   git?: GitBranches;
   /** 运行状态监控器（T29 app/runtime 快照源）。 */
   monitor: RuntimeMonitor;
+  /** 档位 hub 同步失败落档钩子（监督日志 → 监控时间线）。 */
+  onPolicySyncFailed?: (minutes: number, reason: string) => void;
   /** 诊断包落盘（装配层注入：真实 fs + reveal；测试注入替身）。 */
   exportDiagnosticsBundle: () => string;
   /** 额外放行的工作目录（本次运行中经系统选择器选过的目录）。 */
@@ -279,8 +281,10 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       const lastActivityAt = Math.max(rowAtWrite?.updatedAt ?? 0, fileMtimeMs(params.sessionPath) ?? 0) || Date.now();
       const view = runtime.applyStartOutcome(threadId, data.cwd ?? known?.cwd ?? '', data.sessionPath ?? params.sessionPath, known?.title ?? runtime.defaultTitle, lastActivityAt, trusted);
       if (known !== null && known.threadId !== threadId) {
-        // 换 id 整行替换：旧行删除 + 旧 id 视图同步清出（与对账/启动链路同一不变量）
+        // 换 id 整行替换：旧行删除 + 旧 id 视图同步清出（与对账/启动链路同一不变量）；
+        // 常驻是会话文件的属性，随行迁移到新 id（否则唤醒一次即静默丢失）
         runtime.removeSession(known.threadId);
+        if (known.keepalive) runtime.setSessionKeepalive(threadId, true);
       }
       fillSessionMeta(threadId);
       return { ok: true as const, data: view };
@@ -542,7 +546,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       const outcome = await probe.probe(params.name, params.modelId);
       return outcome.ok ? { ok: true as const, data: { latencyMs: outcome.latencyMs } } : fail(outcome.reason);
     },
-    ...runtimeRoutes({ runtime, monitor: deps.monitor, settings: deps.settings, command, fail, exportDiagnosticsBundle: deps.exportDiagnosticsBundle }),
+    ...runtimeRoutes({ runtime, monitor: deps.monitor, settings: deps.settings, command, fail, onPolicySyncFailed: deps.onPolicySyncFailed, exportDiagnosticsBundle: deps.exportDiagnosticsBundle }),
     'app/restartHost': () => {
       deps.audit('restart_host:manual');
       if (runtime.hostPhase() === null) return Promise.resolve(fail('host_unavailable'));
