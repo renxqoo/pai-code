@@ -62,6 +62,21 @@ function ThreadStage({ workspace, activeThreadId, sidebarCollapsed, hostDown, bo
     () => projectMenuItems({ openMenu: copy.thread.openMenu, copyPath: copy.thread.copyPath }),
     [],
   );
+  /** ThreadHeader 是 memo 边界：labels 对象 memo 化（statusLabel 随状态变，其余为模块常量）。 */
+  const headerLabels = React.useMemo(
+    () => ({
+      newTask: copy.thread.newTask,
+      toggleMaximize: copy.thread.toggleMaximize,
+      viewMenuAria: copy.thread.viewMenuAria,
+      changes: copy.thread.changes,
+      statusAria: copy.thread.statusAria,
+      renameTitleAria: copy.thread.renameTitleAria,
+      projectMenuAria: copy.thread.projectMenuAria,
+      sessionMenuAria: copy.thread.sessionMenuAria,
+      statusLabel: copy.thread.status[status],
+    }),
+    [status],
+  );
   const viewMenu = React.useMemo(
     () => viewMenuItems({ openFile: copy.panel.file.openPickerTitle, diff: copy.panel.tabDiff, agents: copy.panel.tabAgents }),
     [],
@@ -119,17 +134,7 @@ function ThreadStage({ workspace, activeThreadId, sidebarCollapsed, hostDown, bo
         status={status}
         additions={workspace.threadDiff.additions}
         deletions={workspace.threadDiff.deletions}
-        labels={{
-          newTask: copy.thread.newTask,
-          toggleMaximize: copy.thread.toggleMaximize,
-          viewMenuAria: copy.thread.viewMenuAria,
-          changes: copy.thread.changes,
-          statusAria: copy.thread.statusAria,
-          renameTitleAria: copy.thread.renameTitleAria,
-          projectMenuAria: copy.thread.projectMenuAria,
-          sessionMenuAria: copy.thread.sessionMenuAria,
-          statusLabel: copy.thread.status[status],
-        }}
+        labels={headerLabels}
         projectMenu={projectMenu}
         sessionMenu={sessionMenu}
         viewMenu={viewMenu}

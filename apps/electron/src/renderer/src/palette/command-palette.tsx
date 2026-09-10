@@ -87,7 +87,11 @@ function CommandPalette({ open, onClose, items, searchFiles, labels, onSelect }:
                   {group.items.map((item) => (
                     <CommandItem
                       key={item.id}
-                      value={`${item.label} ${item.detail ?? ''}`}
+                      /* value 必须唯一（id）：同名词条（如两个同名会话）共用 value 时
+                         cmdk 的 aria-selected 命中文档序第一个，回车会选错条目；
+                         搜索面经 keywords 覆盖 label/detail（T30 审查 中-7）。 */
+                      value={item.id}
+                      keywords={[item.label, ...(item.detail !== undefined ? [item.detail] : [])]}
                       onSelect={() => {
                         onSelect(item.id);
                         onClose();

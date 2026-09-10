@@ -42,8 +42,10 @@ const darkTheme: ThemeRegistrationAny = githubDark;
 
 /** token 结果缓存上限：对话正文按块增量高亮，超限淘汰最早条目，防长会话无限增长 */
 const TOKEN_CACHE_LIMIT = 200;
-/** HTML 结果缓存上限（文件 pane 粒度，单条可达数百 KB，上限远小于 token 缓存） */
+/** HTML 结果缓存上限与单条体积上限：file/read 允许 2MiB，超大文件高亮 HTML
+ * 可达数 MB——超过体积上限只高亮不缓存（内存预算优先于命中率和重开速度）。 */
 const HTML_CACHE_LIMIT = 16;
+const HTML_CACHE_MAX_CODE_BYTES = 256 * 1024;
 
 const tokenCache = new Map<string, TokensResult>();
 const htmlCache = new Map<string, string>();
@@ -135,9 +137,12 @@ export function highlightTokens(
 export async function highlightFileHtml(code: string, language: string): Promise<string | null> {
   const lang = resolveCodeGrammar(language);
   if (lang === 'text' || !hasHighlightGrammar(language)) return null;
+  const cacheable = code.length <= HTML_CACHE_MAX_CODE_BYTES;
   const key = `${lang}\u0000${code}`;
-  const cached = htmlCache.get(key);
-  if (cached !== undefined) return cached;
+  if (cacheable) {
+    const cached = htmlCache.get(key);
+    if (cached !== undefined) return cached;
+  }
   const highlighter = await loadHighlighter();
   await ensureLanguage(highlighter, lang);
   try {
@@ -146,7 +151,7 @@ export async function highlightFileHtml(code: string, language: string): Promise
       themes: { light: 'github-light', dark: 'github-dark' },
       defaultColor: 'light',
     });
-    cacheHtml(key, html);
+    if (cacheable) cacheHtml(key, html);
     return html;
   } catch {
     return null;

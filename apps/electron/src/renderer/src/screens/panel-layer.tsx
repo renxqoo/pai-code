@@ -18,11 +18,16 @@ type PanelLayerProps = {
 /** 面板层渲染：多标签 Dock（活跃 pane 内容）+「打开文件…」选择弹窗。 */
 function PanelLayer({ panels, workspace }: PanelLayerProps) {
   const { panel, activePanelTab, closePanelTabById, focusPanelTabById, closePanel, openFileTab, readFile } = panels;
+  /** PanelDock 是 memo 边界：tab 视图数组 memo 化（panel.tabs 引用仅在面板操作时变化）。 */
+  const dockTabs = React.useMemo(
+    () => panel.tabs.map((tab) => ({ id: tab.id, label: panelTabLabel(tab, { diff: copy.panel.tabDiff, agents: copy.panel.tabAgents }) })),
+    [panel.tabs],
+  );
   return (
     <>
       {panel.tabs.length === 0 ? null : (
         <PanelDock
-          tabs={panel.tabs.map((tab) => ({ id: tab.id, label: panelTabLabel(tab, { diff: copy.panel.tabDiff, agents: copy.panel.tabAgents }) }))}
+          tabs={dockTabs}
           activeId={panel.activeId}
           onSelect={focusPanelTabById}
           onCloseTab={closePanelTabById}

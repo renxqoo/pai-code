@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createOpenLocation, editorCandidates, type Run, type RunResult } from '../open-location';
+import { createOpenLocation, editorCandidates, isSafeWindowsCwd, type Run, type RunResult } from '../open-location';
 
 const OK: RunResult = { code: 0, kind: null };
 
@@ -16,10 +16,45 @@ function makeRun(script: (file: string, args: readonly string[]) => RunResult | 
 }
 
 describe('editorCandidates', () => {
-  test('GUI CLI 优先、env 殿后、去重去空', () => {
+  test('GUI CLI 优先、env 殿后、去重去空；env 带参数只取首个可执行名', () => {
     expect(editorCandidates({})).toEqual(['code', 'cursor']);
     expect(editorCandidates({ VISUAL: 'vim', EDITOR: 'code' })).toEqual(['code', 'cursor', 'vim']);
     expect(editorCandidates({ EDITOR: 'nano' })).toEqual(['code', 'cursor', 'nano']);
+    expect(editorCandidates({ VISUAL: 'code -w' })).toEqual(['code', 'cursor']);
+  });
+});
+
+describe('isSafeWindowsCwd（cmd 链注入面）', () => {
+  test.each([
+    ['C:\\proj&calc', false],
+    ['C:\\a|b', false],
+    ['C:\\a^b', false],
+    ['C:\\%USERPROFILE%\\x', false],
+    ['C:\\a"b', false],
+    ['C:\\Users\\my proj', true],
+    ['', false],
+  ])('%s → %s', (cwd, expected) => {
+    expect(isSafeWindowsCwd(cwd)).toBe(expected);
+  });
+});
+
+describe('Windows 终端链注入防护', () => {
+  test('cwd 含 cmd 元字符 → open_failed:unsupported_cwd（不执行任何命令）', async () => {
+    const { run, calls } = makeRun(() => OK);
+    const location = createOpenLocation({ run, platform: 'win32' });
+    expect(await location.open('C:\\proj&calc', 'terminal')).toEqual({ ok: false, reason: 'open_failed:unsupported_cwd' });
+    expect(calls).toEqual([]);
+  });
+
+  test('编辑器探测负结果不缓存：装好 CLI 后同实例下一次探测即命中', async () => {
+    let codeAvailable = false;
+    const { run, calls } = makeRun((file, args) => (args[0] === '--version' ? (file === 'code' && codeAvailable ? OK : { code: 127, kind: null }) : OK));
+    const location = createOpenLocation({ run, platform: 'darwin', env: {} });
+    expect(await location.open('/tmp/p', 'editor')).toEqual({ ok: false, reason: 'editor_not_found' });
+    codeAvailable = true;
+    expect(await location.open('/tmp/p', 'editor')).toEqual({ ok: true, data: null });
+    // 第二次 open 重新探测了 code --version（负缓存不存在）
+    expect(calls.filter((call) => call === 'code --version').length).toBeGreaterThanOrEqual(2);
   });
 });
 

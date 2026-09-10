@@ -294,10 +294,9 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         closeNewTask,
         selectSession: workspace.actions.selectSession,
         openSavedSession: (sessionPath) => void workspace.actions.openSavedSession(sessionPath),
-        closePanel,
         closeSettings,
       }),
-    [closeNewTask, workspace.actions, closePanel, closeSettings],
+    [closeNewTask, workspace.actions, closeSettings],
   );
   /** 命令面板（⌘P）装配：开关/条目/派发（hub 对话框模态期间不唤起）。 */
   const commandPalette = useCommandPalette({
@@ -316,11 +315,22 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     composerTextRef,
   });
   const { open: paletteOpen, close: closePalette, toggle: togglePalette, items: paletteItems, onSelect: onPaletteSelect } = commandPalette;
+  /** 面板 props 引用恒定：CommandPalette 是 memo 边界，内联箭头/对象会被流式批推击穿并重置文件搜索去抖（T30 审查 高-2）。 */
+  const paletteCwd = workspace.activeCwd;
+  const searchFilesIn = workspace.actions.searchFilesIn;
+  const paletteFileSearch = React.useCallback((query: string) => searchFilesIn(paletteCwd, query), [searchFilesIn, paletteCwd]);
+  const paletteLabels = React.useMemo(
+    () => ({ aria: copy.palette.aria, placeholder: copy.palette.placeholder, empty: copy.palette.empty, groups: copy.palette.groups }),
+    [],
+  );
 
   /** 全局 ⌘N/⌘K 在任一模态覆盖/对话框开着时不劫持（模态层优先于全局热键）。 */
   const hotkeysEnabled =
     workspace.dialogs.length === 0 && !paletteOpen && !newTask.open && !usageOpen && !settingsOpen && projectFilesView.target === null;
-  const paletteHotkeyEnabled = workspace.dialogs.length === 0;
+  // ⌘P 独立门控：hub 对话框之外，整页覆盖（设置/用量/新建任务）开着也不唤起——
+  // 它们的层级盖住面板但 autoFocus 已抢焦点，会变成「不可见地执行动作」（T30 审查 高-3）
+  const paletteHotkeyEnabled =
+    workspace.dialogs.length === 0 && !newTask.open && !usageOpen && !settingsOpen;
   useCmdHotkeys(
     { onNewThread: openNewTask, onSearch: openSidebarSearch, onToggleDiff: toggleDiffPane, onToggleAgents: toggleAgentsPane, onPalette: togglePalette },
     hotkeysEnabled,
@@ -525,13 +535,8 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         open={paletteOpen}
         onClose={closePalette}
         items={paletteItems}
-        searchFiles={(query) => workspace.actions.searchFilesIn(workspace.activeCwd, query)}
-        labels={{
-          aria: copy.palette.aria,
-          placeholder: copy.palette.placeholder,
-          empty: copy.palette.empty,
-          groups: copy.palette.groups,
-        }}
+        searchFiles={paletteFileSearch}
+        labels={paletteLabels}
         onSelect={onPaletteSelect}
       />
       <PanelLayer panels={panels} workspace={workspace} />

@@ -45,10 +45,25 @@ const runExec: Run = (file, args) =>
     );
   });
 
-/** 编辑器候选（去重保序）：已知 GUI CLI 优先，用户 env 指定殿后但被尊重。 */
+/** 编辑器候选（去重保序）：已知 GUI CLI 优先，用户 env 指定殿后但被尊重；
+ * env 值可能带参数（VISUAL='code -w'），只取首个空白分隔的可执行名。 */
 export function editorCandidates(env: { VISUAL?: string | undefined; EDITOR?: string | undefined }): string[] {
-  const names = ['code', 'cursor', env.VISUAL, env.EDITOR];
+  const firstToken = (value: string | undefined): string | undefined => {
+    const token = value?.trim().split(/\s+/)[0];
+    return token !== undefined && token.length > 0 ? token : undefined;
+  };
+  const names = ['code', 'cursor', firstToken(env.VISUAL), firstToken(env.EDITOR)];
   return [...new Set(names.filter((name): name is string => typeof name === 'string' && name.length > 0))];
+}
+
+/**
+ * Windows 终端链的 cwd 安全校验：cmd.exe 会把 /c 后的参数串重新按命令行解析，
+ * `&` `|` `<` `>` `^` `%` `"` 是命令元字符（目录名合法字符）——含其一即拒绝
+ * （execFile 无 shell 防不住这一层，Node 只对含空格参数加引号）。
+ */
+export function isSafeWindowsCwd(cwd: string): boolean {
+  if (cwd.length === 0) return false;
+  return !/[&|^<>%"]/.test(cwd);
 }
 
 export type OpenLocationDeps = {
@@ -71,7 +86,8 @@ export function createOpenLocation(deps: OpenLocationDeps = {}) {
   const platform = deps.platform ?? process.platform;
   const env = deps.env ?? process.env;
 
-  /** 编辑器命令探测缓存（null = 已判定不存在；undefined = 未探测）。 */
+  /** 编辑器命令探测缓存（null = 已判定不存在；undefined = 未探测）。
+   * 只缓存正结果：装好 CLI 后无须重启应用即可命中（负缓存会让「安装后重试」永远失败）。 */
   let editorCommand: string | null | undefined;
 
   const ok = (): OpenOutcome => ({ ok: true, data: null });
@@ -99,6 +115,8 @@ export function createOpenLocation(deps: OpenLocationDeps = {}) {
       return result.code === 0 && result.kind === null ? ok() : fail(result);
     }
     if (platform === 'win32') {
+      // cmd 链的注入面：元字符目录名直接拒绝（不支持而非冒险执行）
+      if (!isSafeWindowsCwd(cwd)) return { ok: false, reason: 'open_failed:unsupported_cwd' };
       const wt = await run('cmd', ['/c', 'start', 'wt', '-d', cwd]);
       if (wt.code === 0 && wt.kind === null) return ok();
       const fallback = await run('cmd', ['/c', 'start', 'cmd', '/K', `cd /d ${cwd}`]);
@@ -121,7 +139,8 @@ export function createOpenLocation(deps: OpenLocationDeps = {}) {
         return candidate;
       }
     }
-    editorCommand = null;
+    // 负结果不落缓存：下一次 open 重新探测（「安装后重试」无须重启应用）
+    editorCommand = undefined;
     return null;
   };
 

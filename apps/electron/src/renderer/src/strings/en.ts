@@ -131,7 +131,6 @@ export const en = {
   },
   flow: {
     openDiff: 'Open Diff',
-    closeDiffPanel: 'Close diff panel',
     steerPlaceholder: 'Steer this agent…',
     steerFailed: (reason: string): string => `Steering failed (${reason}).`,
     workingFor: 'Working for',
@@ -146,12 +145,9 @@ export const en = {
       count === 1 ? '1 subagent working — open the Agents panel' : `${count} subagents working — open the Agents panel`,
     /** 折叠摘要：375 changed files */
     changedFiles: (count: number): string => (count === 1 ? '1 changed file' : `${count} changed files`),
-    closeAgents: 'Close agents panel',
     toggleAgents: 'Toggle agents panel',
     toggleDiff: 'Toggle diff panel',
-    panelTitle: 'DIRECT SPAWNS',
     agentsPanelEmpty: 'No subagents spawned yet',
-    diffPanelTitle: 'FILE CHANGES',
     diffPanelEmpty: 'No file changes in this session yet',
     statusWorking: 'Working',
     executing: 'Working…',

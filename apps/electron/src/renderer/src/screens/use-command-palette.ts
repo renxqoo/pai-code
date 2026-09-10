@@ -39,7 +39,9 @@ type UseCommandPaletteArgs = {
 }
 
 export function useCommandPalette(args: UseCommandPaletteArgs): CommandPaletteApi {
-  const { workspace, activeThreadId, sessions, openNewTask, panels, openSettings, openSettingsAt, openUsage, navigateSession, drafts, composerDraft, setDraft, composerTextRef } = args;
+  const { workspace, activeThreadId, sessions, openNewTask, openSettings, openSettingsAt, openUsage, navigateSession, drafts, composerDraft, setDraft, composerTextRef } = args;
+  // 取稳定方法而非 panels 对象整体（对象每渲染换引用会击穿本 hook 产物的 memo）
+  const { openDiff: openDiffPane, openAgents: openAgentsPane, openFileTab } = args.panels;
 
   const [open, setOpen] = React.useState(false);
   const close = React.useCallback(() => setOpen(false), []);
@@ -66,8 +68,8 @@ export function useCommandPalette(args: UseCommandPaletteArgs): CommandPaletteAp
   const onSelect = React.useCallback(
     (id: string) => {
       if (id === 'action:newTask') openNewTask();
-      else if (id === 'action:openDiff') panels.openDiff();
-      else if (id === 'action:openAgents') panels.openAgents();
+      else if (id === 'action:openDiff') openDiffPane();
+      else if (id === 'action:openAgents') openAgentsPane();
       else if (id === 'action:openFinder') void workspace.actions.openInSystem(workspace.activeCwd, 'finder');
       else if (id === 'action:openTerminal') void workspace.actions.openInSystem(workspace.activeCwd, 'terminal');
       else if (id === 'action:openEditor') void workspace.actions.openInSystem(workspace.activeCwd, 'editor');
@@ -77,7 +79,7 @@ export function useCommandPalette(args: UseCommandPaletteArgs): CommandPaletteAp
       else if (id === 'action:openSettings') openSettings();
       else if (id === 'action:openUsage') openUsage();
       else if (id.startsWith('session:')) navigateSession(id.slice('session:'.length));
-      else if (id.startsWith('file:')) panels.openFileTab(id.slice('file:'.length));
+      else if (id.startsWith('file:')) openFileTab(id.slice('file:'.length));
       else if (id.startsWith('command:')) {
         // 斜杠命令填入 composer（词法/执行语义统一留在输入框侧）
         const name = id.slice('command:'.length);
@@ -87,7 +89,7 @@ export function useCommandPalette(args: UseCommandPaletteArgs): CommandPaletteAp
         composerTextRef.current?.focus();
       } else if (id.startsWith('settings:')) openSettingsAt(id.slice('settings:'.length) as SettingsSectionId);
     },
-    [activeThreadId, workspace.activeCwd, workspace.actions, openNewTask, panels, openSettings, openUsage, navigateSession, drafts, composerDraft, setDraft, composerTextRef, openSettingsAt],
+    [activeThreadId, workspace.activeCwd, workspace.actions, openNewTask, openDiffPane, openAgentsPane, openFileTab, openSettings, openUsage, navigateSession, drafts, composerDraft, setDraft, composerTextRef, openSettingsAt],
   );
 
   return { open, close, toggle, items, onSelect };

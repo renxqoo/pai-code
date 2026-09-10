@@ -77,6 +77,11 @@ function ThreadHeader({
 }: ThreadHeaderProps) {
   const [editing, setEditing] = React.useState<TitleEditState>(null);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
+  // 标题被外部更新（切会话/改名成功/自动命名）即退出编辑态——
+  // 否则切会话后回车会把旧会话草稿提交到新会话（T30 审查 低-15）
+  React.useEffect(() => {
+    setEditing(null);
+  }, [sessionTitle]);
 
   const startEditing = (): void => {
     setEditing(reduceTitleEdit(editing, { kind: 'start', title: sessionTitle }));

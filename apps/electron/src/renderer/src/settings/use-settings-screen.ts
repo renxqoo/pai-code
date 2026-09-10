@@ -115,7 +115,7 @@ export function useSettingsScreen({ workspace, open, onClose, initialSection }: 
   // 每次打开回到首分区（重进分区会重触发按开即读）
   React.useEffect(() => {
     if (open) setSection(initialSection ?? SETTINGS_FIRST_SECTION);
-  }, [open]);
+  }, [open, initialSection]);
 
   const onSelectSection = React.useCallback((id: SettingsSectionId) => {
     dispatchSectionEnter(id, actions);

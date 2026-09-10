@@ -8,6 +8,7 @@ import {
   fileTab,
   focusPanelTab,
   openPanel,
+  panelSwitchOutcome,
   singletonTab,
   togglePanel,
   EMPTY_PANEL,
@@ -50,14 +51,10 @@ export function usePanelTabs(
   const [panel, setPanel] = React.useState<PanelState>(EMPTY_PANEL);
   const panelThreadRef = React.useRef(activeThreadId);
   React.useEffect(() => {
-    if (panelThreadRef.current === activeThreadId) {
-      panelByThread[activeThreadId] = panel;
-      return;
-    }
-    // 切会话：旧会话面板组态存档后恢复新会话的
-    panelByThread[panelThreadRef.current] = panel;
+    const restore = panelSwitchOutcome(panelByThread, panelThreadRef.current, activeThreadId, panel);
+    if (restore === null) return;
     panelThreadRef.current = activeThreadId;
-    setPanel(panelByThread[activeThreadId] ?? EMPTY_PANEL);
+    setPanel(restore);
   }, [activeThreadId, panel]);
 
   const openDiff = React.useCallback(() => setPanel((current) => openPanel(current, singletonTab('diff'))), []);
@@ -79,21 +76,45 @@ export function usePanelTabs(
     });
   }, [searchFilesIn, activeCwd]);
 
-  return {
-    panel,
-    activePanelTab: panel.tabs.find((tab) => tab.id === panel.activeId) ?? null,
-    openDiff,
-    openAgents,
-    toggleDiffPane: React.useCallback(() => setPanel((current) => togglePanel(current, 'diff')), []),
-    toggleAgentsPane: React.useCallback(() => setPanel((current) => togglePanel(current, 'agents')), []),
-    closePanelTabById: React.useCallback((id: string) => setPanel((current) => closePanelTab(current, id)), []),
-    focusPanelTabById: React.useCallback((id: string) => setPanel((current) => focusPanelTab(current, id)), []),
-    closePanel: React.useCallback(() => setPanel(closeAllPanels()), []),
-    openFileTab,
-    readFile,
-    filePickerOpen,
-    filePickerItems,
-    setFilePickerOpen,
-    openFilePicker,
-  };
+  const toggleDiffPane = React.useCallback(() => setPanel((current) => togglePanel(current, 'diff')), []);
+  const toggleAgentsPane = React.useCallback(() => setPanel((current) => togglePanel(current, 'agents')), []);
+  const closePanelTabById = React.useCallback((id: string) => setPanel((current) => closePanelTab(current, id)), []);
+  const focusPanelTabById = React.useCallback((id: string) => setPanel((current) => focusPanelTab(current, id)), []);
+  const closePanel = React.useCallback(() => setPanel(closeAllPanels()), []);
+
+  // 返回对象 memo 化：PanelLayer/useCommandPalette 的 memo 边界不被每渲染的新对象击穿
+  return React.useMemo(
+    () => ({
+      panel,
+      activePanelTab: panel.tabs.find((tab) => tab.id === panel.activeId) ?? null,
+      openDiff,
+      openAgents,
+      toggleDiffPane,
+      toggleAgentsPane,
+      closePanelTabById,
+      focusPanelTabById,
+      closePanel,
+      openFileTab,
+      readFile,
+      filePickerOpen,
+      filePickerItems,
+      setFilePickerOpen,
+      openFilePicker,
+    }),
+    [
+      panel,
+      openDiff,
+      openAgents,
+      toggleDiffPane,
+      toggleAgentsPane,
+      closePanelTabById,
+      focusPanelTabById,
+      closePanel,
+      openFileTab,
+      readFile,
+      filePickerOpen,
+      filePickerItems,
+      openFilePicker,
+    ],
+  );
 }
