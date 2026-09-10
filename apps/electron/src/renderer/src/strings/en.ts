@@ -70,7 +70,7 @@ export const en = {
       queued: 'Queued',
     },
     openFailed: (reason: string): string => `Failed to open (${reason}).`,
-    openEditorMissing: 'No editor CLI found. Install the code or cursor CLI and retry.',
+    openEditorMissing: 'No editor found. Install the code, cursor, or zed CLI and retry.',
     copyFailed: 'Copy failed. Try again.',
     emptyTitle: 'No messages yet',
     retryHydration: 'Retry',

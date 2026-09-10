@@ -17,10 +17,10 @@ function makeRun(script: (file: string, args: readonly string[]) => RunResult | 
 
 describe('editorCandidates', () => {
   test('GUI CLI 优先、env 殿后、去重去空；env 带参数只取首个可执行名', () => {
-    expect(editorCandidates({})).toEqual(['code', 'cursor']);
-    expect(editorCandidates({ VISUAL: 'vim', EDITOR: 'code' })).toEqual(['code', 'cursor', 'vim']);
-    expect(editorCandidates({ EDITOR: 'nano' })).toEqual(['code', 'cursor', 'nano']);
-    expect(editorCandidates({ VISUAL: 'code -w' })).toEqual(['code', 'cursor']);
+    expect(editorCandidates({})).toEqual(['code', 'cursor', 'zed']);
+    expect(editorCandidates({ VISUAL: 'vim', EDITOR: 'code' })).toEqual(['code', 'cursor', 'zed', 'vim']);
+    expect(editorCandidates({ EDITOR: 'nano' })).toEqual(['code', 'cursor', 'zed', 'nano']);
+    expect(editorCandidates({ VISUAL: 'code -w' })).toEqual(['code', 'cursor', 'zed']);
   });
 });
 
@@ -48,7 +48,11 @@ describe('Windows 终端链注入防护', () => {
 
   test('编辑器探测负结果不缓存：装好 CLI 后同实例下一次探测即命中', async () => {
     let codeAvailable = false;
-    const { run, calls } = makeRun((file, args) => (args[0] === '--version' ? (file === 'code' && codeAvailable ? OK : { code: 127, kind: null }) : OK));
+    const { run, calls } = makeRun((file, args) => {
+      if (args[0] === '--version') return file === 'code' && codeAvailable ? OK : { code: 127, kind: null };
+      if (file === 'open') return { code: 1, kind: null };
+      return OK;
+    });
     const location = createOpenLocation({ run, platform: 'darwin', env: {} });
     expect(await location.open('/tmp/p', 'editor')).toEqual({ ok: false, reason: 'editor_not_found' });
     codeAvailable = true;
@@ -103,14 +107,57 @@ describe('createOpenLocation 平台矩阵（fake run）', () => {
     const location = createOpenLocation({ run, platform: 'darwin', env: {} });
     expect(await location.open('/tmp/p', 'editor')).toEqual({ ok: false, reason: 'open_failed:exit' });
     expect(await location.open('/tmp/q', 'editor')).toEqual({ ok: false, reason: 'open_failed:exit' });
-    expect(calls).toEqual(['code --version', 'code /tmp/p', 'code /tmp/q']);
+    expect(calls).toEqual([
+      'code --version',
+      'code /tmp/p',
+      'open -a Visual Studio Code /tmp/p',
+      'open -a Cursor /tmp/p',
+      'open -a Zed /tmp/p',
+      'code /tmp/q',
+      'open -a Visual Studio Code /tmp/q',
+      'open -a Cursor /tmp/q',
+      'open -a Zed /tmp/q',
+    ]);
   });
 
-  test('editor：候选全探活失败 → editor_not_found（不静默换 finder）', async () => {
-    const { run, calls } = makeRun((_file, args) => (args[0] === '--version' ? { code: 127, kind: null } : OK));
+  test('editor：候选全探活失败且应用层也空 → editor_not_found（不静默换 finder）', async () => {
+    const { run, calls } = makeRun((file, args) => (args[0] === '--version' || (file === 'open' && args[0] === '-a') ? { code: 127, kind: null } : OK));
     const location = createOpenLocation({ run, platform: 'darwin', env: { EDITOR: 'my-editor' } });
     expect(await location.open('/tmp/p', 'editor')).toEqual({ ok: false, reason: 'editor_not_found' });
-    expect(calls).toEqual(['code --version', 'cursor --version', 'my-editor --version']);
+    expect(calls).toEqual([
+      'code --version',
+      'cursor --version',
+      'zed --version',
+      'my-editor --version',
+      'open -a Visual Studio Code /tmp/p',
+      'open -a Cursor /tmp/p',
+      'open -a Zed /tmp/p',
+    ]);
+  });
+
+  test('editor：zed CLI 探活命中 → zed <cwd> 直接打开（不走应用层）', async () => {
+    const { run, calls } = makeRun((file, args) => (args[0] === '--version' && file !== 'zed' ? { code: 127, kind: null } : OK));
+    const location = createOpenLocation({ run, platform: 'linux', env: {} });
+    expect(await location.open('/tmp/p', 'editor')).toEqual({ ok: true, data: null });
+    expect(calls).toEqual(['code --version', 'cursor --version', 'zed --version', 'zed /tmp/p']);
+  });
+
+  test('editor（症状：装了 Zed 应用没装 CLI 报 editor_not_found）：darwin 应用层 open -a 兜底拉起', async () => {
+    const { run, calls } = makeRun((_file, args) => {
+      if (args[0] === '--version') return { code: 127, kind: null };
+      if (args[1] === 'Visual Studio Code' || args[1] === 'Cursor') return { code: 1, kind: null };
+      return OK;
+    });
+    const location = createOpenLocation({ run, platform: 'darwin', env: {} });
+    expect(await location.open('/tmp/p', 'editor')).toEqual({ ok: true, data: null });
+    expect(calls).toEqual([
+      'code --version',
+      'cursor --version',
+      'zed --version',
+      'open -a Visual Studio Code /tmp/p',
+      'open -a Cursor /tmp/p',
+      'open -a Zed /tmp/p',
+    ]);
   });
 
   test('超时/进程级异常映射 open_failed:timeout / open_failed:spawn', async () => {

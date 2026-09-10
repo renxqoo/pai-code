@@ -71,7 +71,7 @@ export const zh: typeof en = {
       queued: '排队中',
     },
     openFailed: (reason: string): string => `打开失败（${reason}）。`,
-    openEditorMissing: '未找到可用的编辑器命令，可安装 code 或 cursor CLI 后重试。',
+    openEditorMissing: '未找到可用的编辑器，可安装 code、cursor 或 zed CLI 后重试。',
     copyFailed: '复制失败，请重试。',
     emptyTitle: '还没有消息',
     retryHydration: '重试加载',

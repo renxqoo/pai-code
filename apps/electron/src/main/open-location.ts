@@ -52,9 +52,13 @@ export function editorCandidates(env: { VISUAL?: string | undefined; EDITOR?: st
     const token = value?.trim().split(/\s+/)[0];
     return token !== undefined && token.length > 0 ? token : undefined;
   };
-  const names = ['code', 'cursor', firstToken(env.VISUAL), firstToken(env.EDITOR)];
+  const names = ['code', 'cursor', 'zed', firstToken(env.VISUAL), firstToken(env.EDITOR)];
   return [...new Set(names.filter((name): name is string => typeof name === 'string' && name.length > 0))];
 }
+
+/** darwin 应用名兜底（与 CLI 层同偏好序）：编辑器装了应用但没装 CLI 链接时
+ * （如 Zed 需手动 Install CLI 且常落在 GUI 进程 PATH 之外），open -a 直接拉应用。 */
+const EDITOR_APPS_DARWIN = ['Visual Studio Code', 'Cursor', 'Zed'] as const;
 
 /**
  * Windows 终端链的 cwd 安全校验：cmd.exe 会把 /c 后的参数串重新按命令行解析，
@@ -144,13 +148,32 @@ export function createOpenLocation(deps: OpenLocationDeps = {}) {
     return null;
   };
 
+  /**
+   * 编辑器打开：CLI 层（探活缓存）失败或不命中时，darwin 再走应用名兜底
+   * （open -a，应用未安装时干净退出非零）。两层全空才报 editor_not_found；
+   * CLI 层已有结果但打开失败时保留其失败原因（应用层也救不回才上抛）。
+   */
+  const openEditor = async (cwd: string): Promise<OpenOutcome> => {
+    const editor = await resolveEditor();
+    let cliFailure: OpenOutcome | null = null;
+    if (editor !== null) {
+      const result = await run(editor, [cwd]);
+      if (result.code === 0 && result.kind === null) return ok();
+      cliFailure = fail(result);
+    }
+    if (platform === 'darwin') {
+      for (const app of EDITOR_APPS_DARWIN) {
+        const result = await run('open', ['-a', app, cwd]);
+        if (result.code === 0 && result.kind === null) return ok();
+      }
+    }
+    return cliFailure ?? { ok: false, reason: 'editor_not_found' };
+  };
+
   const open = async (cwd: string, target: OpenTarget): Promise<OpenOutcome> => {
     if (target === 'finder') return openFinder(cwd);
     if (target === 'terminal') return openTerminal(cwd);
-    const editor = await resolveEditor();
-    if (editor === null) return { ok: false, reason: 'editor_not_found' };
-    const result = await run(editor, [cwd]);
-    return result.code === 0 && result.kind === null ? ok() : fail(result);
+    return openEditor(cwd);
   };
 
   return { open };
