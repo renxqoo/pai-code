@@ -20,7 +20,7 @@ function MarkdownText({ text, className }: MarkdownTextProps) {
   if (text.length === 0) return null;
   return (
     <Streamdown
-      className={`chat-markdown space-y-[14px] text-[12px] leading-[20px] text-foreground ${className ?? ''}`.trim()}
+      className={`chat-markdown space-y-[14px] text-[14px] leading-[24px] text-foreground ${className ?? ''}`.trim()}
       plugins={plugins}
       components={{ a: StreamdownLink, img: StreamdownImage }}
       translations={streamdownTranslations()}
