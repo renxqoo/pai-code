@@ -99,11 +99,12 @@ const EMPTY_QUEUE: { steering: readonly string[]; followUp: readonly string[] } 
 /** useSyncExternalStore 订阅句柄：引用恒定（queuedDrafts 是模块单例）。 */
 const subscribeQueuedDrafts = (listener: () => void): (() => void) => queuedDrafts.subscribe(listener);
 
-/** 模型 key（provider/modelId）→ 可用思考档展示名：按模型能力本地推导
- * （无线程/未唤醒时的唯一数据源；live 态以 hub 档位命令为准）。 */
+/** 模型 key（provider/modelId）→ 可用思考档协议值：按模型能力本地推导
+ * （无线程/未唤醒时的唯一数据源；live 态以 hub 档位命令为准。返回协议档位值，
+ * 展示名映射统一由消费面 buildComposer 做——state 语义单一）。 */
 function effortLevelsForModel(models: readonly ModelInfoView[], modelKey: string): string[] {
   const model = models.find((entry) => `${entry.provider}/${entry.modelId}` === modelKey);
-  return supportedThinkingLevels(model).map((level) => thinkingLevelLabel(level));
+  return [...supportedThinkingLevels(model)];
 }
 
 export function useLiveWorkspace(): LiveWorkspaceView {
@@ -135,6 +136,8 @@ export function useLiveWorkspace(): LiveWorkspaceView {
   const activeThread = useStore(store, (s) => threadModelOf(s, s.activeThreadId ?? ''));
   // 活跃会话生命周期态：parked → live 翻转（懒恢复完成）时激活 effect 需要重跑
   const activeSessionState = useStore(store, (s) => (s.activeThreadId === null ? null : s.sessions[s.activeThreadId]?.state ?? null));
+  // 活跃会话模型（parked 直读 get_state 补齐后变化——本地档位推导的数据源）
+  const activeSessionModel = useStore(store, (s) => (s.activeThreadId === null ? null : s.sessions[s.activeThreadId]?.model ?? null));
 
   React.useEffect(() => {
     void controller.start();
@@ -173,7 +176,9 @@ export function useLiveWorkspace(): LiveWorkspaceView {
 
   React.useEffect(() => {
     // 切会话（或最后一个会话被移除）先清会话级派生态，避免上一会话残留到新会话
-    // （sessionRules 的清空在 store.setActiveThread 内同步完成，防渲染帧残留一帧）
+    // （sessionRules 的清空在 store.setActiveThread 内同步完成，防渲染帧残留一帧；
+    // effortLevels 清空防上一会话档位在响应到达前串台展示）
+    setEffortLevels([]);
     setCommands([]);
     store.setState({ agentDefinitions: [] });
     if (activeThreadId.length === 0) return;
@@ -183,8 +188,10 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     void controller.ensureHydrated(activeThreadId);
     void controller.readSessionRules(activeThreadId);
     if (activeSessionState !== 'live') {
-      const model = store.getState().sessions[activeThreadId]?.model ?? '';
-      setEffortLevels(effortLevelsForModel(store.getState().models, model));
+      // 直读 get_state 补 model 元数据：主进程 touchSession 落视图 + sessionUpdated
+      // 推送（model 变化重跑本 effect，本地档位推导随新值收敛）
+      void bridgeClient.invoke('session/state', { threadId: activeThreadId }).catch(() => undefined);
+      setEffortLevels(effortLevelsForModel(store.getState().models, activeSessionModel ?? ''));
       return;
     }
     // 思考档位随会话拉取（模型能力差异；响应回来时会话已切换则丢弃）
@@ -198,7 +205,9 @@ export function useLiveWorkspace(): LiveWorkspaceView {
       if (outcome.ok) setCommands(outcome.data);
     });
     void controller.refreshStats(activeThreadId);
-  }, [activeThreadId, activeSessionState]);
+    // activeSessionModel：parked 直读补齐 model 后（sessionUpdated 推送）本地档位
+    // 推导需要以新值重跑；live 路径的档位拉取幂等，重跑无害
+  }, [activeThreadId, activeSessionState, activeSessionModel]);
 
   const generating = threadState?.streaming ?? false;
   const bashRunning = threadState?.bashRunning ?? false;

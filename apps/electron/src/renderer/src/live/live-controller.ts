@@ -42,7 +42,7 @@ export interface LiveController {
     images?: readonly ImagePayload[],
     mode?: 'auto' | 'steer' | 'followUp',
   ) => Promise<string | null>;
-  /** 会话选择：parked 占位走懒恢复（成功后以响应 id 激活，失败通知不自动重试）；其余直接激活。 */
+  /** 会话选择：一律直接激活（parked 只读浏览，历史经 host 直读水化——T27 读不唤醒）。 */
   readonly selectSession: (threadId: string) => void;
   readonly stopActiveTurn: (threadId: string) => Promise<void>;
   readonly createSession: (input: CreateSessionInput) => Promise<CreateSessionOutcome>;

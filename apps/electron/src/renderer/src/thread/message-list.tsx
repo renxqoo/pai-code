@@ -16,10 +16,13 @@ type MessageListProps = {
   now: number
   /** 会话在途（轮次流式/直执行命令/压缩）：消息流尾部显示执行中指示 */
   loading: boolean
-  /** 底部输入浮层的避让高度（浮层高度 + 呼吸）：贴底内容完整可见，上翻内容滑入浮层后面 */
+  /** 底部输入浮层的避让高度：浮层高度 + 呼吸）：贴底内容完整可见，上翻内容滑入浮层后面 */
   bottomInset: number
   emptyTitle: string
   emptyHint: string
+  /** 历史水化失败态的重试动作（不提供则空态无重试按钮）。 */
+  onRetryHydrate?: () => void
+  retryLabel?: string
   onOpenDiff: () => void
   onEditUserMessage: (text: string) => void
   onForkUserMessage?: (entryId: string, text: string, images: ReadonlyArray<{ data: string; mimeType: string }>, autoResend: boolean) => void
@@ -37,13 +40,13 @@ function itemTopMargin(index: number, item: ThreadItem): string {
 
 /** 消息内容列：用户气泡右对齐、轮次组左对齐，轮与轮之间落时间戳行；滚动与贴底跟随由页面滚动容器负责。
  * shrink-0 + min-h-full：列盒取自然高度（空态撑满视口居中），底部 padding（输入浮层避让）计入可滚动区域。 */
-function MessageList({ thread, now, loading, bottomInset, emptyTitle, emptyHint, onOpenDiff, onEditUserMessage, onForkUserMessage }: MessageListProps) {
+function MessageList({ thread, now, loading, bottomInset, emptyTitle, emptyHint, onRetryHydrate, retryLabel, onOpenDiff, onEditUserMessage, onForkUserMessage }: MessageListProps) {
   const empty = thread.items.length === 0;
   return (
     <div className={`${CONVERSATION_COLUMN_CLASS} flex min-h-full shrink-0 flex-col pt-6 px-3`} style={{ paddingBottom: bottomInset }}>
       {empty ? (
         // 首轮事件到达前的空窗（如直执行命令）：留执行中指示，不闪空态引导
-        loading ? <TurnLoadingRow label={copy.flow.executing} /> : <EmptyThread title={emptyTitle} hint={emptyHint} />
+        loading ? <TurnLoadingRow label={copy.flow.executing} /> : <EmptyThread title={emptyTitle} hint={emptyHint} onRetry={onRetryHydrate} retryLabel={retryLabel} />
       ) : (
         <>
           {thread.items.map((item, index) => (
@@ -83,6 +86,6 @@ function MessageList({ thread, now, loading, bottomInset, emptyTitle, emptyHint,
 
 const MessageListMemo = React.memo(
   MessageList,
-  (prev, next) => prev.thread === next.thread && prev.now === next.now && prev.loading === next.loading && prev.bottomInset === next.bottomInset && prev.emptyTitle === next.emptyTitle && prev.emptyHint === next.emptyHint,
+  (prev, next) => prev.thread === next.thread && prev.now === next.now && prev.loading === next.loading && prev.bottomInset === next.bottomInset && prev.emptyTitle === next.emptyTitle && prev.emptyHint === next.emptyHint && prev.onRetryHydrate === next.onRetryHydrate && prev.retryLabel === next.retryLabel,
 );
 export { MessageListMemo as MessageList };

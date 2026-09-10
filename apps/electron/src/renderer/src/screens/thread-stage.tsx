@@ -104,8 +104,10 @@ function ThreadStage({ workspace, activeThreadId, sidebarCollapsed, panel, onTog
           now={workspace.now}
           loading={workspace.executing}
           bottomInset={bottomInset}
-          emptyTitle={copy.thread.emptyTitle}
-          emptyHint={copy.thread.emptyHint}
+          emptyTitle={workspace.hydrateFailed ? copy.flow.hydrateFailedTitle : copy.thread.emptyTitle}
+          emptyHint={workspace.hydrateFailed ? copy.flow.hydrateFailedHint : copy.thread.emptyHint}
+          onRetryHydrate={workspace.hydrateFailed ? workspace.actions.retryHydration : undefined}
+          retryLabel={copy.thread.retryHydration}
           onOpenDiff={onOpenDiff}
           onEditUserMessage={onEditUserMessage}
           onForkUserMessage={onForkUserMessage}

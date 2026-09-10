@@ -5,6 +5,7 @@ import { copy } from '@/strings';
 import { parseModelKey, pickSessionModel } from './pick-session-model';
 import { nextSessionRulesForMode } from './permission-mode';
 import { bridgeClient, controller, store } from './workspace-runtime';
+import { statsTargetsOf } from './stats-targets';
 
 /**
  * 稳定动作面：引用恒定（不随渲染重建），全部动作在调用时读 store 真相，
@@ -97,6 +98,8 @@ export type WorkspaceActions = {
   readonly steerSubagent: (subagentId: string, message: string) => void;
   readonly fetchDiagnostics: () => void;
   readonly restartHost: () => void;
+  /** 历史水化失败的重试（活跃会话全量重拉）。 */
+  readonly retryHydration: () => void;
   /** 打开 Usage 页时对全部活跃线程补拉 stats（防未访问会话显示 0）。 */
   readonly refreshAllStats: () => void;
   /** 通用通知（bash 携图拒绝等接线层提示）。 */
@@ -295,9 +298,16 @@ export function createWorkspaceActions(setDiagnostics: (value: WorkspaceDiagnost
       void controller.fetchDiagnostics().then((data) => setDiagnostics(data));
     },
     refreshAllStats: () => {
-      for (const threadId of Object.keys(store.getState().sessions)) {
+      // stats 是 worker 级查询：parked 会话不发（会唤醒全部 worker——T27 预算），
+      // 只刷新 live 会话，parked 显示最后已知值
+      for (const threadId of statsTargetsOf(store.getState().sessions)) {
         void controller.refreshStats(threadId);
       }
+    },
+    retryHydration: () => {
+      // 历史水化失败态的重试入口：hydrate/failed 不置 hydrated，直接重发全量拉取
+      const active = store.getState().activeThreadId;
+      if (active !== null) void controller.ensureHydrated(active);
     },
     showNotice: (text) => {
       pushNotice(text);

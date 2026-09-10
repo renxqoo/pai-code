@@ -57,6 +57,22 @@
 
 过渡态：hub M0 落地前本仓库渲染层若先行，parked 直读会失败（get_entries 对 parked 唤醒）→ **顺序硬约束：M0 先于 M1**；M1 落地后单轨（无新旧双路径——selectSession 只有只读激活一条路，唤醒只在 submitDraft 兜底）。
 
+## 对抗审查处置（M2 依据，2026-09-10 独立会话双仓审查）
+
+采纳并修复（本仓库侧）：
+- **P1 Usage 面板 stats 扇出唤醒全部 worker**：`refreshAllStats` 经 `statsTargetsOf` 只面向 live 会话（纯函数独立模块 `live/stats-targets.ts` + 单测）；parked 显示最后已知值。
+- **P2 parked 浏览态 model 断供**：激活 effect 非 live 分支拉 `session/state`（hub 直读），主进程 `touchSession` 落视图 + `sessionUpdated` 推送；effect 依赖加 `activeSessionModel`（model 补齐后本地档位推导以新值收敛）。
+- **P2 直读失败静默空会话**：`hydrate/failed` 不置 hydrated（重试天然可行）——空态按 `hydrateFailed` 切换失败标题 + `EmptyThread` 重试按钮（`actions.retryHydration` → ensureHydrated 重发全量）；SSR 组件测试锁定两个形态。
+- **P2 host 重启回落陈旧 + 横幅失实**：restarting/failed 折叠清 `hydrated`（回落后再次激活必重拉，数据保留展示不闪空——store 回归用例）；`crashedBanner` 文案改为「已退出，发消息恢复」。
+- **P3 档位串台/双重 label/models 响应性**：切会话恢复清空 effortLevels；`effortLevelsForModel` 返回协议档位值（state 语义单一，展示名映射统一在 buildComposer）；models 热更新边角记录（切会话/live 翻转即纠正）。
+- **P3 注释漂移**：selectSession 接口注释同步只读激活语义。
+
+hub 侧处置见 `/Users/wrr/work/pi/app` 提交 55e1e36c2（model 收敛 SessionModel|null + messages 门控、legacy/大文件 fail-open、真值对齐测试改道 e2e-mock、api.md thread_died 行、design.md v0.12 审查处置节）。
+
+驳回（附理由）：
+- worker 恢复链全复刻（auth 检查/findInitialModel/settings 默认档/钳制）——直读语义即「文件记录值」，浏览态显示会话原模型比回落结果更符合直觉；hub resources 端口无 settings 面、pi-ai clamp 不跨包引入。差异已在 hub design.md v0.12 声明。
+- effect 级 renderHook 测试装置——项目无 React testing 装置惯例；查询决策面经 statsTargetsOf/store 回归/SSR 组件测试覆盖，接线面走 e2e 真机。
+
 ## 裁决
 
 - 协议形态：**语义扩展**（不新增命令）——客户端零选路分叉（用户默认裁决 1，否决窗口保留）。

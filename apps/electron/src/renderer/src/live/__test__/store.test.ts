@@ -133,6 +133,19 @@ describe('live store（对话框/通知/bootstrap 合并）', () => {
     expect(store.getState().threads['t1']?.crashed).toBe(true);
   });
 
+  test('症状回归：host 重启折叠清空 hydrated——回落 parked 后再次激活必须重拉全量（防旧数据陈旧展示）', () => {
+    const store = createLiveStore();
+    store.getState().bootstrap({ sessions: [session('t1')], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } });
+    // 已水化的线程（hydrate/initial 置 hydrated）
+    store.getState().hydrate('t1', { kind: 'hydrate/initial', items: [], cursor: 'c1' });
+    expect(store.getState().threads['t1']?.hydrated).toBe(true);
+    // 宿主重启：hydrated 随运行面一起失效（同 threadId 回落后旧数据可能落后于盘上会话）
+    store.getState().applyEvent({ type: 'host', phase: 'restarting' }, 5);
+    expect(store.getState().threads['t1']?.hydrated).toBe(false);
+    // 数据保留展示（不闪空），重拉由激活 effect 驱动
+    expect(store.getState().threads['t1']?.cursor).toBe('c1');
+  });
+
   test('症状回归：sessionDied 立即收起该会话挂起对话框（其余会话弹窗不受影响）', () => {
     const store = createLiveStore();
     store.getState().bootstrap({ sessions: [session('t1'), session('t2')], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } });

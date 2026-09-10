@@ -97,10 +97,12 @@ export function createLiveStore() {
               if (event.phase !== 'restarting' && event.phase !== 'failed') return { hostPhase: event.phase };
               // 宿主进程死亡（挂死重启/启动失败）：全部线程的运行面随进程消亡且不会再有任何事件，
               // 就地终态防 streaming/queue 镜像滞留（滞留会把空闲会话的新消息投进永不消费的队列）；
-              // 挂起对话框同随进程消亡（ui_response 永无回执，滞留只等 5 分钟兜底超时）
+              // 挂起对话框同随进程消亡（ui_response 永无回执，滞留只等 5 分钟兜底超时）。
+              // hydrated 一并失效：对账回落后（同 threadId）旧数据可能落后于盘上会话，
+              // 被再次激活时须重拉全量（ensureHydrated 以该标志守卫）
               const threads: Record<string, LiveThreadState> = {};
               for (const [threadId, thread] of Object.entries(state.threads)) {
-                threads[threadId] = { ...foldDeath(thread, now), crashed: true };
+                threads[threadId] = { ...foldDeath(thread, now), crashed: true, hydrated: false };
               }
               return { hostPhase: event.phase, threads, dialogs: [] };
             }
