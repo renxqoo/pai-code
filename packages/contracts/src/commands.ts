@@ -14,15 +14,11 @@ export type PaiCommandType =
   | 'thread/resume'
   | 'thread/register'
   | 'thread/stop'
-  | 'thread/list'
   | 'thread/list_saved'
   | 'prompt'
-  | 'steer'
-  | 'follow_up'
   | 'abort'
   | 'clear_queue'
   | 'get_state'
-  | 'get_messages'
   | 'get_entries'
   | 'get_models'
   | 'set_model'
@@ -33,7 +29,6 @@ export type PaiCommandType =
   | 'get_commands'
   | 'ui_response'
   | 'subagent/steer'
-  | 'agents/list'
   | 'bash'
   | 'abort_bash'
   | 'fork'
@@ -47,15 +42,11 @@ export const PAI_COMMAND_TYPES = [
   'thread/resume',
   'thread/register',
   'thread/stop',
-  'thread/list',
   'thread/list_saved',
   'prompt',
-  'steer',
-  'follow_up',
   'abort',
   'clear_queue',
   'get_state',
-  'get_messages',
   'get_entries',
   'get_models',
   'set_model',
@@ -66,7 +57,6 @@ export const PAI_COMMAND_TYPES = [
   'get_commands',
   'ui_response',
   'subagent/steer',
-  'agents/list',
   'bash',
   'abort_bash',
   'fork',

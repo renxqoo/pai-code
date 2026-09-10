@@ -1,5 +1,4 @@
 import { realpathSync, statSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { basename as baseName, dirname as dirnamePath, join as joinPaths, resolve as resolvePath, sep as pathSep } from 'node:path';
 
 import { mapEntries, modelInfos, savedSessions, sessionCommands, sessionStatsView, threadStateView, thinkingLevels } from '@paiapp/adapter';
@@ -7,7 +6,7 @@ import { envVarNameForProvider } from './models-config';
 import { createProviderProbe } from './provider-probe';
 import { searchProjectFiles } from './file-search';
 import { createGitBranches, type GitBranches } from './git-branches';
-import { buildSkillInventory, parseSkillPatterns, toggleSkillPatterns } from './skills-inventory';
+import { createSkillsCatalog } from './skills-catalog';
 import type { AgentDirFiles } from './agent-dir-files';
 import type { AgentDefinitionsStore } from './agent-definitions-store';
 import { defaultPermissionRules, parsePermissionRules, THINKING_LEVEL_ORDER, type ProviderModel, type ThinkingFormat, type ThinkingLevel } from '@paiapp/contracts';
@@ -193,19 +192,12 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     getKey: (name) => deps.keyStore.getKey(name),
   });
 
-  /** 用户级技能目录两处（pi 语义：agent = agentDir/skills；agents = ~/.agents/skills）。 */
-  const resolveSkillSources = deps.skillSources ?? (() => [
-    { origin: 'agent' as const, dir: joinPaths(deps.agentDir, 'skills') },
-    { origin: 'agents' as const, dir: joinPaths(homedir(), '.agents', 'skills') },
-  ]);
-
-  /** pi settings.json 宽容读取（白名单文件面；坏/缺按 {} 起步）。 */
-  const readPiSettings = (): Record<string, unknown> => {
-    const raw = deps.agentDirFiles.readJson('settings.json');
-    return typeof raw === 'object' && raw !== null && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
-  };
-
-  const skillsView = () => buildSkillInventory(resolveSkillSources(), parseSkillPatterns(readPiSettings()));
+  /** 用户级技能目录装配（清单/启停/预构命令目录；测试可注入目录源替身）。 */
+  const skills = createSkillsCatalog({
+    agentDir: deps.agentDir,
+    agentDirFiles: deps.agentDirFiles,
+    skillSources: deps.skillSources,
+  });
 
   /**
    * provider 配置变更 → 重启 host 恢复链路：hub 的 ModelConfig 只在启动时读入 models.json，
@@ -228,7 +220,6 @@ export function createApiRoutes(deps: ApiRouteDeps) {
 
   const routes: RouteTable = {
     'app/bootstrap': async () => {
-      runtime.markBootstrapped();
       const [saved, models] = await Promise.all([savedAcrossCwds(), command({ type: 'get_models' })]);
       const outcome = {
         sessions: runtime.sessions(),
@@ -238,7 +229,10 @@ export function createApiRoutes(deps: ApiRouteDeps) {
         preferences: preferencesView(),
         hostPhase: runtime.hostPhase(),
       };
+      // 先冲缓冲再开门：开门后新事件直发，若先开门，await 窗口内的新事件会
+      // 插队到更旧的缓冲事件之前（sessionUpdated 旧覆新）
       runtime.emitBuffered();
+      runtime.markBootstrapped();
       return { ok: true as const, data: outcome };
     },
     'session/start': async (params) => {
@@ -290,6 +284,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       if (!insideSessionsRoot(params.sessionPath)) return fail('session_path_forbidden');
       const known = findRegistryRowByPath(params.sessionPath);
       if (known === null) return fail('unknown_session');
+      if (known.trusted === true) deps.audit(`session_trusted:register:${params.sessionPath}:true`);
       const result = await command({ type: 'thread/register', sessionPath: params.sessionPath, trusted: known.trusted ?? false });
       // 文件已删（对账之后失效）：与 resume 同语义删行，占位不再反复失败
       if (!result.ok && /not found|no such|not readable/i.test(result.reason)) runtime.removeSession(known.threadId);
@@ -322,7 +317,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
         PROMPT_REQUEST_TIMEOUT_MS,
       );
       if (!result.ok) return fail(result.reason);
-      void runtime.autoTitleOnPrompt(params.threadId, params.message);
+      void runtime.autoTitleOnPrompt(params.threadId, params.message).catch(() => undefined);
       return { ok: true as const, data: null };
     },
     'session/abort': async (params) => {
@@ -333,13 +328,15 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     },
     'session/entries': async (params) => {
       const result = await command({ type: 'get_entries', threadId: params.threadId, since: params.since });
-      if (!result.ok) {
-        // 游标失效（会话分支变化/重恢复）：全量重拉一次
+      // 全量兜底只认游标失效（分支变化/重恢复）：busy/timeout 等瞬态再叠一次
+      // 全量拉取只会放大压力（30s 超时后再 30s）
+      if (!result.ok && params.since !== undefined && /Entry not found/.test(result.reason)) {
         const full = await command({ type: 'get_entries', threadId: params.threadId });
         if (!full.ok) return fail(full.reason);
         const data = full.data as { entries?: unknown };
         return { ok: true as const, data: mapEntries(data.entries) };
       }
+      if (!result.ok) return fail(result.reason);
       const data = result.data as { entries?: unknown };
       return { ok: true as const, data: mapEntries(data.entries) };
     },
@@ -405,6 +402,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       const result = await command({ type: 'get_commands', threadId: params.threadId });
       return result.ok ? { ok: true as const, data: sessionCommands(result.data) } : fail(result.reason);
     },
+    'command/preview': () => Promise.resolve({ ok: true as const, data: skills.previewCommands() }),
     'agent/definitions': () => {
       // 管理面走主进程文件面（不经 hub：需要 systemPrompt 原文与全部已知项目的定义）
       return Promise.resolve({ ok: true as const, data: deps.agentDefinitions.list(knownCwds()) });
@@ -450,20 +448,10 @@ export function createApiRoutes(deps: ApiRouteDeps) {
         .pickDirectory(params.defaultPath ?? null)
         .then((directory) => ({ ok: true as const, data: directory }))
         .catch(() => fail('dialog_unavailable')),
-    'skills/list': () => Promise.resolve({ ok: true as const, data: skillsView() }),
+    'skills/list': () => Promise.resolve({ ok: true as const, data: skills.list() }),
     'skills/setEnabled': (params) => {
-      // 同步读-改-写（无 yield 点，invoke 天然串行不交错）
-      const current = skillsView();
-      if (!current.some((skill) => skill.name === params.name)) return Promise.resolve(fail('skill_not_found'));
-      try {
-        const piSettings = readPiSettings();
-        const next = toggleSkillPatterns(parseSkillPatterns(piSettings), params.name, params.enabled);
-        const written = deps.agentDirFiles.writeJsonAtomic('settings.json', { ...piSettings, skills: next });
-        if (!written) return Promise.resolve(fail('write_failed'));
-        return Promise.resolve({ ok: true as const, data: skillsView() });
-      } catch {
-        return Promise.resolve(fail('write_failed'));
-      }
+      const error = skills.setEnabled(params.name, params.enabled);
+      return Promise.resolve(error === null ? { ok: true as const, data: skills.list() } : fail(error));
     },
     'session/clearQueue': async (params) => {
       const result = await command({ type: 'clear_queue', threadId: params.threadId });
@@ -471,7 +459,8 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     },
     'session/bash': async (params) => {
       deps.audit(`bash_run:${params.threadId}`);
-      const result = await command({ type: 'bash', threadId: params.threadId, command: params.command });
+      // hub bash 完成才回包（墙钟上限 24h）：30s 缺省超时会误报仍在执行的命令
+      const result = await command({ type: 'bash', threadId: params.threadId, command: params.command }, 24 * 60 * 60 * 1_000);
       return result.ok ? { ok: true as const, data: null } : fail(result.reason);
     },
     'session/abortBash': async (params) => {
@@ -587,6 +576,8 @@ export function createApiRoutes(deps: ApiRouteDeps) {
 
   return {
     async invoke(method: string, params: unknown): Promise<unknown> {
+      // 自有属性判定：原型链键（toString/__proto__）不得命中 schema（误报 invalid_params）
+      if (!Object.prototype.hasOwnProperty.call(ApiSchemas, method)) return fail(`unknown_method:${method}`);
       const schema = ApiSchemas[method as ApiMethod];
       if (schema === undefined) return fail(`unknown_method:${method}`);
       let parsed: unknown;

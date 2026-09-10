@@ -124,6 +124,18 @@ describe('createFrameDecoder', () => {
     expect(c.dropped).toEqual(['line_too_long']);
   });
 
+  test('症状回归：跨 chunk 无换行累积同样受上限约束（不再只判单 chunk 增量）', () => {
+    const c = collect();
+    const decoder = createFrameDecoder(c.onFrame, { maxLineChars: 100, onDropped: (r) => c.dropped.push(r) });
+    // 300 个 80 字符 chunk 无换行：单 chunk 判定恒不超限，旧实现的基线重置使
+    // buffer 无界增长；真基线（未完成行长度）应在第 2 个 chunk 即进丢弃态
+    for (let i = 0; i < 300; i += 1) decoder.push('x'.repeat(80));
+    expect(c.dropped).toEqual(['line_too_long']);
+    // 丢弃态恢复：后续合法行正常解析
+    decoder.push('\n{"type":"heartbeat"}\n');
+    expect(c.frames.length).toBe(1);
+  });
+
   test('非 JSON 行丢弃并上报', () => {
     const c = collect();
     const decoder = createFrameDecoder(c.onFrame, { onDropped: (r) => c.dropped.push(r) });

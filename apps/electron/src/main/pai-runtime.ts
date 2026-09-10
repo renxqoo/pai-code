@@ -228,6 +228,10 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
         emit({ type: 'sessionRemoved', threadId: row.threadId });
         continue;
       }
+      // 快照之后行被更新过 = list_saved await 窗口内发生了并发 resume/turn：
+      // 重读 registry 与快照比对（内存 live 是旧世代残留，不能作判据——重启对账
+      // 仍须把它回落 parked；只有「新写入」才不被覆写，否则后续发消息撞双开守卫）
+      if ((registry.get(row.threadId)?.updatedAt ?? 0) > row.updatedAt) continue;
       upsertSession(
         toSessionView({
           threadId: row.threadId,

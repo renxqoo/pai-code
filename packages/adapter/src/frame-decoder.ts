@@ -136,7 +136,8 @@ export function createFrameDecoder(onFrame: (frame: HubFrame) => void, options: 
         scanned = 0;
       } else {
         buffer += chunk;
-        // 超限提前判定：堆积超上限立即进入丢弃态，不再继续拼接/扫描
+        // 超限提前判定：基线是「未完成行起点」（scanned），跨 chunk 无换行堆积
+        // 同样累积计数——基线若重置为整个尾巴，无换行小 chunk 流可无限增长
         if (buffer.length - scanned > maxLineChars) {
           enterDiscarding();
           return;
@@ -144,7 +145,7 @@ export function createFrameDecoder(onFrame: (frame: HubFrame) => void, options: 
       }
       // 行提取用偏移游标推进、chunk 处理完一次性压缩尾巴：单 chunk 含 k 行时
       // 复制成本从 O(k×chunk) 降为每 chunk 一次（流式高频小 delta 帧是热路径）
-      let start = 0;
+      let start = scanned;
       for (;;) {
         const index = buffer.indexOf('\n', scanned);
         if (index === -1) break;
@@ -158,7 +159,10 @@ export function createFrameDecoder(onFrame: (frame: HubFrame) => void, options: 
         handleLine(line);
       }
       if (start > 0) buffer = buffer.slice(start);
-      scanned = buffer.length;
+      // 压缩后未完成行从 0 起——scanned 归零即「未完成行起点」，供下一 chunk
+      // 的超限判定与搜索使用（未完成尾巴每 chunk 重扫一次 indexOf，尾巴长度
+      // 受 maxLineChars 上限约束）
+      scanned = 0;
     },
     finish(): void {
       const tail = buffer;

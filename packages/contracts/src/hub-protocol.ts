@@ -114,6 +114,27 @@ export interface SetModelCmd {
   modelId: string;
 }
 
+/** v0.9：模型参数覆写（写 models.json modelOverrides + 快照热刷新）。 */
+export interface SetModelOverrideCmd {
+  type: 'set_model_override';
+  provider: string;
+  modelId: string;
+  contextWindow?: number | null;
+  maxTokens?: number | null;
+  remove?: boolean;
+}
+
+/** v0.6：host 本地可观测性。 */
+export interface GetHostInfoCmd {
+  type: 'get_host_info';
+}
+
+/** v0.7：agent 执行沙箱状态。 */
+export interface GetSandboxStateCmd {
+  type: 'get_sandbox_state';
+  threadId: string;
+}
+
 export interface GetModelsCmd {
   type: 'get_models';
 }
@@ -148,6 +169,8 @@ export interface GetEntriesCmd {
   type: 'get_entries';
   threadId: string;
   since?: string;
+  before?: string;
+  limit?: number;
 }
 
 export interface GetTreeCmd {
@@ -208,6 +231,7 @@ export interface BashCmd {
   threadId: string;
   command: string;
   excludeFromContext?: boolean;
+  timeoutMs?: number;
 }
 
 export interface AbortBashCmd {
@@ -284,6 +308,9 @@ export type HubCommand =
   | (BashCmd & { id?: string })
   | (AbortBashCmd & { id?: string })
   | (UiResponseCmd & { id?: string })
+  | (SetModelOverrideCmd & { id?: string })
+  | (GetHostInfoCmd & { id?: string })
+  | (GetSandboxStateCmd & { id?: string })
   | (GetPermissionRulesCmd & { id?: string })
   | (SetPermissionRulesCmd & { id?: string })
   | (AgentsListCmd & { id?: string })
@@ -294,6 +321,9 @@ export const HUB_COMMAND_TYPES = [
   'thread/start',
   'thread/resume',
   'thread/register',
+  'set_model_override',
+  'get_host_info',
+  'get_sandbox_state',
   'thread/stop',
   'thread/list',
   'thread/list_saved',

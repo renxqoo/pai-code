@@ -213,6 +213,37 @@ describe('pai-runtime 启动对账（懒恢复，0 resume）', () => {
     expect(sent.filter((cmd) => cmd.type === 'thread/resume')).toEqual([]);
     expect(runtime.sessions()[0]?.state).toBe('parked');
   });
+
+  test('症状回归：对账 await 窗口内的并发 resume 不被覆写回 parked（发消息不再撞双开守卫）', async () => {
+    const work = mkdtempSync(join(tmpdir(), 'pai-reconcile-race-'));
+    // start() 内的首轮对账放行；第二轮（挂起点）模拟用户在对账 await 窗口内 resume
+    let listSavedCalls = 0;
+    let releaseSaved: (reply: unknown) => void = () => undefined;
+    const gate = new Promise<unknown>((resolve) => {
+      releaseSaved = resolve;
+    });
+    const { runtime } = makeFixture(work, (cmd) => {
+      if (cmd.type === 'thread/list_saved' && cmd.cwd === '/w/proj') {
+        listSavedCalls += 1;
+        if (listSavedCalls === 1) return { ok: true, data: { sessions: [{ sessionPath: 'a.jsonl' }] } };
+        return gate.then(() => ({ ok: true, data: { sessions: [{ sessionPath: 'a.jsonl' }] } })) as never;
+      }
+      return { ok: true, data: {} };
+    });
+    seedRow(runtime, { threadId: 't1', sessionPath: 'a.jsonl', cwd: '/w/proj', title: '调试' });
+    await runtime.start();
+
+    const reconciling = runtime.reconcileSessions();
+    await new Promise((r) => {
+      setTimeout(r, 10);
+    });
+    // 对账挂起期间并发 resume 成功（applyStartOutcome 置 live 并推进注册表行）
+    runtime.applyStartOutcome('t1', '/w/proj', 'a.jsonl', '调试', Date.now());
+    releaseSaved({ ok: true, data: { sessions: [{ sessionPath: 'a.jsonl' }] } });
+    await reconciling;
+
+    expect(runtime.sessions()[0]?.state).toBe('live');
+  });
 });
 
 describe('api-routes session/resume（懒恢复通路）', () => {

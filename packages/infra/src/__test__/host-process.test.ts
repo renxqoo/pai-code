@@ -100,6 +100,46 @@ describe('createHostProcess · 启动期假死与 failed 复活（对抗审查 C
     await host.dispose();
   }, 20_000);
 
+  test('症状回归：failed 是自动自愈终态——watchdog 不再对其复活（无 10s 循环）', async () => {
+    const harness = makeHarness({
+      config: { bunPath: process.execPath, hubEntry: join(import.meta.dir, 'silent-host.ts'), agentDir, buildEnv: () => ({}) },
+      timing: { ...fastTiming, maxConsecutiveRestarts: 2, restartBackoffMs: [0, 0] as unknown as readonly number[] },
+    });
+    const host = launch(harness);
+    await waitFor(() => host.phase === 'failed', 10_000, 'failed after repeated silent spawns');
+    const restartsAtFailed = harness.restartCount();
+    // 覆盖至少两个心跳判定周期：旧实现会由 watchdog 无限复活（每 ~hangAfterMs 一次）
+    await new Promise((resolve) => {
+      setTimeout(resolve, fastTiming.hangAfterMs * 2 + 300);
+    });
+    expect(host.phase).toBe('failed');
+    expect(harness.restartCount()).toBe(restartsAtFailed);
+    await host.dispose();
+  }, 25_000);
+
+  test('症状回归：buildEnv 同步抛错不卡 restarting（吞掉交 watchdog 计数闭环）', async () => {
+    let poison = true;
+    const harness = makeHarness({
+      config: {
+        bunPath: process.execPath,
+        hubEntry: join(import.meta.dir, 'silent-host.ts'),
+        agentDir,
+        buildEnv: () => {
+          if (poison) throw new Error('disk full (fixture)');
+          return {};
+        },
+      },
+      timing: { ...fastTiming, maxConsecutiveRestarts: 2, restartBackoffMs: [0, 0] as unknown as readonly number[] },
+    });
+    const host = launch(harness);
+    // 抛错的 spawn 被吞 → watchdog 判挂死重试 → 计数闭环到 failed（而非永卡 starting/restarting）
+    await waitFor(() => host.phase === 'failed', 12_000, 'failed via poisoned buildEnv loop');
+    poison = false;
+    await host.restart('manual_recovery');
+    await waitFor(() => host.phase !== 'starting' || host.phase === 'ready', 8_000, 'recovers after poison clears');
+    await host.dispose();
+  }, 25_000);
+
   test('C-S9：failed 后显式 restart 复活（计数重置）', async () => {
     const harness = makeHarness({
       config: { bunPath: process.execPath, hubEntry: join(import.meta.dir, 'silent-host.ts'), agentDir, buildEnv: () => ({}) },

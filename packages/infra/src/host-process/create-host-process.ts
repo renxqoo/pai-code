@@ -121,7 +121,9 @@ export function createHostProcess(deps: HostProcessDeps): HostProcessPort {
   const startWatchdog = (): void => {
     if (watchdog !== null) return;
     watchdog = setInterval(() => {
-      if (disposed || restarting || exitingGracefully) return;
+      // failed 是「自动自愈」的终态（显式 restart 给予复活）；watchdog 对
+      // failed 静默——否则坏 host 每 hangAfterMs 复活一次且计数被清零，无限循环
+      if (disposed || restarting || exitingGracefully || phase === 'failed') return;
       // 启动期同样判挂死：spawn 后 hangAfterMs 内无首心跳即重启（spawnStartedAt 即首个基准）
       const lastBeat = sawFirstHeartbeat ? lastHeartbeatAt : spawnStartedAt;
       if (Date.now() - lastBeat <= timing.hangAfterMs) return;
@@ -232,7 +234,14 @@ export function createHostProcess(deps: HostProcessDeps): HostProcessPort {
       restarting = false;
       return;
     }
-    spawnHost();
+    // spawn 链路（buildEnv 写盘等）可同步抛：吞掉交 watchdog 闭环（spawnStartedAt
+    // 已置——hangAfterMs 后按挂死重试，连续失败计数在本轮开头已 +1，超限转 failed）。
+    // 不吞则 restarting 永真，watchdog 与一切 restart 全部失效。
+    try {
+      spawnHost();
+    } catch (error) {
+      note(`spawn_failed:${errorMessage(error)}`);
+    }
     restarting = false;
     // 恢复钩子（resume 会话）在 spawn 后立即执行；命令会排队直到 worker 就绪
     try {
@@ -242,7 +251,16 @@ export function createHostProcess(deps: HostProcessDeps): HostProcessPort {
     }
   };
 
-  spawnHost();
+  // 首启与重启同一收口：buildEnv/spawn 同步抛错不炸穿构造（spawnHost 已置
+  // starting/spawnStartedAt 基准），交 watchdog 按挂死重试、计数闭环超限转 failed
+  try {
+    spawnHost();
+  } catch (error) {
+    note(`spawn_failed:${errorMessage(error)}`);
+    // startWatchdog 在 spawnHost 末尾——抛错路径走不到，watchdog 从未启动
+    // 的话「交 watchdog 重试」就是空话
+    startWatchdog();
+  }
 
   return {
     get phase(): HostPhase {

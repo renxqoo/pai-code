@@ -5,31 +5,11 @@ import type {
   SessionStatsView,
   SessionView,
   ThreadStateView,
-  ThreadListEntry,
 } from '@paiapp/contracts';
 
 /**
  * 协议响应 data → 渲染层视图（收窄与降级：垃圾输入回落空形态，不抛）。
  */
-
-export function threadListEntries(data: unknown): ThreadListEntry[] {
-  const threads = recordOf(data)['threads'];
-  if (!Array.isArray(threads)) return [];
-  const out: ThreadListEntry[] = [];
-  for (const item of threads) {
-    const t = recordOf(item);
-    const threadId = str(t.threadId);
-    if (threadId.length === 0) continue;
-    out.push({
-      threadId,
-      cwd: str(t.cwd),
-      sessionPath: optStr(t.sessionPath) ?? null,
-      isStreaming: t.isStreaming === true,
-      state: t.state === 'live' || t.state === 'parked' || t.state === 'dead' ? t.state : 'parked',
-    });
-  }
-  return out;
-}
 
 export interface SessionViewInput {
   threadId: string;
@@ -161,6 +141,18 @@ export function sessionCommands(data: unknown): CommandView[] {
     const source = c.source;
     if (source !== 'extension' && source !== 'prompt' && source !== 'skill' && source !== 'builtin') continue;
     out.push({ name, description: optStr(c.description), source });
+  }
+  return out;
+}
+
+/** 技能清单 → 目录条目（get_commands 的 skill 源同型命名 `skill:<name>`）。
+ * 无会话时（新建任务页）以用户级启用技能预构目录——extension/prompt/builtin
+ * 源依赖会话态（扩展代码加载/模板目录/能力门控），预摆即假能力，不构造。 */
+export function previewCommands(skills: readonly { name: string; description: string | null }[]): CommandView[] {
+  const out: CommandView[] = [];
+  for (const skill of skills) {
+    if (skill.name.length === 0) continue;
+    out.push({ name: `skill:${skill.name}`, description: skill.description, source: 'skill' });
   }
   return out;
 }

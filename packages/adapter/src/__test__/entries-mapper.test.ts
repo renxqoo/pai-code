@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { mapEntries } from '../entries-mapper';
 import { diffFromPatch } from '../diff-extract';
-import { sessionStatsView, savedSessions, modelInfos, threadListEntries, threadStateView, thinkingLevels } from '../response-views';
+import { sessionStatsView, savedSessions, modelInfos, threadStateView, thinkingLevels } from '../response-views';
 
 function messageEntry(id: string, message: Record<string, unknown>): Record<string, unknown> {
   return { type: 'message', id, parentId: null, timestamp: '2026-01-01T00:00:00Z', message };
@@ -169,21 +169,6 @@ describe('diffFromPatch', () => {
 });
 
 describe('response-views', () => {
-  test('threadListEntries：形状收窄 + 垃圾行跳过 + 非法 state 降级 parked', () => {
-    const entries = threadListEntries({
-      threads: [
-        { threadId: 't1', cwd: '/a', sessionPath: '/s1.jsonl', isStreaming: true, state: 'live' },
-        { threadId: '', cwd: '/x' },
-        { threadId: 't2', cwd: '/b', sessionPath: null, isStreaming: false, state: 'weird' },
-        'garbage',
-      ],
-    });
-    expect(entries).toEqual([
-      { threadId: 't1', cwd: '/a', sessionPath: '/s1.jsonl', isStreaming: true, state: 'live' },
-      { threadId: 't2', cwd: '/b', sessionPath: null, isStreaming: false, state: 'parked' },
-    ]);
-    expect(threadListEntries({})).toEqual([]);
-  });
 
   test('threadStateView：model.id 收窄 + 缺省降级', () => {
     expect(threadStateView({ model: { provider: 'glm', id: 'glm-5.3' }, thinkingLevel: 'high', isStreaming: true, isCompacting: false, sessionName: 'n', messageCount: 7 })).toEqual({
