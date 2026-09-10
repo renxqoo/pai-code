@@ -1,9 +1,10 @@
-import type { AgentDefinition, ApiOutcome, ImagePayload, PermissionRules, PreferencesView, ProviderModel, SkillView, ThinkingFormat, UiEvent } from '@paiapp/contracts';
+import type { AgentDefinition, ApiOutcome, CommandView, ImagePayload, PermissionRules, PreferencesView, ProviderModel, SkillView, ThinkingFormat, UiEvent } from '@paiapp/contracts';
 
 import { copy } from '@/strings';
 import { queuedDrafts } from '@/composer/queued-drafts';
 import type { BridgeClient } from './client-invoke';
 import { coalesceEvents } from './coalesce-events';
+import { createEntryHydration } from './entry-hydration';
 import { createLazyResume } from './lazy-resume';
 import { checkoutGitBranch, listGitBranches, searchFiles } from './git-actions';
 import { nextSessionRulesForMode } from './permission-mode';
@@ -79,6 +80,8 @@ export interface LiveController {
   readonly removeAgentDefinition: (key: { file: string; scope: 'user' | 'project'; project: string | null }) => Promise<string | null>;
   /** 用户级技能目录刷新（含启用态）。 */
   readonly refreshSkills: () => Promise<void>;
+  /** 预会话命令目录（新建任务页 `/` 补全数据源；失败空目录降级）。 */
+  readonly fetchCommandPreview: () => Promise<CommandView[]>;
   /** 技能启停：写 pi settings skills overrides；返回写后清单（失败 null + 原因）。 */
   readonly setSkillEnabled: (name: string, enabled: boolean) => Promise<{ ok: true; data: SkillView[] } | { ok: false; reason: string }>;
   /** 技能开关完整编排：写 + 串行重开全部 live 会话（链式排队，交错不叠加）；失败返回重开失败数。 */
@@ -127,43 +130,13 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     if (outcome.ok) store.setState({ agentDefinitions: outcome.data });
   };
 
-  const fetchEntries = async (threadId: string, since: string | null, dropLiveTurn: boolean): Promise<void> => {
-    if (reconciling.has(`${threadId}:${dropLiveTurn}`)) return;
-    reconciling.add(`${threadId}:${dropLiveTurn}`);
-    try {
-      const outcome = await client.invoke('session/entries', { threadId, since: since ?? undefined });
-      if (disposed) return;
-      if (!outcome.ok) {
-        // 游标失效由主进程兜底全量重拉；此处失败则标记（settle 后保留装饰态）
-        store.getState().hydrate(threadId, { kind: 'hydrate/failed' });
-        return;
-      }
-      store.getState().hydrate(threadId, { kind: 'hydrate/reconcile', items: outcome.data.items, cursor: outcome.data.cursor, dropLiveTurn });
-    } finally {
-      reconciling.delete(`${threadId}:${dropLiveTurn}`);
-    }
-  };
-
-  const rebuildFromTranscript = async (threadId: string): Promise<void> => {
-    const outcome = await client.invoke('session/entries', { threadId });
-
-    if (disposed) return;
-    if (!outcome.ok) {
-      store.getState().hydrate(threadId, { kind: 'hydrate/failed' });
-      return;
-    }
-    store.getState().hydrate(threadId, { kind: 'hydrate/rebuild', items: outcome.data.items, cursor: outcome.data.cursor });
-  };
-
-  const hydrateFull = async (threadId: string): Promise<void> => {
-    const outcome = await client.invoke('session/entries', { threadId });
-    if (disposed) return;
-    if (!outcome.ok) {
-      store.getState().hydrate(threadId, { kind: 'hydrate/failed' });
-      return;
-    }
-    store.getState().hydrate(threadId, { kind: 'hydrate/initial', items: outcome.data.items, cursor: outcome.data.cursor });
-  };
+  /** 会话条目水化三路径（增量对账/轮末重建/冷启动全量）独立模块。 */
+  const { fetchEntries, rebuildFromTranscript, hydrateFull } = createEntryHydration({
+    client,
+    store,
+    reconciling,
+    isDisposed: () => disposed,
+  });
 
   /** 懒恢复机制（在途去重/乐观登记）独立模块。 */
   const lazy = createLazyResume(client, store);
@@ -464,6 +437,11 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     },    async refreshSkills(): Promise<void> {
       const outcome = await client.invoke('skills/list', {});
       if (outcome.ok) store.setState({ skills: outcome.data });
+    },
+    /** 预会话命令目录（新建任务页 `/` 补全数据源；失败空目录降级）。 */
+    async fetchCommandPreview(): Promise<CommandView[]> {
+      const outcome = await client.invoke('command/preview', {});
+      return outcome.ok ? outcome.data : [];
     },
     async setSkillEnabled(name: string, enabled: boolean): Promise<{ ok: true; data: SkillView[] } | { ok: false; reason: string }> {
       const outcome = await client.invoke('skills/setEnabled', { name, enabled });

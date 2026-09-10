@@ -318,6 +318,12 @@ export const ApiSchemas = {
     params: z.object({ threadId: z.string().min(1) }).strict(),
     result: z.array(CommandViewSchema),
   },
+  /** 预会话命令目录（新建任务页无 threadId 可寻址）：用户级启用技能以 skill: 条目
+   * 预构；extension/prompt/builtin 源依赖会话态，建会话后以 command/list 为准。 */
+  'command/preview': {
+    params: empty,
+    result: z.array(CommandViewSchema),
+  },
   /** agent 定义管理枚举（主进程文件面：user 目录 + 已知项目 .pi/agents，含 systemPrompt 原文）。 */
   'agent/definitions': {
     params: empty,

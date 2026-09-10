@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { thinkingLevelLabel, thinkingLevelOfLabel, type ApiOutcome, type PermissionRules } from '@paiapp/contracts';
+import { thinkingLevelLabel, thinkingLevelOfLabel, type ApiOutcome, type CommandView, type PermissionRules } from '@paiapp/contracts';
 
 import { BranchPickerDialog } from '@/composer/branch-picker-dialog';
 import { branchSegmentOf } from '@/composer/branch-segment';
@@ -38,6 +38,8 @@ export type NewTaskStart = {
 type NewTaskScreenProps = {
   /** 已知项目目录（最近优先） */
   knownDirs: readonly string[]
+  /** 预会话命令目录（`/` 补全数据源：用户级启用技能预构；建会话后由 hub 目录接管） */
+  commands: readonly CommandView[]
   /** 打开时的预选目录（当前会话目录 / 侧栏项目行） */
   defaultCwd: string
   /** 信任开关初值（偏好 trustedDefault） */
@@ -68,10 +70,12 @@ type NewTaskScreenProps = {
 /**
  * 新建任务整页：问候语 + 项目/分支条 + 白卡输入框 + 快捷任务胶囊。
  * 与线程页共用 PromptCard / PromptInputArea / PromptContextBar / ComposerActionsRow；
- * 会话尚未创建：思考档按所选模型本地计算（跟随模型默认可退回），压缩与用量环无数据面不渲染。
+ * 会话尚未创建：`/` 补全用预构命令目录（用户级启用技能），思考档按所选模型本地
+ * 计算（跟随模型默认可退回），压缩与用量环无数据面不渲染。
  */
 function NewTaskScreen({
   knownDirs,
+  commands,
   defaultCwd,
   trustedDefault,
   defaultModelFor,
@@ -264,7 +268,7 @@ function NewTaskScreen({
                 onChange={setDraft}
                 placeholder={copy.newTask.placeholder}
                 textareaRef={textareaRef}
-                commands={[]}
+                commands={commands}
                 slashAriaLabel={copy.composer.slashAria}
                 fileAriaLabel={copy.composer.fileAria}
                 onSearchFiles={searchFiles}

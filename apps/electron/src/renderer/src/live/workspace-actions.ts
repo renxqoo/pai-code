@@ -1,4 +1,4 @@
-import type { AgentDefinition, ApiOutcome, ImagePayload, PermissionRules, ProviderModel, ThinkingFormat } from '@paiapp/contracts';
+import type { AgentDefinition, ApiOutcome, CommandView, ImagePayload, PermissionRules, ProviderModel, ThinkingFormat } from '@paiapp/contracts';
 import { thinkingLevelOfLabel } from '@paiapp/contracts';
 
 import { copy } from '@/strings';
@@ -74,6 +74,8 @@ export type WorkspaceActions = {
   readonly removeAgentDefinition: (key: { file: string; scope: 'user' | 'project'; project: string | null }) => Promise<string | null>;
   /** 技能目录刷新（设置页技能分区进入时）。 */
   readonly refreshSkills: () => void;
+  /** 预会话命令目录（新建任务页打开时拉取；失败空目录降级）。 */
+  readonly fetchCommandPreview: () => Promise<CommandView[]>;
   /** 技能启停：落盘后重开全部活跃会话使新设置生效（失败 notice）。 */
   readonly setSkillEnabled: (name: string, enabled: boolean) => Promise<boolean>;
   readonly searchFiles: (query: string) => Promise<string[] | null>;
@@ -334,6 +336,7 @@ export function createWorkspaceActions(setDiagnostics: (value: WorkspaceDiagnost
     refreshSkills: () => {
       void controller.refreshSkills();
     },
+    fetchCommandPreview: () => controller.fetchCommandPreview(),
     setSkillEnabled: async (name, enabled) => {
       // 生效编排走 controller 排队链：写 pi settings + 串行重开全部 live 会话（信任态由注册表补全）
       const outcome = await controller.applySkillToggle(name, enabled);

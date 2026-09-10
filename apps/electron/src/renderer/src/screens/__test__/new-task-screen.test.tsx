@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
+import type { CommandView } from '@paiapp/contracts';
+
 import { greetingKeyOf } from '@/lib/greeting';
 import { greetingTexts } from '@/screens/new-task-view-model';
 import { copy } from '@/strings';
@@ -15,6 +17,7 @@ function renderScreen(overrides: Partial<Parameters<typeof NewTaskScreen>[0]> = 
   return renderToStaticMarkup(
     <NewTaskScreen
       knownDirs={['/w/app', '/w/cli']}
+      commands={[]}
       defaultCwd="/w/app"
       trustedDefault={false}
       defaultModelFor={() => 'glm/glm-4.7'}
@@ -78,5 +81,16 @@ describe('NewTaskScreen', () => {
     expect(html).not.toContain(copy.composer.branchUnavailable);
     expect(html).not.toContain(copy.composer.branchLoading);
     expect(html).toContain(copy.newTask.placeholder);
+  });
+
+  test('症状回归：新建任务页输入 / 无命令面板——commands 属性接入预构目录（启用技能条目）', () => {
+    // 目录数据源经 use-new-task-page（command/preview）装配；本用例锁定页面属性面：
+    // 预构目录非空时输入区正常渲染（`/` 触发数据源不再恒空），空目录时页面不回归。
+    const catalog: readonly CommandView[] = [{ name: 'skill:rxopen-hot', description: '查热搜', source: 'skill' }];
+    const withCatalog = renderScreen({ commands: catalog });
+    expect(withCatalog).toContain(copy.newTask.placeholder);
+    expect(withCatalog).toContain(copy.composer.send);
+    const emptyCatalog = renderScreen({ commands: [] });
+    expect(emptyCatalog).toContain(copy.newTask.placeholder);
   });
 });

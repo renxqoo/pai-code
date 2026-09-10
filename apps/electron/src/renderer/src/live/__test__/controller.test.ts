@@ -117,3 +117,27 @@ test('症状回归：StrictMode 双挂载序列（start→dispose→start）下 
   expect(store.getState().bootstrapLoaded).toBe(true);
   controller.dispose();
 });
+
+test('症状回归：新建任务页输入 / 无命令面板——fetchCommandPreview 拉取 command/preview，失败空目录降级', async () => {
+  // 预会话目录（无 threadId 可寻址）：成功透传 CommandView[]；宿主/桥失败不抛出，
+  // 空数组降级（`/` 触发不启用，@ 文件补全不受影响）。
+  const store = createLiveStore();
+  let fail = false;
+  const client: BridgeClient = {
+    available: true,
+    invoke: (method) => {
+      if (method !== 'command/preview') return Promise.resolve({ ok: true, data: null } as never);
+      return fail
+        ? Promise.resolve({ ok: false, reason: 'hub_unavailable' } as never)
+        : Promise.resolve({
+            ok: true,
+            data: [{ name: 'skill:rxopen-hot', description: '查热搜', source: 'skill' }],
+          } as never);
+    },
+    subscribe: () => () => undefined,
+  };
+  const controller = createLiveController(client, store);
+  expect(await controller.fetchCommandPreview()).toEqual([{ name: 'skill:rxopen-hot', description: '查热搜', source: 'skill' }]);
+  fail = true;
+  expect(await controller.fetchCommandPreview()).toEqual([]);
+});

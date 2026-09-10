@@ -22,7 +22,9 @@ type PromptInputAreaProps = {
   placeholder: string
   /** 外部聚焦句柄：编辑重发回填草稿后聚焦输入框 */
   textareaRef?: React.Ref<HTMLTextAreaElement>
-  /** 会话内斜杠命令/技能目录（hub get_commands 下发，含 builtin 内置命令；空 = 无会话：不启用 `/` 触发，仅 `@` 文件补全） */
+  /** 斜杠命令/技能目录（`/` 触发数据源；空 = 不启用 `/` 触发，仅 `@` 文件补全）：
+   * 线程页由 hub get_commands 下发（含 builtin 内置命令），新建任务页为用户级
+   * 启用技能的预构目录（command/preview） */
   commands: readonly CommandView[]
   /** 补全弹层的无障碍名（命令 / 文件） */
   slashAriaLabel: string

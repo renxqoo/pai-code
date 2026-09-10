@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { sessionCommands } from '../response-views';
+import { previewCommands, sessionCommands } from '../response-views';
 
 /** get_commands 收窄回归：四源透传（含 hub builtin 内置命令）、垃圾降级。 */
 
@@ -44,5 +44,24 @@ test('混合垃圾条目中合法条目保留', () => {
     commands: [{ name: '/ok', source: 'prompt' }, { name: 1, source: 'prompt' }, 'junk'],
   });
   expect(kept).toEqual([{ name: '/ok', description: null, source: 'prompt' }]);
+});
+
+/** 预会话目录（新建任务页 `/` 补全）：技能清单 → get_commands 的 skill 源同型条目。 */
+
+test('技能名加 skill: 前缀成 skill 源条目，description 原样透传（含 null）', () => {
+  expect(
+    previewCommands([
+      { name: 'rxopen-hot', description: '查热搜' },
+      { name: 'writer', description: null },
+    ]),
+  ).toEqual([
+    { name: 'skill:rxopen-hot', description: '查热搜', source: 'skill' },
+    { name: 'skill:writer', description: null, source: 'skill' },
+  ]);
+});
+
+test('空名技能丢弃；空清单 → 空目录', () => {
+  expect(previewCommands([{ name: '', description: 'x' }])).toEqual([]);
+  expect(previewCommands([])).toEqual([]);
 });
 

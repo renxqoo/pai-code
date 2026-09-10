@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import type { CommandView } from '@paiapp/contracts';
+
 import type { ComposerAttachment } from '@/composer/prompt-card';
 import { imagePayloadOf } from '@/composer/read-image-file';
 import type { LiveWorkspaceView } from '@/live/use-live-workspace';
@@ -40,9 +42,22 @@ export function useNewTaskPage(input: {
   const [cwd, setCwd] = React.useState('');
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [branchRevision, setBranchRevision] = React.useState(0);
+  /** 预会话命令目录（`/` 补全数据源）：每次打开重拉（技能启停/目录变化即时生效） */
+  const [commands, setCommands] = React.useState<readonly CommandView[]>([]);
   const actions = workspace.actions;
   /** 宿主掉线（从未构建或 failed）：模型位文案不得伪装成「未配置模型」 */
   const hostDown = workspace.hostPhase === null || workspace.hostPhase === 'failed';
+
+  React.useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    void actions.fetchCommandPreview().then((list) => {
+      if (!cancelled) setCommands(list);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, actions]);
 
   /** 已知项目目录（活跃会话 + 已保存会话 cwd 去重，最近优先） */
   const knownDirs = React.useMemo(
@@ -99,6 +114,7 @@ export function useNewTaskPage(input: {
             props: {
               knownDirs,
               defaultCwd: cwd.length > 0 ? cwd : workspace.activeCwd,
+              commands,
               trustedDefault: workspace.preferences.trustedDefault,
               defaultModelFor: actions.defaultModelFor,
               modelOptions: workspace.composer.modelOptions,
@@ -117,7 +133,7 @@ export function useNewTaskPage(input: {
             },
           }
         : null,
-    [open, key, knownDirs, cwd, hostDown, workspace, actions, onOpenSettings, checkoutBranch, create, close, onDialogOpenChange],
+    [open, key, knownDirs, cwd, commands, hostDown, workspace, actions, onOpenSettings, checkoutBranch, create, close, onDialogOpenChange],
   );
 
   return { open, dialogOpen, branchRevision, enter, close, screen };
