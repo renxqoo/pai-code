@@ -52,3 +52,34 @@ describe('coalesceEvents', () => {
     expect(out).toEqual([text('t', 'm', '')]);
   });
 });
+
+
+describe('coalesceEvents · toolUpdated 批内折叠（T28 R11：chatty 工具输出与打字机同型）', () => {
+  const tool = (callId: string, output: string) => ({ type: 'toolUpdated' as const, threadId: 't1', callId, output });
+
+  test('同 callId 相邻 toolUpdated 拼接为一条；不同 callId 不合并', () => {
+    const events = [
+      { type: 'textDelta' as const, threadId: 't1', messageId: 'm1', delta: 'a' },
+      tool('c1', 'line1\n'),
+      tool('c1', 'line2\n'),
+      tool('c1', 'line3\n'),
+      tool('c2', 'other'),
+    ];
+    const out = coalesceEvents(events);
+    expect(out).toEqual([
+      { type: 'textDelta', threadId: 't1', messageId: 'm1', delta: 'a' },
+      { type: 'toolUpdated', threadId: 't1', callId: 'c1', output: 'line1\nline2\nline3\n' },
+      { type: 'toolUpdated', threadId: 't1', callId: 'c2', output: 'other' },
+    ]);
+  });
+
+  test('中间被其他事件打断则不跨段合并', () => {
+    const events = [
+      tool('c1', 'a'),
+      { type: 'turnSettled' as const, threadId: 't1', at: 1 },
+      tool('c1', 'b'),
+    ];
+    const out = coalesceEvents(events);
+    expect(out.filter((event) => event.type === 'toolUpdated')).toHaveLength(2);
+  });
+});

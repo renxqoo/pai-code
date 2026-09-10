@@ -20,9 +20,9 @@ type MessageListProps = {
   bottomInset: number
   emptyTitle: string
   emptyHint: string
-  /** 历史水化失败态的重试动作（不提供则空态无重试按钮）。 */
+  /** 历史水化失败态的重试动作（不提供则空态无重试按钮）；提供时文案必传。 */
   onRetryHydrate?: () => void
-  retryLabel?: string
+  retryLabel: string
   onOpenDiff: () => void
   onEditUserMessage: (text: string) => void
   onForkUserMessage?: (entryId: string, text: string, images: ReadonlyArray<{ data: string; mimeType: string }>, autoResend: boolean) => void
@@ -86,6 +86,6 @@ function MessageList({ thread, now, loading, bottomInset, emptyTitle, emptyHint,
 
 const MessageListMemo = React.memo(
   MessageList,
-  (prev, next) => prev.thread === next.thread && prev.now === next.now && prev.loading === next.loading && prev.bottomInset === next.bottomInset && prev.emptyTitle === next.emptyTitle && prev.emptyHint === next.emptyHint && prev.onRetryHydrate === next.onRetryHydrate && prev.retryLabel === next.retryLabel,
+  (prev, next) => prev.thread === next.thread && prev.now === next.now && prev.loading === next.loading && prev.bottomInset === next.bottomInset && prev.emptyTitle === next.emptyTitle && prev.emptyHint === next.emptyHint && prev.onRetryHydrate === next.onRetryHydrate && prev.retryLabel === next.retryLabel && prev.onOpenDiff === next.onOpenDiff && prev.onEditUserMessage === next.onEditUserMessage && prev.onForkUserMessage === next.onForkUserMessage,
 );
 export { MessageListMemo as MessageList };

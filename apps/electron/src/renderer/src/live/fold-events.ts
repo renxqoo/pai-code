@@ -169,7 +169,7 @@ export function foldHydrate(state: LiveThreadState, action: HydrateAction): Live
         }
       }
       const seen = capSeenIds(new Set([...state.seenIds, ...action.items.map((item) => item.id)]));
-      return { ...state, items, cursor: action.cursor ?? state.cursor, seenIds: seen, liveTurnId: liveTurn };
+      return { ...state, items, cursor: action.cursor ?? state.cursor, seenIds: seen, liveTurnId: liveTurn, hydrateFailed: false };
     }
     case 'hydrate/rebuild': {
       const items = [...hydrateItems(action.items)];

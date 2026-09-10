@@ -80,12 +80,16 @@ void app.whenReady().then(async () => {
     if (pendingEvents.length === 0) return;
     const batch = pendingEvents;
     pendingEvents = [];
+    // 失焦通知随批发定一次（通知只关心批内是否含触发类事件，逐事件判定是
+    // 高频 delta 期的无谓原生调用）
+    for (const raw of batch) {
+      if (notifyIfBlurred(raw as UiEvent)) break;
+    }
     const target = mainWindow;
     if (target === null || target.isDestroyed()) return;
     target.webContents.send('pai:event', batch);
   };
   const emitToRenderer = (event: UiEvent): void => {
-    notifyIfBlurred(event);
     pendingEvents.push(event);
     if (pendingEvents.length >= 128) {
       if (flushTimer !== null) clearTimeout(flushTimer);
@@ -96,10 +100,10 @@ void app.whenReady().then(async () => {
   };
 
   /** K1 系统通知：窗口失焦时的权限弹窗与 host 失败（任务通知走应用内通知条）。 */
-  const notifyIfBlurred = (event: UiEvent): void => {
-    if (!Notification.isSupported()) return;
+  const notifyIfBlurred = (event: UiEvent): boolean => {
+    if (!Notification.isSupported()) return false;
     const win = mainWindow;
-    if (win !== null && !win.isDestroyed() && win.isFocused()) return;
+    if (win !== null && !win.isDestroyed() && win.isFocused()) return false;
     if (event.type === 'dialogRequest' && event.method !== 'notify' && event.method !== 'setStatus') {
       new Notification({ title: 'pai', body: event.title ?? 'Action required' }).show();
     } else if (event.type === 'host' && event.phase === 'failed') {
@@ -108,7 +112,10 @@ void app.whenReady().then(async () => {
       new Notification({ title: 'pai', body: 'Agent host is restarting.' }).show();
     } else if (event.type === 'turnSettled') {
       new Notification({ title: 'pai', body: 'Turn finished.' }).show();
+    } else {
+      return false;
     }
+    return true;
   };
 
   // 装配段整体兜底：任何一步失败都继续开窗（渲染层经 bootstrap 失败态进设置引导），绝不静默悬挂

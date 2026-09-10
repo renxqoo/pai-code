@@ -133,6 +133,16 @@ describe('live store（对话框/通知/bootstrap 合并）', () => {
     expect(store.getState().threads['t1']?.crashed).toBe(true);
   });
 
+  test('症状回归：host 重启折叠同步清 hydrateFailed（旧世代失败标志不得残留误呈加载失败）', () => {
+    const store = createLiveStore();
+    store.getState().bootstrap({ sessions: [session('t1')], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } });
+    store.getState().hydrate('t1', { kind: 'hydrate/failed' });
+    expect(store.getState().threads['t1']?.hydrateFailed).toBe(true);
+    store.getState().applyEvent({ type: 'host', phase: 'restarting' }, 5);
+    expect(store.getState().threads['t1']?.hydrateFailed).toBe(false);
+    expect(store.getState().threads['t1']?.hydrated).toBe(false);
+  });
+
   test('症状回归：host 重启折叠清空 hydrated——回落 parked 后再次激活必须重拉全量（防旧数据陈旧展示）', () => {
     const store = createLiveStore();
     store.getState().bootstrap({ sessions: [session('t1')], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } });
