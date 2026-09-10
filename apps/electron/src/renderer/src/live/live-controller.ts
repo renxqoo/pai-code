@@ -106,11 +106,9 @@ export interface LiveController {
   readonly forkSession: (threadId: string, entryId: string) => Promise<{ ok: true; threadId: string } | { ok: false; reason: string }>;
   readonly refreshStats: (threadId: string) => Promise<void>;
   readonly ensureHydrated: (threadId: string) => Promise<void>;
-  /** 懒恢复（T16）：parked 占位 → session/resume（在途按 sessionPath 去重）。
-   * 返回可用 threadId（非 parked 原样返回；失败 null，不自动重试）。 */
+  /** 写路径懒恢复（T16 建立、T27 收窄）：parked 占位 → session/resume（在途按
+   * sessionPath 去重）。返回可用 threadId（非 parked 原样返回；失败 null，不自动重试）。 */
   readonly ensureLiveSession: (threadId: string) => Promise<string | null>;
-  /** 懒恢复并激活（选择/兜底通路编排）：失败发通知条。 */
-  readonly wakeAndActivate: (threadId: string) => void;
 }
 
 export function createLiveController(client: BridgeClient, store: LiveStore): LiveController {
@@ -167,9 +165,9 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     store.getState().hydrate(threadId, { kind: 'hydrate/initial', items: outcome.data.items, cursor: outcome.data.cursor });
   };
 
-  /** 懒恢复机制（在途去重/乐观登记/选择意图）独立模块。 */
-  const lazy = createLazyResume(client, store, () => disposed);
-  const { resumeByPath, ensureLiveSession, wakeAndActivate, activate } = lazy;
+  /** 懒恢复机制（在途去重/乐观登记）独立模块。 */
+  const lazy = createLazyResume(client, store);
+  const { resumeByPath, ensureLiveSession, activate } = lazy;
 
   /** 对话框兜底定时器登记：结算/dispose 时清理，避免滞留句柄。 */
   const dialogTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -205,11 +203,6 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     if (event.type === 'host' && (event.phase === 'restarting' || event.phase === 'failed')) {
       // host 进程消亡：乐观登记的「已恢复」随 worker 全灭失效（对账会重发 parked 视图）
       lazy.invalidate();
-      return;
-    }
-    if (event.type === 'sessionUpdated' && event.session.state === 'parked' && state.activeThreadId === event.session.threadId) {
-      // host 重启后对账回落 parked 的活跃会话：窗口正在看着它，自动唤回
-      wakeAndActivate(event.session.threadId);
       return;
     }
     if (event.type === 'dialogRequest' && event.method !== 'notify' && event.method !== 'setStatus') {
@@ -271,10 +264,8 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       store.getState().bootstrap(outcome.data);
       // 全局权限规则启动即载（新任务页权限控件的唯一数据源；此前仅设置页进入时拉取）
       void refreshGlobalRules();
-      // 聚焦会话懒恢复：启动不再全量 resume，bootstrap 自动选中的会话若是 parked 占位需唤醒
-      // （历史水化由工作区激活 effect 跟随 state 翻转完成，此处只负责唤活与激活）
-      const active = store.getState().activeThreadId;
-      if (active !== null) wakeAndActivate(active);
+      // bootstrap 自动选中的 parked 会话保持只读激活（历史经直读水化），
+      // 发消息才唤醒 worker（T27：读不唤醒）
     },
     dispose(): void {
       disposed = true;
@@ -581,14 +572,9 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       await hydrateFull(threadId).catch(() => undefined);
     },
     ensureLiveSession,
-    wakeAndActivate,
     selectSession(threadId: string): void {
-      const session = store.getState().sessions[threadId];
-      // parked 占位不直接激活：先懒恢复，成功后以响应 threadId 激活
-      if (session?.state === 'parked') {
-        wakeAndActivate(threadId);
-        return;
-      }
+      // parked 只读激活（历史经 host 直读水化，不唤醒 worker）；
+      // 发消息走 submitDraft 的 ensureLiveSession 兜底唤醒（T27：读不唤醒、写才唤醒）
       activate(threadId);
     },
   };

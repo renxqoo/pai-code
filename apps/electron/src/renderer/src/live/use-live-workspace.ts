@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import type { AgentDefinition, CommandView, PermissionRules, PreferencesView, ProviderConfigView, SessionStatsView, SessionView, SkillView } from '@paiapp/contracts';
+import type { AgentDefinition, CommandView, ModelInfoView, PermissionRules, PreferencesView, ProviderConfigView, SessionStatsView, SessionView, SkillView } from '@paiapp/contracts';
 import { supportedThinkingLevels, thinkingLevelLabel } from '@paiapp/contracts';
 import { useStore } from 'zustand';
 
@@ -99,6 +99,13 @@ const EMPTY_QUEUE: { steering: readonly string[]; followUp: readonly string[] } 
 /** useSyncExternalStore 订阅句柄：引用恒定（queuedDrafts 是模块单例）。 */
 const subscribeQueuedDrafts = (listener: () => void): (() => void) => queuedDrafts.subscribe(listener);
 
+/** 模型 key（provider/modelId）→ 可用思考档展示名：按模型能力本地推导
+ * （无线程/未唤醒时的唯一数据源；live 态以 hub 档位命令为准）。 */
+function effortLevelsForModel(models: readonly ModelInfoView[], modelKey: string): string[] {
+  const model = models.find((entry) => `${entry.provider}/${entry.modelId}` === modelKey);
+  return supportedThinkingLevels(model).map((level) => thinkingLevelLabel(level));
+}
+
 export function useLiveWorkspace(): LiveWorkspaceView {
   const [now, setNow] = React.useState(() => Date.now());
   const [effortLevels, setEffortLevels] = React.useState<readonly string[]>([]);
@@ -142,12 +149,10 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     [],
   );
 
-  /** 模型 → 可用思考档展示名（新任务页数据源：hub 档位命令只按线程寻址，无线程时按模型能力算）。 */
+  /** 模型 → 可用思考档展示名（新任务页与 parked 浏览态共用：hub 档位命令只按
+   * 线程寻址，无线程/未唤醒时按模型能力本地算——effortLevelsForModel 单一真相）。 */
   const effortOptionsFor = React.useCallback(
-    (modelKey: string): string[] => {
-      const model = models.find((entry) => `${entry.provider}/${entry.modelId}` === modelKey);
-      return supportedThinkingLevels(model).map((level) => thinkingLevelLabel(level));
-    },
+    (modelKey: string): string[] => effortLevelsForModel(models, modelKey),
     [models],
   );
 
@@ -169,13 +174,19 @@ export function useLiveWorkspace(): LiveWorkspaceView {
   React.useEffect(() => {
     // 切会话（或最后一个会话被移除）先清会话级派生态，避免上一会话残留到新会话
     // （sessionRules 的清空在 store.setActiveThread 内同步完成，防渲染帧残留一帧）
-    setEffortLevels([]);
     setCommands([]);
     store.setState({ agentDefinitions: [] });
-    // parked 占位：懒恢复完成（state 翻转为 live）后本 effect 重跑再拉取，
-    // 避免对未恢复线程发注定失败的水化/档位/命令/规则请求
-    if (activeThreadId.length === 0 || activeSessionState === 'parked') return;
+    if (activeThreadId.length === 0) return;
+    // parked 浏览态（T27）：历史经 host 直读水化（读不唤醒 worker）；
+    // thinkingLevels/commands/stats 是 worker 级查询——不发，思考档控件用
+    // 模型能力本地推导（与新任务页同源），其余控件在 live 翻转后由本 effect 重跑补齐
     void controller.ensureHydrated(activeThreadId);
+    void controller.readSessionRules(activeThreadId);
+    if (activeSessionState !== 'live') {
+      const model = store.getState().sessions[activeThreadId]?.model ?? '';
+      setEffortLevels(effortLevelsForModel(store.getState().models, model));
+      return;
+    }
     // 思考档位随会话拉取（模型能力差异；响应回来时会话已切换则丢弃）
     void bridgeClient.invoke('session/thinkingLevels', { threadId: activeThreadId }).then((outcome) => {
       if (store.getState().activeThreadId !== activeThreadId) return;
@@ -186,8 +197,6 @@ export function useLiveWorkspace(): LiveWorkspaceView {
       if (store.getState().activeThreadId !== activeThreadId) return;
       if (outcome.ok) setCommands(outcome.data);
     });
-    // 会话权限规则随会话拉取（操作栏模式控件数据源；判活在 controller.readSessionRules 内）
-    void controller.readSessionRules(activeThreadId);
     void controller.refreshStats(activeThreadId);
   }, [activeThreadId, activeSessionState]);
 

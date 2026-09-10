@@ -7,9 +7,10 @@ import { createLiveStore, type LiveStore } from '../store';
 import type { BridgeClient } from '../client-invoke';
 
 /**
- * 懒恢复回归（T16）：parked 占位的按需 resume——去重（同 sessionPath 在途至多一次）、
- * 失败不自动重试（通知条 + 占位保留）、threadId 只信响应、发消息前兜底、
- * bootstrap 自动选中唤醒、host 重启后活跃会话自动唤回、History 打开与占位收敛。
+ * 懒恢复回归（T16 建立、T27 收窄为「读不唤醒、写才唤醒」）：parked 会话的
+ * 选择/bootstrap/回落一律只读激活（零 resume，历史经 host 直读）；resume 只
+ * 在写路径发生——发消息兜底（去重、threadId 只信响应、失败不自动重试）、
+ * History 打开（hub 无表项必须建表）、trusted 重载串行化。
  */
 
 type Outcome = { ok: true; data: unknown } | { ok: false; reason: string };
@@ -63,17 +64,17 @@ const waitMs = (ms: number): Promise<void> =>
     setTimeout(resolve, ms);
   });
 
-/** start() 需要 bootstrap 载荷（ disposed 守卫在 start 前拦截懒恢复续体，与生产时序一致）。 */
+/** start() 需要 bootstrap 载荷（disposed 守卫在 start 前拦截懒恢复续体，与生产时序一致）。 */
 const bootstrapOf = (sessions: SessionView[]): Outcome => ({
   ok: true,
   data: { sessions, saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] }, hostPhase: 'ready' },
 });
 
-describe('懒恢复：选择与去重', () => {
-  test('selectSession(parked) → 恰一次 resume，成功后以响应 id 激活', async () => {
+describe('只读激活（T27：读不唤醒）', () => {
+  test('症状回归「点开对话即拉起 worker」：selectSession(parked) 零 resume 直接激活，历史经直读水化', async () => {
     const sessions = [sessionView('t2', 'live', '/w/s/t2.jsonl'), sessionView('t1', 'parked', '/w/s/t1.jsonl')];
     const client = makeClient((method) =>
-      method === 'session/resume' ? { ok: true, data: { threadId: 't9' } } : method === 'app/bootstrap' ? bootstrapOf(sessions) : { ok: true, data: null },
+      method === 'app/bootstrap' ? bootstrapOf(sessions) : { ok: true, data: { items: [], cursor: null } },
     );
     const store = bootStore(sessions);
     store.getState().setActiveThread('t2');
@@ -84,36 +85,41 @@ describe('懒恢复：选择与去重', () => {
     controller.selectSession('t1');
     await waitMs(0);
 
-    expect(resumeCalls(client)).toBe(1);
-    expect(store.getState().activeThreadId).toBe('t9');
+    expect(resumeCalls(client)).toBe(0);
+    expect(store.getState().activeThreadId).toBe('t1');
   });
 
-  test('在途去重：响应未落前重复点击同一占位只发一次 resume', async () => {
-    let releaseResume: (outcome: Outcome) => void = () => undefined;
-    const gate = new Promise<Outcome>((resolve) => {
-      releaseResume = resolve;
-    });
-    const sessions = [sessionView('t2', 'live', '/w/s/t2.jsonl'), sessionView('t1', 'parked', '/w/s/t1.jsonl')];
+  test('症状回归「bootstrap 自动选中即唤醒」：启动选中的 parked 会话零 resume', async () => {
     const client = makeClient((method) => {
-      if (method === 'session/resume') return gate;
-      if (method === 'app/bootstrap') return bootstrapOf(sessions);
+      if (method === 'app/bootstrap') {
+        return {
+          ok: true,
+          data: { sessions: [sessionView('t1', 'parked', '/w/s/t1.jsonl')], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] }, hostPhase: 'ready' },
+        };
+      }
       return { ok: true, data: null };
     });
-    const store = bootStore(sessions);
-    store.getState().setActiveThread('t2');
+    const store = createLiveStore();
     const controller = createLiveController(client, store);
+
     await controller.start();
+    await waitMs(0);
+
+    expect(resumeCalls(client)).toBe(0);
+    expect(store.getState().notices).toHaveLength(0);
+  });
+
+  test('症状回归「host 重启回落自动唤回」：sessionUpdated(parked) 命中活跃会话零 resume', async () => {
+    const client = makeClient(() => ({ ok: true, data: null }));
+    const store = bootStore([sessionView('t1', 'live', '/w/s/t1.jsonl')]);
+    store.getState().setActiveThread('t1');
+    const controller = createLiveController(client, store);
+    await controller.start().catch(() => undefined);
     client.calls.length = 0;
 
-    controller.selectSession('t1');
-    controller.selectSession('t1');
-    controller.selectSession('t1');
+    client.emitToController({ type: 'sessionUpdated', session: sessionView('t1', 'parked', '/w/s/t1.jsonl') });
     await waitMs(0);
-    expect(resumeCalls(client)).toBe(1);
-
-    releaseResume({ ok: true, data: { threadId: 't1' } });
-    await waitMs(0);
-    expect(resumeCalls(client)).toBe(1);
+    expect(resumeCalls(client)).toBe(0);
     expect(store.getState().activeThreadId).toBe('t1');
   });
 
@@ -130,49 +136,7 @@ describe('懒恢复：选择与去重', () => {
   });
 });
 
-describe('懒恢复：失败面（不自动重试）', () => {
-  test('resume 失败 → 通知条 + 活跃不变 + 占位保留；手动重试（再次选择）可成功', async () => {
-    let fail = true;
-    const sessions = [sessionView('t2', 'live', '/w/s/t2.jsonl'), sessionView('t1', 'parked', '/w/s/t1.jsonl')];
-    const client = makeClient((method) => {
-      if (method === 'app/bootstrap') return bootstrapOf(sessions);
-      if (method !== 'session/resume') return { ok: true, data: null };
-      return fail ? { ok: false, reason: 'session_not_found' } : { ok: true, data: { threadId: 't1' } };
-    });
-    const store = bootStore(sessions);
-    store.getState().setActiveThread('t2');
-    const controller = createLiveController(client, store);
-    await controller.start();
-    client.calls.length = 0;
-
-    controller.selectSession('t1');
-    await waitMs(0);
-    expect(store.getState().notices.map((notice) => notice.text)).toContain('会话恢复失败，请重试。');
-    expect(store.getState().activeThreadId).toBe('t2');
-    expect(store.getState().sessions['t1']?.state).toBe('parked');
-    expect(resumeCalls(client)).toBe(1);
-
-    // 手动重试 = 再次点击
-    fail = false;
-    controller.selectSession('t1');
-    await waitMs(0);
-    expect(resumeCalls(client)).toBe(2);
-    expect(store.getState().activeThreadId).toBe('t1');
-  });
-
-  test('submitDraft 于 parked 会话：resume 失败返回 resume_failed 且不发 prompt', async () => {
-    const client = makeClient((method) => (method === 'session/resume' ? { ok: false, reason: 'timeout' } : { ok: true, data: null }));
-    const store = bootStore([sessionView('t1', 'parked', '/w/s/t1.jsonl')]);
-    const controller = createLiveController(client, store);
-
-    const reason = await controller.submitDraft('t1', '你好');
-
-    expect(reason).toBe('resume_failed');
-    expect(client.calls.some((call) => call.method === 'session/prompt')).toBe(false);
-  });
-});
-
-describe('懒恢复：发消息前兜底', () => {
+describe('写路径兜底（T16 遗产 + T27 收窄）', () => {
   test('submitDraft(parked) → 先 resume 后 prompt，prompt 用响应 threadId', async () => {
     const client = makeClient((method) => (method === 'session/resume' ? { ok: true, data: { threadId: 't9' } } : { ok: true, data: null }));
     const store = bootStore([sessionView('t1', 'parked', '/w/s/t1.jsonl')]);
@@ -187,118 +151,40 @@ describe('懒恢复：发消息前兜底', () => {
     // 换 id 时同步激活（旧占位由主进程 sessionRemoved 清出）
     expect(store.getState().activeThreadId).toBe('t9');
   });
-});
 
-describe('懒恢复：启动与 host 重启链路', () => {
-  test('bootstrap 自动选中的 parked 会话自动唤醒；失败发通知不崩', async () => {
-    const client = makeClient((method) => {
-      if (method === 'session/resume') return { ok: false, reason: 'timeout' };
-      if (method === 'app/bootstrap') {
-        return {
-          ok: true,
-          data: { sessions: [sessionView('t1', 'parked', '/w/s/t1.jsonl')], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] }, hostPhase: 'ready' },
-        };
-      }
-      return { ok: true, data: null };
-    });
-    const store = createLiveStore();
-    const controller = createLiveController(client, store);
-
-    await controller.start();
-    await waitMs(0);
-
-    expect(resumeCalls(client)).toBe(1);
-    expect(store.getState().notices.map((notice) => notice.text)).toContain('会话恢复失败，请重试。');
-    expect(store.getState().activeThreadId).toBe('t1');
-  });
-
-  test('sessionUpdated(parked) 命中活跃会话 → 自动唤回；非活跃不打扰', async () => {
-    const client = makeClient((method) => (method === 'session/resume' ? { ok: true, data: { threadId: 't1' } } : { ok: true, data: null }));
-    const store = bootStore([sessionView('t1', 'live', '/w/s/t1.jsonl'), sessionView('t2', 'parked', '/w/s/t2.jsonl')]);
-    store.getState().setActiveThread('t1');
-    const controller = createLiveController(client, store);
-    await controller.start().catch(() => undefined);
-    client.calls.length = 0;
-
-    client.emitToController({ type: 'sessionUpdated', session: sessionView('t2', 'parked', '/w/s/t2.jsonl') });
-    await waitMs(0);
-    expect(resumeCalls(client)).toBe(0);
-
-    client.emitToController({ type: 'sessionUpdated', session: sessionView('t1', 'parked', '/w/s/t1.jsonl') });
-    await waitMs(0);
-    expect(resumeCalls(client)).toBe(1);
-  });
-});
-
-describe('懒恢复：History 打开与占位收敛', () => {
-  test('同路径已 live → 直接激活零 resume（不撞 hub 双开守卫）', async () => {
-    const client = makeClient(() => ({ ok: true, data: null }));
-    const store = bootStore([sessionView('t2', 'live', '/w/s/t2.jsonl')]);
-    const controller = createLiveController(client, store);
-
-    const opened = await controller.openSavedSession('/w/s/t2.jsonl');
-
-    expect(opened).toBe(true);
-    expect(resumeCalls(client)).toBe(0);
-    expect(store.getState().activeThreadId).toBe('t2');
-  });
-
-  test('同路径 parked 占位 → 走 resume 去重通路后激活', async () => {
-    const client = makeClient((method) => (method === 'session/resume' ? { ok: true, data: { threadId: 't1' } } : { ok: true, data: null }));
+  test('submitDraft 于 parked 会话：resume 失败返回 resume_failed 且不发 prompt', async () => {
+    const client = makeClient((method) => (method === 'session/resume' ? { ok: false, reason: 'timeout' } : { ok: true, data: null }));
     const store = bootStore([sessionView('t1', 'parked', '/w/s/t1.jsonl')]);
     const controller = createLiveController(client, store);
 
-    const opened = await controller.openSavedSession('/w/s/t1.jsonl');
+    const reason = await controller.submitDraft('t1', '你好');
 
-    expect(opened).toBe(true);
-    expect(resumeCalls(client)).toBe(1);
-    expect(store.getState().activeThreadId).toBe('t1');
-    // 激活后水化走 session/entries
-    expect(client.calls.some((call) => call.method === 'session/entries')).toBe(true);
+    expect(reason).toBe('resume_failed');
+    expect(client.calls.some((call) => call.method === 'session/prompt')).toBe(false);
   });
 
-  test('未知路径 → 直接 resume；失败返回 false 并通知', async () => {
-    const client = makeClient((method) => (method === 'session/resume' ? { ok: false, reason: 'session_not_found' } : { ok: true, data: null }));
-    const store = createLiveStore();
-    const controller = createLiveController(client, store);
-
-    const opened = await controller.openSavedSession('/w/s/ghost.jsonl');
-
-    expect(opened).toBe(false);
-    expect(resumeCalls(client)).toBe(1);
-    expect(store.getState().notices.map((notice) => notice.text)).toContain('会话恢复失败，请重试。');
-  });
-});
-
-describe('懒恢复：对抗审查修复面（M3）', () => {
-  test('唤醒完成不劫持在途选择：在途期间用户显式切换 → 只唤活不激活', async () => {
+  test('在途去重（写路径）：响应未落前重复发消息只发一次 resume', async () => {
     let releaseResume: (outcome: Outcome) => void = () => undefined;
     const gate = new Promise<Outcome>((resolve) => {
       releaseResume = resolve;
     });
-    const sessions = [sessionView('t2', 'live', '/w/s/t2.jsonl'), sessionView('t1', 'parked', '/w/s/t1.jsonl')];
-    const client = makeClient((method) => {
-      if (method === 'session/resume') return gate;
-      if (method === 'app/bootstrap') return bootstrapOf(sessions);
-      return { ok: true, data: null };
-    });
-    const store = bootStore(sessions);
-    store.getState().setActiveThread('t2');
+    const client = makeClient((method) => (method === 'session/resume' ? gate : { ok: true, data: null }));
+    const store = bootStore([sessionView('t1', 'parked', '/w/s/t1.jsonl')]);
     const controller = createLiveController(client, store);
-    await controller.start();
-    client.calls.length = 0;
 
-    controller.selectSession('t1');
+    void controller.submitDraft('t1', '第一条');
     await waitMs(0);
-    controller.selectSession('t2'); // 在途切换走（显式选择使唤醒意图失效）
+    void controller.submitDraft('t1', '第二条');
+    await waitMs(0);
+    expect(resumeCalls(client)).toBe(1);
+
     releaseResume({ ok: true, data: { threadId: 't1' } });
     await waitMs(0);
-
     expect(resumeCalls(client)).toBe(1);
-    expect(store.getState().activeThreadId).toBe('t2');
+    expect(store.getState().activeThreadId).toBe('t1');
   });
 
-  test('乐观登记：resume 响应先于 sessionUpdated(live) 事件时，重复使用不再发 resume；host restarting 清空登记', async () => {
+  test('乐观登记：resume 响应先于 sessionUpdated(live) 事件时，重复发消息不再发 resume；host restarting 清空登记', async () => {
     const sessions = [sessionView('t1', 'parked', '/w/s/t1.jsonl')];
     const client = makeClient((method) => {
       if (method === 'session/resume') return { ok: true, data: { threadId: 't1' } };
@@ -309,17 +195,17 @@ describe('懒恢复：对抗审查修复面（M3）', () => {
     const controller = createLiveController(client, store);
     await controller.start();
     await waitMs(0);
-    expect(resumeCalls(client)).toBe(1);
+    expect(resumeCalls(client)).toBe(0);
 
-    // 事件尚未折叠（store 仍 parked）：再次选择 → 乐观登记直接返回，不重发
-    controller.selectSession('t1');
-    controller.selectSession('t1');
+    // 事件尚未折叠（store 仍 parked）：首次发消息 resume 一次；乐观登记窗口内重复投递不重发
+    await controller.submitDraft('t1', '一');
+    await controller.submitDraft('t1', '二');
     await waitMs(0);
     expect(resumeCalls(client)).toBe(1);
 
-    // host 重启：乐观登记失效 → 对账 parked 视图再次选择会重新 resume
+    // host 重启：乐观登记失效 → 再次发消息会重新 resume
     client.emitToController({ type: 'host', phase: 'restarting' });
-    controller.selectSession('t1');
+    await controller.submitDraft('t1', '三');
     await waitMs(0);
     expect(resumeCalls(client)).toBe(2);
   });
@@ -347,6 +233,73 @@ describe('懒恢复：对抗审查修复面（M3）', () => {
     expect(resumeCalls(client)).toBe(0);
   });
 
+  test('唤醒完成不劫持在途选择：submitDraft 唤醒在途时用户显式切换 → 换 id 只投递不激活', async () => {
+    let releaseResume: (outcome: Outcome) => void = () => undefined;
+    const gate = new Promise<Outcome>((resolve) => {
+      releaseResume = resolve;
+    });
+    const sessions = [sessionView('t2', 'live', '/w/s/t2.jsonl'), sessionView('t1', 'parked', '/w/s/t1.jsonl')];
+    const client = makeClient((method) => {
+      if (method === 'session/resume') return gate;
+      return { ok: true, data: null };
+    });
+    const store = bootStore(sessions);
+    store.getState().setActiveThread('t1');
+    const controller = createLiveController(client, store);
+
+    void controller.submitDraft('t1', '你好');
+    await waitMs(0);
+    controller.selectSession('t2'); // 在途切换走（显式选择优先于换 id 激活）
+    releaseResume({ ok: true, data: { threadId: 't9' } });
+    await waitMs(0);
+
+    expect(resumeCalls(client)).toBe(1);
+    expect(client.calls.find((call) => call.method === 'session/prompt')?.params).toMatchObject({ threadId: 't9' });
+    expect(store.getState().activeThreadId).toBe('t2');
+  });
+});
+
+describe('History 打开与占位收敛', () => {
+  test('同路径已 live → 直接激活零 resume（不撞 hub 双开守卫）', async () => {
+    const client = makeClient(() => ({ ok: true, data: null }));
+    const store = bootStore([sessionView('t2', 'live', '/w/s/t2.jsonl')]);
+    const controller = createLiveController(client, store);
+
+    const opened = await controller.openSavedSession('/w/s/t2.jsonl');
+
+    expect(opened).toBe(true);
+    expect(resumeCalls(client)).toBe(0);
+    expect(store.getState().activeThreadId).toBe('t2');
+  });
+
+  test('同路径 parked 占位 → 走 resume 建表后激活（hub 无表项的会话必须 resume 才可读）', async () => {
+    const client = makeClient((method) => (method === 'session/resume' ? { ok: true, data: { threadId: 't1' } } : { ok: true, data: null }));
+    const store = bootStore([sessionView('t1', 'parked', '/w/s/t1.jsonl')]);
+    const controller = createLiveController(client, store);
+
+    const opened = await controller.openSavedSession('/w/s/t1.jsonl');
+
+    expect(opened).toBe(true);
+    expect(resumeCalls(client)).toBe(1);
+    expect(store.getState().activeThreadId).toBe('t1');
+    // 激活后水化走 session/entries
+    expect(client.calls.some((call) => call.method === 'session/entries')).toBe(true);
+  });
+
+  test('未知路径 → 直接 resume；失败返回 false 并通知', async () => {
+    const client = makeClient((method) => (method === 'session/resume' ? { ok: false, reason: 'session_not_found' } : { ok: true, data: null }));
+    const store = createLiveStore();
+    const controller = createLiveController(client, store);
+
+    const opened = await controller.openSavedSession('/w/s/ghost.jsonl');
+
+    expect(opened).toBe(false);
+    expect(resumeCalls(client)).toBe(1);
+    expect(store.getState().notices.map((notice) => notice.text)).toContain('会话恢复失败，请重试。');
+  });
+});
+
+describe('写路径串行化（trusted 重载链）', () => {
   test('reloadSessionTrusted 串行化：先等在途唤醒结算，再 stop(保行) + resume(trusted)', async () => {
     const order: string[] = [];
     let releaseWake: (outcome: Outcome) => void = () => undefined;
@@ -373,6 +326,9 @@ describe('懒恢复：对抗审查修复面（M3）', () => {
     const store = bootStore(sessions);
     const controller = createLiveController(client, store);
     await controller.start();
+    // 在途唤醒由写路径（发消息）制造——读路径不再唤醒（T27）
+    void controller.submitDraft('t1', '制造在途唤醒');
+    await waitMs(0);
     expect(resumeCalls(client)).toBe(1);
     client.calls.length = 0;
     order.push('toggle');

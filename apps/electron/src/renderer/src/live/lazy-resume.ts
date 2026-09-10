@@ -1,21 +1,19 @@
-import { copy } from '@/strings';
 import type { BridgeClient } from './client-invoke';
 import type { LiveStore } from './store';
 
 /**
- * 懒恢复机制（T16）：parked 占位 → session/resume 的按需通路。
- * 单一职责文件：在途去重（waking）、乐观登记（resumedByPath）、选择意图
- * （pendingSelection，唤醒完成不劫持用户在途切换）都只在这里。
+ * 懒恢复机制（T16 建立、T27 收窄为「写路径专用」）：parked 占位 →
+ * session/resume 的按需通路。读路径（浏览历史）经 host 直读不再唤醒
+ * worker，只有发消息/写动作经 ensureLiveSession 兜底唤醒。
+ * 单一职责文件：在途去重（waking）、乐观登记（resumedByPath）只在这里。
  */
 
 export interface LazyResume {
   /** 按 sessionPath 恢复（在途去重；trusted 分歧串行结算后重发，不静默降级信任态）。 */
   readonly resumeByPath: (sessionPath: string, trusted?: boolean) => Promise<string | null>;
-  /** parked 占位 → 恢复返回可用 threadId；非 parked 原样返回（dead 由 hub 下条命令自愈）；失败 null。 */
+  /** parked 占位 → 恢复返回可用 threadId；非 parked 原样返回（dead 由 hub 写命令自愈）；失败 null。 */
   readonly ensureLiveSession: (threadId: string) => Promise<string | null>;
-  /** 恢复并激活：失败发通知条；用户在途切换后只唤活不激活。 */
-  readonly wakeAndActivate: (threadId: string) => void;
-  /** 显式激活（任何在途唤醒的选择意图随之失效）。 */
+  /** 显式激活会话（只读激活同一入口；唤醒换 id 的激活由 submitDraft 处理）。 */
   readonly activate: (threadId: string) => void;
   /** host 进程消亡：乐观登记的「已恢复」随 worker 全灭失效。 */
   readonly invalidate: () => void;
@@ -23,7 +21,7 @@ export interface LazyResume {
   readonly discardResumed: (sessionPath: string) => void;
 }
 
-export function createLazyResume(client: BridgeClient, store: LiveStore, isDisposed: () => boolean): LazyResume {
+export function createLazyResume(client: BridgeClient, store: LiveStore): LazyResume {
   /** 在途登记：sessionPath -> resume（hub 对同文件重复 resume 回 failure，必须去重）。 */
   const waking = new Map<string, { promise: Promise<string | null>; trusted: boolean | undefined }>();
 
@@ -70,30 +68,13 @@ export function createLazyResume(client: BridgeClient, store: LiveStore, isDispo
     return resumeByPath(session.sessionPath);
   };
 
-  /** 懒恢复期间的选择意图：任何显式激活使其失效——唤醒完成只唤活，不劫持用户在途切换。 */
-  let pendingSelection: string | null = null;
-
   const activate = (threadId: string): void => {
-    pendingSelection = null;
     store.getState().setActiveThread(threadId);
-  };
-
-  const wakeAndActivate = (threadId: string): void => {
-    pendingSelection = threadId;
-    void ensureLiveSession(threadId).then((liveId) => {
-      if (isDisposed() || pendingSelection !== threadId) return;
-      if (liveId === null) {
-        store.getState().pushNotice(copy.flow.resumeFailed);
-        return;
-      }
-      activate(liveId);
-    });
   };
 
   return {
     resumeByPath,
     ensureLiveSession,
-    wakeAndActivate,
     activate,
     invalidate: () => {
       resumedByPath.clear();
