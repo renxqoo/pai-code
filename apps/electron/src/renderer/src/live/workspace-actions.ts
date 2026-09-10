@@ -114,9 +114,6 @@ export type WorkspaceActions = {
   readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; thinkingFormat?: ThinkingFormat; apiKey?: string }) => Promise<boolean>;
   readonly removeProvider: (name: string) => Promise<boolean>;
   readonly renameSession: (threadId: string, name: string) => Promise<boolean>;
-  /** 压缩上下文（customInstructions = `/compact` 后随文字；缺省 = 无附加指示）。
-   * 返回 true = 已受理（调用方据此清草稿）；拒绝/失败 false（提示已在内部发出）。 */
-  readonly compact: (customInstructions?: string) => Promise<boolean>;
 };
 
 /** 通知条写入（store 动作的便捷别名；保留最近 5 条）。 */
@@ -399,18 +396,6 @@ export function createWorkspaceActions(setDiagnostics: (value: WorkspaceDiagnost
       const ok = await controller.renameSession(threadId, name);
       if (!ok) pushNotice(copy.sidebar.renameFailed);
       return ok;
-    },
-    compact: (customInstructions) => {
-      const threadId = activeThreadOf();
-      // 压缩中重复触发本地拒绝（命令入口没有按钮的 disabled 防线）；hub 错误仍兜底
-      if (store.getState().threads[threadId]?.compacting) {
-        pushNotice(copy.flow.compactBusy);
-        return Promise.resolve(false);
-      }
-      return controller.compact(threadId, customInstructions).then((reason) => {
-        if (reason !== null) pushNotice(copy.flow.compactFailed(reason));
-        return reason === null;
-      });
     },
     steerSubagent: (subagentId, message) => {
       void controller.steerSubagent(activeThreadOf(), subagentId, message).then((reason) => {

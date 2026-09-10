@@ -30,7 +30,6 @@
 | `session/setName` | `{threadId, name}` | `set_session_name` |
 | `session/setModel` | `{threadId, provider, modelId}` | `set_model` |
 | `session/setThinking` | `{threadId, level}` | `set_thinking_level` |
-| `session/compact` | `{threadId}` | `compact` |
 | `model/list` | `{}` → `ModelInfoView[]` | `get_models` |
 | `dialog/respond` | `{requestId, payload}` | `ui_response`（任何情况下必答） |
 | `subagent/steer` | `{threadId, subagentId, message}` | `subagent/steer` |

@@ -31,38 +31,6 @@ function makeClient(
   };
 }
 
-test('compact 成功返回 null 并按 threadId 发命令', async () => {
-  const client = makeClient({});
-  const controller = createLiveController(client, createLiveStore());
-  expect(await controller.compact('t1')).toBeNull();
-  expect(client.calls).toContainEqual({ method: 'session/compact', params: { threadId: 't1' } });
-});
-
-test('compact 附加指示透传 customInstructions（不传时 params 不含该键）', async () => {
-  const withInstructions = makeClient({});
-  const controllerA = createLiveController(withInstructions, createLiveStore());
-  expect(await controllerA.compact('t1', '保留迁移重点')).toBeNull();
-  expect(withInstructions.calls).toContainEqual({
-    method: 'session/compact',
-    params: { threadId: 't1', customInstructions: '保留迁移重点' },
-  });
-
-  const withoutInstructions = makeClient({});
-  const controllerB = createLiveController(withoutInstructions, createLiveStore());
-  expect(await controllerB.compact('t1')).toBeNull();
-  const compactCall = withoutInstructions.calls.find((call) => call.method === 'session/compact');
-  expect(compactCall?.params).toEqual({ threadId: 't1' });
-});
-
-test.each([
-  ['compact_rejected', 'compact_rejected'],
-  ['stream_busy', 'stream_busy'],
-])('compact 失败透传原因（%s）', async (_, reason) => {
-  const client = makeClient({ 'session/compact': { ok: false, reason } });
-  const controller = createLiveController(client, createLiveStore());
-  expect(await controller.compact('t1')).toBe(reason);
-});
-
 test('renameSession 成功返回 true 并发送 trim 后的名字', async () => {
   const client = makeClient({});
   const controller = createLiveController(client, createLiveStore());

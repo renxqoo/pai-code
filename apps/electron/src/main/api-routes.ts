@@ -90,15 +90,23 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     return target === root || target.startsWith(`${root}${pathSep}`);
   };
 
-  const command = async (cmd: Parameters<PaiRuntime['host']['request']>[0]): Promise<{ ok: true; data: unknown } | { ok: false; reason: string }> => {
+  const command = async (
+    cmd: Parameters<PaiRuntime['host']['request']>[0],
+    timeoutMs?: number,
+  ): Promise<{ ok: true; data: unknown } | { ok: false; reason: string }> => {
     try {
-      const outcome = await runtime.host.request(cmd);
+      const outcome = await runtime.host.request(cmd, timeoutMs);
       return outcome.ok ? { ok: true, data: outcome.data } : fail(outcome.error);
     } catch {
       // host 未启动/装配失败走 outcome 而非异常（渲染层据此进降级 UI）
       return fail('host_unavailable');
     }
   };
+
+  /** prompt 通路携带 compact 完成时序（hub 对行首 /compact 拦截后完成才回包，
+   * 见 hub design.md v0.11），大上下文压缩可远超默认 30s 单命令超时——本路由
+   * 放宽到 10 分钟；普通 prompt 的接受时刻回包不受影响。 */
+  const PROMPT_REQUEST_TIMEOUT_MS = 10 * 60_000;
 
   /** 按会话文件路径找注册表行（resume 缺省 trusted 的补全源）。 */
   const findRegistryRowByPath = (sessionPath: string) => runtime.registry.list().find((row) => row.sessionPath === sessionPath) ?? null;
@@ -288,13 +296,16 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       return { ok: true as const, data: await savedAcrossCwds(params.cwd) };
     },
     'session/prompt': async (params) => {
-      const result = await command({
-        type: 'prompt',
-        threadId: params.threadId,
-        message: params.message,
-        streamingBehavior: params.streamingBehavior,
-        images: params.images,
-      });
+      const result = await command(
+        {
+          type: 'prompt',
+          threadId: params.threadId,
+          message: params.message,
+          streamingBehavior: params.streamingBehavior,
+          images: params.images,
+        },
+        PROMPT_REQUEST_TIMEOUT_MS,
+      );
       if (!result.ok) return fail(result.reason);
       void runtime.autoTitleOnPrompt(params.threadId, params.message);
       return { ok: true as const, data: null };
@@ -358,14 +369,6 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     'session/thinkingLevels': async (params) => {
       const result = await command({ type: 'get_thinking_levels', threadId: params.threadId });
       return result.ok ? { ok: true as const, data: thinkingLevels(result.data) } : fail(result.reason);
-    },
-    'session/compact': async (params) => {
-      const result = await command({
-        type: 'compact',
-        threadId: params.threadId,
-        customInstructions: params.customInstructions,
-      });
-      return result.ok ? { ok: true as const, data: null } : fail(result.reason);
     },
     'model/list': async () => {
       const result = await command({ type: 'get_models' });

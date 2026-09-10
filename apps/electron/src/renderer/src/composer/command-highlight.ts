@@ -1,26 +1,26 @@
-import type { ComposerCommand } from '@/composer/builtin-commands';
+import type { CommandView } from '@paiapp/contracts';
 
 /**
  * 输入框命令 token 高亮计算（纯函数，供镜像层渲染）。
  * 高亮语义锚定命令解释真相：模板（expandPromptTemplate）、技能
  * （_expandSkillCommand）、扩展命令以「提示词以 / 开头 + 首 token 与
- * 命令名精确匹配」为命中条件；内置命令（/compact 等，渲染层拦截分派）
- * 沿用同一词法——因此只高亮消息首部、名字在命令目录（get_commands +
- * 本地 builtin 合成）精确命中的完整 token；未知命令与文中段斜杠文本
- * 不高亮（如实呈现它们会被原样发送）。
+ * 命令名精确匹配」为命中条件；hub 内置命令（/compact，v0.11 起 prompt
+ * 通路拦截）沿用同一词法——因此只高亮消息首部、名字在命令目录
+ * （get_commands，含 builtin 源）精确命中的完整 token；未知命令与文中段
+ * 斜杠文本不高亮（如实呈现它们会被原样发送）。
  */
 
 /** 高亮区间：source 保留命令分类——当前视觉统一，字段供后续按类着色/图标扩展。 */
 export type HighlightRange = {
   start: number
   end: number
-  source: ComposerCommand['source']
+  source: CommandView['source']
 }
 
 /** 高亮渲染段：命中段与普通段按序拼接还原全文。 */
 export type HighlightSegment = { text: string; highlighted: boolean }
 
-export function leadingCommandHighlight(text: string, commands: readonly ComposerCommand[]): readonly HighlightRange[] {
+export function leadingCommandHighlight(text: string, commands: readonly CommandView[]): readonly HighlightRange[] {
   if (!text.startsWith('/') || text.length === 1) return []
   const end = text.search(/\s/)
   const tokenEnd = end === -1 ? text.length : end

@@ -31,7 +31,7 @@ describe('slashCommandGroups 斜杠命令分组', () => {
 
   test('内置命令（builtin 源）归命令组：与模板/扩展命令同组并列', () => {
     const groups = slashCommandGroups(
-      [{ name: 'compact', description: 'd', source: 'builtin' as const }, cmd('goal', 'prompt'), cmd('skill:writer', 'skill')],
+      [cmd('compact', 'builtin', 'Manually compact the session context'), cmd('goal', 'prompt'), cmd('skill:writer', 'skill')],
       { commandTitle: '命令', skillTitle: '技能' },
     );
     expect(groups[0]?.items.map((item) => item.id)).toEqual(['builtin:compact', 'prompt:goal']);

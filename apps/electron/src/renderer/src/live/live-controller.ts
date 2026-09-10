@@ -55,9 +55,6 @@ export interface LiveController {
   readonly cancelDialog: (requestId: string) => Promise<void>;
   readonly selectModel: (threadId: string, provider: string, modelId: string) => Promise<void>;
   readonly selectThinking: (threadId: string, level: string) => Promise<void>;
-  /** 压缩（customInstructions = 压缩附加指示，如「/compact 保留重点」的后随文字）：
-   * 成功返回 null，失败返回原因（调用方转用户可见提示）。 */
-  readonly compact: (threadId: string, customInstructions?: string) => Promise<string | null>;
   readonly refreshSaved: () => Promise<void>;
   /** 模型目录刷新（provider 保存触发 host 重启后向导/设置页手动补拉）。 */
   readonly refreshModels: () => Promise<void>;
@@ -392,11 +389,6 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     },
     async selectThinking(threadId: string, level: string): Promise<void> {
       await client.invoke('session/setThinking', { threadId, level });
-    },
-    async compact(threadId: string, customInstructions?: string): Promise<string | null> {
-      const params = customInstructions === undefined ? { threadId } : { threadId, customInstructions };
-      const outcome = await client.invoke('session/compact', params);
-      return outcome.ok ? null : outcome.reason;
     },
     async refreshSaved(): Promise<void> {
       const outcome = await client.invoke('session/listSaved', {});

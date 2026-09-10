@@ -1,8 +1,6 @@
 import * as React from 'react';
 
-import type { PermissionRules, SessionStatsView } from '@paiapp/contracts';
-
-import type { ComposerCommand } from '@/composer/builtin-commands';
+import type { CommandView, PermissionRules, SessionStatsView } from '@paiapp/contracts';
 
 import { CONVERSATION_COLUMN_CLASS } from '@/thread/conversation-column';
 import { ComposerActionsRow } from '@/composer/composer-actions-row';
@@ -33,7 +31,7 @@ type ComposerProps = {
   /** true = 生效规则来自全局文件（无会话 sidecar） */
   permissionFollowsGlobal: boolean
   /** 会话内斜杠命令/技能目录（补全数据源） */
-  commands: readonly ComposerCommand[]
+  commands: readonly CommandView[]
   /** 补全弹层的无障碍名（命令 / 文件） */
   slashAriaLabel: string
   fileAriaLabel: string

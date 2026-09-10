@@ -141,7 +141,7 @@ export function sessionCommands(data: unknown): CommandView[] {
     const name = str(c.name);
     if (name.length === 0) continue;
     const source = c.source;
-    if (source !== 'extension' && source !== 'prompt' && source !== 'skill') continue;
+    if (source !== 'extension' && source !== 'prompt' && source !== 'skill' && source !== 'builtin') continue;
     out.push({ name, description: optStr(c.description), source });
   }
   return out;

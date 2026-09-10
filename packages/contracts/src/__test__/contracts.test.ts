@@ -65,6 +65,11 @@ describe('词表封闭（双向）', () => {
     }
   });
 
+  test('Pai 不发送 compact 命令（压缩经 prompt 通路的 /compact 拦截表达；hub 协议命令词表仍全量镜像）', () => {
+    expect(PAI_COMMAND_TYPES).not.toContain('compact');
+    expect(HUB_COMMAND_TYPES).toContain('compact');
+  });
+
   test('命令词表类型级校验：PaiCommand 可赋给 HubCommand 的 type 集', () => {
     const all: HubCommand['type'][] = [...HUB_COMMAND_TYPES];
     const pai: PaiCommand['type'][] = [...PAI_COMMAND_TYPES];
@@ -195,16 +200,6 @@ describe('API schema：每方法合法/非法样本', () => {
     expect(ApiSchemas['session/bash'].params.parse({ threadId: 't', command: 'git status' })).toEqual({ threadId: 't', command: 'git status' });
     expect(() => ApiSchemas['session/bash'].params.parse({ threadId: 't', command: '' })).toThrow();
     expect(ApiSchemas['session/abortBash'].params.parse({ threadId: 't' })).toEqual({ threadId: 't' });
-  });
-
-  test('session/compact：customInstructions 可选（缺省不带键）；空串与未知键拒绝', () => {
-    expect(ApiSchemas['session/compact'].params.parse({ threadId: 't' })).toEqual({ threadId: 't' });
-    expect(ApiSchemas['session/compact'].params.parse({ threadId: 't', customInstructions: '保留迁移重点' })).toEqual({
-      threadId: 't',
-      customInstructions: '保留迁移重点',
-    });
-    expect(() => ApiSchemas['session/compact'].params.parse({ threadId: 't', customInstructions: '' })).toThrow();
-    expect(() => ApiSchemas['session/compact'].params.parse({ threadId: 't', extra: 1 } as never)).toThrow();
   });
 
   test('session/fork 与 clearQueue 样本', () => {

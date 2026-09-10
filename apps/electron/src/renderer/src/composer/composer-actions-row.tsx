@@ -62,7 +62,7 @@ function optionItems(options: readonly string[], selected: string) {
 /**
  * 输入框底行：左侧附件与权限模式，右侧用量环 / 模型 / 思考档 / 发送（生成中为停止）。
  * 模型选择走统一 CommandDialog 弹窗（T21）；思考档与用量环只在有会话时出现。
- * 压缩入口是斜杠命令 /compact（按钮已下线，见 builtin-commands）。
+ * 压缩入口是斜杠命令 /compact（按钮已下线；hub prompt 通路拦截，见 T26）。
  */
 function ComposerActionsRow({
   model,

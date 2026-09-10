@@ -16,7 +16,6 @@ export type PaiCommandType =
   | 'follow_up'
   | 'abort'
   | 'clear_queue'
-  | 'compact'
   | 'get_state'
   | 'get_messages'
   | 'get_entries'
@@ -49,7 +48,6 @@ export const PAI_COMMAND_TYPES = [
   'follow_up',
   'abort',
   'clear_queue',
-  'compact',
   'get_state',
   'get_messages',
   'get_entries',

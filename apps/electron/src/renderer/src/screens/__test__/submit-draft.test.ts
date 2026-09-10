@@ -6,23 +6,19 @@ import type { ImagePayload } from '@paiapp/contracts';
 import { copy } from '@/strings';
 
 /**
- * 提交语义分派表驱动：`! ` bash 直执行 / `/compact` 内置命令拦截 / 普通消息。
- * fake actions 只实现 submit-draft 消费的方法（手写替身，不引 mock 库）。
+ * 提交语义分派：`! ` bash 直执行在渲染层拦截；斜杠命令（含 /compact）不再本地
+ * 分派——hub 的 prompt 通路负责拦截与解释（T26 B2），渲染层只保留「不入暂存」
+ * 的词法判定。fake actions 只实现 submit-draft 消费的方法（手写替身，不引 mock 库）。
  */
 type Recorded = {
-  compact: Array<{ customInstructions: string | undefined }>
   bash: string[]
   submitted: Array<{ text: string; images: readonly ImagePayload[] | undefined }>
   notices: string[]
   cleared: number
 }
 
-function makeActions(recorded: Recorded, compactAccepted: () => boolean = () => true): WorkspaceActions {
+function makeActions(recorded: Recorded): WorkspaceActions {
   return {
-    compact: (customInstructions) => {
-      recorded.compact.push({ customInstructions });
-      return Promise.resolve(compactAccepted());
-    },
     runBash: (command) => {
       recorded.bash.push(command);
       return Promise.resolve(null);
@@ -37,9 +33,9 @@ function makeActions(recorded: Recorded, compactAccepted: () => boolean = () => 
   } as unknown as WorkspaceActions;
 }
 
-function deps(recorded: Recorded, compactAccepted?: () => boolean) {
+function deps(recorded: Recorded) {
   return {
-    actions: makeActions(recorded, compactAccepted),
+    actions: makeActions(recorded),
     clearDraft: () => {
       recorded.cleared += 1;
     },
@@ -48,59 +44,37 @@ function deps(recorded: Recorded, compactAccepted?: () => boolean) {
 
 const IMAGE: ImagePayload = { name: 'a.png', data: 'x', mediaType: 'image/png' } as unknown as ImagePayload;
 
-describe('submitDraftText：/compact 内置命令拦截', () => {
-  test('裸 /compact：调 actions.compact(undefined)，受理后清草稿', async () => {
-    const recorded: Recorded = { compact: [], bash: [], submitted: [], notices: [], cleared: 0 };
+describe('submitDraftText：`! ` bash 拦截与消息直发', () => {
+  test('斜杠命令照常走消息提交（/compact 由 hub prompt 通路拦截，渲染层不分派）', async () => {
+    const recorded: Recorded = { bash: [], submitted: [], notices: [], cleared: 0 };
     await expect(submitDraftText(deps(recorded), '/compact')).resolves.toBe(true);
-    expect(recorded.compact).toEqual([{ customInstructions: undefined }]);
+    await expect(submitDraftText(deps(recorded), '/compact 保留迁移重点')).resolves.toBe(true);
+    await expect(submitDraftText(deps(recorded), '/skill:writer 写一段')).resolves.toBe(true);
+    expect(recorded.bash).toEqual([]);
+    expect(recorded.submitted.map((entry) => entry.text)).toEqual(['/compact', '/compact 保留迁移重点', '/skill:writer 写一段']);
+    expect(recorded.cleared).toBe(3);
+  });
+
+  test('`! ` 直执行走 bash 并清草稿；! /compact 是 bash 命令字面量', async () => {
+    const recorded: Recorded = { bash: [], submitted: [], notices: [], cleared: 0 };
+    await expect(submitDraftText(deps(recorded), '! /compact')).resolves.toBe(true);
+    expect(recorded.bash).toEqual(['/compact']);
     expect(recorded.submitted).toEqual([]);
     expect(recorded.cleared).toBe(1);
   });
 
-  test('/compact 后随文字 → customInstructions；后随空白首尾收敛、内部原样', async () => {
-    const recorded: Recorded = { compact: [], bash: [], submitted: [], notices: [], cleared: 0 };
-    await expect(submitDraftText(deps(recorded), '/compact  保留迁移重点  ')).resolves.toBe(true);
-    expect(recorded.compact).toEqual([{ customInstructions: '保留迁移重点' }]);
-  });
-
-  test('首 token 不精确匹配（/compactfoo、/compact-x、文中段、前导空白）不拦截，照常作为消息提交', async () => {
-    const recorded: Recorded = { compact: [], bash: [], submitted: [], notices: [], cleared: 0 };
-    for (const text of ['/compactfoo', '/compact-x', '看这个 /compact', '  /compact']) {
-      await expect(submitDraftText(deps(recorded), text)).resolves.toBe(true);
-    }
-    expect(recorded.compact).toEqual([]);
-    expect(recorded.submitted.map((entry) => entry.text)).toEqual(['/compactfoo', '/compact-x', '看这个 /compact', '/compact']);
-    expect(recorded.cleared).toBe(4);
-  });
-
-  test('携图拒绝：提示 compactNoImages、不清草稿、不调 compact', async () => {
-    const recorded: Recorded = { compact: [], bash: [], submitted: [], notices: [], cleared: 0 };
-    await expect(submitDraftText(deps(recorded), '/compact', [IMAGE])).resolves.toBe(false);
-    expect(recorded.notices).toEqual([copy.flow.compactNoImages]);
-    expect(recorded.compact).toEqual([]);
-    expect(recorded.cleared).toBe(0);
-  });
-
-  test('压缩中重复触发（actions 拒绝）：false 且草稿保留（症状回归：按钮 disabled 防线迁到命令通路）', async () => {
-    const recorded: Recorded = { compact: [], bash: [], submitted: [], notices: [], cleared: 0 };
-    await expect(submitDraftText(deps(recorded, () => false), '/compact')).resolves.toBe(false);
-    expect(recorded.compact).toHaveLength(1);
-    expect(recorded.cleared).toBe(0);
-  });
-
-  test('`! ` 前缀优先于命令词法：! /compact 走 bash 直执行', async () => {
-    const recorded: Recorded = { compact: [], bash: [], submitted: [], notices: [], cleared: 0 };
-    await expect(submitDraftText(deps(recorded), '! /compact')).resolves.toBe(true);
-    expect(recorded.bash).toEqual(['/compact']);
-    expect(recorded.compact).toEqual([]);
-  });
-
   test('`! ` 携图拒绝：false、草稿保留、不执行（空命令经 trim 不成立，无该分支）', async () => {
-    const recorded: Recorded = { compact: [], bash: [], submitted: [], notices: [], cleared: 0 };
+    const recorded: Recorded = { bash: [], submitted: [], notices: [], cleared: 0 };
     await expect(submitDraftText(deps(recorded), '! ls', [IMAGE])).resolves.toBe(false);
     expect(recorded.bash).toEqual([]);
     expect(recorded.notices).toEqual([copy.flow.bashNoImages]);
     expect(recorded.cleared).toBe(0);
+  });
+
+  test('空文本 false 不提交', async () => {
+    const recorded: Recorded = { bash: [], submitted: [], notices: [], cleared: 0 };
+    await expect(submitDraftText(deps(recorded), '   ')).resolves.toBe(false);
+    expect(recorded.submitted).toEqual([]);
   });
 });
 
@@ -108,11 +82,17 @@ describe('isImmediateSubmit：生成中不入暂存的即时提交判定', () =>
   test.each([
     ['! bun test', true, 'bash 直执行（容忍前导空白）'],
     ['  ! bun test', true, 'bash 前导空白仍即时'],
-    ['/compact', true, '内置命令'],
-    ['/compact 保留重点', true, '内置命令带附加指示'],
-    ['/compactfoo', false, '非命令文本是普通消息，生成中照常暂存'],
-    ['  /compact', false, '命令词法严格行首，前导空白不即时（与高亮一致）'],
-    ['普通消息', false, '普通消息'],
+    ['/compact', true, '斜杠命令（hub 拦截型）'],
+    ['/compact 保留重点', true, '斜杠命令带附加指示'],
+    ['/skill:writer 写一段', true, '技能命令'],
+    ['/未知命令', true, '任意行首斜杠 token 都是命令族——排队冲刷命令无意义'],
+    ['普通消息', false, '普通消息生成中照常暂存'],
+    ['看这个 /compact', false, '非行首斜杠是普通消息'],
+    [
+      ' /compact',
+      false,
+      '前导空白不即时（与 hub 严格行首词法一致）：生成中进暂存，轮末冲刷时 trim 后仍会被 hub 拦截执行压缩——既有取舍，如实落档',
+    ],
     ['', false, '空文本'],
   ])('isImmediateSubmit(%j) = %s（%s）', (text, expected) => {
     expect(isImmediateSubmit(text)).toBe(expected);

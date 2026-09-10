@@ -216,8 +216,8 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const submitDraft = React.useCallback(
     (text: string, attachments: readonly ComposerAttachment[]): Promise<boolean> => {
       const trimmed = text.trim();
-      // 生成中普通消息 = 本地暂存（默认轮后发送，轮自然结束冲刷）；直执行与内置命令
-      // 是即时操作不走暂存（词法单一真相在 submit-draft 的 isImmediateSubmit）
+      // 生成中普通消息 = 本地暂存（默认轮后发送，轮自然结束冲刷）；直执行与行首
+      // 斜杠命令不走暂存（词法单一真相在 submit-draft 的 isImmediateSubmit）
       if (workspace.isThreadStreaming(activeThreadId) && trimmed.length > 0 && !isImmediateSubmit(text)) {
         queuedDrafts.stage(activeThreadId, activeSessionPath, trimmed, attachments.map(({ name, payload }) => ({ name, payload })));
         clearDraft();

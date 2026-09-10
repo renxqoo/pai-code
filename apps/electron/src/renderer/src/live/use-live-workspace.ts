@@ -1,8 +1,6 @@
 import * as React from 'react';
 
-import type { AgentDefinition, PermissionRules, PreferencesView, ProviderConfigView, SessionStatsView, SessionView, SkillView } from '@paiapp/contracts';
-
-import { mergeCommands, type ComposerCommand } from '@/composer/builtin-commands';
+import type { AgentDefinition, CommandView, PermissionRules, PreferencesView, ProviderConfigView, SessionStatsView, SessionView, SkillView } from '@paiapp/contracts';
 import { useStore } from 'zustand';
 
 import type { SessionCardModel } from '@/sidebar/session-card-model';
@@ -80,7 +78,7 @@ export type LiveWorkspaceView = {
   saved: ReadonlyArray<{ sessionPath: string; title: string; cwd: string; modifiedAt: number; messageCount: number }>;
   providers: readonly ProviderConfigView[];
   /** 当前会话的斜杠命令/技能目录（补全数据源）。 */
-  commands: readonly ComposerCommand[];
+  commands: readonly CommandView[];
   /** 子 agent 定义管理面（文件真相；进 Agents 分区时拉取）。 */
   agentDefinitions: readonly AgentDefinition[];
   /** 用户级技能目录（含启用态；进技能分区时拉取）。 */
@@ -112,7 +110,7 @@ const subscribeQueuedDrafts = (listener: () => void): (() => void) => queuedDraf
 export function useLiveWorkspace(): LiveWorkspaceView {
   const [now, setNow] = React.useState(() => Date.now());
   const [effortLevels, setEffortLevels] = React.useState<readonly string[]>([]);
-  const [commands, setCommands] = React.useState<readonly ComposerCommand[]>([]);
+  const [commands, setCommands] = React.useState<readonly CommandView[]>([]);
   const [diagnostics, setDiagnostics] = React.useState<WorkspaceDiagnostics | null>(null);
   const actions = React.useMemo(() => createWorkspaceActions(setDiagnostics), []);
 
@@ -182,11 +180,10 @@ export function useLiveWorkspace(): LiveWorkspaceView {
       if (store.getState().activeThreadId !== activeThreadId) return;
       if (outcome.ok) setEffortLevels(outcome.data.allowed);
     });
-    // 斜杠命令目录随会话拉取（thread 级；同上判活）。拉取失败也要落内置命令——
-    // 本地 builtin 条目（/compact）不依赖 hub 目录，可见性不被 hub 数据拖累
+    // 斜杠命令目录随会话拉取（thread 级；同上判活；builtin 内置命令也由 hub 下发）
     void bridgeClient.invoke('command/list', { threadId: activeThreadId }).then((outcome) => {
       if (store.getState().activeThreadId !== activeThreadId) return;
-      setCommands(mergeCommands(outcome.ok ? outcome.data : []));
+      if (outcome.ok) setCommands(outcome.data);
     });
     // 会话权限规则随会话拉取（操作栏模式控件数据源；判活在 controller.readSessionRules 内）
     void controller.readSessionRules(activeThreadId);

@@ -4,17 +4,17 @@
  * @ 文件引用为单组。空组整组丢弃，组序即键盘导航序（拍平后循环）。
  */
 
+import type { CommandView } from '@paiapp/contracts';
 import type { AutocompleteGroup, AutocompleteGroupItem } from '@paiapp/ui';
 
-import type { ComposerCommand } from '@/composer/builtin-commands';
 import { filterTokenItems } from '@/composer/token-trigger';
 
 /** 斜杠命令分组：空查询过滤由调用方完成，这里只做 source 分箱与视图映射。 */
 export function slashCommandGroups(
-  commands: readonly ComposerCommand[],
+  commands: readonly CommandView[],
   titles: { readonly commandTitle: string; readonly skillTitle: string },
 ): readonly AutocompleteGroup[] {
-  const toItems = (sources: readonly ComposerCommand['source'][]): AutocompleteGroupItem[] =>
+  const toItems = (sources: readonly CommandView['source'][]): AutocompleteGroupItem[] =>
     commands
       .filter((command) => sources.includes(command.source))
       .map((command) => ({ id: `${command.source}:${command.name}`, label: command.name, description: command.description }));

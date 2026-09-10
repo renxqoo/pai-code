@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { mapDialogRequest, mapSessionEvent, mapSubagentEvent, savedSessions, toSessionView } from '@paiapp/adapter';
+import { autoTitleCandidateOf } from './auto-title';
 import {
   openRegistryStore,
   createHostProcess,
@@ -333,8 +334,8 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
     async autoTitleOnPrompt(threadId: string, message: string): Promise<void> {
       const view = sessions.get(threadId);
       if (view === undefined || view.title !== DEFAULT_TITLE) return;
-      const name = message.replace(/\s+/g, ' ').trim().slice(0, 48);
-      if (name.length === 0) return;
+      const name = autoTitleCandidateOf(message);
+      if (name === null) return;
       const outcome = await this.host.request({ type: 'set_session_name', threadId, name });
       if (!outcome.ok) return;
       this.renameSession(threadId, name);

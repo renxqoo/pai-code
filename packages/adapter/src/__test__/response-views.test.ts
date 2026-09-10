@@ -2,20 +2,22 @@ import { expect, test } from 'bun:test';
 
 import { sessionCommands } from '../response-views';
 
-/** get_commands 收窄回归：三源透传、垃圾降级。 */
+/** get_commands 收窄回归：四源透传（含 hub builtin 内置命令）、垃圾降级。 */
 
-test('三源条目透传，description 缺失收窄 null', () => {
+test('四源条目透传，description 缺失收窄 null', () => {
   const raw = {
     commands: [
       { name: '/review', description: 'Review the diff', source: 'extension' },
       { name: '/deploy', source: 'prompt' },
       { name: 'skill:writer', description: '写文档', source: 'skill' },
+      { name: 'compact', description: 'Manually compact the session context', source: 'builtin' },
     ],
   };
   expect(sessionCommands(raw)).toEqual([
     { name: '/review', description: 'Review the diff', source: 'extension' },
     { name: '/deploy', description: null, source: 'prompt' },
     { name: 'skill:writer', description: '写文档', source: 'skill' },
+    { name: 'compact', description: 'Manually compact the session context', source: 'builtin' },
   ]);
 });
 
@@ -28,7 +30,7 @@ test.each([
 ])('垃圾降级：%s', (_name, commands) => {
   const kept = sessionCommands({ commands });
   expect(kept.every((item) => typeof item.name === 'string' && item.name.length > 0)).toBe(true);
-  expect(kept.every((item) => item.source === 'extension' || item.source === 'prompt' || item.source === 'skill')).toBe(true);
+  expect(kept.every((item) => item.source === 'extension' || item.source === 'prompt' || item.source === 'skill' || item.source === 'builtin')).toBe(true);
 });
 
 test('commands 非数组 / 顶层非对象 → 空数组', () => {

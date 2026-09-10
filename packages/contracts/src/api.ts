@@ -114,11 +114,11 @@ export const ThinkingLevelViewSchema = z.object({
 });
 export type ThinkingLevelView = z.infer<typeof ThinkingLevelViewSchema>;
 
-/** 会话内斜杠命令/技能条目（get_commands 收窄；source 三源）。 */
+/** 会话内斜杠命令/技能条目（get_commands 收窄；source 四源：hub 三源 + builtin 内置命令）。 */
 export const CommandViewSchema = z.object({
   name: z.string(),
   description: z.string().nullable(),
-  source: z.enum(['extension', 'prompt', 'skill']),
+  source: z.enum(['extension', 'prompt', 'skill', 'builtin']),
 });
 export type CommandView = z.infer<typeof CommandViewSchema>;
 
@@ -281,12 +281,6 @@ export const ApiSchemas = {
   'session/thinkingLevels': {
     params: threadOnly,
     result: ThinkingLevelViewSchema,
-  },
-  'session/compact': {
-    params: z
-      .object({ threadId: z.string().min(1), customInstructions: z.string().min(1).optional() })
-      .strict(),
-    result: z.null(),
   },
   'model/list': {
     params: empty,
