@@ -55,7 +55,7 @@ function onSubagentTool(
       toolCount: agent.toolCount + 1,
       tools: [
         ...agent.tools,
-        { id: event.call.id, name: event.call.name, argsPreview: event.call.argsPreview, output: '', exitCode: null, durationMs: null, status: 'running' },
+        { id: event.call.id, name: event.call.name, argsPreview: event.call.argsPreview, subagents: [], output: '', exitCode: null, durationMs: null, status: 'running' },
       ],
     }));
   }

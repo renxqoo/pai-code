@@ -147,3 +147,44 @@ describe('foldEvents · 工具块按消息归块', () => {
     expect(tools).toMatchObject({ calls: [{ id: 'c1', status: 'stopped' }] });
   });
 });
+
+describe('task 调用子代理清单透传（live 折叠与水化同源）', () => {
+  test('toolCallAdded 携带 subagents → tools 块调用保留清单', () => {
+    let s = initialThreadState;
+    s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(0) }), tick(0));
+    s = foldThreadEvent(
+      s,
+      ev({
+        type: 'toolCallAdded',
+        threadId: 't',
+        messageId: 'a',
+        call: { id: 'c1', name: 'task', argsPreview: 'Explore', subagents: [{ agent: 'Explore', task: '分析现状' }] },
+        diff: null,
+      }),
+      tick(1),
+    );
+    const turn = liveTurn(s);
+    if (turn?.kind !== 'turn') throw new Error('expected turn');
+    const block = turn.turn.blocks.find((block): block is Extract<typeof block, { kind: 'tools' }> => block.kind === 'tools');
+    expect(block?.calls[0]?.subagents).toEqual([{ agent: 'Explore', task: '分析现状' }]);
+  });
+
+  test('水化：task 工具透传 subagents，其余工具归一空数组', () => {
+    const items = hydrateItems([
+      history({
+        id: 'a',
+        kind: 'assistant',
+        toolCalls: [
+          { id: 'c1', name: 'task', argsPreview: 'Explore', output: 'done', isError: false, diff: null, subagents: [{ agent: 'Explore', task: '分析现状' }] },
+          { id: 'c2', name: 'bash', argsPreview: 'ls', output: '', isError: false, diff: null },
+        ],
+      }),
+    ]);
+    const turn = items[0];
+    if (turn?.kind !== 'turn') throw new Error('expected turn');
+    const block = turn.turn.blocks[0];
+    if (block?.kind !== 'tools') throw new Error('expected tools block');
+    expect(block.calls[0]?.subagents).toEqual([{ agent: 'Explore', task: '分析现状' }]);
+    expect(block.calls[1]?.subagents).toEqual([]);
+  });
+});

@@ -4,6 +4,8 @@
  * demo 数据按同一形状提供，组件不感知数据来源。
  */
 
+import type { SubagentSpawnView } from '@paiapp/contracts';
+
 /** system = 后台任务通知/子代理上报等以用户角色注入的系统信封消息（api.md §7.5）。 */
 export type SessionMessage = {
   id: string;
@@ -24,6 +26,8 @@ export type ToolCallModel = {
   name: string;
   /** 参数摘要（命令调用即命令文本） */
   argsPreview: string;
+  /** task 工具的子代理执行清单（每个 item 一行展示）；其余工具为空数组 */
+  subagents: readonly SubagentSpawnView[];
   output: string;
   /** null = 尚未结束 */
   exitCode: number | null;

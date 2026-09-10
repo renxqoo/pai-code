@@ -57,6 +57,7 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
         id: event.call.id,
         name: event.call.name,
         argsPreview: event.call.argsPreview,
+        subagents: event.call.subagents ?? [],
         output: '',
         exitCode: null,
         durationMs: null,
@@ -341,7 +342,16 @@ function onMessageFinal(
       if (!blocks.some((block) => block.kind === 'tools' && block.calls.some((existing) => existing.id === call.id))) {
         blocks = appendToolCall(
           blocks,
-          { id: call.id, name: call.name, argsPreview: call.argsPreview, output: '', exitCode: null, durationMs: null, status: 'running' },
+          {
+            id: call.id,
+            name: call.name,
+            argsPreview: call.argsPreview,
+            subagents: call.subagents ?? [],
+            output: '',
+            exitCode: null,
+            durationMs: null,
+            status: 'running',
+          },
           event.message.id,
         );
       }
