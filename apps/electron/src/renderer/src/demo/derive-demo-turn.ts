@@ -143,6 +143,7 @@ export function deriveLiveTurn(spec: LiveTurnSpec, now: number, stopAtMs: number
       startedAt,
       endedAt: ended ? clock : null,
       blocks,
+      streamingThinkingBlockId: null,
     },
     agents,
   };

@@ -43,8 +43,8 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
       };
     }
     case 'messageStarted':
-      // 重试成功后模型继续出消息：清除重试提示
-      return ensureLiveTurn({ ...state, liveMessageId: event.messageId, retrying: null }, now);
+      // 重试成功后模型继续出消息：清除重试提示；新消息开始即旧思考段让位
+      return clearThinkingStream(ensureLiveTurn({ ...state, liveMessageId: event.messageId, retrying: null }, now));
     case 'textDelta':
       return appendDelta(state, resolveMessageId(state, event.messageId), 'text', event.delta, now);
     case 'thinkingDelta':
@@ -64,9 +64,11 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
       };
       const messageId = resolveMessageId(withTurn, event.messageId);
       const withStart = { ...withTurn, callStarts: noteCallStart(withTurn.callStarts, event.call.id, now) };
+      // 工具调用开始即思考段结束（模型转入行动，长工具轮不得挂「思考中」）
       return updateTurn(withStart, turn.id, (current) => ({
         ...current,
         blocks: appendToolCall(current.blocks, call, messageId),
+        streamingThinkingBlockId: null,
       }));
     }
     case 'toolUpdated':
@@ -98,7 +100,7 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
               ? { ...block, calls: block.calls.map((call) => (call.status === 'running' ? { ...call, status: 'stopped' as const } : call)) }
               : block,
           );
-          return { kind: 'turn', turn: { ...item.turn, status: stopped ? ('stopped' as const) : ('completed' as const), endedAt: now, blocks } };
+          return { kind: 'turn', turn: { ...item.turn, status: stopped ? ('stopped' as const) : ('completed' as const), endedAt: now, blocks, streamingThinkingBlockId: null } };
         }),
       };
     }
@@ -208,7 +210,7 @@ export function foldDeath(state: LiveThreadState, now: number): LiveThreadState 
       ? state.items
       : state.items.map((item): ThreadItem =>
           item.kind === 'turn' && item.turn.id === state.liveTurnId && item.turn.status === 'running'
-            ? { kind: 'turn', turn: { ...item.turn, status: 'completed', endedAt: now } }
+            ? { kind: 'turn', turn: { ...item.turn, status: 'completed', endedAt: now, streamingThinkingBlockId: null } }
             : item,
         );
   return {
@@ -244,6 +246,7 @@ function onTurnStarted(state: LiveThreadState, at: number): LiveThreadState {
     startedAt: at,
     endedAt: null,
     blocks: [],
+    streamingThinkingBlockId: null,
   };
   return {
     ...state,
@@ -343,7 +346,8 @@ function onMessageFinal(
         );
       }
     }
-    return { ...current, blocks };
+    // 消息定形（message_end）：该消息的思考段权威收束，流式态熄灭
+    return { ...current, blocks, streamingThinkingBlockId: null };
   });
 }
 
@@ -364,13 +368,21 @@ function appendDelta(state: LiveThreadState, messageId: string, kind: 'text' | '
         blocks[index] = { ...block, text: clip(block.text + delta) };
       }
     }
-    return { ...current, blocks };
+    // 思考激活态跟实际流走：thinking 增量亮、同消息正文开始（thinking 段已结束）灭
+    return { ...current, blocks, streamingThinkingBlockId: kind === 'thinking' ? blockId : null };
   });
 }
 
 function ensureLiveTurn(state: LiveThreadState, now: number): LiveThreadState {
   if (state.liveTurnId !== null && findTurn(state, state.liveTurnId) !== null) return state;
   return onTurnStarted({ ...state, streaming: true }, now);
+}
+
+/** 清 live 轮的思考流式态（新消息开始等让位点）；无 live 轮原样返回。 */
+function clearThinkingStream(state: LiveThreadState): LiveThreadState {
+  const turn = findTurn(state, state.liveTurnId);
+  if (turn?.streamingThinkingBlockId == null) return state;
+  return updateTurn(state, turn.id, (current) => ({ ...current, streamingThinkingBlockId: null }));
 }
 
 function mapLiveCall(state: LiveThreadState, callId: string, patch: (call: ToolCallModel) => ToolCallModel): LiveThreadState {

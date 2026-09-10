@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { foldHydrate, foldStopIntent, foldThreadEvent } from '../fold-events';
+import { foldDeath, foldHydrate, foldStopIntent, foldThreadEvent } from '../fold-events';
 import { initialThreadState } from '../live-thread-state';
 import type { HistoryItem, UiEvent } from '@paiapp/contracts';
 import type { ThreadItem } from '@/thread/thread-model';
@@ -417,4 +417,49 @@ test('bashOutput 增量入尾部并封顶 2000 字符', () => {
   state = foldThreadEvent(state, { type: 'bashOutput', threadId: 't1', delta: big }, 3);
   expect(state.bashTail.length).toBe(2000);
   expect(state.bashTail.startsWith('x')).toBe(true);
+});
+
+describe('foldEvents · 思考激活态（块粒度）', () => {
+  test('症状回归：长工具轮里思考定形后不再挂「思考中」——工具/正文/定形/新消息/settle 均熄灭，仅 thinking 增量点亮', () => {
+    let s = initialThreadState;
+    s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(0) }), tick(0));
+    s = foldThreadEvent(s, ev({ type: 'messageStarted', threadId: 't', messageId: 'm1', at: tick(1) }), tick(1));
+    // 思考流式中：信号指向该块
+    s = foldThreadEvent(s, ev({ type: 'thinkingDelta', threadId: 't', messageId: 'm1', delta: '先想' }), tick(2));
+    expect(liveTurn(s)?.kind === 'turn' && liveTurn(s).turn.streamingThinkingBlockId).toBe('think-m1');
+    // 同消息正文开始（思考段结束）：熄灭
+    s = foldThreadEvent(s, ev({ type: 'textDelta', threadId: 't', messageId: 'm1', delta: '动手' }), tick(3));
+    expect(liveTurn(s)?.kind === 'turn' && liveTurn(s).turn.streamingThinkingBlockId).toBeNull();
+    // 再来一段思考（同消息交替）：重新点亮
+    s = foldThreadEvent(s, ev({ type: 'thinkingDelta', threadId: 't', messageId: 'm1', delta: '再想' }), tick(4));
+    expect(liveTurn(s)?.kind === 'turn' && liveTurn(s).turn.streamingThinkingBlockId).toBe('think-m1');
+    // 工具调用开始：熄灭（核心症状——工具执行期间思考不得再转圈）
+    s = foldThreadEvent(s, ev({ type: 'toolCallAdded', threadId: 't', messageId: 'm1', call: { id: 'c1', name: 'bash', argsPreview: 'rg' } }), tick(5));
+    expect(liveTurn(s)?.kind === 'turn' && liveTurn(s).turn.streamingThinkingBlockId).toBeNull();
+    // 消息定形：熄灭（幂等）
+    s = foldThreadEvent(s, ev({ type: 'thinkingDelta', threadId: 't', messageId: 'm1', delta: '补' }), tick(6));
+    s = foldThreadEvent(
+      s,
+      ev({ type: 'messageFinal', threadId: 't', message: { id: 'm1', text: '动手', thinking: '先想再想补', toolCalls: [], usage: null } }),
+      tick(7),
+    );
+    expect(liveTurn(s)?.kind === 'turn' && liveTurn(s).turn.streamingThinkingBlockId).toBeNull();
+    // 下一条消息的思考：信号跟随新块
+    s = foldThreadEvent(s, ev({ type: 'messageStarted', threadId: 't', messageId: 'm2', at: tick(8) }), tick(8));
+    s = foldThreadEvent(s, ev({ type: 'thinkingDelta', threadId: 't', messageId: 'm2', delta: '工具回来了' }), tick(9));
+    expect(liveTurn(s)?.kind === 'turn' && liveTurn(s).turn.streamingThinkingBlockId).toBe('think-m2');
+    // 轮终态：熄灭兜底
+    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', usage: null }), tick(10));
+    expect(liveTurn(s)?.kind === 'turn' && liveTurn(s).turn.streamingThinkingBlockId).toBeNull();
+    expect(liveTurn(s)?.kind === 'turn' && liveTurn(s).turn.status).toBe('completed');
+  });
+
+  test('宿主死亡终态同样熄灭思考流式态', () => {
+    let s = initialThreadState;
+    s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(0) }), tick(0));
+    s = foldThreadEvent(s, ev({ type: 'messageStarted', threadId: 't', messageId: 'm1', at: tick(1) }), tick(1));
+    s = foldThreadEvent(s, ev({ type: 'thinkingDelta', threadId: 't', messageId: 'm1', delta: '想' }), tick(2));
+    s = foldDeath(s, tick(3));
+    expect(liveTurn(s)?.kind === 'turn' && liveTurn(s).turn.streamingThinkingBlockId).toBeNull();
+  });
 });

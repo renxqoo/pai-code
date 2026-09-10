@@ -48,7 +48,7 @@ function TurnGroup({ turn, now, onOpenDiff }: TurnGroupProps) {
             <ProcessGroup
               key={`process-${run.blocks[0]?.id ?? ''}`}
               blocks={run.blocks}
-              running={isTurnRunning(turn)}
+              streamingThinkingBlockId={turn.streamingThinkingBlockId}
             />
           ) : (
             <TurnBlockView key={run.block.id} block={run.block} onOpenDiff={onOpenDiff} />

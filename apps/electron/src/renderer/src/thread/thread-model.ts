@@ -83,6 +83,9 @@ export type TurnModel = {
   /** null = 仍在运行，计时走表 */
   endedAt: number | null;
   blocks: readonly TurnBlock[];
+  /** 仍在流式输出的思考块 id（think-<messageId>；null = 无）。思考激活态是
+   * 块粒度信号——同轮工具执行/正文流式期间，早已定形的思考不再挂「思考中」。 */
+  streamingThinkingBlockId: string | null;
 };
 
 export type ThreadItem =

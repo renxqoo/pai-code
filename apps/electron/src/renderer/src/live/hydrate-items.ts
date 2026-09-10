@@ -39,6 +39,7 @@ export function hydrateItems(history: readonly HistoryItem[], turnStartAt: numbe
       startedAt: startAt ?? (first.kind === 'assistant' ? first.at : 0),
       endedAt: last.kind === 'assistant' ? last.at : 0,
       blocks,
+      streamingThinkingBlockId: null,
     };
     items.push({ kind: 'turn', turn });
   };
@@ -76,6 +77,7 @@ export function hydrateItems(history: readonly HistoryItem[], turnStartAt: numbe
         startedAt: item.at,
         endedAt: item.at,
         blocks: [{ kind: 'tools', id: `tools-${item.id}`, calls: [call] }],
+        streamingThinkingBlockId: null,
       };
       items.push({ kind: 'turn', turn });
       continue;

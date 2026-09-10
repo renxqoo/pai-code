@@ -71,6 +71,7 @@ const greetingTurn: TurnModel = {
       } satisfies DiffSummaryModel,
     },
   ],
+  streamingThinkingBlockId: null,
 };
 
 function session(id: string, title: string, ageInDays: number): SessionCardModel {
