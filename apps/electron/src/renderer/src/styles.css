@@ -298,26 +298,51 @@
   font-weight: 600;
 }
 .chat-markdown [data-streamdown='code-block'] {
+  position: relative;
   margin-block: 16px;
-  gap: 6px;
+  gap: 0;
   border-radius: 10px;
   border-color: var(--border);
   background-color: var(--surface-subtle);
   padding: 4px 6px 6px;
 }
 /*
- * 代码块头部：header 行 24px（语言标签 10.5px），操作浮层按同几何叠回该行。
- * streamdown 浮层约定 margin-top = -(容器顶内边距 + header 高)（默认 p-2 + h-8 → -mt-10），
- * 这里保持同式：-(4px + 24px) = -28px，浮层与 header 精确同行，不越出容器被
- * content-visibility 的 paint containment 裁切。
+ * 代码块头部不占布局：语言标签与操作（复制）合并悬浮右上角，hover 或键盘
+ * 聚焦时才显形，代码首行直接从容器顶 padding 开始，不再预留整行头部高度。
+ * 两浮层同用 24px 行高（top 4px）对齐中线；label pointer-events 关闭不挡按钮。
  */
 .chat-markdown [data-streamdown='code-block-header'] {
+  position: absolute;
+  top: 4px;
+  right: 40px;
+  display: flex;
+  align-items: center;
   height: 24px;
   font-size: 11px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease;
 }
 .chat-markdown [data-streamdown='code-block'] > div:has(> [data-streamdown='code-block-actions']) {
+  position: absolute;
+  top: 4px;
+  right: 8px;
   height: 24px;
-  margin-top: -28px;
+  margin: 0;
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+.chat-markdown [data-streamdown='code-block']:hover [data-streamdown='code-block-header'],
+.chat-markdown [data-streamdown='code-block']:focus-within [data-streamdown='code-block-header'],
+.chat-markdown [data-streamdown='code-block']:hover > div:has(> [data-streamdown='code-block-actions']),
+.chat-markdown [data-streamdown='code-block']:focus-within > div:has(> [data-streamdown='code-block-actions']) {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-markdown [data-streamdown='code-block-header'],
+  .chat-markdown [data-streamdown='code-block'] > div:has(> [data-streamdown='code-block-actions']) {
+    transition: none;
+  }
 }
 .chat-markdown [data-streamdown='code-block-actions'] {
   gap: 2px;
