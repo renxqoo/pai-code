@@ -48,6 +48,20 @@ describe('deriveLiveTurn 轮次生命周期', () => {
     expect(turn.status).toBe('running');
     expect(turn.blocks.map((block) => block.kind)).toEqual(['text']);
   });
+
+  test('diff 块按出现时刻产出（轮内尾块不变式）', () => {
+    const script = {
+      blocks: [
+        { kind: 'text' as const, id: 'text-1', atMs: 0, text: '先改代码' },
+        { kind: 'diff' as const, id: 'diff-1', atMs: 1000, diff: { changedFiles: 1, additions: 2, deletions: 0, files: [] } },
+      ],
+      completeAtMs: null,
+    };
+    const before = deriveLiveTurn({ turnId: 't', startedAt: START, script }, START + 500, null);
+    expect(before.turn.blocks.map((block) => block.kind)).toEqual(['text']);
+    const after = deriveLiveTurn({ turnId: 't', startedAt: START, script }, START + 2000, null);
+    expect(after.turn.blocks.map((block) => block.kind)).toEqual(['text', 'diff']);
+  });
 });
 
 describe('deriveLiveTurn 子代理（面板数据面，不进轮内块）', () => {
@@ -81,6 +95,16 @@ describe('deriveLiveTurn 子代理（面板数据面，不进轮内块）', () =
     expect(turn.status).toBe('completed');
     expect(agents.every((entry) => entry.status === 'done')).toBe(true);
     expect(agents.every((entry) => entry.summary.length > 0)).toBe(true);
+  });
+
+  test('块未到出现时刻：无子代理产出（reveal 前空数据面）', () => {
+    const { turn, agents } = deriveLiveTurn(
+      { turnId: 't', startedAt: START, script: buildAnalysisScript() },
+      START + 40_000,
+      null,
+    );
+    expect(turn.status).toBe('running');
+    expect(agents).toEqual([]);
   });
 
   test('用户停止：未完成的子代理被截断冻结，不带报告摘要', () => {
