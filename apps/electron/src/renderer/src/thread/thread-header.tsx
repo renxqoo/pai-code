@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ChevronDown, Diff as DiffIcon, Folder, Maximize2, MoreHorizontal, Plus } from 'lucide-react';
+import { ChevronDown, Folder, Maximize2, MoreHorizontal, Plus } from 'lucide-react';
 
 import { IconButton, MenuButton, type MenuItemDef } from '@paiapp/ui';
 
@@ -164,13 +164,18 @@ function ThreadHeader({
         )}
       </div>
       <div className="app-no-drag ml-auto flex shrink-0 items-center gap-[10px]">
+        {/*
+         * 变更徽标不带图标：± 形 svg 压到 12px 后笔画经缩放抗锯齿呈灰色脏斑
+         * （用户观感即「图标坏了」），且裸 ± 语义不自明。红绿 +N/−N 数字本身
+         * 就是 diff 摘要的通行语言，入口用途由 title 悬停说明。
+         */}
         <Button
           variant="outline"
           onClick={onOpenChanges}
           aria-label={labels.changes}
-          className="h-[23px] gap-[5px] rounded-full px-[10px] text-[11.5px] leading-none font-medium tabular-nums [&_svg]:size-3 [&_svg]:text-muted-foreground"
+          title={labels.changes}
+          className="h-[23px] gap-[5px] rounded-full px-[10px] text-[11.5px] leading-none font-medium tabular-nums"
         >
-          <DiffIcon className="size-3" strokeWidth={1.75} />
           <span className={hasChanges ? 'text-diff-add' : 'text-muted-foreground/70'}>{formatDiffDelta('add', additions)}</span>
           <span className={hasChanges ? 'text-diff-del' : 'text-muted-foreground/70'}>{formatDiffDelta('del', deletions)}</span>
         </Button>

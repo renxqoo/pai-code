@@ -78,6 +78,16 @@ describe('ThreadHeader', () => {
     expect(html).toContain('-16');
   });
 
+  test('变更角标不带 svg 图标（± 压到 12px 呈灰色脏斑，观感为图标损坏）且带 title 悬停说明', () => {
+    const html = render({ additions: 34, deletions: 16 });
+    const pill = /<button[^>]*aria-label="会话变更"[^>]*>[\s\S]*?<\/button>/.exec(html);
+    if (pill === null) throw new Error('changes pill not found in rendered markup');
+    expect(pill[0]).toContain('title="会话变更"');
+    expect(pill[0]).not.toContain('<svg');
+    expect(pill[0]).toContain('+34');
+    expect(pill[0]).toContain('-16');
+  });
+
   test.each<[ThreadStatusKind, string]>([
     ['running', '运行中'],
     ['permission', '等待权限'],
