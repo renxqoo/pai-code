@@ -28,7 +28,7 @@ type SessionRowProps = {
 const actionButtonClass =
   'flex size-5 cursor-pointer items-center justify-center rounded-[5px] text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50';
 
-/** 会话行：标题 + 相对时间 + hover 动作（置顶/重命名/关闭）；流式进行中带活动指示。 */
+/** 会话行：行首状态位（置顶钉 / 流式活动指示）+ 标题 + 相对时间 + hover 动作（置顶/重命名/关闭）。 */
 function SessionRow({
   session,
   age,
@@ -76,6 +76,14 @@ function SessionRow({
       {pinned ? (
         <Pin aria-hidden="true" className="mr-2 size-[13px] shrink-0 rotate-45 text-muted-foreground" strokeWidth={1.75} />
       ) : null}
+      {session.streaming && !editing ? (
+        <LoaderCircle
+          role="img"
+          aria-label={copy.sidebar.working}
+          className="mr-2 size-[13px] shrink-0 animate-spin text-muted-foreground/80"
+          strokeWidth={1.75}
+        />
+      ) : null}
       {editing ? (
         <input
           autoFocus
@@ -99,14 +107,6 @@ function SessionRow({
         <span className="min-w-0 truncate text-[12.5px] leading-none font-medium text-foreground">{session.title}</span>
       )}
       <span className="ml-auto flex shrink-0 items-center gap-[2px] pl-2">
-        {session.streaming && !editing ? (
-          <LoaderCircle
-            role="img"
-            aria-label={copy.sidebar.working}
-            className="size-[13px] shrink-0 animate-spin text-muted-foreground/80"
-            strokeWidth={1.75}
-          />
-        ) : null}
         {/* 时间标签与动作钮占同一网格格：格宽按较大者常驻保留，hover 只切换透明度/可见性，行内布局零位移 */}
         <span className="grid items-center justify-items-end">
           <span

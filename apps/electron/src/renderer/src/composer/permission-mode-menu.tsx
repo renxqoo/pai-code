@@ -43,7 +43,7 @@ function PermissionModeMenu({ mode, followsGlobal, onSelectMode, onFollowGlobal 
         }
         if ((MODES as readonly string[]).includes(id)) onSelectMode(id as PermissionRules['mode']);
       }}
-      triggerClassName={menuTriggerClassName}
+      triggerClassName={`${menuTriggerClassName} shrink-0`}
       trigger={
         <>
           <Shield size={13} className="text-muted-foreground" strokeWidth={2} />

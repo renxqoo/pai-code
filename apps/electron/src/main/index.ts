@@ -259,7 +259,9 @@ void app.whenReady().then(async () => {
   };
 
   mainWindow = createMainWindow();
-
+  if (!app.isPackaged) {
+    mainWindow.webContents.openDevTools()
+  }
   // macOS dock 重开：关窗后 app 常驻，activate 重建窗口
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

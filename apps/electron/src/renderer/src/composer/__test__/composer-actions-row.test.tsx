@@ -47,6 +47,16 @@ function makeProps(overrides: Partial<Parameters<typeof ComposerActionsRow>[0]> 
   };
 }
 
+/** 取 aria-label 定位的按钮开标签（disabled 属性与状态类都渲染在开标签上） */
+function buttonTag(html: string, label: string): string | null {
+  const anchor = `aria-label="${label}"`;
+  const end = html.indexOf(anchor);
+  if (end === -1) return null;
+  const start = html.lastIndexOf('<button', end);
+  const close = html.indexOf('>', end);
+  return start === -1 || close === -1 ? null : html.slice(start, close + 1);
+}
+
 describe('输入框底行模型选择（弹窗入口）', () => {
   test('触发器渲染当前模型（文案不变是回归锚点）+ haspopup=dialog；弹窗关态零渲染', () => {
     const html = renderToStaticMarkup(<ComposerActionsRow {...makeProps()} />);
@@ -93,6 +103,25 @@ describe('输入框底行模型选择（弹窗入口）', () => {
   });
 });
 
+describe('输入框底行收缩契约（窄卡不把发送键顶出卡片）', () => {
+  test('症状回归：超长模型 id 不再撑爆底行——模型名是唯一可收缩项（min-w-0 + truncate，全名在 title/aria-label）', () => {
+    const longModel = 'deepseek/deepseek-v4.1-flash-expires-on-0910';
+    const html = renderToStaticMarkup(<ComposerActionsRow {...makeProps({ model: longModel })} />);
+    expect(html).toContain('min-w-0 truncate');
+    expect(html).toContain(`title="${longModel}"`);
+    expect(html).toContain(`aria-label="${longModel}"`);
+  });
+
+  test('固定宽度控件不参与收缩：权限模式 / 思考档触发器带 shrink-0，文案保持 nowrap', () => {
+    const html = renderToStaticMarkup(
+      <ComposerActionsRow {...makeProps({ permissionMode: 'allow-all' })} />,
+    );
+    // 触发器 class 以 shrink-0 结尾（menuTriggerClassName 尾段含 &，静态 markup 里转义为 &amp;，故只断尾段）
+    expect(html).toContain(' shrink-0">');
+    expect(html).toContain('whitespace-nowrap');
+  });
+});
+
 describe('输入框底行子代理状态徽标', () => {
   test('不传 agents（新任务页无会话面）不渲染', () => {
     const html = renderToStaticMarkup(<ComposerActionsRow {...makeProps()} />);
@@ -109,5 +138,39 @@ describe('输入框底行子代理状态徽标', () => {
     const html = renderToStaticMarkup(<ComposerActionsRow {...makeProps({ agents: { working: 0, onOpen: noop } })} />);
     expect(html).not.toContain(copy.flow.agentsWorking(0));
     expect(html).not.toContain('>0<');
+  });
+});
+
+describe('发送/停止键状态机（禁用灰 / 可发黑 / 生成中空输入红）', () => {
+  test('空闲+空输入：发送键禁用（disabled 属性）+ 禁用灰 disabled:bg-send', () => {
+    const html = renderToStaticMarkup(<ComposerActionsRow {...makeProps({ canSend: false })} />);
+    const tag = buttonTag(html, copy.composer.send);
+    expect(tag).toContain('disabled=""');
+    expect(tag).toContain('disabled:bg-send');
+    expect(tag).toContain('enabled:bg-primary');
+  });
+
+  test('空闲+有输入：发送键启用（无 disabled 属性）+ 可发黑 enabled:bg-primary', () => {
+    const html = renderToStaticMarkup(<ComposerActionsRow {...makeProps({ canSend: true })} />);
+    const tag = buttonTag(html, copy.composer.send);
+    expect(tag).not.toContain('disabled=""');
+    expect(tag).toContain('enabled:bg-primary');
+    expect(tag).toContain('type="submit"');
+  });
+
+  test('症状回归（生成中+空输入保持红色停止）：停止键 bg-stop 在位，发送键不渲染', () => {
+    const html = renderToStaticMarkup(<ComposerActionsRow {...makeProps({ canSend: false, generating: true })} />);
+    const tag = buttonTag(html, copy.composer.stop);
+    expect(tag).toContain('bg-stop');
+    expect(tag).toContain('type="button"');
+    expect(buttonTag(html, copy.composer.send)).toBeNull();
+  });
+
+  test('症状回归（生成中+有输入发送键回归黑色）：发送键启用 enabled:bg-primary，停止键不渲染', () => {
+    const html = renderToStaticMarkup(<ComposerActionsRow {...makeProps({ canSend: true, generating: true })} />);
+    const tag = buttonTag(html, copy.composer.send);
+    expect(tag).not.toContain('disabled=""');
+    expect(tag).toContain('enabled:bg-primary');
+    expect(buttonTag(html, copy.composer.stop)).toBeNull();
   });
 });

@@ -44,7 +44,7 @@ type ComposerProps = {
   noModelsLabel: string
   /** 思考档不可用时的禁用原因文案 */
   effortUnavailableLabel: string
-  /** 有生成任务时回车 = 排队消息（语义由父层按会话状态裁决），发送键仍为停止 */
+  /** 有生成任务时回车 = 排队消息（语义由父层按会话状态裁决）；输入为空时发送键让位红色停止键 */
   generating: boolean
   /** 本地暂存的排队消息（旧→新；生成中显示为输入卡顶部的灰色卡片堆） */
   queuedMessages: readonly { id: number; text: string }[]

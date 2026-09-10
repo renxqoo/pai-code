@@ -53,4 +53,12 @@ describe('SessionRow hover 动作区', () => {
     expect(html).toContain('3小时');
     expect(html).not.toContain('group-hover/row:opacity-0');
   });
+
+  test('流式会话 loading 症状（指示器出现在文案后面）：活动指示渲染在标题前的行首状态位', () => {
+    const html = renderToStaticMarkup(
+      <SessionRow session={makeSession({ streaming: true })} age="3小时" active={false} onSelect={noop} />,
+    );
+    expect(html).toContain('aria-label="进行中"');
+    expect(html.indexOf('aria-label="进行中"')).toBeLessThan(html.indexOf('会话标题'));
+  });
 });

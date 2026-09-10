@@ -1,7 +1,6 @@
 import * as React from 'react';
 
 import { thinkingLevelLabel, thinkingLevelOfLabel, type ApiOutcome, type PermissionRules } from '@paiapp/contracts';
-import { SparkMark } from '@paiapp/ui';
 
 import { BranchPickerDialog } from '@/composer/branch-picker-dialog';
 import { branchSegmentOf } from '@/composer/branch-segment';
@@ -230,7 +229,6 @@ function NewTaskScreen({
   return (
     <div className="relative flex h-full min-h-0 flex-col items-center justify-center overflow-hidden px-[40px] pb-[18px]">
       <div className={`${CONVERSATION_COLUMN_CLASS} flex flex-col items-center`}>
-        <SparkMark size={34} className="mb-[16px] text-foreground/10" />
         <h1 className="text-[26px] leading-[34px] font-semibold tracking-tight text-foreground">{texts.title}</h1>
         <p className="pt-[6px] text-[13px] leading-[20px] text-muted-foreground">{texts.subtitle}</p>
         <div className="mt-[26px] w-full">

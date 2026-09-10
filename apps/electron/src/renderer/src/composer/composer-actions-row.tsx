@@ -5,7 +5,7 @@ import type { PermissionRules, SessionStatsView } from '@paiapp/contracts';
 
 import { UsageDetails } from './usage-details';
 
-import { IconButton, MenuButton, SparkMark, UsageRing } from '@paiapp/ui';
+import { IconButton, MenuButton, UsageRing } from '@paiapp/ui';
 
 import { PickerDialog } from '@/components/picker-dialog';
 import { groupModelOptions } from '@/components/group-model-options';
@@ -44,7 +44,7 @@ type ComposerActionsRowProps = {
   sendLabel: string
   stopLabel: string
   canSend: boolean
-  /** 有生成任务时发送键让位给红色停止键 */
+  /** 生成中且无输入时发送键让位给红色停止键；有输入时发送键回归（提交=排队，投递语义由父层裁决） */
   generating: boolean
   onStop: () => void
   /** 会话权限模式（当前生效；null = 未加载/无会话，控件不渲染） */
@@ -66,7 +66,7 @@ function optionItems(options: readonly string[], selected: string) {
 }
 
 /**
- * 输入框底行：左侧附件与权限模式，右侧用量环 / 模型 / 思考档 / 发送（生成中为停止）。
+ * 输入框底行：左侧附件与权限模式，右侧用量环 / 模型 / 思考档 / 发送（生成中且无输入时为红色停止）。
  * 模型选择走统一 CommandDialog 弹窗（T21）；思考档在会话与新建任务页都可用
  * （选项数据源不同：会话走 hub 线程真相，新建页按模型能力本地计算）；
  * 用量环只在有会话时出现。压缩入口是斜杠命令 /compact（按钮已下线；hub prompt 通路拦截，见 T26）。
@@ -108,10 +108,11 @@ function ComposerActionsRow({
         />
       ) : null}
       {agents === undefined ? null : <AgentStatusButton count={agents.working} onOpen={agents.onOpen} />}
-      <div className="ml-auto flex items-center gap-[9px]">
+      {/* 右组可收缩（min-w-0），收缩量全部由模型名截断吸收；其余控件 shrink-0 保持原宽 */}
+      <div className="ml-auto flex min-w-0 items-center gap-[9px]">
         {usage === null ? null : (
           <>
-            <span className="relative flex items-center">
+            <span className="relative flex shrink-0 items-center">
               {usageOpen && usage.stats !== null ? <UsageDetails stats={usage.stats} /> : null}
               {usage.stats === null ? (
                 <span title={usage.label}>
@@ -133,8 +134,12 @@ function ComposerActionsRow({
           </>
         )}
         {modelOptions.length === 0 && onOpenSettings !== undefined ? (
-          <button type="button" onClick={onOpenSettings} title={noModelsLabel} className={menuTriggerClassName}>
-            <SparkMark size={13} className="text-spark" />
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            title={noModelsLabel}
+            className={`${menuTriggerClassName} shrink-0`}
+          >
             <span className="whitespace-nowrap">{noModelsLabel}</span>
           </button>
         ) : (
@@ -142,13 +147,14 @@ function ComposerActionsRow({
             <button
               type="button"
               aria-label={model}
+              title={model}
               aria-haspopup="dialog"
               aria-expanded={modelPickerOpen}
               onClick={() => setModelPickerOpen(true)}
-              className={menuTriggerClassName}
+              className={`${menuTriggerClassName} min-w-0`}
             >
-              <SparkMark size={13} className="text-spark" />
-              <span className="whitespace-nowrap">{model}</span>
+              {/* 模型 id 长度无上界：空间不足时唯一收缩项，省略号截断，全名走 title/aria-label */}
+              <span className="min-w-0 truncate">{model}</span>
               <ChevronDown className="size-3 text-muted-foreground/70" strokeWidth={2} />
             </button>
             <PickerDialog
@@ -166,7 +172,7 @@ function ComposerActionsRow({
         {effort === null ? null : effort.options.length === 0 ? (
           <span
             title={effort.unavailableLabel}
-            className="flex cursor-default items-center gap-2 rounded-lg py-1 pr-1 pl-1.5 text-[12px] leading-none text-muted-foreground/60 select-none"
+            className="flex shrink-0 cursor-default items-center gap-2 rounded-lg py-1 pr-1 pl-1.5 text-[12px] leading-none text-muted-foreground/60 select-none"
           >
             <span className="whitespace-nowrap">{effort.unavailableLabel}</span>
           </span>
@@ -177,7 +183,7 @@ function ComposerActionsRow({
             popupMinWidth={168}
             items={optionItems(effort.options, effort.value)}
             onSelect={effort.onSelect}
-            triggerClassName={menuTriggerClassName}
+            triggerClassName={`${menuTriggerClassName} shrink-0`}
             trigger={
               <>
                 <span className="whitespace-nowrap">{effort.value}</span>
@@ -186,7 +192,7 @@ function ComposerActionsRow({
             }
           />
         )}
-        {generating ? (
+        {generating && !canSend ? (
           <button
             type="button"
             aria-label={stopLabel}
@@ -202,7 +208,7 @@ function ComposerActionsRow({
             aria-label={sendLabel}
             title={sendLabel}
             disabled={!canSend}
-            className="flex size-[29px] shrink-0 cursor-pointer items-center justify-center rounded-full text-white outline-none transition-colors select-none focus-visible:ring-3 focus-visible:ring-ring/50 enabled:bg-send-active enabled:hover:bg-send-active/85 disabled:cursor-default disabled:bg-send"
+            className="flex size-[29px] shrink-0 cursor-pointer items-center justify-center rounded-full text-primary-foreground outline-none transition-colors select-none focus-visible:ring-3 focus-visible:ring-ring/50 enabled:bg-primary enabled:hover:bg-primary/90 disabled:cursor-default disabled:bg-send disabled:text-white"
           >
             <ArrowUp className="size-[15px]" strokeWidth={2.5} />
           </button>
