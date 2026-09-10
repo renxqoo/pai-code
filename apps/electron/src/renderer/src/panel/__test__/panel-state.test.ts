@@ -4,6 +4,7 @@ import {
   closeAllPanels,
   closePanelTab,
   EMPTY_PANEL,
+  fileTab,
   focusPanelTab,
   openPanel,
   panelTabLabel,
@@ -64,9 +65,20 @@ describe('focusPanelTab / togglePanel / closeAllPanels', () => {
 });
 
 describe('panelTabLabel', () => {
-  test('kind → 文案映射', () => {
+  test('kind → 文案映射；文件 tab 用相对路径', () => {
     const labels = { diff: 'Diff', agents: '子代理' };
     expect(panelTabLabel(DIFF, labels)).toBe('Diff');
     expect(panelTabLabel(AGENTS, labels)).toBe('子代理');
+    expect(panelTabLabel(fileTab('/w', 'src/main.ts'), labels)).toBe('src/main.ts');
+  });
+});
+
+describe('fileTab', () => {
+  test('同路径同 id 去重；跨 cwd 不同 id', () => {
+    expect(fileTab('/w', 'a.ts').id).toBe(fileTab('/w', 'a.ts').id);
+    expect(fileTab('/w', 'a.ts').id).not.toBe(fileTab('/v', 'a.ts').id);
+    const state = openPanel(openPanel(EMPTY_PANEL, DIFF), fileTab('/w', 'a.ts'));
+    expect(openPanel(state, fileTab('/w', 'a.ts')).tabs).toHaveLength(2);
+    expect(state.tabs[1]).toMatchObject({ kind: 'file', cwd: '/w', path: 'a.ts' });
   });
 });

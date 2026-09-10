@@ -467,3 +467,17 @@
 @source "../../../node_modules/@streamdown/math/dist/*.js";
 @source "../../../node_modules/@streamdown/mermaid/dist/*.js";
 @source "../../../node_modules/@streamdown/cjk/dist/*.js";
+
+/*
+ * 文件查看 pane 的 Shiki 双主题（github-light 基色 + --shiki-dark 变量）：
+ * 透出面板底色、字号对齐 pane 正文；暗色经 .dark 变体切换变量。
+ */
+.file-code pre.shiki {
+  background-color: transparent;
+  font-size: 11.5px;
+  line-height: 19px;
+}
+.dark .file-code pre.shiki,
+.dark .file-code pre.shiki span {
+  color: var(--shiki-dark);
+}

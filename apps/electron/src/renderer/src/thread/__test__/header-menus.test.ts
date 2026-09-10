@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { projectMenuItems, sessionMenuItems } from '../header-menus';
+import { projectMenuItems, sessionMenuItems, viewMenuItems } from '../header-menus';
 
 const PROJECT_LABELS = {
   openMenu: ['在访达中打开', '在终端中打开', '在编辑器中打开'] as const,
@@ -14,6 +14,13 @@ const SESSION_LABELS = {
   reloadUntrusted: '以非受信模式重开',
   close: '关闭会话',
 };
+
+describe('viewMenuItems', () => {
+  test('打开文件入口 + 两个单例面板；id 词表封闭', () => {
+    const items = viewMenuItems({ openFile: '打开文件', diff: 'Diff', agents: '子代理' });
+    expect(items.map((item) => (item.kind === 'item' ? item.id : 'sep'))).toEqual(['openFile', 'sep', 'diff', 'agents']);
+  });
+});
 
 describe('projectMenuItems', () => {
   test('四动作 + 分隔符；id 词表封闭', () => {

@@ -7,10 +7,12 @@ import type { DiffSummaryModel } from '@/thread/thread-model';
 
 type DiffPanelProps = {
   diff: DiffSummaryModel
+  /** 文件行点击 → 文件查看 pane（消息流内的摘要卡不传）。 */
+  onOpenFile?: (path: string) => void
 }
 
 /** Diff pane（面板容器提供标签行与外框）：会话级文件变更列表 + 底部总量汇总。 */
-function DiffPanel({ diff }: DiffPanelProps) {
+function DiffPanel({ diff, onOpenFile }: DiffPanelProps) {
   return (
     <>
       {diff.files.length === 0 ? (
@@ -20,7 +22,7 @@ function DiffPanel({ diff }: DiffPanelProps) {
       ) : (
         <>
           <div className="min-h-0 flex-1 overflow-y-auto px-[14px] pt-[2px] pb-[10px]">
-            <DiffFileList files={diff.files} />
+            <DiffFileList files={diff.files} onOpenFile={onOpenFile} />
           </div>
           <div className="flex h-[30px] shrink-0 items-center gap-[12px] border-t border-border px-[14px]">
             <span className="text-[11px] leading-none text-muted-foreground">

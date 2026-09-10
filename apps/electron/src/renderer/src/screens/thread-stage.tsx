@@ -63,7 +63,7 @@ function ThreadStage({ workspace, activeThreadId, sidebarCollapsed, hostDown, bo
     [],
   );
   const viewMenu = React.useMemo(
-    () => viewMenuItems({ diff: copy.panel.tabDiff, agents: copy.panel.tabAgents }),
+    () => viewMenuItems({ openFile: copy.panel.file.openPickerTitle, diff: copy.panel.tabDiff, agents: copy.panel.tabAgents }),
     [],
   );
   const sessionMenu = React.useMemo(

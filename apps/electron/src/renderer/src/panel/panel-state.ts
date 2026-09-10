@@ -1,14 +1,17 @@
 /**
  * 右侧面板多标签状态（纯函数，容器只接线）：
- * 单例 tab（diff/agents，id == kind）与参数化 tab（后续文件视图）共存；
+ * 单例 tab（diff/agents，id == kind）与参数化 tab（文件查看，id = cwd+path）共存；
  * 关闭活跃 tab 时焦点移到右邻，无右邻取左邻——与浏览器 tab 惯例一致。
  */
 
-export type PanelKind = 'diff' | 'agents';
+export type PanelKind = 'diff' | 'agents' | 'file';
 
 export type PanelTab = {
   id: string;
   kind: PanelKind;
+  /** file 专属：目标项目目录与相对路径（tab 身份 = 路径）。 */
+  cwd?: string;
+  path?: string;
 };
 
 export type PanelState = {
@@ -19,8 +22,13 @@ export type PanelState = {
 export const EMPTY_PANEL: PanelState = { tabs: [], activeId: null };
 
 /** 单例 tab 的稳定 id（同 kind 只存一份）。 */
-export function singletonTab(kind: PanelKind): PanelTab {
+export function singletonTab(kind: 'diff' | 'agents'): PanelTab {
   return { id: kind, kind };
+}
+
+/** 文件 tab：同目录同路径去重（跨会话 cwd 不同即不同 tab）。 */
+export function fileTab(cwd: string, path: string): PanelTab {
+  return { id: `file:${cwd}:${path}`, kind: 'file', cwd, path };
 }
 
 export function openPanel(state: PanelState, tab: PanelTab): PanelState {
@@ -48,7 +56,7 @@ export function focusPanelTab(state: PanelState, id: string): PanelState {
 }
 
 /** 快捷键 toggle 语义：已开且是活跃 tab → 关闭；否则打开并聚焦。 */
-export function togglePanel(state: PanelState, kind: PanelKind): PanelState {
+export function togglePanel(state: PanelState, kind: 'diff' | 'agents'): PanelState {
   if (state.activeId === kind) return closePanelTab(state, kind);
   return openPanel(state, singletonTab(kind));
 }
@@ -63,7 +71,8 @@ export type PanelTabLabels = {
   agents: string;
 };
 
-/** tab → 标签文案（视图菜单与标签行共用同一词表）。 */
+/** tab → 标签文案（文件 tab 用相对路径；视图菜单与标签行共用同一词表）。 */
 export function panelTabLabel(tab: PanelTab, labels: PanelTabLabels): string {
+  if (tab.kind === 'file') return tab.path ?? tab.id;
   return tab.kind === 'diff' ? labels.diff : labels.agents;
 }

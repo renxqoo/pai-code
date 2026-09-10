@@ -22,7 +22,7 @@ const PROJECT_MENU = projectMenuItems({
   copyPath: '复制路径',
 });
 
-const VIEW_MENU = viewMenuItems({ diff: 'Diff', agents: '子代理' });
+const VIEW_MENU = viewMenuItems({ openFile: '打开文件', diff: 'Diff', agents: '子代理' });
 
 const SESSION_MENU = sessionMenuItems(
   {
