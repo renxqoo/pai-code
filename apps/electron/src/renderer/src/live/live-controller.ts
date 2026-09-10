@@ -4,7 +4,7 @@ import { copy } from '@/strings';
 import { queuedDrafts } from '@/composer/queued-drafts';
 import type { BridgeClient } from './client-invoke';
 import { coalesceEvents } from './coalesce-events';
-import { createEntryHydration } from './entry-hydration';
+import { createEntryHydration, createReadonlyHydration } from './entry-hydration';
 import { createLazyResume } from './lazy-resume';
 import { checkoutGitBranch, listGitBranches, searchFiles } from './git-actions';
 import { nextSessionRulesForMode } from './permission-mode';
@@ -108,10 +108,8 @@ export interface LiveController {
   /** 从历史条目分叉（position=before）→ 旧线程镜像终态 + 激活新会话；失败带原因（cancelled 拦截单列）。 */
   readonly forkSession: (threadId: string, entryId: string) => Promise<{ ok: true; threadId: string } | { ok: false; reason: string }>;
   readonly refreshStats: (threadId: string) => Promise<void>;
-  readonly ensureHydrated: (threadId: string) => Promise<void>;
-  /** 写路径懒恢复（T16 建立、T27 收窄）：parked 占位 → session/resume（在途按
-   * sessionPath 去重）。返回可用 threadId（非 parked 原样返回；失败 null，不自动重试）。 */
-  readonly ensureLiveSession: (threadId: string) => Promise<string | null>;
+  /** 只读水化链（纳管→直读→model 补齐；force 供重试入口越过 hydrated 守卫）。 */
+  readonly ensureHydrated: (threadId: string, options?: { force?: boolean }) => Promise<void>;
 }
 
 export function createLiveController(client: BridgeClient, store: LiveStore): LiveController {
@@ -142,8 +140,19 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
   const lazy = createLazyResume(client, store);
   const { resumeByPath, ensureLiveSession, activate } = lazy;
 
+  /** 只读水化链（纳管→直读→model 补齐；纳管失败回落 resume）独立模块。 */
+  const readonlyHydration = createReadonlyHydration({
+    client,
+    store,
+    resumeByPath: (sessionPath) => resumeByPath(sessionPath),
+    activate,
+    isDisposed: () => disposed,
+  });
+
   /** 对话框兜底定时器登记：结算/dispose 时清理，避免滞留句柄。 */
   const dialogTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  /** 轮首游标（turnStarted 记录、settle 窗口重建消费；每线程至多一条，settle 即清）。 */
+  const turnStartCursors = new Map<string, string | null>();
 
   /** 全局规则真相更新后刷新活跃会话的生效视图（source=global 时 rules 即全局内容，不得滞留旧值）。 */
   const refreshActiveSessionRules = async (): Promise<void> => {
@@ -179,7 +188,10 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       return;
     }
     if (event.type === 'dialogRequest' && event.method !== 'notify' && event.method !== 'setStatus') {
-      // 宿主侧 5 分钟超时默认拒绝后无回执帧：客户端同步兜底收起
+      // 宿主侧 5 分钟超时默认拒绝后无回执帧：客户端同步兜底收起；同 id 重投先清
+      // 旧 timer（孤儿定时器会按首个请求的时点提前取消重投后的弹窗）
+      const stale = dialogTimers.get(event.requestId);
+      if (stale !== undefined) clearTimeout(stale);
       dialogTimers.set(
         event.requestId,
         setTimeout(() => {
@@ -190,19 +202,35 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       );
       return;
     }
+    if (event.type === 'sessionDied' || (event.type === 'host' && (event.phase === 'restarting' || event.phase === 'failed'))) {
+      // 线程/宿主消亡：挂起弹窗的兜底 timer 一并收走（弹窗已折叠，timer 只会发
+      // 出注定无回执的 cancel）；host 消亡清全部（与 dispose 同口径）
+      for (const [requestId, timer] of dialogTimers) {
+        const owner = store.getState().dialogs.find((dialog) => dialog.requestId === requestId);
+        if (event.type === 'host' || owner?.threadId === event.threadId) {
+          clearTimeout(timer);
+          dialogTimers.delete(requestId);
+        }
+      }
+    }
     if (event.type === 'turnStarted') {
+      // 轮首游标：本轮开始前的持久游标（settle 窗口重建的 since 下界）
+      turnStartCursors.set(event.threadId, state.threads[event.threadId]?.cursor ?? null);
       // 用户回显/通知注入经条目对账到达（消息不走事件流）
       void fetchEntries(event.threadId, state.threads[event.threadId]?.cursor ?? null, false).catch(() => undefined);
     } else if (event.type === 'turnSettled') {
-      // 等条目落盘的短延迟后【全量重建】：以完整转写替换轮次区域，
-      // 根治增量批次切在 assistant/toolResult 之间导致的配对丢失。
-      // 代际守卫：窗口内若新一轮已开始（followUp 自动续轮），本次重建让位给下一轮的 settle。
+      // 等条目落盘的短延迟后【轮内窗口重建】：since = 轮首游标，以完整转写替换
+      // 本轮 span（根治配对丢失的语义不变，长会话不再每轮 O(全部条目) 全量拉取；
+      // 游标失效由主进程兜底全量重拉）。代际守卫：窗口内若新一轮已开始（followUp
+      // 自动续轮），本次重建让位给下一轮的 settle。
       const settledTurnId = state.threads[event.threadId]?.liveTurnId ?? null;
+      const turnStartCursor = turnStartCursors.get(event.threadId) ?? null;
+      turnStartCursors.delete(event.threadId);
       setTimeout(() => {
         if (disposed) return;
         const current = store.getState().threads[event.threadId];
         if (current !== undefined && current.liveTurnId !== settledTurnId) return;
-        void rebuildFromTranscript(event.threadId).catch(() => undefined);
+        void rebuildFromTranscript(event.threadId, turnStartCursor).catch(() => undefined);
         void controller.refreshStats(event.threadId);
       }, RECONCILE_SETTLE_DELAY_MS);
     }
@@ -305,9 +333,21 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       return { ok: true, threadId };
     },
     async openSavedSession(sessionPath: string, trusted?: boolean): Promise<boolean> {
-      // 同文件已在会话表（占位点击与 History 打开收敛）：直接激活，不撞 hub 双开守卫
+      // 同文件已在会话表（占位点击与 History 打开收敛）：不撞 hub 双开守卫。
+      // parked/dead 占位是纯浏览意图——只读激活走纳管直读链（T27 读不唤醒）；
+      // live 会话幂等用既有 id
       const existing = Object.values(store.getState().sessions).find((session) => session.sessionPath === sessionPath);
-      const liveId = existing !== undefined ? await this.ensureLiveSession(existing.threadId) : await resumeByPath(sessionPath, trusted);
+      let liveId: string | null;
+      if (existing === undefined) {
+        liveId = await resumeByPath(sessionPath, trusted);
+      } else if (existing.state === 'live') {
+        liveId = existing.threadId;
+      } else {
+        activate(existing.threadId);
+        await readonlyHydration.ensureHydrated(existing.threadId);
+        await this.refreshSaved();
+        return true;
+      }
       if (liveId === null) {
         store.getState().pushNotice(copy.flow.resumeFailed);
         return false;
@@ -321,7 +361,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       const sessionPath = store.getState().sessions[threadId]?.sessionPath ?? null;
       if (sessionPath === null || sessionPath.length === 0) return false;
       // 在途懒恢复先结算（trusted 分歧的去重通路会静默降级信任态，必须串行化后再重开）
-      await this.ensureLiveSession(threadId).catch(() => undefined);
+      await ensureLiveSession(threadId).catch(() => undefined);
       // 记住重开前是否活跃：resume 成功后仅在该会话原本活跃时跟随切换（用户在途切换别会话时不劫持）
       const wasActive = store.getState().activeThreadId === threadId;
       const stop = await client.invoke('session/stop', { threadId, remove: false });
@@ -489,11 +529,19 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     async runBash(threadId: string, command: string): Promise<string | null> {
       const text = command.trim();
       if (text.length === 0) return 'empty_command';
+      const cursorBefore = store.getState().threads[threadId]?.cursor ?? null;
       store.getState().bashStarted(threadId);
-      const outcome = await client.invoke('session/bash', { threadId, command: text });
-      store.getState().bashSettled(threadId);
-      await rebuildFromTranscript(threadId).catch(() => undefined);
-      return outcome.ok ? null : outcome.reason;
+      try {
+        // invoke reject（桥断连等）同样必须落 bashSettled：executing 永真会使
+        // 消息流尾部永久 loading 且 1Hz 走表定时器永不停
+        const outcome = await client.invoke('session/bash', { threadId, command: text });
+        store.getState().bashSettled(threadId);
+        await rebuildFromTranscript(threadId, cursorBefore).catch(() => undefined);
+        return outcome.ok ? null : outcome.reason;
+      } catch {
+        store.getState().bashSettled(threadId);
+        return 'bridge_unavailable';
+      }
     },
     async abortBash(threadId: string): Promise<void> {
       await client.invoke('session/abortBash', { threadId });
@@ -543,30 +591,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       const outcome = await client.invoke('session/stats', { threadId });
       if (outcome.ok) store.getState().updateStats(threadId, outcome.data);
     },
-    async ensureHydrated(threadId: string): Promise<void> {
-      const thread = store.getState().threads[threadId];
-      // hydrated 标志判定（空会话 cursor 恒 null，不能以 cursor 判，否则切回即重水化抹掉在途现场）
-      if (thread?.hydrated) return;
-      // parked 会话在 hub 表可能不存在（冷启动对账/重启回落都不建表项）：
-      // 读命令按 threadId 寻址会回 Unknown threadId——先纳管（host 本地零 worker、
-      // 幂等）再水化；失败交 hydrate/failed 失败面（可重试）
-      const session = store.getState().sessions[threadId];
-      if (session?.state === 'parked' && session.sessionPath !== null) {
-        const outcome = await client.invoke('session/register', { sessionPath: session.sessionPath });
-        if (disposed) return;
-        if (!outcome.ok) {
-          store.getState().hydrate(threadId, { kind: 'hydrate/failed' });
-          return;
-        }
-        await hydrateFull(threadId).catch(() => undefined);
-        // 直读 get_state 补 model 元数据（主进程 touchSession 落视图 + 推送；
-        // 失败静默——注册表 model 缺省时控件本地推导兜底）
-        void client.invoke('session/state', { threadId }).catch(() => undefined);
-        return;
-      }
-      await hydrateFull(threadId).catch(() => undefined);
-    },
-    ensureLiveSession,
+    ensureHydrated: (threadId: string, options?: { force?: boolean }) => readonlyHydration.ensureHydrated(threadId, options),
     selectSession(threadId: string): void {
       // parked 只读激活（历史经 host 直读水化，不唤醒 worker）；
       // 发消息走 submitDraft 的 ensureLiveSession 兜底唤醒（T27：读不唤醒、写才唤醒）

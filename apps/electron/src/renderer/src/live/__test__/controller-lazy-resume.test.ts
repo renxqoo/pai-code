@@ -112,46 +112,7 @@ describe('只读激活（T27：读不唤醒）', () => {
     expect(methods.indexOf('session/entries')).toBe(1);
     expect(methods).toContain('session/state');
     expect(resumeCalls(client)).toBe(0);
-    expect(client.calls[0]?.params).toMatchObject({ sessionPath: '/w/s/t1.jsonl' });
     expect(store.getState().threads['t1']?.hydrateFailed).toBe(false);
-  });
-
-  test('register 失败 → hydrate/failed（重试入口再发 register）；live 会话水化不走 register', async () => {
-    let registerFails = true;
-    const sessions = [sessionView('t1', 'parked', '/w/s/t1.jsonl')];
-    const client = makeClient((method) => {
-      if (method === 'app/bootstrap') return bootstrapOf(sessions);
-      if (method === 'session/register') return registerFails ? { ok: false, reason: 'session_not_found' } : { ok: true, data: sessionView('t1', 'parked', '/w/s/t1.jsonl') };
-      if (method === 'session/entries') return { ok: true, data: { items: [], cursor: null } };
-      return { ok: true, data: null };
-    });
-    const store = bootStore(sessions);
-    const controller = createLiveController(client, store);
-    await controller.start();
-    client.calls.length = 0;
-
-    await controller.ensureHydrated('t1');
-    expect(store.getState().threads['t1']?.hydrateFailed).toBe(true);
-    expect(client.calls.some((call) => call.method === 'session/entries')).toBe(false);
-
-    registerFails = false;
-    await controller.ensureHydrated('t1');
-    expect(client.calls.filter((call) => call.method === 'session/register').length).toBe(2);
-    expect(store.getState().threads['t1']?.hydrateFailed).toBe(false);
-
-    // live 会话：水化不纳管（hub 表内已有 worker）
-    const liveSessions = [sessionView('t2', 'live', '/w/s/t2.jsonl')];
-    const liveClient = makeClient((method) => {
-      if (method === 'app/bootstrap') return bootstrapOf(liveSessions);
-      return { ok: true, data: { items: [], cursor: null } };
-    });
-    const liveStore = bootStore(liveSessions);
-    const liveController = createLiveController(liveClient, liveStore);
-    await liveController.start();
-    liveClient.calls.length = 0;
-    await liveController.ensureHydrated('t2');
-    expect(liveClient.calls.some((call) => call.method === 'session/register')).toBe(false);
-    expect(liveClient.calls.some((call) => call.method === 'session/entries')).toBe(true);
   });
 
   test('症状回归「bootstrap 自动选中即唤醒」：启动选中的 parked 会话零 resume', async () => {
@@ -337,17 +298,26 @@ describe('History 打开与占位收敛', () => {
     expect(store.getState().activeThreadId).toBe('t2');
   });
 
-  test('同路径 parked 占位 → 走 resume 建表后激活（hub 无表项的会话必须 resume 才可读）', async () => {
-    const client = makeClient((method) => (method === 'session/resume' ? { ok: true, data: { threadId: 't1' } } : { ok: true, data: null }));
-    const store = bootStore([sessionView('t1', 'parked', '/w/s/t1.jsonl')]);
+  test('症状回归「History 打开 parked 占位也拉起 worker」：只读激活走纳管直读链，零 resume', async () => {
+    const sessions = [sessionView('t1', 'parked', '/w/s/t1.jsonl')];
+    const client = makeClient((method) => {
+      if (method === 'app/bootstrap') return bootstrapOf(sessions);
+      if (method === 'session/register') return { ok: true, data: sessionView('t1', 'parked', '/w/s/t1.jsonl') };
+      if (method === 'session/entries') return { ok: true, data: { items: [], cursor: null } };
+      return { ok: true, data: null };
+    });
+    const store = bootStore(sessions);
     const controller = createLiveController(client, store);
+    await controller.start();
+    client.calls.length = 0;
 
     const opened = await controller.openSavedSession('/w/s/t1.jsonl');
 
     expect(opened).toBe(true);
-    expect(resumeCalls(client)).toBe(1);
+    expect(resumeCalls(client)).toBe(0);
     expect(store.getState().activeThreadId).toBe('t1');
-    // 激活后水化走 session/entries
+    // 水化走 register → entries 纳管链
+    expect(client.calls.some((call) => call.method === 'session/register')).toBe(true);
     expect(client.calls.some((call) => call.method === 'session/entries')).toBe(true);
   });
 

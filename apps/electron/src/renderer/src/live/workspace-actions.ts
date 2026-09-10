@@ -307,9 +307,10 @@ export function createWorkspaceActions(setDiagnostics: (value: WorkspaceDiagnost
       }
     },
     retryHydration: () => {
-      // 历史水化失败态的重试入口：hydrate/failed 不置 hydrated，直接重发全量拉取
+      // 历史水化失败态的重试入口：force 越过 hydrated 守卫（reconcile/rebuild 的
+      // 失败可发生在已水化线程上，无 force 的重试会被守卫吞掉）
       const active = store.getState().activeThreadId;
-      if (active !== null) void controller.ensureHydrated(active);
+      if (active !== null) void controller.ensureHydrated(active, { force: true });
     },
     showNotice: (text) => {
       pushNotice(text);
