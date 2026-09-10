@@ -2,9 +2,9 @@ import * as React from 'react';
 
 import { cn } from 'cn';
 
-const TYPE_TICK_MS = 30;
-/** 每拍推进字符数（约 200 字/秒的打字节奏，跟上流式吐字不拖沓） */
-const CHARS_PER_TICK = 6;
+const TYPE_TICK_MS = 50;
+/** 每拍推进字符数（约 100 字/秒的打字节奏，跟上流式吐字不拖沓） */
+const CHARS_PER_TICK = 5;
 /** 打字展示窗口：只渲染光标前的尾部片段，流式预览只关心最新内容 */
 const TAIL_WINDOW_CHARS = 160;
 /** 读屏替身文本的尾部上限 */
