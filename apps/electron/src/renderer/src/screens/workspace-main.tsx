@@ -464,7 +464,6 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
               onOpenDiff={openDiff}
               panelOpen={panelOpen}
               onTogglePanel={togglePanelFromHeader}
-              onNewTask={openNewTask}
               onViewAction={onViewAction}
               onEditUserMessage={editUserMessage}
               onForkUserMessage={forkUserMessage}

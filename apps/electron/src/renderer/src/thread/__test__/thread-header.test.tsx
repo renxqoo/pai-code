@@ -6,7 +6,6 @@ import { projectMenuItems, sessionMenuItems, viewMenuItems } from '../header-men
 import type { ThreadStatusKind } from '../thread-status';
 
 const LABELS = {
-  newTask: '新建',
   toggleMaximize: '切换最大化',
   toggleSplitView: '切换分栏',
   viewMenuAria: '打开视图',
@@ -53,7 +52,6 @@ function render(overrides: Partial<Parameters<typeof ThreadHeader>[0]> = {}): st
       onStatusJump={() => undefined}
       onTogglePanel={() => undefined}
       onSessionAction={() => undefined}
-      onNewTask={() => undefined}
       onToggleMaximize={() => undefined}
       {...overrides}
     />,
@@ -61,13 +59,13 @@ function render(overrides: Partial<Parameters<typeof ThreadHeader>[0]> = {}): st
 }
 
 describe('ThreadHeader', () => {
-  test('身份区：项目名 + 标题 + 新建；不再渲染变更徽标（用户裁决删除）', () => {
+  test('身份区：项目名 + 标题；不渲染变更徽标与新建按钮（用户裁决删除）', () => {
     const html = render();
     expect(html).toContain('agent-app');
     expect(html).toContain('新会话');
-    expect(html).toContain('新建');
     expect(html).not.toContain('lucide-diff');
     expect(html).not.toMatch(/\+\d/);
+    expect(html).not.toContain('新建');
   });
 
   test.each<[boolean, string]>([

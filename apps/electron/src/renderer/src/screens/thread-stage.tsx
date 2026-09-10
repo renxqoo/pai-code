@@ -26,7 +26,6 @@ type ThreadStageProps = {
   /** 右侧面板开关按钮：面板是否有 tab + 点击开/收。 */
   panelOpen: boolean
   onTogglePanel: () => void
-  onNewTask: () => void
   onViewAction: (id: string) => void
   onEditUserMessage: (text: string) => void
   onForkUserMessage?: (entryId: string, text: string, images: ReadonlyArray<{ data: string; mimeType: string }>, autoResend: boolean) => void
@@ -36,7 +35,7 @@ type ThreadStageProps = {
  * 会话舞台（主区固定结构，以 fragment 挂进主区根）：全宽菜单栏 + 掉线横幅 +
  * 页面滚动消息流；菜单栏不随滚动，贴底跟随、轮次锚点带、回底浮标挂本层。
  */
-function ThreadStage({ workspace, activeThreadId, sidebarCollapsed, hostDown, bottomInset, onOpenSettings, onOpenDiff, panelOpen, onTogglePanel, onNewTask, onViewAction, onEditUserMessage, onForkUserMessage }: ThreadStageProps) {
+function ThreadStage({ workspace, activeThreadId, sidebarCollapsed, hostDown, bottomInset, onOpenSettings, onOpenDiff, panelOpen, onTogglePanel, onViewAction, onEditUserMessage, onForkUserMessage }: ThreadStageProps) {
   const { sessions, actions } = workspace;
   /** 页面滚动：菜单栏固定，消息流独占滚动容器，贴底跟随挂在容器上 */
   const { containerRef: scrollRef, onScroll, atBottom, scrollToBottom } = useStickToBottom();
@@ -69,7 +68,6 @@ function ThreadStage({ workspace, activeThreadId, sidebarCollapsed, hostDown, bo
   /** ThreadHeader 是 memo 边界：labels 对象 memo 化（statusLabel 随状态变，其余为模块常量）。 */
   const headerLabels = React.useMemo(
     () => ({
-      newTask: copy.thread.newTask,
       toggleMaximize: copy.thread.toggleMaximize,
       viewMenuAria: copy.thread.viewMenuAria,
       toggleSplitView: copy.thread.toggleSplitView,
@@ -147,7 +145,6 @@ function ThreadStage({ workspace, activeThreadId, sidebarCollapsed, hostDown, bo
         onStatusJump={scrollToBottom}
         onTogglePanel={onTogglePanel}
         onSessionAction={onSessionAction}
-        onNewTask={onNewTask}
         onToggleMaximize={toggleMaximize}
       />
       {hostDown ? (

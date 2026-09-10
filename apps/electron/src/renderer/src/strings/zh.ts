@@ -47,7 +47,6 @@ export const zh: typeof en = {
     },
   },
   thread: {
-    newTask: '新建',
     toggleMaximize: '切换最大化',
     viewMenuAria: '打开视图',
     openDiff: '打开 Diff',

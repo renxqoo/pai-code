@@ -3,7 +3,6 @@ import { ChevronDown, Folder, Maximize2, MoreHorizontal, PanelRight, Plus } from
 
 import { IconButton, MenuButton, type MenuItemDef } from '@paiapp/ui';
 
-import { Button } from '@/components/ui/button';
 import { WINDOWS_CAPTION_WIDTH } from '@/lib/platform';
 import { reduceTitleEdit, titleCommit, type TitleEditState } from '@/thread/title-edit';
 import type { ThreadStatusKind } from '@/thread/thread-status';
@@ -17,7 +16,6 @@ type ThreadHeaderProps = {
   /** 右侧面板是否有打开的 tab（开关按钮的展开态）。 */
   panelOpen: boolean
   labels: {
-    newTask: string
     toggleMaximize: string
     toggleSplitView: string
     viewMenuAria: string
@@ -36,7 +34,6 @@ type ThreadHeaderProps = {
   onStatusJump: () => void
   onTogglePanel: () => void
   onSessionAction: (id: string) => void
-  onNewTask: () => void
   onToggleMaximize: () => void
 }
 
@@ -69,7 +66,6 @@ function ThreadHeader({
   onStatusJump,
   onTogglePanel,
   onSessionAction,
-  onNewTask,
   onToggleMaximize,
 }: ThreadHeaderProps) {
   const [editing, setEditing] = React.useState<TitleEditState>(null);
@@ -169,14 +165,6 @@ function ThreadHeader({
           onSelect={onSessionMenuSelect}
           aria-label={labels.sessionMenuAria}
         />
-        <Button
-          variant="outline"
-          onClick={onNewTask}
-          className="h-[23px] gap-[5px] rounded-full px-[10px] text-[11.5px] leading-none font-medium [&_svg]:size-3 [&_svg]:text-muted-foreground"
-        >
-          <Plus className="size-3" strokeWidth={2} />
-          {labels.newTask}
-        </Button>
       </div>
       <div className="app-no-drag ml-[8px] flex shrink-0 items-center gap-[10px]">
         <MenuButton

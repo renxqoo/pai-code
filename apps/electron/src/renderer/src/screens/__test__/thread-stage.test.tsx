@@ -70,7 +70,6 @@ function renderStage(workspace: LiveWorkspaceView): string {
       onOpenDiff={() => undefined}
       panelOpen={false}
       onTogglePanel={() => undefined}
-      onNewTask={() => undefined}
       onViewAction={() => undefined}
       onEditUserMessage={() => undefined}
     />,

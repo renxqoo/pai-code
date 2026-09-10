@@ -46,7 +46,6 @@ export const en = {
     },
   },
   thread: {
-    newTask: 'New',
     toggleMaximize: 'Toggle maximize',
     viewMenuAria: 'Open view',
     openDiff: 'Open Diff',
