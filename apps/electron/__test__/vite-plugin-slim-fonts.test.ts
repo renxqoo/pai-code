@@ -5,8 +5,8 @@ import { expect, test } from 'bun:test';
 import { slimCssForId, slimFontsPlugin } from '../vite-plugin-slim-fonts';
 
 /**
- * 字体瘦身插件回归：基于 katex 与 @fontsource-variable/inter 的真实分发 css
- * 断言裁剪行为——KaTeX 三格式只留 woff2、Inter 只留 latin/latin-ext 子集、
+ * 字体瘦身插件回归：基于 katex 与 @fontsource-variable/geist 的真实分发 css
+ * 断言裁剪行为——KaTeX 三格式只留 woff2、Geist 只留 latin/latin-ext 子集、
  * 无关模块不受影响。产物里字体文件是否真的减少由构建后 out/ 目录体现。
  */
 
@@ -37,18 +37,18 @@ test('katex css：src 仅剩 woff2 单段（抽样一个 face 的完整 src）',
   expect(src).toBe('src:url(fonts/KaTeX_Main-Regular.woff2) format("woff2")');
 });
 
-test('Inter css：仅保留 latin 与 latin-ext 两个子集块', () => {
-  const css = readFileSync(resolvePackageFile('@fontsource-variable/inter/index.css'), 'utf8');
-  const slimmed = slimCssForId(css, '/x/node_modules/@fontsource-variable/inter/index.css');
+test('Geist css：仅保留 latin 与 latin-ext 两个子集块', () => {
+  const css = readFileSync(resolvePackageFile('@fontsource-variable/geist/index.css'), 'utf8');
+  const slimmed = slimCssForId(css, '/x/node_modules/@fontsource-variable/geist/index.css');
   expect(slimmed).not.toBeNull();
   if (slimmed === null) return;
 
   expect(slimmed.match(/@font-face/g)?.length).toBe(2);
-  expect(slimmed).toContain('inter-latin-wght-normal.woff2');
-  expect(slimmed).toContain('inter-latin-ext-wght-normal.woff2');
+  expect(slimmed).toContain('geist-latin-wght-normal.woff2');
+  expect(slimmed).toContain('geist-latin-ext-wght-normal.woff2');
   // 源 css 的子集注释头会残留（构建压缩自会移除），断言以字体文件引用为准
-  for (const subset of ['cyrillic-ext', 'cyrillic', 'greek-ext', 'greek', 'vietnamese']) {
-    expect(slimmed).not.toContain(`inter-${subset}-wght-normal.woff2`);
+  for (const subset of ['cyrillic-ext', 'cyrillic', 'vietnamese']) {
+    expect(slimmed).not.toContain(`geist-${subset}-wght-normal.woff2`);
   }
 });
 
@@ -57,9 +57,9 @@ test('无关 css 模块与已无变化的内容返回 null', () => {
   // katex 路径但内容无降级段：不变即 null
   expect(slimCssForId('a{b:c}', '/x/node_modules/katex/dist/katex.min.css')).toBeNull();
   // 带 query 的 id 也能命中
-  const css = readFileSync(resolvePackageFile('@fontsource-variable/inter/index.css'), 'utf8');
+  const css = readFileSync(resolvePackageFile('@fontsource-variable/geist/index.css'), 'utf8');
   expect(
-    slimCssForId(css, '/x/node_modules/@fontsource-variable/inter/index.css?direct'),
+    slimCssForId(css, '/x/node_modules/@fontsource-variable/geist/index.css?direct'),
   ).not.toBeNull();
 });
 

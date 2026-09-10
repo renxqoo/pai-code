@@ -5,28 +5,28 @@ import type { Plugin } from 'vite';
  * 被裁掉的 url 不再触发对应字体文件产出。两条规则：
  * - katex.min.css 的 @font-face src 三格式（woff2/woff/ttf）只留 woff2——
  *   运行面是 Electron 的 Chromium 内核，无需老格式降级，产物字体约 -800KB；
- * - Inter 变量字体只留 latin/latin-ext 子集——UI 文案为中英与代码文本，
- *   西里尔/希腊/越南语子集永远命中不了 unicode-range。
+ * - UI 变量字体（@fontsource-variable/geist）只留 latin/latin-ext 子集——
+ *   UI 文案为中英与代码文本，西里尔/越南语子集永远命中不了 unicode-range。
  */
 
 const KATEX_CSS_SUFFIX = '/katex/dist/katex.min.css';
-const INTER_CSS_DIR = '/@fontsource-variable/inter/';
+const UI_FONT_CSS_DIR = '/@fontsource-variable/geist/';
 
 /** katex @font-face src 的 woff/ttf 降级段（woff2 段在前，保留） */
 const KATEX_FALLBACK_SRCS =
   /,url\(fonts\/[^)]*\.woff\)\s*format\("woff"\),url\(fonts\/[^)]*\.ttf\)\s*format\("truetype"\)/g;
 
-/** Inter 子集 @font-face 块内的字体文件名：inter-<子集>-wght-normal.woff2 */
-const INTER_SUBSET_URL = /url\([^)]*\/inter-([a-z-]+)-wght-normal\.woff2\)/;
+/** UI 字体子集 @font-face 块内的字体文件名：geist-<子集>-wght-normal.woff2 */
+const UI_FONT_SUBSET_URL = /url\([^)]*\/geist-([a-z-]+)-wght-normal\.woff2\)/;
 
-/** Inter 保留子集：latin 覆盖 ASCII 与常用标点，latin-ext 覆盖扩展拉丁与拼音声调字形 */
-const INTER_KEPT_SUBSETS = new Set(['latin', 'latin-ext']);
+/** UI 字体保留子集：latin 覆盖 ASCII 与常用标点，latin-ext 覆盖扩展拉丁与拼音声调字形 */
+const UI_FONT_KEPT_SUBSETS = new Set(['latin', 'latin-ext']);
 
-/** 剔除 Inter 未保留子集的整个 @font-face 块（@font-face 内无嵌套花括号） */
-function slimInterFaces(css: string): string {
+/** 剔除 UI 字体未保留子集的整个 @font-face 块（@font-face 内无嵌套花括号） */
+function slimUiFontFaces(css: string): string {
   return css.replace(/@font-face\s*\{[^{}]*\}/g, (face) => {
-    const subset = face.match(INTER_SUBSET_URL)?.[1];
-    return subset !== undefined && !INTER_KEPT_SUBSETS.has(subset) ? '' : face;
+    const subset = face.match(UI_FONT_SUBSET_URL)?.[1];
+    return subset !== undefined && !UI_FONT_KEPT_SUBSETS.has(subset) ? '' : face;
   });
 }
 
@@ -36,8 +36,8 @@ function slimCssForId(css: string, id: string): string | null {
   let slimmed: string | null = null;
   if (file.endsWith(KATEX_CSS_SUFFIX)) {
     slimmed = css.replace(KATEX_FALLBACK_SRCS, '');
-  } else if (file.includes(INTER_CSS_DIR) && file.endsWith('.css')) {
-    slimmed = slimInterFaces(css);
+  } else if (file.includes(UI_FONT_CSS_DIR) && file.endsWith('.css')) {
+    slimmed = slimUiFontFaces(css);
   }
   return slimmed !== null && slimmed !== css ? slimmed : null;
 }
