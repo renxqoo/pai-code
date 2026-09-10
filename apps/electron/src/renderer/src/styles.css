@@ -373,15 +373,27 @@
 }
 /*
  * 表格：单层描边卡片——去掉 streamdown 的卡片套卡片底色，操作行浮在正文底上，
- * 表体为透明底 + --border 圆角框（radius 10 与代码块一致），只用横向行分隔线。
+ * 表体为透明底 + --border 圆角框（radius 10 与代码块一致），只用横向行分隔线；
+ * 上方工具栏（复制/下载/全屏）紧凑右对齐，与表体间距收窄到 6px。
  */
 .chat-markdown [data-streamdown='table-wrapper'] {
   margin-block: 16px;
-  gap: 14px;
+  gap: 6px;
   border: 0;
   border-radius: 0;
   background-color: transparent;
   padding: 0;
+}
+.chat-markdown [data-streamdown='table-wrapper'] > div:first-child {
+  min-height: 0;
+  padding: 0;
+}
+.chat-markdown [data-streamdown='table-wrapper'] > div:first-child button {
+  padding: 2px;
+}
+.chat-markdown [data-streamdown='table-wrapper'] > div:first-child button svg {
+  width: 15px;
+  height: 15px;
 }
 .chat-markdown [data-streamdown='table-wrapper'] > div:last-child {
   border-radius: 10px;

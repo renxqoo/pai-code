@@ -26,6 +26,8 @@ function MarkdownText({ text, className }: MarkdownTextProps) {
       translations={streamdownTranslations()}
       /* 正文代码仅供阅读/复制，不出下载入口；表格/图示/图片控件保持 streamdown 默认 */
       controls={{ code: { download: false } }}
+      /* 表格滚动上限：约 20 行单行表格再出现区内滚动（streamdown 默认 300px ≈ 6 行） */
+      tableMaxHeight={800}
       linkSafety={{ enabled: false }}
       lineNumbers={false}
     >
