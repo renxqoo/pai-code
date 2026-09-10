@@ -198,19 +198,56 @@
   background: color-mix(in oklab, var(--muted-foreground) 45%, transparent);
   background-clip: content-box;
 }
+
+/*
+ * 执行中文字波纹（shimmer-text）：对话流运行中元素（轮次计时/工具行/思考行/执行指示）
+ * 共用的 Skeleton 式加载态——文字本色透明，灰阶渐变带经 background-clip: text 匀速扫过。
+ * 颜色走 token（--meta-faint 底 + --muted-foreground 波峰）亮暗自适应；
+ * 系统减弱动态偏好下停在基础灰、不再滑动。
+ */
+.shimmer-text {
+  background-image: linear-gradient(
+    90deg,
+    var(--meta-faint) 0%,
+    var(--meta-faint) 38%,
+    var(--muted-foreground) 50%,
+    var(--meta-faint) 62%,
+    var(--meta-faint) 100%
+  );
+  background-size: 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: shimmer-slide 1.8s linear infinite;
+}
+
+@keyframes shimmer-slide {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shimmer-text {
+    animation: none;
+  }
+}
 /*
  * 对话正文 markdown（chat-markdown，见 markdown-text.tsx）外观校准，对标基准：
- * 正文 13.5px/24px 单级字号，标题=正文字号加重（600），章节前 24px / 其后 16px；
+ * 正文 14px/24px 单级字号，标题=近正文字号加重（600），章节前 24px / 其后 16px；
  * 表格单层描边卡片（透明底 + --border 圆角框 + 行分隔线），表头小字弱化；
  * 行内代码为无色调灰底 chip（--muted），代码块沿用对话几何（--surface-subtle）。
  * 颜色全部走 token，亮暗两态经变量自动跟随；链接样式由 components.a 覆写组件
  * （streamdown-link.tsx）内联提供，不在此处。非层叠规则优先于 streamdown 写进
  * utilities 层的默认类。
  *
- * 垂直节奏（正文 13.5px/24px）：兄弟块基础间距 16px——段落/列表由 markdown-text 的
- * space-y-[16px] 供给 margin-top，代码块/表格/引用/分隔线各自声明 margin-block 16px
- * （相邻兄弟纵向 margin 折叠取 max，节奏恒为 16px）；标题开启新章节，一律前 24px、
- * 后 16px。首尾元素由边界守卫清零，不在消息气泡内产生悬空空隙。
+ * 垂直节奏（正文 14px/24px）：兄弟块基础间距 12px——段落/列表由 markdown-text 的
+ * space-y-[12px] 供给 margin-top，代码块/表格/引用/分隔线各自声明 margin-block 16px
+ * （相邻兄弟纵向 margin 折叠取 max，块级节奏恒为 16px）；标题开启新章节，一律
+ * 前 24px、后 16px。首尾元素由边界守卫清零，不在消息气泡内产生悬空空隙。
  */
 .chat-markdown > :first-child {
   margin-block-start: 0 !important;
@@ -220,14 +257,14 @@
 }
 .chat-markdown [data-streamdown='heading-1'] {
   margin-block: 24px 16px;
-  font-size: 15px;
-  line-height: 22px;
+  font-size: 16px;
+  line-height: 24px;
   font-weight: 600;
 }
 .chat-markdown [data-streamdown='heading-2'] {
   margin-block: 24px 16px;
-  font-size: 14px;
-  line-height: 21px;
+  font-size: 14.5px;
+  line-height: 22px;
   font-weight: 600;
 }
 .chat-markdown [data-streamdown='heading-3'],
@@ -235,8 +272,8 @@
 .chat-markdown [data-streamdown='heading-5'],
 .chat-markdown [data-streamdown='heading-6'] {
   margin-block: 24px 16px;
-  font-size: 13.5px;
-  line-height: 20px;
+  font-size: 14px;
+  line-height: 21px;
   font-weight: 600;
 }
 .chat-markdown [data-streamdown='code-block'] {
@@ -272,8 +309,8 @@
   border: 0;
   background-color: transparent;
   padding: 2px 4px 0;
-  font-size: 12px;
-  line-height: 18px;
+  font-size: 12.5px;
+  line-height: 19px;
 }
 /* pre 默认带 shiki 主题背景色（--sdm-bg/--shiki-dark-bg），统一透出卡片底色 */
 .chat-markdown [data-streamdown='code-block-body'] pre {
@@ -285,8 +322,8 @@
   border-radius: 6px;
   background-color: var(--muted);
   padding: 0 6px;
-  font-size: 12px;
-  line-height: 18px;
+  font-size: 12.5px;
+  line-height: 19px;
 }
 /*
  * 表格：单层描边卡片——去掉 streamdown 的卡片套卡片底色，操作行浮在正文底上，
@@ -316,11 +353,11 @@
 .chat-markdown [data-streamdown='table-header'] [data-streamdown='table-row'] {
   border-top: 0;
 }
-/* 表头小字弱化（12px 常规体 + --muted-foreground），表体继承正文 13.5px/24px */
+/* 表头小字弱化（12.5px 常规体 + --muted-foreground），表体继承正文 14px/24px */
 .chat-markdown [data-streamdown='table-header-cell'] {
   padding: 11px 12px;
-  font-size: 12px;
-  line-height: 18px;
+  font-size: 12.5px;
+  line-height: 19px;
   font-weight: 400;
   color: var(--muted-foreground);
 }

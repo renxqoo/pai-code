@@ -48,10 +48,16 @@ function ToolCallRow({ call }: ToolCallRowProps) {
   const expandable = callExpandable(call);
   const kind = toolKindOf(call.name);
   const failed = call.status === 'failed';
+  const running = call.status === 'running';
 
   const content = (
     <>
-      <span className="shrink-0 text-[12.5px] leading-[20px] font-medium text-muted-foreground">
+      <span
+        className={cn(
+          'shrink-0 text-[12.5px] leading-[20px] font-medium',
+          running ? 'shimmer-text' : 'text-foreground/75',
+        )}
+      >
         {toolLabel(kind, call.name)}
       </span>
       <span
@@ -59,7 +65,7 @@ function ToolCallRow({ call }: ToolCallRowProps) {
         className={cn(
           'min-w-0 flex-1 truncate',
           toolPreviewMono(kind) ? 'font-mono text-[12.5px]' : 'text-[12.5px]',
-          failed ? 'text-diff-del' : 'text-muted-foreground',
+          running ? 'shimmer-text' : failed ? 'text-diff-del' : 'text-muted-foreground',
         )}
       >
         {call.argsPreview}
@@ -85,18 +91,18 @@ function ToolCallRow({ call }: ToolCallRowProps) {
       >
         <ToolStatusIcon status={call.status} />
       </span>
-      <div className="flex min-h-[24px] items-center">
+      <div className="flex min-h-[26px] items-center">
         {expandable ? (
           <button
             type="button"
             onClick={() => setPref(!open)}
             aria-expanded={open}
-            className="flex min-w-0 flex-1 cursor-pointer items-center gap-[8px] rounded-md px-[6px] py-[2px] text-left outline-none select-none hover:bg-accent/60 focus-visible:ring-3 focus-visible:ring-ring/50"
+            className="flex min-w-0 flex-1 cursor-pointer items-center gap-[8px] rounded-md px-[6px] py-[3px] text-left outline-none select-none hover:bg-accent/60 focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             {content}
           </button>
         ) : (
-          <div className="flex min-w-0 flex-1 items-center gap-[8px] px-[6px] py-[2px]">{content}</div>
+          <div className="flex min-w-0 flex-1 items-center gap-[8px] px-[6px] py-[3px]">{content}</div>
         )}
       </div>
       {expandable && open ? <ToolCallDetail call={call} /> : null}

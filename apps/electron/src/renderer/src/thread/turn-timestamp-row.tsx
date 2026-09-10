@@ -20,7 +20,7 @@ function TurnTimestampRow({ time, value }: TurnTimestampRowProps) {
         onCopy={writeClipboardText}
         className="-ml-[3px]"
       />
-      <span className="text-[13.5px] leading-[21px] text-muted-foreground">{time}</span>
+      <span className="text-[12.5px] leading-[18px] text-muted-foreground">{time}</span>
     </div>
   );
 }

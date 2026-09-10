@@ -42,7 +42,7 @@ function TurnGroup({ turn, now, onOpenDiff }: TurnGroupProps) {
         open={collapse.turnOpen}
         onToggle={collapse.toggleTurn}
       />
-      <div className="flex flex-col gap-[18px] pt-[12px]">
+      <div className="flex flex-col gap-[14px] pt-[10px]">
         {runs.map((run) =>
           run.kind === 'process' ? (
             <ProcessGroup
@@ -56,7 +56,7 @@ function TurnGroup({ turn, now, onOpenDiff }: TurnGroupProps) {
         )}
       </div>
       {endedAt !== null ? (
-        <div className="pt-[24px]">
+        <div className="pt-[20px]">
           <TurnTimestampRow time={formatClockTime(endedAt)} value={turnTextContent(turn)} />
         </div>
       ) : null}
