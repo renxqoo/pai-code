@@ -12,6 +12,7 @@ import {
 import type {
   HostPhase,
   HostProcessPort,
+  IdleRecycleMinutes,
   ProviderConfig,
   RegistryStorePort,
   SessionView,
@@ -39,6 +40,8 @@ export interface PaiRuntimeDeps {
   keyStore: ProviderKeyStore;
   providers: () => readonly ProviderConfig[];
   hubPaths: () => { bunPath: string; hubEntry: string } | null;
+  /** 闲置回收档位（分钟）：spawn env 注入（PAI_IDLE_RETIRE_MS），档位真相在 settings。 */
+  idleRecycleMinutes: () => IdleRecycleMinutes;
   logger: { log(message: string): void };
   /** 事件出口（装配层接 IPC 推送）。 */
   emit: (event: UiEvent) => void;
@@ -73,6 +76,12 @@ export interface PaiRuntime {
    * 视图转 parked 不得留 live 僵尸（僵尸行上的任何命令都打向已失效 id）。 */
   parkSession(threadId: string): void;
   renameSession(threadId: string, name: string): void;
+  /** 常驻开关：注册表持久真相 + hub 表项置位（parked 未纳管先 register；hub 失败容忍，下次 live 化 re-assert）。 */
+  setSessionKeepalive(threadId: string, keepalive: boolean): 'ok' | 'unknown_session';
+  /** 把注册表行的常驻标志 re-assert 进 hub 表项（会话 live 化后调用；失败只记日志）。 */
+  assertKeepalive(threadId: string): Promise<void>;
+  /** 监控器轮询的漂移纠正（hub parked/dead × 内存 live → 折叠；thread_parked/thread_died 帧丢失的兜底对账）。 */
+  reconcileWorkerStates(rows: readonly { threadId: string; state: 'live' | 'parked' | 'dead' }[]): void;
   touchSession(threadId: string, patch: Partial<Pick<SessionView, 'streaming' | 'model' | 'thinkingLevel' | 'state'>>): void;
   autoTitleOnPrompt(threadId: string, message: string): Promise<void>;
 }
@@ -111,6 +120,8 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
       title: view.title,
       // 未指定（缺省 resume 等同文件重开）沿用行内记录；显式指定则覆盖
       trusted: trusted ?? existing?.trusted ?? null,
+      // 常驻是注册表真相（hub 表项标志是运行期镜像）：写行恒保留既有值
+      keepalive: existing?.keepalive ?? false,
       createdAt: existing?.createdAt ?? Date.now(),
       // updatedAt ≡ 会话最后活动时间：随视图走（新建/fork/turn 推进；恢复/改名不推进）。
       // 单调钳制——帧事件与 resume 续体交错时不得把行内活动时间写回旧值
@@ -177,6 +188,21 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
           to: frame.to ?? null,
         });
         return;
+      case 'heartbeat':
+        // 1Hz 推送只喂运行状态监控器（runtime-monitor 经 host.onFrame 订阅），
+        // 不进 UiEvent 面（渲染层按需拉快照）
+        return;
+      case 'thread_parked': {
+        // worker 被收编（闲置/手动）：视图转 parked 折叠 streaming 镜像；注册表行
+        // 保留（发消息自动唤醒）——与 thread_died 同型的终态折叠
+        const parkedView = sessions.get(frame.threadId);
+        // 事件与折叠同守卫（状态转移恰好广播一次；重复帧/未知线程零副作用）
+        if (parkedView !== undefined && parkedView.state !== 'parked') {
+          upsertSession({ ...parkedView, state: 'parked', streaming: false });
+          emit({ type: 'sessionParked', threadId: frame.threadId, reason: frame.reason });
+        }
+        return;
+      }
       case 'thread_died': {
         const view = sessions.get(frame.threadId);
         // 死亡终态必须折叠 streaming 镜像：侧栏活动指示消费该字段，滞留会永久转圈
@@ -258,7 +284,11 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
         agentDir: deps.paths.agentDir,
         cwd: homedir(),
         // 每次 spawn（含重启）重生成 models.json 并解析最新 key 注入
-        buildEnv: () => writeModelsConfig(deps.paths.agentDir, deps.providers(), deps.keyStore).env,
+        // 档位随 spawn 生效（运行期变更经 set_idle_retire_ms 即时同步）
+        buildEnv: () => ({
+          ...writeModelsConfig(deps.paths.agentDir, deps.providers(), deps.keyStore).env,
+          PAI_IDLE_RETIRE_MS: String(deps.idleRecycleMinutes() * 60_000),
+        }),
       },
       onFrame: handleFrame,
       onPhase: (phase: HostPhase) => {
@@ -316,6 +346,10 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
       const view = toSessionView({ threadId, cwd, sessionPath, title, lastActivityAt });
       upsertSession(view);
       persistSession(view, trusted);
+      // 会话 live 化后把注册表常驻标志同步进 hub 表项（hub 不持久化该标志）
+      if (registry.get(threadId)?.keepalive === true) {
+        void this.assertKeepalive(threadId).catch(() => undefined);
+      }
       return view;
     },
     removeSession(threadId: string): void {
@@ -339,6 +373,40 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
       if (view === undefined) return;
       upsertSession({ ...view, title: name });
       persistSession({ ...view, title: name });
+    },
+    setSessionKeepalive(threadId: string, keepalive: boolean): 'ok' | 'unknown_session' {
+      const row = registry.get(threadId);
+      if (row === null) return 'unknown_session';
+      registry.upsert({ ...row, keepalive });
+      // hub 表项可能不存在（parked 未纳管）：置位失败 → register（零 worker 幂等）后
+      // 无条件重试一次 set——register 被 live 占用拒绝（Session already open）或任何
+      // 暂态失败都覆盖；再失败只记日志（注册表是真相，下次 live 化 re-assert）
+      void (async () => {
+        let outcome = await host?.request({ type: 'thread/set_keepalive', threadId, keepalive });
+        if (outcome?.ok) return;
+        if (row.sessionPath !== null) {
+          await host?.request({ type: 'thread/register', sessionPath: row.sessionPath, trusted: row.trusted ?? false });
+        }
+        outcome = await host?.request({ type: 'thread/set_keepalive', threadId, keepalive });
+        if (!outcome?.ok) log(`keepalive_hub_apply_failed:${threadId}`);
+      })();
+      return 'ok';
+    },
+    async assertKeepalive(threadId: string): Promise<void> {
+      const outcome = await this.host.request({ type: 'thread/set_keepalive', threadId, keepalive: true });
+      if (!outcome.ok) log(`keepalive_assert_failed:${threadId}:${outcome.error}`);
+    },
+    reconcileWorkerStates(rows: readonly { threadId: string; state: 'live' | 'parked' | 'dead' }[]): void {
+      // 只折叠 hub 报告为非 live 且内存仍 live 的会话（帧丢失兜底）；不广播
+      // sessionParked——事件广播是帧路径专属，对账路径只收敛视图
+      for (const row of rows) {
+        if (row.state === 'live') continue;
+        const view = sessions.get(row.threadId);
+        if (view?.state !== 'live') continue;
+        const folded = { ...view, state: row.state, streaming: false };
+        upsertSession(folded);
+        persistSession(folded);
+      }
     },
     touchSession(threadId: string, patch: Partial<Pick<SessionView, 'streaming' | 'model' | 'thinkingLevel' | 'state'>>): void {
       const view = sessions.get(threadId);

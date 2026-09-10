@@ -26,6 +26,10 @@ type SidebarProps = {
   onSearchOpenChange: (open: boolean) => void
   /** 快捷区「搜索」行入口：展开 + 聚焦（已展开时重新聚焦；含收起态展开侧栏）。 */
   onOpenSearch: () => void
+  /** 快捷区「运行状态」行入口：打开运行状态监控页。 */
+  onOpenRuntime: () => void
+  /** 快捷区「运行状态」行的异常亮标数据（宿主相位异常或存在 dead worker）。 */
+  runtimeAttention: boolean
   /** 聚焦信号：每次 ⌘K/快捷行触发递增，驱动已展开的搜索框重新聚焦。 */
   searchFocusToken: number
   /** 会话过滤查询（受控）：空串 = 不过滤。 */
@@ -58,6 +62,8 @@ type SidebarProps = {
   onRenameSession?: (sessionId: string, name: string) => void
   /** 置顶切换（键为 sessionPath）；sessionPath 为 null 的行无置顶入口。 */
   onTogglePin: (sessionPath: string) => void
+  /** 回收 worker（仅 live 且非流式的行内出现）。 */
+  onRetireSession?: (sessionId: string) => void
   /** 项目行菜单：基于该项目新建任务（键为项目 cwd）。 */
   onNewTaskInProject: (cwd: string) => void
   /** 项目行菜单：移除项目（键为项目 cwd）。 */
@@ -86,6 +92,8 @@ function Sidebar({
   searchOpen,
   onSearchOpenChange,
   onOpenSearch,
+  onOpenRuntime,
+  runtimeAttention,
   searchFocusToken,
   searchQuery,
   onSearchQueryChange,
@@ -105,6 +113,7 @@ function Sidebar({
   onCloseSession,
   onRenameSession,
   onTogglePin,
+  onRetireSession,
   onNewTaskInProject,
   onRemoveProject,
   onProjectFiles,
@@ -142,7 +151,7 @@ function Sidebar({
         <>
             <div className="flex min-h-0 flex-1 flex-col pt-2 ">
               <div className="px-2 ">
-            <QuickActionsRow onNewThread={onNewThread} onOpenSearch={onOpenSearch} />
+            <QuickActionsRow onNewThread={onNewThread} onOpenSearch={onOpenSearch} onOpenRuntime={onOpenRuntime} runtimeAttention={runtimeAttention} />
             {searchOpen ? (
               <div className="pt-1.5">
                 <SidebarSearchInput
@@ -182,6 +191,7 @@ function Sidebar({
                     onClose={onCloseSession}
                     onRename={onRenameSession}
                     onTogglePin={onTogglePin}
+                    onRetire={onRetireSession}
                   />
                 ) : null}
                 {view === 'grouped' ? (
@@ -197,6 +207,7 @@ function Sidebar({
                         onClose={onCloseSession}
                         onRename={onRenameSession}
                         onTogglePin={onTogglePin}
+                        onRetire={onRetireSession}
                       />
                     ))}
                   </section>
@@ -218,6 +229,7 @@ function Sidebar({
                         onClose={onCloseSession}
                         onRename={onRenameSession}
                         onTogglePin={onTogglePin}
+                        onRetire={onRetireSession}
                         onNewTaskInProject={onNewTaskInProject}
                         onRemoveProject={onRemoveProject}
                         onProjectFiles={onProjectFiles}

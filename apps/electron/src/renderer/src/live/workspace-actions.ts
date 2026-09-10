@@ -1,4 +1,4 @@
-import type { AgentDefinition, ApiOutcome, CommandView, ImagePayload, PermissionRules, ProviderModel, ThinkingFormat } from '@paiapp/contracts';
+import type { AgentDefinition, ApiOutcome, CommandView, IdleRecycleMinutes, ImagePayload, PermissionRules, ProviderModel, RuntimeSnapshotView, ThinkingFormat } from '@paiapp/contracts';
 import { thinkingLevelOfLabel } from '@paiapp/contracts';
 
 import { copy } from '@/strings';
@@ -12,12 +12,6 @@ import { statsTargetsOf } from './stats-targets';
  * 消灭闭包旧值与「actions 换引用击穿子组件 memo / effect 重挂」两类问题。
  * 唯一外来依赖是 hook 注入的 setState setter（引用本身恒定）。
  */
-
-export type WorkspaceDiagnostics = {
-  hostPhase: 'starting' | 'ready' | 'restarting' | 'failed' | null;
-  stderrTail: string;
-  registrySessions: number;
-};
 
 export type WorkspaceActions = {
   readonly submitDraft: (message: string, images?: readonly ImagePayload[], mode?: 'auto' | 'steer' | 'followUp') => Promise<string | null>;
@@ -98,8 +92,22 @@ export type WorkspaceActions = {
   readonly forkFromEntry: (entryId: string) => Promise<string | null>;
   readonly reloadSessionTrusted: (threadId: string, trusted: boolean) => void;
   readonly steerSubagent: (subagentId: string, message: string) => void;
-  readonly fetchDiagnostics: () => void;
   readonly restartHost: () => void;
+  /** 指定线程停止当前轮（运行状态页执行中行的停止操作；活跃线程走 stopActiveTurn）。 */
+  readonly stopThread: (threadId: string) => void;
+  /** 运行状态快照（T29 监控页轮询；失败 null 保持旧值）。 */
+  readonly fetchRuntime: () => Promise<RuntimeSnapshotView | null>;
+  /** 宿主 stderr 尾部（按需）。 */
+  readonly fetchDiagnosticLog: () => Promise<string | null>;
+  /** 手动/强制回收（失败推通知条）。 */
+  readonly retireSession: (threadId: string) => Promise<void>;
+  readonly forceRetireSession: (threadId: string) => Promise<void>;
+  /** 常驻开关（失败推通知条）。 */
+  readonly setKeepalive: (threadId: string, keepalive: boolean) => Promise<void>;
+  /** 闲置回收档位（失败推通知条）。 */
+  readonly setIdleRecycle: (minutes: IdleRecycleMinutes) => Promise<void>;
+  /** 诊断包导出；失败推通知条，返回是否成功（成功提示由调用方给）。 */
+  readonly exportDiagnostics: () => Promise<boolean>;
   /** 历史水化失败的重试（活跃会话全量重拉）。 */
   readonly retryHydration: () => void;
   /** 打开 Usage 页时对全部活跃线程补拉 stats（防未访问会话显示 0）。 */
@@ -146,7 +154,7 @@ function notifySubmitFailure(reason: string | null): void {
   pushNotice(reason === 'resume_failed' ? copy.flow.resumeFailed : copy.flow.sendFailed(reason));
 }
 
-export function createWorkspaceActions(setDiagnostics: (value: WorkspaceDiagnostics | null) => void): WorkspaceActions {
+export function createWorkspaceActions(): WorkspaceActions {
   /** 建会话的共用路径（新会话入口与新建任务页首条提交）：失败推通知条，成功解除项目隐藏。 */
   const openSession = async (input: {
     cwd: string
@@ -296,9 +304,6 @@ export function createWorkspaceActions(setDiagnostics: (value: WorkspaceDiagnost
       if (reason !== null) pushNotice(copy.settings.permissionSaveFailed);
       return reason === null;
     },
-    fetchDiagnostics: () => {
-      void controller.fetchDiagnostics().then((data) => setDiagnostics(data));
-    },
     refreshAllStats: () => {
       // stats 是 worker 级查询：parked 会话不发（会唤醒全部 worker——T27 预算），
       // 只刷新 live 会话，parked 显示最后已知值
@@ -324,6 +329,33 @@ export function createWorkspaceActions(setDiagnostics: (value: WorkspaceDiagnost
       return true;
     },
     restartHost: () => controller.restartHost(),
+    stopThread: (threadId) => void controller.stopActiveTurn(threadId),
+    fetchRuntime: () => controller.runtime.fetchRuntimeSnapshot(),
+    fetchDiagnosticLog: () => controller.runtime.fetchDiagnosticLog(),
+    retireSession: async (threadId) => {
+      const reason = await controller.runtime.retireSession(threadId);
+      if (reason !== null) pushNotice(copy.runtime.recycleFailed);
+    },
+    forceRetireSession: async (threadId) => {
+      const reason = await controller.runtime.forceRetireSession(threadId);
+      if (reason !== null) pushNotice(copy.runtime.recycleFailed);
+    },
+    setKeepalive: async (threadId, keepalive) => {
+      const reason = await controller.runtime.setKeepalive(threadId, keepalive);
+      if (reason !== null) pushNotice(copy.runtime.keepaliveFailed);
+    },
+    setIdleRecycle: async (minutes) => {
+      const applied = await controller.runtime.setIdleRecycle(minutes);
+      if (applied === null) pushNotice(copy.runtime.recycleSettingFailed);
+    },
+    exportDiagnostics: async () => {
+      const directory = await controller.runtime.exportDiagnostics();
+      if (directory === null) {
+        pushNotice(copy.runtime.exportFailed);
+        return false;
+      }
+      return true;
+    },
     reloadSessionTrusted: (threadId, trusted) => {
       void controller.reloadSessionTrusted(threadId, trusted).then((ok) => {
         if (!ok) pushNotice(copy.thread.reloadTrustFailed);

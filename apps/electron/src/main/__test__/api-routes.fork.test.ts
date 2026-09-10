@@ -53,7 +53,7 @@ function fakeHost(responses: { fork?: ForkResponse | { error: string }; state?: 
     get phase(): HostPhase {
       return 'ready';
     },
-    diagnostics: () => ({ stderrTail: '' }),
+    diagnostics: () => ({ stderrTail: '', restartCount: 0, lastRestartCause: null, lastRestartAt: null }),
   } satisfies HostProcessPort;
 }
 
@@ -81,6 +81,7 @@ async function makeRoutes(responses: Parameters<typeof fakeHost>[0]) {
     },
     keyStore,
     providers: () => [],
+    idleRecycleMinutes: () => 5,
     hubPaths: () => ({ bunPath: "bun", hubEntry }),
     logger: { log: () => undefined },
     emit: sink.emit,

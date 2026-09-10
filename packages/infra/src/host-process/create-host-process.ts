@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 
 import { createFrameDecoder, encodeCommand } from '@paiapp/adapter';
-import type { HostPhase, HostProcessPort, HostRuntimeConfig, HostCommandOutcome, HubFrame, PaiCommand } from '@paiapp/contracts';
+import type { HostDiagnostics, HostPhase, HostProcessPort, HostRuntimeConfig, HostCommandOutcome, HubFrame, PaiCommand } from '@paiapp/contracts';
 
 import { hubSpawnEnv } from './spawn-env';
 
@@ -75,6 +75,9 @@ export function createHostProcess(deps: HostProcessDeps): HostProcessPort {
   let restarting = false;
   let nextId = 1;
   let stderrRing = '';
+  let restartCount = 0;
+  let lastRestartCause: string | null = null;
+  let lastRestartAt: number | null = null;
   const pending = new Map<string, PendingRequest>();
   const frameListeners = new Set<(frame: HubFrame) => void>();
   const phaseListeners = new Set<(p: HostPhase) => void>();
@@ -177,6 +180,8 @@ export function createHostProcess(deps: HostProcessDeps): HostProcessPort {
           consecutiveFailures = 0;
           setPhase('ready');
         }
+        // 心跳帧透传给订阅面（runtime-monitor 折叠资源字段）；不进渲染层 UiEvent
+        emitFrame(frame);
         return;
       }
       emitFrame(frame);
@@ -217,6 +222,9 @@ export function createHostProcess(deps: HostProcessDeps): HostProcessPort {
     // failed 是「自动自愈」的终态；显式 restart（配置变更等）重置计数给予复活
     if (phase === 'failed') consecutiveFailures = 0;
     consecutiveFailures += 1;
+    restartCount += 1;
+    lastRestartCause = cause;
+    lastRestartAt = Date.now();
     note(`restart:cause=${cause}:attempt=${consecutiveFailures}`);
     if (consecutiveFailures > timing.maxConsecutiveRestarts) {
       killGroup();
@@ -333,10 +341,10 @@ export function createHostProcess(deps: HostProcessDeps): HostProcessPort {
       });
       child = null;
     },
-    diagnostics(): { stderrTail: string } {
-      return { stderrTail: stderrRing };
+    diagnostics(): HostDiagnostics {
+      return { stderrTail: stderrRing, restartCount, lastRestartCause, lastRestartAt };
     },
-  } satisfies HostProcessPort & { diagnostics(): { stderrTail: string } };
+  } satisfies HostProcessPort;
 }
 
 function delay(ms: number): Promise<void> {

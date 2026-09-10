@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { LoaderCircle, Pencil, Pin, PinOff, X } from 'lucide-react';
+import { Archive, LoaderCircle, Pencil, Pin, PinOff, X } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { copy } from '@/strings';
@@ -23,6 +23,8 @@ type SessionRowProps = {
   onRename?: (sessionId: string, name: string) => void
   /** 置顶切换：sessionPath 为 null（未落盘）的行不渲染钉子按钮。 */
   onTogglePin?: (sessionPath: string) => void
+  /** 回收 worker（仅 live 且非流式的行出现）；会话保留，可随时唤醒。 */
+  onRetire?: (sessionId: string) => void
 }
 
 const actionButtonClass =
@@ -39,6 +41,7 @@ function SessionRow({
   onClose,
   onRename,
   onTogglePin,
+  onRetire,
 }: SessionRowProps) {
   const [editing, setEditing] = React.useState(false);
   const [draft, setDraft] = React.useState('');
@@ -52,8 +55,9 @@ function SessionRow({
   const canTogglePin = onTogglePin !== undefined && session.sessionPath !== null;
   const canRename = onRename !== undefined;
   const canClose = onClose !== undefined;
+  const canRetire = onRetire !== undefined && session.state === 'live' && !session.streaming;
   /** hover 动作与时间标签同格交叉淡切（不在流内增删，行高与标题截断点恒定）；编辑态只留输入框。 */
-  const showActions = (canTogglePin || canRename || canClose) && !editing;
+  const showActions = (canTogglePin || canRename || canClose || canRetire) && !editing;
 
   return (
     <div
@@ -150,6 +154,20 @@ function SessionRow({
                   className={actionButtonClass}
                 >
                   <Pencil className="size-3" strokeWidth={1.75} />
+                </button>
+              ) : null}
+              {canRetire ? (
+                <button
+                  type="button"
+                  aria-label={copy.sidebar.retireSession}
+                  title={copy.sidebar.retireSession}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onRetire?.(session.id);
+                  }}
+                  className={actionButtonClass}
+                >
+                  <Archive className="size-3" strokeWidth={1.75} />
                 </button>
               ) : null}
               {canClose ? (

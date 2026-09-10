@@ -137,6 +137,17 @@ export function createLiveStore() {
               const dialogs = state.dialogs.filter((dialog) => dialog.threadId !== event.threadId);
               return { threads: { ...state.threads, [event.threadId]: foldThreadEvent(thread, event, now) }, dialogs };
             }
+            case 'sessionParked': {
+              const thread = threadOf(state, event.threadId);
+              const session = state.sessions[event.threadId];
+              const dialogs = state.dialogs.filter((dialog) => dialog.threadId !== event.threadId);
+              return {
+                // 会话视图经 sessionUpdated(parked) 折叠；此处兜底幂等置 parked（事件乱序安全）
+                sessions: session === undefined || session.state === 'parked' ? state.sessions : { ...state.sessions, [event.threadId]: { ...session, state: 'parked', streaming: false } },
+                threads: { ...state.threads, [event.threadId]: foldThreadEvent(thread, event, now) },
+                dialogs,
+              };
+            }
             case 'dialogRequest': {
               if (event.method === 'notify') {
                 const text = event.message ?? event.title ?? '';
@@ -299,7 +310,7 @@ function initialStoreState(): LiveStoreState {
     providers: [],
     agentDefinitions: [],
     skills: [],
-    preferences: { defaultModel: null, onboarded: false, projectModels: {}, pinnedSessions: [], trustedDefault: false, hiddenProjects: [] },
+    preferences: { defaultModel: null, onboarded: false, projectModels: {}, pinnedSessions: [], trustedDefault: false, hiddenProjects: [], idleRecycleMinutes: 5 },
     permissionRules: null,
     sessionRules: null,
     threads: {},

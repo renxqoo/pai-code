@@ -29,6 +29,8 @@ function makeProps(overrides: Partial<SettingsScreenProps> = {}): SettingsScreen
       onThemeChange: noop,
       trustedDefault: false,
       onSaveTrustedDefault: ok,
+      idleRecycleMinutes: 5,
+      onIdleRecycleChange: noop,
       onRestartOnboarding: noop,
     },
     providers: {
@@ -58,7 +60,6 @@ function makeProps(overrides: Partial<SettingsScreenProps> = {}): SettingsScreen
       onOpenSaved: noop,
       onRefresh: noop,
     },
-    diagnostics: { data: null, onRefresh: noop, onRestartHost: noop },
     ...overrides,
   };
 }
@@ -104,7 +105,6 @@ describe('设置页渲染冒烟', () => {
       { section: 'agents', marks: [copy.settings.agentsTitle, copy.settings.agentsEmpty] },
       { section: 'skills', marks: [copy.settings.skillsTitle, copy.settings.skillsEmpty] },
       { section: 'history', marks: [copy.settings.historyTitle, copy.settings.historyEmpty] },
-      { section: 'diagnostics', marks: [copy.settings.diagnosticsTitle, copy.settings.diagnosticsEmpty] },
     ];
     for (const { section, marks } of cases) {
       const html = renderToStaticMarkup(<SettingsScreen {...makeProps({ section })} />);

@@ -8,7 +8,6 @@ export type SettingsSectionId =
   | 'permissions'
   | 'agents'
   | 'skills'
-  | 'diagnostics'
   | 'history';
 
 /** 打开设置页时回到的首分区。 */
@@ -19,7 +18,6 @@ export const FETCH_ON_ENTER_SECTIONS: ReadonlySet<SettingsSectionId> = new Set([
   'permissions',
   'agents',
   'skills',
-  'diagnostics',
 ]);
 
 export type SettingsNavGroupId = 'basics' | 'agent' | 'data';
@@ -33,5 +31,5 @@ export type SettingsNavGroup = {
 export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
   { id: 'basics', sections: ['general', 'providers'] },
   { id: 'agent', sections: ['permissions', 'agents', 'skills'] },
-  { id: 'data', sections: ['history', 'diagnostics'] },
+  { id: 'data', sections: ['history'] },
 ];

@@ -1,4 +1,6 @@
-import { SegmentedControl, ToggleSwitch } from '@paiapp/ui';
+import type { IdleRecycleMinutes } from '@paiapp/contracts';
+import { IDLE_RECYCLE_MINUTE_OPTIONS } from '@paiapp/contracts';
+import { SegmentedControl, type SegmentedControlOption, ToggleSwitch } from '@paiapp/ui';
 
 import type { Theme } from '@/components/theme-context';
 import type { LocaleSetting } from '@/strings';
@@ -15,11 +17,13 @@ type GeneralSectionProps = {
   onThemeChange: (next: Theme) => void
   trustedDefault: boolean
   onSaveTrustedDefault: (trustedDefault: boolean) => Promise<boolean>
+  idleRecycleMinutes: IdleRecycleMinutes
+  onIdleRecycleChange: (minutes: IdleRecycleMinutes) => void
   onRestartOnboarding: () => void
 }
 
-/** 通用分区：界面语言/外观分段即改即生效（语言切换触发 app 根重挂载）、默认信任即改即存、虚线引导卡。 */
-function GeneralSection({ localeSetting, onLocaleSettingChange, theme, onThemeChange, trustedDefault, onSaveTrustedDefault, onRestartOnboarding }: GeneralSectionProps) {
+/** 通用分区：界面语言/外观分段即改即生效（语言切换触发 app 根重挂载）、默认信任与闲置回收即改即存、虚线引导卡。 */
+function GeneralSection({ localeSetting, onLocaleSettingChange, theme, onThemeChange, trustedDefault, onSaveTrustedDefault, idleRecycleMinutes, onIdleRecycleChange, onRestartOnboarding }: GeneralSectionProps) {
   const localeOptions: ReadonlyArray<{ value: LocaleSetting; label: string }> = [
     { value: 'system', label: copy.settings.followSystem },
     // 语言自称属专有名词：各 locale 表均显示原生名，不进文案表
@@ -31,6 +35,10 @@ function GeneralSection({ localeSetting, onLocaleSettingChange, theme, onThemeCh
     { value: 'dark', label: copy.settings.appearanceDark },
     { value: 'system', label: copy.settings.followSystem },
   ];
+  const idleRecycleOptions: ReadonlyArray<SegmentedControlOption<IdleRecycleMinutes>> = IDLE_RECYCLE_MINUTE_OPTIONS.map((minutes) => ({
+    value: minutes,
+    label: copy.runtime.minutesOption(minutes),
+  }));
   return (
     <section>
       <SettingsPageHeader title={copy.settings.generalTitle} description={copy.settings.generalDesc} />
@@ -47,6 +55,14 @@ function GeneralSection({ localeSetting, onLocaleSettingChange, theme, onThemeCh
               checked={trustedDefault}
               onCheckedChange={(next) => void onSaveTrustedDefault(next)}
               aria-label={copy.settings.generalTrustedDefault}
+            />
+          </SettingsRow>
+          <SettingsRow title={copy.settings.generalIdleRecycle} description={copy.settings.generalIdleRecycleHint}>
+            <SegmentedControl
+              aria-label={copy.settings.generalIdleRecycle}
+              options={idleRecycleOptions}
+              value={idleRecycleMinutes}
+              onChange={onIdleRecycleChange}
             />
           </SettingsRow>
         </SettingsCard>

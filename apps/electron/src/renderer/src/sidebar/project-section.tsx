@@ -22,6 +22,8 @@ type ProjectSectionProps = {
   onRename?: (sessionId: string, name: string) => void
   /** 置顶切换（键为 sessionPath）；sessionPath 为 null 的行无置顶入口。 */
   onTogglePin?: (sessionPath: string) => void
+  /** 回收 worker（仅 live 且非流式的行出现）。 */
+  onRetire?: (sessionId: string) => void
   /** 项目行菜单：基于该项目新建任务（键为项目 cwd）。 */
   onNewTaskInProject: (cwd: string) => void
   /** 项目行菜单：移除项目（键为项目 cwd）。 */
@@ -57,6 +59,7 @@ function ProjectSection({
   onClose,
   onRename,
   onTogglePin,
+  onRetire,
   onNewTaskInProject,
   onRemoveProject,
   onProjectFiles,
@@ -109,6 +112,7 @@ function ProjectSection({
               onClose={onClose}
               onRename={onRename}
               onTogglePin={onTogglePin}
+              onRetire={onRetire}
             />
           ))}
       {!collapsed && group.total > group.visible.length ? (

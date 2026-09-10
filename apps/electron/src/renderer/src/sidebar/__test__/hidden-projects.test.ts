@@ -4,7 +4,7 @@ import { excludeHiddenProjects } from '../hidden-projects';
 import type { SessionCardModel } from '../session-card-model';
 
 function card(id: string, cwd: string): SessionCardModel {
-  return { id, projectName: cwd.split('/').pop() ?? cwd, title: id, version: 'm', cwd, sessionPath: `/s/${id}.jsonl`, streaming: false, lastActivityAt: 0 };
+  return { id, projectName: cwd.split('/').pop() ?? cwd, title: id, version: 'm', cwd, sessionPath: `/s/${id}.jsonl`, state: 'live', streaming: false, lastActivityAt: 0 };
 }
 
 test('空集合同引用返回（零重建）', () => {

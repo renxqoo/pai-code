@@ -277,3 +277,37 @@ describe('pushNotice 文案去重', () => {
     expect(store.getState().notices.map((notice) => notice.text)).toEqual(['会话恢复失败，请重试。']);
   });
 });
+
+
+describe('sessionParked 收编折叠（T29：worker 回收后侧栏即时转 parked）', () => {
+  test('症状回归：回收后视图转 parked、streaming 复位、挂起对话框收起、线程非 crashed', () => {
+    const store = createLiveStore();
+    store.getState().bootstrap({ sessions: [session('t1'), session('t2')], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } });
+    store.getState().applyEvent({ type: 'turnStarted', threadId: 't1', at: 1 }, 1);
+    store.getState().applyEvent({ type: 'dialogRequest', threadId: 't1', requestId: 'r1', method: 'confirm', title: '允许执行？' }, 2);
+
+    store.getState().applyEvent({ type: 'sessionParked', threadId: 't1', reason: 'idle' }, 3);
+
+    expect(store.getState().sessions['t1']?.state).toBe('parked');
+    expect(store.getState().sessions['t1']?.streaming).toBe(false);
+    expect(store.getState().dialogs.length).toBe(0);
+    expect(store.getState().threads['t1']?.crashed).toBe(false);
+    expect(store.getState().threads['t1']?.streaming).toBe(false);
+    // 回收打断的在途回合冻结为 stopped——不得伪装成自然完成（对比 sessionDied 的 completed）
+    const items = store.getState().threads['t1']?.items ?? [];
+    const turn = items.find((item) => item.kind === 'turn');
+    expect(turn !== undefined && turn.kind === 'turn' ? turn.turn.status : null).toBe('stopped');
+    // 未知线程（表外会话）不崩溃、不落视图
+    store.getState().applyEvent({ type: 'sessionParked', threadId: 'ghost', reason: 'manual' }, 4);
+    expect(store.getState().sessions['ghost']).toBeUndefined();
+  });
+
+  test('重复收编幂等（已 parked 不再改写）', () => {
+    const store = createLiveStore();
+    store.getState().bootstrap({ sessions: [session('t1')], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } });
+    store.getState().applyEvent({ type: 'sessionParked', threadId: 't1', reason: 'idle' }, 1);
+    const first = store.getState().sessions['t1'];
+    store.getState().applyEvent({ type: 'sessionParked', threadId: 't1', reason: 'manual' }, 2);
+    expect(store.getState().sessions['t1']).toBe(first);
+  });
+});

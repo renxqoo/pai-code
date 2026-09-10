@@ -13,7 +13,7 @@ import { imagePayloadOf } from '@/composer/read-image-file';
 import { queuedDrafts, type QueuedDraft, type QueuedDraftSubmit } from '@/composer/queued-drafts';
 import { connectQueuedDraftFlush } from './queued-flush';
 
-import type { WorkspaceActions, WorkspaceDiagnostics } from './workspace-actions';
+import type { WorkspaceActions } from './workspace-actions';
 import { createWorkspaceActions } from './workspace-actions';
 import { bridgeClient, controller, store } from './workspace-runtime';
 import { threadModelOf, type LiveStoreState, type PendingDialog } from './store';
@@ -39,6 +39,8 @@ export type LiveWorkspaceView = {
   bridgeAvailable: boolean;
   hostPhase: LiveStoreState['hostPhase'];
   sessions: readonly SessionCardModel[];
+  /** 会话注册表原始视图（线程 id 寻址；运行状态页 worker 行 join 标题/模型的订阅面）。 */
+  sessionById: Readonly<Record<string, SessionView>>;
   activeThreadId: string;
   activeThread: ThreadModel;
   /** 当前会话工作目录（新会话缺省值）。 */
@@ -58,6 +60,8 @@ export type LiveWorkspaceView = {
   submitQueuedDraft: QueuedDraftSubmit;
   /** 调用时读 store 真相的流式判定（提交路径不得用渲染帧快照判生成中）。 */
   isThreadStreaming: (threadId: string) => boolean;
+  /** 指定线程的排队深度（steering + followUp；调用时读 store 真相，仅 live 会话非零）。 */
+  queueCountOf: (threadId: string) => number;
   crashed: boolean;
   compacting: boolean;
   /** 直执行 bash 在途与其流式输出尾部。 */
@@ -71,8 +75,6 @@ export type LiveWorkspaceView = {
   activeStats: SessionStatsView | null;
   /** 各会话用量快照（I2 聚合数据源）。 */
   statsById: Readonly<Record<string, SessionStatsView>>;
-  /** 运行时诊断（M1 分区数据源；null = 未拉取）。 */
-  diagnostics: WorkspaceDiagnostics | null;
   composer: ComposerSelection;
   dialogs: readonly PendingDialog[];
   notices: readonly { id: string; text: string }[];
@@ -111,13 +113,12 @@ export function useLiveWorkspace(): LiveWorkspaceView {
   const [now, setNow] = React.useState(() => Date.now());
   const [effortLevels, setEffortLevels] = React.useState<readonly string[]>([]);
   const [commands, setCommands] = React.useState<readonly CommandView[]>([]);
-  const [diagnostics, setDiagnostics] = React.useState<WorkspaceDiagnostics | null>(null);
-  const actions = React.useMemo(() => createWorkspaceActions(setDiagnostics), []);
+  const actions = React.useMemo(() => createWorkspaceActions(), []);
 
   const hostPhase = useStore(store, (s) => s.hostPhase);
   const bootstrapLoaded = useStore(store, (s) => s.bootstrapLoaded);
   const bootstrapError = useStore(store, (s) => s.bootstrapError);
-  const sessions = useStore(store, (s) => s.sessions);
+  const sessionViews = useStore(store, (s) => s.sessions);
   const savedRaw = useStore(store, (s) => s.saved);
   const models = useStore(store, (s) => s.models);
   const providers = useStore(store, (s) => s.providers);
@@ -151,6 +152,12 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     (threadId: string) => store.getState().threads[threadId]?.streaming === true,
     [],
   );
+
+  /** 排队深度读 store 真相（引用恒定；运行状态页 worker 行装配用） */
+  const queueCountOf = React.useCallback((threadId: string): number => {
+    const queue = store.getState().threads[threadId]?.queue;
+    return queue === undefined ? 0 : queue.steering.length + queue.followUp.length;
+  }, []);
 
   /** 模型 → 可用思考档展示名（新任务页与 parked 浏览态共用：hub 档位命令只按
    * 线程寻址，无线程/未唤醒时按模型能力本地算——effortLevelsForModel 单一真相）。 */
@@ -225,7 +232,7 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     return () => window.clearInterval(handle);
   }, [executing, agentsActive]);
 
-  const activeSession = sessions[activeThreadId];
+  const activeSession = sessionViews[activeThreadId];
   const queue = threadState?.queue;
   const queueItems = queue ?? EMPTY_QUEUE;
 
@@ -239,7 +246,8 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     bootstrapError,
     bridgeAvailable: bridgeClient.available,
     hostPhase,
-    sessions: React.useMemo(() => toCards(sessions), [sessions]),
+    sessions: React.useMemo(() => toCards(sessionViews), [sessionViews]),
+    sessionById: sessionViews,
     activeThreadId,
     activeThread,
     activeCwd: activeSession?.cwd ?? '',
@@ -252,6 +260,7 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     queuedDrafts: queuedDraftsByThread,
     submitQueuedDraft,
     isThreadStreaming,
+    queueCountOf,
     crashed: threadState?.crashed ?? false,
     compacting,
     bashRunning,
@@ -261,7 +270,6 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     now,
     threadDiff: React.useMemo(() => collectThreadDiff(activeThread), [activeThread]),
     activeStats: stats[activeThreadId] ?? null,
-    diagnostics,
     statsById: stats,
     composer,
     dialogs,
@@ -323,6 +331,7 @@ function toCards(sessions: Readonly<Record<string, SessionView>>): readonly Sess
       version: session.model ?? '',
       cwd: session.cwd,
       sessionPath: session.sessionPath,
+      state: session.state,
       streaming: session.streaming,
       lastActivityAt: session.lastActivityAt,
     }));

@@ -16,8 +16,11 @@ describe('classifyFrame', () => {
     ['ui_request', { type: 'ui_request', requestId: 'r1', threadId: 't1', method: 'confirm', title: 'T', message: 'M' }],
     ['heartbeat', { type: 'heartbeat' }],
     ['heartbeat+subagents', { type: 'heartbeat', subagents: 3 }],
+    ['heartbeat+resources(v0.13)', { type: 'heartbeat', rssBytes: 123, cpuPercent: 4.5 }],
     ['hub_error', { type: 'hub_error', threadId: 't1', scope: 'worker', error: 'boom' }],
     ['thread_died', { type: 'thread_died', threadId: 't1', reason: 'crash' }],
+    ['thread_parked(idle)', { type: 'thread_parked', threadId: 't1', reason: 'idle' }],
+    ['thread_parked(manual)', { type: 'thread_parked', threadId: 't1', reason: 'manual' }],
     ['subagent_event', { type: 'subagent_event', threadId: 't1', subagentId: 's1', agent: 'explore', task: 'go', event: { type: 'agent_start' } }],
     ['subagent_message', { type: 'subagent_message', threadId: 't1', subagentId: 's1', agent: 'explore', text: 'hi', to: 's2' }],
   ])('%s 合法形状', (_name, value) => {
@@ -32,6 +35,7 @@ describe('classifyFrame', () => {
     ['缺 type', { command: 'x' }],
     ['type 非字符串', { type: 3 }],
     ['未知 type', { type: 'mystery' }],
+    ['thread_parked 非法 reason', { type: 'thread_parked', threadId: 't1', reason: 'other' }],
   ])('垃圾形状：%s → reason', (_name, value) => {
     const result = classifyFrame(value);
     expect('reason' in result).toBe(true);

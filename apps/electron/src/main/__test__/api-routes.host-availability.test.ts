@@ -8,11 +8,12 @@ import { createAgentDirFiles } from '../agent-dir-files';
 import { createAgentDefinitionsStore } from '../agent-definitions-store';
 import { createFileSettings, type ProviderKeyStore } from '../file-settings';
 import { createPaiRuntime } from '../pai-runtime';
+import { createRuntimeMonitor } from '../runtime-monitor/create-runtime-monitor';
 
 /**
  * host 可用性可见性回归：host 从未构建（hub 路径未解析）时
  * bootstrap 曾静默返回空模型目录（composer 显示「还没有模型」误导用户去查 Provider），
- * app/diagnostics 与 app/restartHost 曾直接 internal_error。
+ * app/runtime 快照与 app/restartHost 曾直接 internal_error。
  */
 
 const keyStore: ProviderKeyStore = {
@@ -38,13 +39,21 @@ function makeRoutes(work: string) {
     },
     keyStore,
     providers: () => [],
+    idleRecycleMinutes: () => 5,
     hubPaths: () => null,
     logger: { log: () => undefined },
     emit: () => undefined,
   });
-  const routes = createApiRoutes({ runtime, settings, keyStore, audit: () => undefined, agentDirFiles: createAgentDirFiles(agentDir), agentDefinitions: createAgentDefinitionsStore(agentDir), revealPath: () => undefined,
+  const monitor = createRuntimeMonitor({
+    host: () => null,
+    appMetrics: () => ({ rssBytes: 1, cpuPercent: 0 }),
+    systemMemory: () => ({ totalBytes: null, availableBytes: null }),
+    idleRecycleMinutes: () => 5,
+    appVersion: () => 'test',
+  });
+  const routes = createApiRoutes({ runtime, settings, keyStore, monitor, exportDiagnosticsBundle: () => work, audit: () => undefined, agentDirFiles: createAgentDirFiles(agentDir), agentDefinitions: createAgentDefinitionsStore(agentDir), revealPath: () => undefined,
     pickDirectory: () => Promise.resolve(null) });
-  return { routes };
+  return { routes, monitor };
 }
 
 describe('api-routes host 可用性（host 未构建）', () => {
@@ -57,11 +66,20 @@ describe('api-routes host 可用性（host 未构建）', () => {
     expect(outcome.data.models).toEqual([]);
   });
 
-  test('症状回归：app/diagnostics 不再 internal_error，返回 null 相位', async () => {
+  test('症状回归：app/runtime host 未构建不 internal_error（hostPhase=null 快照安全降级）', async () => {
     const work = mkdtempSync(join(tmpdir(), 'pai-host-diag-'));
     const { routes } = makeRoutes(work);
-    const outcome = (await routes.invoke('app/diagnostics', {})) as { ok: boolean; data: { hostPhase: string | null; stderrTail: string } };
-    expect(outcome).toEqual({ ok: true, data: { hostPhase: null, stderrTail: '', registrySessions: 0 } });
+    const outcome = (await routes.invoke('app/runtime', {})) as { ok: boolean; data: { hostPhase: string | null; workers: unknown[] } };
+    expect(outcome.ok).toBe(true);
+    expect(outcome.data.hostPhase).toBeNull();
+    expect(outcome.data.workers).toEqual([]);
+  });
+
+  test('app/diagnosticLog 空尾部（host 未构建）', async () => {
+    const work = mkdtempSync(join(tmpdir(), 'pai-host-log-'));
+    const { routes } = makeRoutes(work);
+    const outcome = (await routes.invoke('app/diagnosticLog', {})) as { ok: boolean; data: { stderrTail: string } };
+    expect(outcome).toEqual({ ok: true, data: { stderrTail: '' } });
   });
 
   test('症状回归：app/restartHost 在 host 未构建时给出 host_unavailable（可读原因）', async () => {

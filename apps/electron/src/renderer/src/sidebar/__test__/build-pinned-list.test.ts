@@ -9,7 +9,7 @@ function card(
   sessionPath: string | null,
   lastActivityAt: number,
 ): SessionCardModel {
-  return { id, projectName, title: id, version: 'm', cwd: `/w/${projectName}`, sessionPath, streaming: false, lastActivityAt };
+  return { id, projectName, title: id, version: 'm', cwd: `/w/${projectName}`, sessionPath, state: 'live', streaming: false, lastActivityAt };
 }
 
 test('置顶交集：仅 sessionPath 命中置顶集合的会话进入', () => {

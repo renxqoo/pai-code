@@ -4,7 +4,7 @@ import { buildProjectGroups, SHOW_MORE_LIMIT } from '../build-project-groups';
 import type { SessionCardModel } from '../session-card-model';
 
 function card(id: string, projectName: string, lastActivityAt: number): SessionCardModel {
-  return { id, projectName, title: id, version: 'm', cwd: `/w/${projectName}`, sessionPath: `/s/${id}.jsonl`, streaming: false, lastActivityAt };
+  return { id, projectName, title: id, version: 'm', cwd: `/w/${projectName}`, sessionPath: `/s/${id}.jsonl`, state: 'live', streaming: false, lastActivityAt };
 }
 
 test('按 cwd 分组，组内最近活跃倒序', () => {

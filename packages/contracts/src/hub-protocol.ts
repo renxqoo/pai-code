@@ -1,5 +1,5 @@
 /**
- * pai-cli 协议镜像（v0.5）。
+ * pai-cli 协议镜像（v0.13）。
  *
  * 同步纪律：本文件是外部仓库 pai-cli `src/protocol.ts` 的镜像抄录，
  * 不引入对 pai-cli 的运行时依赖。协议变更时，先走 pai-cli 仓库流程定稿，
@@ -52,6 +52,19 @@ export interface ThreadRegisterCmd {
 export interface ThreadStopCmd {
   type: 'thread/stop';
   threadId: string;
+}
+
+/** v0.13：手动闲置收编——表项转 parked（与 thread/stop 的 dispose 语义互补）。 */
+export interface ThreadRetireCmd {
+  type: 'thread/retire';
+  threadId: string;
+}
+
+/** v0.13：表项「免闲置收编」标志（host 本地零 worker；只豁免闲置 sweep，stale 心跳强杀照旧；不持久化，客户端注册表是持久真相，fork 不继承）。 */
+export interface ThreadSetKeepaliveCmd {
+  type: 'thread/set_keepalive';
+  threadId: string;
+  keepalive: boolean;
 }
 
 export interface ThreadListCmd {
@@ -127,6 +140,12 @@ export interface SetModelOverrideCmd {
 /** v0.6：host 本地可观测性。 */
 export interface GetHostInfoCmd {
   type: 'get_host_info';
+}
+
+/** v0.13：运行期调整闲置回收阈值（钳制 1s..24h；响应 data 回实际生效值）。 */
+export interface SetIdleRetireMsCmd {
+  type: 'set_idle_retire_ms';
+  ms: number;
 }
 
 /** v0.7：agent 执行沙箱状态。 */
@@ -279,6 +298,8 @@ export type HubCommand =
   | (ThreadResumeCmd & { id?: string })
   | (ThreadRegisterCmd & { id?: string })
   | (ThreadStopCmd & { id?: string })
+  | (ThreadRetireCmd & { id?: string })
+  | (ThreadSetKeepaliveCmd & { id?: string })
   | (ThreadListCmd & { id?: string })
   | (ThreadListSavedCmd & { id?: string })
   | (PromptCmd & { id?: string })
@@ -310,6 +331,7 @@ export type HubCommand =
   | (UiResponseCmd & { id?: string })
   | (SetModelOverrideCmd & { id?: string })
   | (GetHostInfoCmd & { id?: string })
+  | (SetIdleRetireMsCmd & { id?: string })
   | (GetSandboxStateCmd & { id?: string })
   | (GetPermissionRulesCmd & { id?: string })
   | (SetPermissionRulesCmd & { id?: string })
@@ -323,8 +345,11 @@ export const HUB_COMMAND_TYPES = [
   'thread/register',
   'set_model_override',
   'get_host_info',
+  'set_idle_retire_ms',
   'get_sandbox_state',
   'thread/stop',
+  'thread/retire',
+  'thread/set_keepalive',
   'thread/list',
   'thread/list_saved',
   'prompt',
@@ -392,10 +417,13 @@ export interface UiRequestFrame {
   [key: string]: unknown;
 }
 
-/** host 心跳 1Hz；有任何子 agent 在途时带聚合计数（queued+running）。 */
+/** host 心跳 1Hz；有任何子 agent 在途时带聚合计数（queued+running）；
+ * v0.13 起恒带宿主进程 rssBytes 与 cpuPercent（process.cpuUsage 1s 差分、单核归一、可>100）。 */
 export interface HeartbeatFrame {
   type: 'heartbeat';
   subagents?: number;
+  rssBytes?: number;
+  cpuPercent?: number;
 }
 
 export interface HubErrorFrame {
@@ -411,6 +439,14 @@ export interface ThreadDiedFrame {
   type: 'thread_died';
   threadId: string;
   reason: string;
+}
+
+/** v0.13：worker 被收编（闲置 sweep / thread/retire），表项转 parked、会话文件保留。
+ * 以 close 结算为准恰好一次；thread/stop 关闭不发。与 thread_died 互补：died=异常，parked=正常收编。 */
+export interface ThreadParkedFrame {
+  type: 'thread_parked';
+  threadId: string;
+  reason: 'idle' | 'manual';
 }
 
 /** v0.5：子 agent（孙进程）会话事件原样转发，按 subagentId 分组。 */
@@ -434,13 +470,21 @@ export interface SubagentMessageFrame {
   to?: string;
 }
 
-/** thread/list 行（host 会话表）。 */
+/** thread/list 行（host 会话表；v0.13 起带观测字段）。 */
 export interface ThreadListEntry {
   threadId: string;
   cwd: string;
   sessionPath: string | null;
   isStreaming: boolean;
   state: 'live' | 'parked' | 'dead';
+  /** 空闲时长（live = worker 心跳值；非 live = 0）。 */
+  idleMs: number;
+  /** 在途子代理（live = 最近心跳计数；非 live = 0）。 */
+  subagents: number;
+  /** worker 内存（心跳上报；未上报 = null）。 */
+  rssBytes: number | null;
+  /** 表项「免闲置收编」标志（sweep 只跳过标记的 live worker）。 */
+  keepalive: boolean;
 }
 
 export type HubFrame =
@@ -450,6 +494,7 @@ export type HubFrame =
   | HeartbeatFrame
   | HubErrorFrame
   | ThreadDiedFrame
+  | ThreadParkedFrame
   | SubagentEventFrame
   | SubagentMessageFrame;
 
@@ -461,6 +506,7 @@ export const HUB_FRAME_TYPES = [
   'heartbeat',
   'hub_error',
   'thread_died',
+  'thread_parked',
   'subagent_event',
   'subagent_message',
 ] as const;

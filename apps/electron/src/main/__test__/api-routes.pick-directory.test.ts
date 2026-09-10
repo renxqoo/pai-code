@@ -37,6 +37,7 @@ function makeRoutes(pickDirectory: (defaultPath: string | null) => Promise<strin
     },
     keyStore,
     providers: () => [],
+    idleRecycleMinutes: () => 5,
     hubPaths: () => null,
     logger: { log: () => undefined },
     emit: () => undefined,

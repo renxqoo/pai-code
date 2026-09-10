@@ -12,6 +12,8 @@ import { resolveHubPaths } from './hub-paths';
 import { resolveAppPaths, resolveUserDataDir } from './paths';
 import { createPaiRuntime } from './pai-runtime';
 import { createProviderKeyStore } from './provider-key-store';
+import { createRuntimeMonitor } from './runtime-monitor/create-runtime-monitor';
+import { writeDiagnosticsBundle } from './export-diagnostics';
 
 // 开启 Web 内容可访问性树（辅助技术 + 自动化验证都依赖它）
 app.commandLine.appendSwitch('force-renderer-accessibility');
@@ -121,6 +123,7 @@ void app.whenReady().then(async () => {
   // 装配段整体兜底：任何一步失败都继续开窗（渲染层经 bootstrap 失败态进设置引导），绝不静默悬挂
   let runtime: ReturnType<typeof createPaiRuntime> | null = null;
   let routes: ReturnType<typeof createApiRoutes> | null = null;
+  let monitor: ReturnType<typeof createRuntimeMonitor> | null = null;
   // 目录选择对话框单飞标志（createApiRoutes 注入面闭包引用）
   let directoryPickerInFlight = false;
   // 本次运行中经系统选择器选过的目录：新任务页对尚无会话的目录也要能读分支/切分支
@@ -129,18 +132,74 @@ void app.whenReady().then(async () => {
     const keyStore = createProviderKeyStore(paths.providerKeysFile);
     const settings = createFileSettings(paths.settingsFile, keyStore);
     settingsRef = settings;
+    // 运行状态监控器（T29）：2s 轮询 host 本地观测面 + Electron/os 资源采样；
+    // host 未构建时降级运行（快照字段安全为 null）
+    monitor = createRuntimeMonitor({
+      // host 存在即订阅面可用（含 start 抛错但宿主已构建的降级形态——监控页
+      // 恰恰在宿主起不来时最该工作）；未构建/装配失败安全返回 null
+      host: () => {
+        try {
+          return runtime === null ? null : runtime.host;
+        } catch {
+          return null;
+        }
+      },
+      appMetrics: () => {
+        let rssBytes = 0;
+        let cpuPercent = 0;
+        for (const metric of app.getAppMetrics()) {
+          rssBytes += metric.memory.workingSetSize * 1024;
+          cpuPercent += metric.cpu.percentCPUUsage;
+        }
+        return { rssBytes: Math.round(rssBytes), cpuPercent: Math.round(cpuPercent * 10) / 10 };
+      },
+      systemMemory: () => {
+        const info = process.getSystemMemoryInfo();
+        return { totalBytes: info.total * 1024, availableBytes: info.available * 1024 };
+      },
+      idleRecycleMinutes: () => settings.get().idleRecycleMinutes,
+      appVersion: () => app.getVersion(),
+      // 2s 轮询的漂移纠正：hub 报 parked/dead 而内存仍 live 的会话就地折叠
+      // （thread_parked/thread_died 帧丢失的兜底对账）
+      onWorkersPolled: (rows) => runtime?.reconcileWorkerStates(rows),
+    });
+    const monitorRef = monitor;
+    monitorRef.start();
+    const loggingToMonitor = {
+      log(message: string): void {
+        logger.log(message);
+        monitorRef.noteDiagnostic(message);
+      },
+    };
     runtime = createPaiRuntime({
       paths,
       keyStore,
       providers: () => settings.listProviders(),
       hubPaths: resolveHubPathsForRuntime,
-      logger,
+      idleRecycleMinutes: () => settings.get().idleRecycleMinutes,
+      logger: loggingToMonitor,
       emit: emitToRenderer,
     });
+    const diagnosticsRoot = join(paths.userDataDir, 'diagnostics');
     routes = createApiRoutes({
       runtime,
       settings,
       keyStore,
+      monitor: monitorRef,
+      onPolicySyncFailed: (minutes, reason) => {
+        loggingToMonitor.log(`set_idle_retire_failed:${minutes}:${reason}`);
+      },
+      exportDiagnosticsBundle: () => {
+        const snapshot = monitorRef.snapshot();
+        const directory = writeDiagnosticsBundle(diagnosticsRoot, {
+          snapshot,
+          events: snapshot.events,
+          stderrTail: runtime?.hostStderrTail() ?? '',
+          logFile: paths.logFile,
+        });
+        shell.showItemInFolder(join(directory, 'summary.md'));
+        return directory;
+      },
       audit: (message) => logger.log(`audit:${message}`),
       agentDirFiles: createAgentDirFiles(paths.agentDir),
       agentDefinitions: createAgentDefinitionsStore(paths.agentDir),
@@ -170,6 +229,20 @@ void app.whenReady().then(async () => {
   } catch (error) {
     logger.log(`runtime_start_failed:${error instanceof Error ? error.message : String(error)}`);
     // host 未就绪也继续开窗：渲染层展示设置引导（配置 provider/宿主路径）
+  }
+
+  // 监控器订阅宿主观测流：心跳资源折叠 + worker 收编/死亡进时间线；相位事件
+  // 走同一条线。订阅只要求宿主已构建（含 start 超时/失败的降级形态），随宿主
+  // 进程生命周期存续（单宿主常驻，无需退订句柄）
+  if (monitor !== null && runtime !== null && runtime.hostPhase() !== null) {
+    const host = runtime.host;
+    host.onFrame((frame) => {
+      if (frame.type === 'heartbeat') monitor.noteHeartbeat(frame);
+      else if (frame.type === 'thread_parked') monitor.noteWorkerRecycled(frame.threadId, frame.reason);
+      else if (frame.type === 'thread_died') monitor.noteWorkerDied(frame.threadId, frame.reason);
+    });
+    monitor.noteHostPhase(host.phase);
+    host.onPhase((phase) => monitor.noteHostPhase(phase));
   }
 
   ipcMain.handle('pai:invoke', (_event, payload: unknown) => {
@@ -284,11 +357,10 @@ void app.whenReady().then(async () => {
     quitting = true;
     if (flushTimer !== null) clearTimeout(flushTimer);
     flushEvents();
+    monitor?.stop();
     void runtime
       ?.stop()
       .catch(() => undefined)
-      .finally(() => {
-        app.quit();
-      });
+      .finally(() => app.quit());
   });
 });

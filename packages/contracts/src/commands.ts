@@ -14,7 +14,12 @@ export type PaiCommandType =
   | 'thread/resume'
   | 'thread/register'
   | 'thread/stop'
+  | 'thread/retire'
+  | 'thread/set_keepalive'
+  | 'thread/list'
   | 'thread/list_saved'
+  | 'get_host_info'
+  | 'set_idle_retire_ms'
   | 'prompt'
   | 'abort'
   | 'clear_queue'
@@ -42,7 +47,12 @@ export const PAI_COMMAND_TYPES = [
   'thread/resume',
   'thread/register',
   'thread/stop',
+  'thread/retire',
+  'thread/set_keepalive',
+  'thread/list',
   'thread/list_saved',
+  'get_host_info',
+  'set_idle_retire_ms',
   'prompt',
   'abort',
   'clear_queue',

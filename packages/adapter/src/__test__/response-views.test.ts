@@ -1,6 +1,6 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 
-import { previewCommands, sessionCommands } from '../response-views';
+import { previewCommands, sessionCommands, hostInfoView, threadListRows } from '../response-views';
 
 /** get_commands 收窄回归：四源透传（含 hub builtin 内置命令）、垃圾降级。 */
 
@@ -65,3 +65,47 @@ test('空名技能丢弃；空清单 → 空目录', () => {
   expect(previewCommands([])).toEqual([]);
 });
 
+
+
+describe('hostInfoView（get_host_info 收窄）', () => {
+  test('全字段 round-trip', () => {
+    const data = {
+      version: '0.13.0', piVersion: '0.85.1', bunVersion: '1.4.2', pid: 42, uptimeMs: 1000, rssBytes: 2048,
+      threads: { live: 1, parked: 2, dead: 3 }, subagents: { running: 4 },
+      limits: { maxThreads: 32, idleRetireMs: 300000, workerStaleMs: 30000, workerExitTimeoutMs: 10000, maxSubagents: 8, bashTimeoutMs: 600000 },
+      backend: { id: 'pi-coding-agent', version: '0.85.1', capabilities: ['session.fork', 1] },
+    };
+    expect(hostInfoView(data)).toEqual({
+      version: '0.13.0', piVersion: '0.85.1', bunVersion: '1.4.2', pid: 42, uptimeMs: 1000, rssBytes: 2048,
+      threads: { live: 1, parked: 2, dead: 3 }, subagents: { running: 4 },
+      limits: { maxThreads: 32, idleRetireMs: 300000, workerStaleMs: 30000, workerExitTimeoutMs: 10000, maxSubagents: 8, bashTimeoutMs: 600000 },
+      backend: { id: 'pi-coding-agent', version: '0.85.1', capabilities: ['session.fork'] },
+    });
+  });
+
+  test('垃圾输入降级全零形态不抛', () => {
+    const view = hostInfoView('junk');
+    expect(view.pid).toBe(0);
+    expect(view.threads).toEqual({ live: 0, parked: 0, dead: 0 });
+    expect(view.backend.capabilities).toEqual([]);
+  });
+});
+
+describe('threadListRows（thread/list 行收窄）', () => {
+  test('合法行 + 观测字段（rss null 容错）', () => {
+    const rows = threadListRows({ threads: [
+      { threadId: 't1', cwd: '/w', sessionPath: '/w/s.jsonl', isStreaming: true, state: 'live', idleMs: 12, subagents: 2, rssBytes: 111, keepalive: true },
+      { threadId: 't2', cwd: '/w', sessionPath: null, isStreaming: false, state: 'parked', idleMs: 0, subagents: 0, rssBytes: null, keepalive: false },
+    ] });
+    expect(rows.length).toBe(2);
+    expect(rows[0]).toMatchObject({ threadId: 't1', state: 'live', idleMs: 12, rssBytes: 111, keepalive: true });
+    expect(rows[1]).toMatchObject({ threadId: 't2', state: 'parked', rssBytes: null });
+  });
+
+  test('缺 threadId 或未知 state 的行丢弃（未来 hub 新状态不误读为 dead）；非数组降级空', () => {
+    expect(threadListRows({ threads: [{ cwd: '/w' }, { threadId: 'ok', state: 'weird' }] }).length).toBe(0);
+    expect(threadListRows({})).toEqual([]);
+    expect(threadListRows(null)).toEqual([]);
+    expect(threadListRows({ threads: [{ threadId: 't', state: 'weird' }] })).toEqual([]);
+  });
+});

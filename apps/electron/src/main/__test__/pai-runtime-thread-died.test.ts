@@ -39,7 +39,7 @@ function makeFixture() {
     onPhase: (_cb: (phase: HostPhase) => void) => () => undefined,
     restart: () => Promise.resolve(undefined),
     dispose: () => Promise.resolve(undefined),
-    diagnostics: () => ({ stderrTail: '' }),
+    diagnostics: () => ({ stderrTail: '', restartCount: 0, lastRestartCause: null, lastRestartAt: null }),
   };
   const runtime = createPaiRuntime({
     paths: {
@@ -52,6 +52,7 @@ function makeFixture() {
     },
     keyStore: emptyKeyStore,
     providers: () => [],
+    idleRecycleMinutes: () => 5,
     hubPaths: () => ({ bunPath: 'bun', hubEntry: join(work, 'cli.js') }),
     logger: { log: () => undefined },
     emit: (event) => events.push(event),
