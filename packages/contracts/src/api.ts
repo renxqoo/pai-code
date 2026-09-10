@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { PermissionRulesSchema } from './permissions';
 import { ProviderModelSchema, ThinkingFormatSchema } from './settings';
-import { DiffFileViewSchema, SessionViewSchema } from './ui-events';
+import { DiffFileViewSchema, SessionViewSchema, SubagentSpawnViewSchema } from './ui-events';
 
 /**
  * 渲染层 API 面：方法名用应用语义（渲染层不出现协议字面量）。
@@ -50,6 +50,8 @@ export const HistoryItemSchema = z.discriminatedUnion('kind', [
         isError: z.boolean(),
         /** 文件修改类工具的变更视图；null = 非文件修改。 */
         diff: z.array(DiffFileViewSchema).nullable(),
+        /** task 工具的子代理执行清单；其余工具不携带。 */
+        subagents: z.array(SubagentSpawnViewSchema).optional(),
       }),
     ),
     usage: z.object({ input: z.number(), output: z.number() }).nullable(),

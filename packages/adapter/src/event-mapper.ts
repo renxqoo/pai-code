@@ -3,6 +3,7 @@ import type { AgentSessionEvent, SubagentEventFrame, UiEvent, UsageView } from '
 import { assistantText, assistantThinking, assistantToolCalls, toolResultText } from './content';
 import { previewArgs } from './args-preview';
 import { diffFromToolCall, diffFromToolResult } from './diff-extract';
+import { subagentsField } from './subagent-spawns';
 
 /**
  * AgentSessionEvent → UiEvent（渲染层流式装饰）。
@@ -111,7 +112,7 @@ function mapMessageUpdate(threadId: string, raw: AgentSessionEvent): UiEvent[] {
         type: 'toolCallAdded',
         threadId,
         messageId,
-        call: { id: str(toolCall['id']), name, argsPreview: previewArgs(args) },
+        call: { id: str(toolCall['id']), name, argsPreview: previewArgs(args), ...subagentsField(name, args) },
         diff: diffFromToolCall(name, args),
       },
     ];
@@ -125,6 +126,7 @@ function mapMessageEnd(threadId: string, message: unknown): UiEvent {
     id: call.id,
     name: call.name,
     argsPreview: previewArgs(call.args),
+    ...subagentsField(call.name, call.args),
   }));
   return {
     type: 'messageFinal',

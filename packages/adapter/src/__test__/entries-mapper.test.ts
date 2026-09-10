@@ -105,6 +105,37 @@ describe('mapEntries（转写真相源）', () => {
     expect(assistants[3]).toMatchObject({ stopReason: 'error', errorMessage: null });
   });
 
+  test('task 工具调用在转写重建中携带 subagents，toolResult 并入后保留', () => {
+    const { items } = mapEntries([
+      messageEntry('e1', { role: 'user', content: '并行分析', timestamp: 1 }),
+      messageEntry('e2', {
+        role: 'assistant',
+        timestamp: 2,
+        content: [
+          { type: 'toolCall', id: 'tc1', name: 'task', arguments: { tasks: [{ agent: 'Explore', task: '分析 A' }, { agent: 'general-purpose', task: '调研 B' }] } },
+        ],
+        usage: { input: 10, output: 5, total: 15 },
+      }),
+      messageEntry('e3', { role: 'toolResult', toolCallId: 'tc1', toolName: 'task', content: [{ type: 'text', text: 'done' }], isError: false, timestamp: 3 }),
+    ]);
+    if (items[1]?.kind !== 'assistant') throw new Error('expected assistant item');
+    expect(items[1].toolCalls).toEqual([
+      {
+        id: 'tc1',
+        name: 'task',
+        // parallel 参数无已知预览字段，argsPreview 回落浅层 JSON（行展示改走 subagents，不受影响）
+        argsPreview: '[{"agent":"Explore","task":"分析 A"},{"agent":"general-purpose","task":"调研 B"}]',
+        output: 'done',
+        isError: false,
+        diff: null,
+        subagents: [
+          { agent: 'Explore', task: '分析 A' },
+          { agent: 'general-purpose', task: '调研 B' },
+        ],
+      },
+    ]);
+  });
+
   test('toolResult 找不到所属 assistant（异常序）→ 丢弃不抛', () => {
     const { items } = mapEntries([messageEntry('e1', { role: 'toolResult', toolCallId: 'ghost', toolName: 'bash', content: [], isError: true, timestamp: 1 })]);
     expect(items).toEqual([]);

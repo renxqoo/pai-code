@@ -3,6 +3,7 @@ import type { HistoryItem } from '@paiapp/contracts';
 import { assistantText, assistantThinking, assistantToolCalls, flattenUserText, toolResultText, userImages } from './content';
 import { previewArgs } from './args-preview';
 import { diffFromPatch, diffFromWriteArgs } from './diff-extract';
+import { subagentsField } from './subagent-spawns';
 
 /**
  * get_entries 条目 → HistoryItem[]（对话流的唯一真相源）。
@@ -69,6 +70,8 @@ export function mapEntries(entries: unknown): { items: HistoryItem[]; cursor: st
           isError: message.isError === true,
           // write 的 diff 来自参数（执行前已知），toolResult 无 diff 不得清掉
           diff: diff ?? call.diff,
+          // 子代理执行清单同样来自参数，并入结果时原样保留
+          subagents: call.subagents,
         };
         break;
       }
@@ -82,6 +85,7 @@ export function mapEntries(entries: unknown): { items: HistoryItem[]; cursor: st
         output: '',
         isError: false,
         diff: call.name === 'write' ? writeDiffOf(call.args) : null,
+        ...subagentsField(call.name, call.args),
       }));
       // 异常终态收窄：仅 error/aborted 透传，正常 stop/toolUse 不产生视图噪音
       const rawStopReason = message.stopReason;

@@ -22,9 +22,15 @@ export function previewArgs(args: Record<string, unknown>): string {
   return clip(JSON.stringify(smallValue(value)));
 }
 
-function clip(text: string): string {
+/** 预览归一：空白折叠 + 截断（预览域同一语义，argsPreview 与 subagents 展开共用）。
+ * UTF-16 截断不劈代理对：末位落在新高位代理上时整体舍弃（增补平面字符让位，不产生替换符）。 */
+export function clip(text: string): string {
   const single = text.replace(/\s+/g, ' ').trim();
-  return single.length > PREVIEW_LIMIT ? `${single.slice(0, PREVIEW_LIMIT - 1)}…` : single;
+  if (single.length <= PREVIEW_LIMIT) return single;
+  const cut = single.slice(0, PREVIEW_LIMIT - 1);
+  const last = cut.charCodeAt(cut.length - 1);
+  const loneHighSurrogate = last >= 0xd800 && last <= 0xdbff;
+  return `${loneHighSurrogate ? cut.slice(0, -1) : cut}…`;
 }
 
 /** 预览序列化的体积防御：只序列化浅层。 */

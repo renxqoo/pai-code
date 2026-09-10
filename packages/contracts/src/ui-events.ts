@@ -6,10 +6,19 @@ import { z } from 'zod';
  * 同线程事件有序；跨线程无序保证。
  */
 
+/** task 工具参数展开出的子代理执行项（agent 名与任务描述分列展示）。 */
+export const SubagentSpawnViewSchema = z.object({
+  agent: z.string(),
+  task: z.string(),
+});
+export type SubagentSpawnView = z.infer<typeof SubagentSpawnViewSchema>;
+
 export const ToolCallViewSchema = z.object({
   id: z.string(),
   name: z.string(),
   argsPreview: z.string(),
+  /** task 工具的子代理执行清单（single/parallel/chain 统一展开）；其余工具不携带。 */
+  subagents: z.array(SubagentSpawnViewSchema).optional(),
 });
 export type ToolCallView = z.infer<typeof ToolCallViewSchema>;
 

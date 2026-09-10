@@ -127,6 +127,41 @@ describe('mapSessionEvent 全表', () => {
     expect(events[0].message.usage).toBeNull();
   });
 
+  test('task 工具调用携带 subagents 清单，其余工具不携带（toolcall_end 与 message_end 同源）', () => {
+    const args = { agent: 'Explore', task: '分析 pai-cli sandbox 现状' };
+    const added = mapSessionEvent(
+      't',
+      {
+        type: 'message_update',
+        message: assistantMessage({}),
+        assistantMessageEvent: { type: 'toolcall_end', contentIndex: 2, toolCall: { type: 'toolCall', id: 'tc9', name: 'task', arguments: args } },
+      },
+      deps,
+    );
+    expect(added).toEqual([
+      {
+        type: 'toolCallAdded',
+        threadId: 't',
+        messageId: '1234',
+        call: { id: 'tc9', name: 'task', argsPreview: 'Explore', subagents: [{ agent: 'Explore', task: '分析 pai-cli sandbox 现状' }] },
+        diff: null,
+      },
+    ]);
+
+    const final = mapSessionEvent(
+      't',
+      {
+        type: 'message_end',
+        message: assistantMessage({ content: [{ type: 'toolCall', id: 'tc9', name: 'task', arguments: args }] }),
+      },
+      deps,
+    );
+    if (final[0]?.type !== 'messageFinal') throw new Error('expected messageFinal');
+    expect(final[0].message.toolCalls).toEqual([
+      { id: 'tc9', name: 'task', argsPreview: 'Explore', subagents: [{ agent: 'Explore', task: '分析 pai-cli sandbox 现状' }] },
+    ]);
+  });
+
   test('tool_execution_update → toolUpdated', () => {
     const events = mapSessionEvent(
       't',

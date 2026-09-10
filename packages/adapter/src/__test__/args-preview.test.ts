@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { previewArgs } from '../args-preview';
+import { clip, previewArgs } from '../args-preview';
 
 describe('previewArgs · 字段优先级与防御', () => {
   test.each([
@@ -25,5 +25,16 @@ describe('previewArgs · 字段优先级与防御', () => {
     const long = previewArgs({ command: 'x'.repeat(300) });
     expect(long.length).toBe(160);
     expect(long.endsWith('…')).toBe(true);
+  });
+
+  test('症状回归：截断点落在增补平面字符上不劈代理对（不产生替换符）', () => {
+    // 截断点恰在高位代理上：该 emoji 整体舍弃，不留孤立代理项
+    const splitPoint = clip(`${'x'.repeat(158)}😀😀`);
+    expect(splitPoint).toBe(`${'x'.repeat(158)}…`);
+    // 截断点在 emoji 完整落位之后：整体保留
+    const wholeEmoji = clip(`${'x'.repeat(157)}😀😀`);
+    expect(wholeEmoji).toBe(`${'x'.repeat(157)}😀…`);
+    expect(splitPoint).not.toContain('\uFFFD');
+    expect(wholeEmoji).not.toContain('\uFFFD');
   });
 });
