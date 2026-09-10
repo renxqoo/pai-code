@@ -55,7 +55,7 @@ export const en = {
     openMenu: ['Open in Finder', 'Open in Terminal', 'Open in Editor'] as [string, string, string],
     copyPath: 'Copy path',
     projectMenuAria: 'Project actions',
-    changes: 'Session changes',
+    toggleSplitView: 'Toggle split view',
     sessionMenuAria: 'Session actions',
     sessionRename: 'Rename',
     sessionCopyId: 'Copy session ID',

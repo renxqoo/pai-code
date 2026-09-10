@@ -68,6 +68,8 @@ function renderStage(workspace: LiveWorkspaceView): string {
       bottomInset={0}
       onOpenSettings={() => undefined}
       onOpenDiff={() => undefined}
+      panelOpen={false}
+      onTogglePanel={() => undefined}
       onNewTask={() => undefined}
       onViewAction={() => undefined}
       onEditUserMessage={() => undefined}

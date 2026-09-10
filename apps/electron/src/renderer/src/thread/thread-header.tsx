@@ -1,11 +1,10 @@
 import * as React from 'react';
-import { ChevronDown, Folder, Maximize2, MoreHorizontal, Plus } from 'lucide-react';
+import { ChevronDown, Folder, Maximize2, MoreHorizontal, PanelRight, Plus } from 'lucide-react';
 
 import { IconButton, MenuButton, type MenuItemDef } from '@paiapp/ui';
 
 import { Button } from '@/components/ui/button';
 import { WINDOWS_CAPTION_WIDTH } from '@/lib/platform';
-import { formatDiffDelta } from '@/thread/format-count-unit';
 import { reduceTitleEdit, titleCommit, type TitleEditState } from '@/thread/title-edit';
 import type { ThreadStatusKind } from '@/thread/thread-status';
 
@@ -15,14 +14,13 @@ type ThreadHeaderProps = {
   /** 侧栏收起时左侧避让固定标题块（--titlebar-left-w 由标题覆盖块发布） */
   sidebarCollapsed: boolean
   status: ThreadStatusKind
-  /** 会话累计变更（collectThreadDiff）；零值时按钮弱化仍可点开面板。 */
-  additions: number
-  deletions: number
+  /** 右侧面板是否有打开的 tab（开关按钮的展开态）。 */
+  panelOpen: boolean
   labels: {
     newTask: string
     toggleMaximize: string
+    toggleSplitView: string
     viewMenuAria: string
-    changes: string
     statusAria: string
     renameTitleAria: string
     projectMenuAria: string
@@ -36,7 +34,7 @@ type ThreadHeaderProps = {
   onViewAction: (id: string) => void
   onRenameTitle: (name: string) => void
   onStatusJump: () => void
-  onOpenChanges: () => void
+  onTogglePanel: () => void
   onSessionAction: (id: string) => void
   onNewTask: () => void
   onToggleMaximize: () => void
@@ -60,8 +58,7 @@ function ThreadHeader({
   sessionTitle,
   sidebarCollapsed,
   status,
-  additions,
-  deletions,
+  panelOpen,
   labels,
   projectMenu,
   sessionMenu,
@@ -70,7 +67,7 @@ function ThreadHeader({
   onViewAction,
   onRenameTitle,
   onStatusJump,
-  onOpenChanges,
+  onTogglePanel,
   onSessionAction,
   onNewTask,
   onToggleMaximize,
@@ -100,8 +97,6 @@ function ThreadHeader({
     }
     onSessionAction(id);
   };
-
-  const hasChanges = additions > 0 || deletions > 0;
 
   return (
     <header
@@ -164,21 +159,6 @@ function ThreadHeader({
         )}
       </div>
       <div className="app-no-drag ml-auto flex shrink-0 items-center gap-[10px]">
-        {/*
-         * 变更徽标不带图标：± 形 svg 压到 12px 后笔画经缩放抗锯齿呈灰色脏斑
-         * （用户观感即「图标坏了」），且裸 ± 语义不自明。红绿 +N/−N 数字本身
-         * 就是 diff 摘要的通行语言，入口用途由 title 悬停说明。
-         */}
-        <Button
-          variant="outline"
-          onClick={onOpenChanges}
-          aria-label={labels.changes}
-          title={labels.changes}
-          className="h-[23px] gap-[5px] rounded-full px-[10px] text-[11.5px] leading-none font-medium tabular-nums"
-        >
-          <span className={hasChanges ? 'text-diff-add' : 'text-muted-foreground/70'}>{formatDiffDelta('add', additions)}</span>
-          <span className={hasChanges ? 'text-diff-del' : 'text-muted-foreground/70'}>{formatDiffDelta('del', deletions)}</span>
-        </Button>
         <MenuButton
           trigger={
             <span className="flex size-[26px] cursor-pointer items-center justify-center rounded-full text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50">
@@ -212,6 +192,19 @@ function ThreadHeader({
         />
         <IconButton label={labels.toggleMaximize} size="sm" onClick={onToggleMaximize}>
           <Maximize2 strokeWidth={1.75} />
+        </IconButton>
+        {/*
+         * 右侧面板开关（还原旧头部位次：最大化右侧）：面板开着（任一 tab 在）
+         * 点击整组收起，关着点击以 Diff 视图打开；多标签细节入口在「+视图」
+         * 菜单与 ⌘⇧D/⌘⇧A。
+         */}
+        <IconButton
+          label={labels.toggleSplitView}
+          size="sm"
+          aria-expanded={panelOpen}
+          onClick={onTogglePanel}
+        >
+          <PanelRight strokeWidth={1.75} />
         </IconButton>
       </div>
     </header>

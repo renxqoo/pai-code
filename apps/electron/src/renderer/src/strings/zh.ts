@@ -56,7 +56,7 @@ export const zh: typeof en = {
     openMenu: ['在访达中打开', '在终端中打开', '在编辑器中打开'] as [string, string, string],
     copyPath: '复制路径',
     projectMenuAria: '项目操作',
-    changes: '会话变更',
+    toggleSplitView: '切换分栏',
     sessionMenuAria: '会话操作',
     sessionRename: '重命名',
     sessionCopyId: '复制会话 ID',

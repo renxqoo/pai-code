@@ -28,6 +28,10 @@ const panelByThread: Record<string, PanelState> = {};
 export type PanelTabs = {
   panel: PanelState
   activePanelTab: PanelTab | null
+  /** 面板是否有打开的 tab（头部开关按钮的展开态）。 */
+  panelOpen: boolean
+  /** 头部开关：开着整组收起，关着以 Diff 视图打开。 */
+  togglePanelFromHeader: () => void
   openDiff: () => void
   openAgents: () => void
   toggleDiffPane: () => void
@@ -76,6 +80,10 @@ export function usePanelTabs(
     });
   }, [searchFilesIn, activeCwd]);
 
+  /** 头部开关按钮语义：面板开着（任一 tab 在）整组收起；关着以 Diff 视图打开。 */
+  const togglePanelFromHeader = React.useCallback(() => {
+    setPanel((current) => (current.tabs.length > 0 ? closeAllPanels() : openPanel(current, singletonTab('diff'))));
+  }, []);
   const toggleDiffPane = React.useCallback(() => setPanel((current) => togglePanel(current, 'diff')), []);
   const toggleAgentsPane = React.useCallback(() => setPanel((current) => togglePanel(current, 'agents')), []);
   const closePanelTabById = React.useCallback((id: string) => setPanel((current) => closePanelTab(current, id)), []);
@@ -87,6 +95,8 @@ export function usePanelTabs(
     () => ({
       panel,
       activePanelTab: panel.tabs.find((tab) => tab.id === panel.activeId) ?? null,
+      panelOpen: panel.tabs.length > 0,
+      togglePanelFromHeader,
       openDiff,
       openAgents,
       toggleDiffPane,
@@ -103,6 +113,7 @@ export function usePanelTabs(
     }),
     [
       panel,
+      togglePanelFromHeader,
       openDiff,
       openAgents,
       toggleDiffPane,

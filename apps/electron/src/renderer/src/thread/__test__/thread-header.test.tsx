@@ -8,8 +8,8 @@ import type { ThreadStatusKind } from '../thread-status';
 const LABELS = {
   newTask: '新建',
   toggleMaximize: '切换最大化',
+  toggleSplitView: '切换分栏',
   viewMenuAria: '打开视图',
-  changes: '会话变更',
   statusAria: '会话状态',
   renameTitleAria: '重命名会话',
   projectMenuAria: '项目操作',
@@ -42,8 +42,7 @@ function render(overrides: Partial<Parameters<typeof ThreadHeader>[0]> = {}): st
       sessionTitle="新会话"
       sidebarCollapsed={false}
       status="idle"
-      additions={0}
-      deletions={0}
+      panelOpen={false}
       labels={LABELS}
       projectMenu={PROJECT_MENU}
       sessionMenu={SESSION_MENU}
@@ -52,7 +51,7 @@ function render(overrides: Partial<Parameters<typeof ThreadHeader>[0]> = {}): st
       onViewAction={() => undefined}
       onRenameTitle={() => undefined}
       onStatusJump={() => undefined}
-      onOpenChanges={() => undefined}
+      onTogglePanel={() => undefined}
       onSessionAction={() => undefined}
       onNewTask={() => undefined}
       onToggleMaximize={() => undefined}
@@ -62,30 +61,24 @@ function render(overrides: Partial<Parameters<typeof ThreadHeader>[0]> = {}): st
 }
 
 describe('ThreadHeader', () => {
-  test('身份区：项目名 + 标题 + 新建；空变更角标弱化仍可点', () => {
+  test('身份区：项目名 + 标题 + 新建；不再渲染变更徽标（用户裁决删除）', () => {
     const html = render();
     expect(html).toContain('agent-app');
     expect(html).toContain('新会话');
     expect(html).toContain('新建');
-    expect(html).toContain('会话变更');
-    expect(html).toContain('+0');
-    expect(html).toContain('-0');
+    expect(html).not.toContain('lucide-diff');
+    expect(html).not.toMatch(/\+\d/);
   });
 
-  test('变更角标渲染真实增删数字', () => {
-    const html = render({ additions: 34, deletions: 16 });
-    expect(html).toContain('+34');
-    expect(html).toContain('-16');
-  });
-
-  test('变更角标不带 svg 图标（± 压到 12px 呈灰色脏斑，观感为图标损坏）且带 title 悬停说明', () => {
-    const html = render({ additions: 34, deletions: 16 });
-    const pill = /<button[^>]*aria-label="会话变更"[^>]*>[\s\S]*?<\/button>/.exec(html);
-    if (pill === null) throw new Error('changes pill not found in rendered markup');
-    expect(pill[0]).toContain('title="会话变更"');
-    expect(pill[0]).not.toContain('<svg');
-    expect(pill[0]).toContain('+34');
-    expect(pill[0]).toContain('-16');
+  test.each<[boolean, string]>([
+    [true, 'true'],
+    [false, 'false'],
+  ])('右侧面板开关随面板态展开（panelOpen=%s）', (panelOpen, expanded) => {
+    const html = render({ panelOpen });
+    const toggle = /<button[^>]*aria-label="切换分栏"[^>]*>[\s\S]*?<\/button>/.exec(html);
+    if (toggle === null) throw new Error('panel toggle not found in rendered markup');
+    expect(toggle[0]).toContain(`aria-expanded="${expanded}"`);
+    expect(toggle[0]).toContain('lucide-panel-right');
   });
 
   test.each<[ThreadStatusKind, string]>([

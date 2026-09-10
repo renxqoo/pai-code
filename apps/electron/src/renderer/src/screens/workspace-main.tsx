@@ -189,7 +189,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   );
   /** 面板系统（多标签 + 会话记忆 + 文件查看 + 打开文件弹窗）单一装配面。 */
   const panels = usePanelTabs(activeThreadId, workspace.activeCwd, workspace.actions.searchFilesIn);
-  const { panel, openAgents, openDiff, toggleAgentsPane, toggleDiffPane, closePanel, openFilePicker } = panels;
+  const { panel, panelOpen, togglePanelFromHeader, openAgents, openDiff, toggleAgentsPane, toggleDiffPane, closePanel, openFilePicker } = panels;
 
   /** 分叉重发与草稿回填装配（消息行编辑/重试与排队编辑共用）。 */
   const forkMessage = useForkMessage({ actions: workspace.actions, restoreDraft: restoreNewTaskDraft, setDraft, composerTextRef });
@@ -462,6 +462,8 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
               bottomInset={bottomInset}
               onOpenSettings={openSettings}
               onOpenDiff={openDiff}
+              panelOpen={panelOpen}
+              onTogglePanel={togglePanelFromHeader}
               onNewTask={openNewTask}
               onViewAction={onViewAction}
               onEditUserMessage={editUserMessage}

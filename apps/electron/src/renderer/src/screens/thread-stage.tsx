@@ -21,7 +21,11 @@ type ThreadStageProps = {
   /** 底部输入浮层的避让高度：内容列底部 padding 与回底浮标定位共用。 */
   bottomInset: number
   onOpenSettings: () => void
+  /** 消息流内 diff 摘要卡的打开入口（头部变更徽标已删除）。 */
   onOpenDiff: () => void
+  /** 右侧面板开关按钮：面板是否有 tab + 点击开/收。 */
+  panelOpen: boolean
+  onTogglePanel: () => void
   onNewTask: () => void
   onViewAction: (id: string) => void
   onEditUserMessage: (text: string) => void
@@ -32,7 +36,7 @@ type ThreadStageProps = {
  * 会话舞台（主区固定结构，以 fragment 挂进主区根）：全宽菜单栏 + 掉线横幅 +
  * 页面滚动消息流；菜单栏不随滚动，贴底跟随、轮次锚点带、回底浮标挂本层。
  */
-function ThreadStage({ workspace, activeThreadId, sidebarCollapsed, hostDown, bottomInset, onOpenSettings, onOpenDiff, onNewTask, onViewAction, onEditUserMessage, onForkUserMessage }: ThreadStageProps) {
+function ThreadStage({ workspace, activeThreadId, sidebarCollapsed, hostDown, bottomInset, onOpenSettings, onOpenDiff, panelOpen, onTogglePanel, onNewTask, onViewAction, onEditUserMessage, onForkUserMessage }: ThreadStageProps) {
   const { sessions, actions } = workspace;
   /** 页面滚动：菜单栏固定，消息流独占滚动容器，贴底跟随挂在容器上 */
   const { containerRef: scrollRef, onScroll, atBottom, scrollToBottom } = useStickToBottom();
@@ -68,7 +72,7 @@ function ThreadStage({ workspace, activeThreadId, sidebarCollapsed, hostDown, bo
       newTask: copy.thread.newTask,
       toggleMaximize: copy.thread.toggleMaximize,
       viewMenuAria: copy.thread.viewMenuAria,
-      changes: copy.thread.changes,
+      toggleSplitView: copy.thread.toggleSplitView,
       statusAria: copy.thread.statusAria,
       renameTitleAria: copy.thread.renameTitleAria,
       projectMenuAria: copy.thread.projectMenuAria,
@@ -132,8 +136,7 @@ function ThreadStage({ workspace, activeThreadId, sidebarCollapsed, hostDown, bo
         sessionTitle={activeSession?.title ?? ''}
         sidebarCollapsed={sidebarCollapsed}
         status={status}
-        additions={workspace.threadDiff.additions}
-        deletions={workspace.threadDiff.deletions}
+        panelOpen={panelOpen}
         labels={headerLabels}
         projectMenu={projectMenu}
         sessionMenu={sessionMenu}
@@ -142,7 +145,7 @@ function ThreadStage({ workspace, activeThreadId, sidebarCollapsed, hostDown, bo
         onViewAction={onViewAction}
         onRenameTitle={onRenameTitle}
         onStatusJump={scrollToBottom}
-        onOpenChanges={onOpenDiff}
+        onTogglePanel={onTogglePanel}
         onSessionAction={onSessionAction}
         onNewTask={onNewTask}
         onToggleMaximize={toggleMaximize}
