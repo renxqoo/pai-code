@@ -123,6 +123,10 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
     case 'sessionDied':
       // worker 死亡时全部在途子代理随进程自灭且无 settle 通知（api.md U2）：就地终态
       return { ...foldDeath(state, now), crashed: true };
+    case 'sessionParked':
+      // worker 收编（闲置/手动）：进程面随 worker 消亡就地终态，但不是崩溃——
+      // 停留态可浏览（T27 只读历史），发消息自动唤醒
+      return foldDeath(state, now);
     case 'bashOutput':
       // 直执行 bash 流式输出：只留尾部 2000 字符（横幅预览；权威条目经对账到达）
       return { ...state, bashTail: (state.bashTail + event.delta).slice(-2000) };

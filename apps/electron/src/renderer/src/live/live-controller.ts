@@ -3,6 +3,7 @@ import type { AgentDefinition, ApiOutcome, CommandView, ImagePayload, Permission
 import { copy } from '@/strings';
 import { queuedDrafts } from '@/composer/queued-drafts';
 import type { BridgeClient } from './client-invoke';
+import { createRuntimeController, type RuntimeController } from './runtime-controller';
 import { coalesceEvents } from './coalesce-events';
 import { createEntryHydration, createReadonlyHydration } from './entry-hydration';
 import { createLazyResume } from './lazy-resume';
@@ -70,6 +71,8 @@ export interface LiveController {
   /** 会话级规则写入（null = 删除 sidecar 回退全局）；成功返回 null。 */
   readonly writeSessionRules: (threadId: string, rules: PermissionRules | null) => Promise<string | null>;
   readonly restartHost: () => void;
+  /** 运行状态方法族（T29：快照/回收/档位/诊断包——runtime-controller.ts）。 */
+  readonly runtime: RuntimeController;
   /** 子 agent 定义管理面刷新（主进程文件面快照；失败静默保持旧值）。 */
   readonly refreshAgentDefinitions: () => Promise<void>;
   /** 子 agent 定义新建/编辑/改名/移动（previous 非空时含旧文件清理）；成功返回 null。 */
@@ -454,6 +457,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     restartHost(): void {
       void client.invoke('app/restartHost', {}).then(() => undefined);
     },
+    runtime: createRuntimeController(client),
     async refreshAgentDefinitions(): Promise<void> {
       await refreshAgentDefinitions();
     },

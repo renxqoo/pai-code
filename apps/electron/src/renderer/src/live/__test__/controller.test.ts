@@ -141,3 +141,32 @@ test('症状回归：新建任务页输入 / 无命令面板——fetchCommandPr
   fail = true;
   expect(await controller.fetchCommandPreview()).toEqual([]);
 });
+
+
+test('T29 运行状态方法族：快照/诊断日志/回收/常驻/档位/导出经对应 api 透传', async () => {
+  const client = makeClient();
+  const store = createLiveStore();
+  const controller = createLiveController(client, store);
+
+  const snapshot = await controller.runtime.fetchRuntimeSnapshot();
+  expect(snapshot).toBeNull(); // makeClient 对 app/runtime 返回 data:null → 快照失败面
+  expect(client.invokes).toContain('app/runtime');
+
+  await controller.runtime.fetchDiagnosticLog();
+  expect(client.invokes).toContain('app/diagnosticLog');
+
+  expect(await controller.runtime.retireSession('t1')).toBeNull();
+  expect(client.invokes).toContain('session/retire');
+
+  expect(await controller.runtime.forceRetireSession('t1')).toBeNull();
+  expect(client.invokes).toContain('session/forceRetire');
+
+  expect(await controller.runtime.setKeepalive('t1', true)).toBeNull();
+  expect(client.invokes).toContain('session/setKeepalive');
+
+  expect(await controller.runtime.setIdleRecycle(10)).toBeNull(); // data:null → minutes 取不到 → null（失败面）
+  expect(client.invokes).toContain('app/setIdleRecycle');
+
+  await controller.runtime.exportDiagnostics();
+  expect(client.invokes).toContain('app/exportDiagnostics');
+});
