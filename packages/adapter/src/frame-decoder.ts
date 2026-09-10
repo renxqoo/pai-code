@@ -48,11 +48,16 @@ function classifyKnown(obj: Record<string, unknown>, type: string): { frame: Hub
     case 'ui_request':
       return { frame: { type: 'ui_request', requestId: reqString(obj.requestId), threadId: reqString(obj.threadId), method: optString(obj.method), subagentId: optString(obj.subagentId), agent: optString(obj.agent), ...restFields(obj, ['type', 'requestId', 'threadId', 'method', 'subagentId', 'agent']) } };
     case 'heartbeat':
-      return { frame: { type: 'heartbeat', subagents: optNumber(obj.subagents) } };
+      return { frame: { type: 'heartbeat', subagents: optNumber(obj.subagents), rssBytes: optNumber(obj.rssBytes), cpuPercent: optNumber(obj.cpuPercent) } };
     case 'hub_error':
       return { frame: { type: 'hub_error', threadId: optString(obj.threadId), scope: reqString(obj.scope), error: reqString(obj.error) } };
     case 'thread_died':
       return { frame: { type: 'thread_died', threadId: reqString(obj.threadId), reason: reqString(obj.reason) } };
+    case 'thread_parked': {
+      const reason = obj.reason;
+      if (reason !== 'idle' && reason !== 'manual') throw new Error('thread_parked_reason_invalid');
+      return { frame: { type: 'thread_parked', threadId: reqString(obj.threadId), reason } };
+    }
     case 'subagent_event':
       return { frame: { type: 'subagent_event', threadId: reqString(obj.threadId), subagentId: reqString(obj.subagentId), agent: reqString(obj.agent), task: reqString(obj.task), event: requireEventPayload(obj.event) } };
     case 'subagent_message':

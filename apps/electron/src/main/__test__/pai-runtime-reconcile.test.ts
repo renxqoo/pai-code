@@ -58,7 +58,7 @@ function makeFixture(work: string, reply: (cmd: PaiCommand) => Reply) {
       await restartHook?.();
     },
     dispose: () => Promise.resolve(undefined),
-    diagnostics: () => ({ stderrTail: '' }),
+    diagnostics: () => ({ stderrTail: '', restartCount: 0, lastRestartCause: null, lastRestartAt: null }),
   };
   const runtime = createPaiRuntime({
     paths: {
@@ -71,6 +71,7 @@ function makeFixture(work: string, reply: (cmd: PaiCommand) => Reply) {
     },
     keyStore: emptyKeyStore,
     providers: () => [],
+    idleRecycleMinutes: () => 5,
     hubPaths: () => ({ bunPath: 'bun', hubEntry: join(work, 'cli.js') }),
     logger: { log: (message) => logs.push(message) },
     emit: (event) => events.push(event),

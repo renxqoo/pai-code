@@ -5,7 +5,7 @@ import { AGENT_TOOL_IDS } from '@paiapp/contracts';
 import type { Theme } from '@/components/theme-context';
 import { useTheme } from '@/components/use-theme';
 import type { LiveWorkspaceView } from '@/live/use-live-workspace';
-import type { WorkspaceActions, WorkspaceDiagnostics } from '@/live/workspace-actions';
+import type { WorkspaceActions } from '@/live/workspace-actions';
 import { changeLocaleSetting, getLocaleSetting, type LocaleSetting } from '@/strings';
 import { FETCH_ON_ENTER_SECTIONS, SETTINGS_FIRST_SECTION, type SettingsSectionId } from './settings-sections';
 
@@ -15,12 +15,11 @@ type SavedSession = { sessionPath: string; title: string; cwd: string; modifiedA
  * 按开即读派发：分区目录/文件面无推送，每次进入都拉取；其余分区 no-op。
  * 分区 ↔ 动作映射在这里集中（导航层不认识 workspace 动作面）。
  */
-export function dispatchSectionEnter(id: SettingsSectionId, actions: Pick<WorkspaceActions, 'refreshPermissionRules' | 'refreshAgentDefinitions' | 'refreshSkills' | 'fetchDiagnostics'>): void {
+export function dispatchSectionEnter(id: SettingsSectionId, actions: Pick<WorkspaceActions, 'refreshPermissionRules' | 'refreshAgentDefinitions' | 'refreshSkills'>): void {
   if (!FETCH_ON_ENTER_SECTIONS.has(id)) return;
   if (id === 'permissions') actions.refreshPermissionRules();
   else if (id === 'agents') actions.refreshAgentDefinitions();
-  else if (id === 'skills') actions.refreshSkills();
-  else actions.fetchDiagnostics();
+  else actions.refreshSkills();
 }
 
 /** 已保存会话的项目目录（首现顺序去重；历史分区过滤数据源）。 */
@@ -88,7 +87,6 @@ export type SettingsScreenProps = {
     onOpenSaved: (sessionPath: string) => void;
     onRefresh: () => void;
   };
-  diagnostics: { data: WorkspaceDiagnostics | null; onRefresh: () => void; onRestartHost: () => void };
 };
 
 export type UseSettingsScreenInput = {
@@ -179,6 +177,5 @@ export function useSettingsScreen({ workspace, open, onClose }: UseSettingsScree
       },
       onRefresh: actions.refreshSaved,
     },
-    diagnostics: { data: workspace.diagnostics, onRefresh: actions.fetchDiagnostics, onRestartHost: actions.restartHost },
   }), [open, onClose, section, onSelectSection, localeSetting, theme, setTheme, workspace, pinned, projects, actions]);
 }

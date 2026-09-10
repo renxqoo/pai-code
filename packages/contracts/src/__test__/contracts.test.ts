@@ -34,18 +34,18 @@ describe('词表封闭（双向）', () => {
     expect(() => UiEventSchema.parse({ type: 'nope', threadId: 't1' })).toThrow();
   });
 
-  test('hub 帧词表 == 八类（v0.5）', () => {
+  test('hub 帧词表 == 九类（v0.5 + v0.13 thread_parked）', () => {
     expect([...HUB_FRAME_TYPES].sort(byStr)).toEqual(
-      ['event', 'heartbeat', 'hub_error', 'response', 'thread_died', 'ui_request', 'subagent_event', 'subagent_message'].sort(byStr),
+      ['event', 'heartbeat', 'hub_error', 'response', 'thread_died', 'thread_parked', 'ui_request', 'subagent_event', 'subagent_message'].sort(byStr),
     );
   });
 
-  test('hub 命令词表 == 40（v0.5 + v0.6-v0.9 补齐 + v0.12 thread/register）', () => {
-    expect(HUB_COMMAND_TYPES.length).toBe(40);
+  test('hub 命令词表 == 43（v0.5 + v0.6-v0.9 补齐 + v0.12 thread/register + v0.13 观测三命令）', () => {
+    expect(HUB_COMMAND_TYPES.length).toBe(43);
     expect([...HUB_COMMAND_TYPES].sort(byStr)).toEqual(
       [
-        'thread/start', 'thread/resume', 'thread/register', 'thread/stop', 'thread/list', 'thread/list_saved',
-        'set_model_override', 'get_host_info', 'get_sandbox_state',
+        'thread/start', 'thread/resume', 'thread/register', 'thread/stop', 'thread/retire', 'thread/set_keepalive', 'thread/list', 'thread/list_saved',
+        'set_model_override', 'get_host_info', 'set_idle_retire_ms', 'get_sandbox_state',
         'prompt', 'steer', 'follow_up', 'abort', 'clear_queue', 'compact',
         'get_state', 'get_messages', 'get_entries', 'get_tree', 'get_session_stats', 'set_session_name', 'get_commands', 'get_fork_messages',
         'fork', 'clone', 'navigate_tree',
@@ -103,6 +103,7 @@ describe('Settings zod：round-trip 与拒绝表', () => {
       projectModels: { '/w': 'glm/glm-5.3' },
       pinnedSessions: ['/a.jsonl'],
       hiddenProjects: ['/w/gone'],
+      idleRecycleMinutes: 15,
     };
     expect(SettingsSchema.parse(input)).toEqual(input);
   });
@@ -358,6 +359,8 @@ function samplePerUiEvent(): UiEvent[] {
     { type: 'sessionRenamed', threadId: t, name: 'renamed' },
     { type: 'sessionRemoved', threadId: t },
     { type: 'sessionDied', threadId: t, reason: 'worker crash' },
+    { type: 'sessionParked', threadId: t, reason: 'idle' },
+    { type: 'sessionParked', threadId: t, reason: 'manual' },
     { type: 'turnStarted', threadId: t, at: 1 },
     { type: 'userMessage', threadId: t, message: { id: 'm1', text: 'hi', origin: 'user' } },
     { type: 'userMessage', threadId: t, message: { id: 'm2', text: '[task-notification]', origin: 'system' } },

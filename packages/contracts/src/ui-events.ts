@@ -55,6 +55,8 @@ const uiEventDefs = {
   sessionRemoved: z.object({ type: z.literal('sessionRemoved'), threadId }),
   /** worker 异常死亡（自动恢复中，UI 呈横幅提示）。 */
   sessionDied: z.object({ type: z.literal('sessionDied'), threadId, reason: z.string() }),
+  /** worker 被收编（v0.13：闲置 sweep / 手动回收），会话转 parked、发消息自动唤醒。 */
+  sessionParked: z.object({ type: z.literal('sessionParked'), threadId, reason: z.enum(['idle', 'manual']) }),
 
   /** 一轮开始（agent_start；后台任务通知唤起的回合同样触发）。 */
   turnStarted: z.object({ type: z.literal('turnStarted'), threadId, at: z.number() }),

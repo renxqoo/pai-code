@@ -44,6 +44,7 @@ function makeRoutes(piSettingsRaw: string | null = null) {
     },
     keyStore,
     providers: () => [],
+    idleRecycleMinutes: () => 5,
     hubPaths: () => null,
     logger: { log: () => undefined },
     emit: () => undefined,

@@ -13,7 +13,7 @@ import { imagePayloadOf } from '@/composer/read-image-file';
 import { queuedDrafts, type QueuedDraft, type QueuedDraftSubmit } from '@/composer/queued-drafts';
 import { connectQueuedDraftFlush } from './queued-flush';
 
-import type { WorkspaceActions, WorkspaceDiagnostics } from './workspace-actions';
+import type { WorkspaceActions } from './workspace-actions';
 import { createWorkspaceActions } from './workspace-actions';
 import { bridgeClient, controller, store } from './workspace-runtime';
 import { threadModelOf, type LiveStoreState, type PendingDialog } from './store';
@@ -71,8 +71,6 @@ export type LiveWorkspaceView = {
   activeStats: SessionStatsView | null;
   /** 各会话用量快照（I2 聚合数据源）。 */
   statsById: Readonly<Record<string, SessionStatsView>>;
-  /** 运行时诊断（M1 分区数据源；null = 未拉取）。 */
-  diagnostics: WorkspaceDiagnostics | null;
   composer: ComposerSelection;
   dialogs: readonly PendingDialog[];
   notices: readonly { id: string; text: string }[];
@@ -111,8 +109,7 @@ export function useLiveWorkspace(): LiveWorkspaceView {
   const [now, setNow] = React.useState(() => Date.now());
   const [effortLevels, setEffortLevels] = React.useState<readonly string[]>([]);
   const [commands, setCommands] = React.useState<readonly CommandView[]>([]);
-  const [diagnostics, setDiagnostics] = React.useState<WorkspaceDiagnostics | null>(null);
-  const actions = React.useMemo(() => createWorkspaceActions(setDiagnostics), []);
+  const actions = React.useMemo(() => createWorkspaceActions(), []);
 
   const hostPhase = useStore(store, (s) => s.hostPhase);
   const bootstrapLoaded = useStore(store, (s) => s.bootstrapLoaded);
@@ -261,7 +258,6 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     now,
     threadDiff: React.useMemo(() => collectThreadDiff(activeThread), [activeThread]),
     activeStats: stats[activeThreadId] ?? null,
-    diagnostics,
     statsById: stats,
     composer,
     dialogs,

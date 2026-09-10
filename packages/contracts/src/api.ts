@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { PermissionRulesSchema } from './permissions';
 import { ProviderModelSchema, ThinkingFormatSchema } from './settings';
 import { DiffFileViewSchema, SessionViewSchema } from './ui-events';
+import { IdleRecycleMinutesSchema } from './settings';
 
 /**
  * 渲染层 API 面：方法名用应用语义（渲染层不出现协议字面量）。
@@ -179,6 +180,8 @@ export const PreferencesViewSchema = z.object({
   pinnedSessions: z.array(z.string()),
   trustedDefault: z.boolean(),
   hiddenProjects: z.array(z.string()),
+  /** worker 闲置自动回收档位（分钟）。 */
+  idleRecycleMinutes: IdleRecycleMinutesSchema,
 });
 export type PreferencesView = z.infer<typeof PreferencesViewSchema>;
 
@@ -202,6 +205,86 @@ export const GitBranchesViewSchema = z
   })
   .strict();
 export type GitBranchesView = z.infer<typeof GitBranchesViewSchema>;
+
+// ---------------------------------------------------------------------------
+// 运行状态面（T29：监控页快照与其组成视图）
+// ---------------------------------------------------------------------------
+
+/** get_host_info 收窄（hub v0.6 形状；垃圾输入在 adapter 降级）。 */
+export const HostInfoViewSchema = z.object({
+  version: z.string(),
+  piVersion: z.string(),
+  bunVersion: z.string(),
+  pid: z.number().int(),
+  uptimeMs: z.number().int().nonnegative(),
+  rssBytes: z.number().int().nonnegative(),
+  threads: z.object({ live: z.number().int(), parked: z.number().int(), dead: z.number().int() }),
+  subagents: z.object({ running: z.number().int().nonnegative() }),
+  limits: z.object({
+    maxThreads: z.number().int().positive(),
+    idleRetireMs: z.number().int().positive(),
+    workerStaleMs: z.number().int().positive(),
+    workerExitTimeoutMs: z.number().int().positive(),
+    maxSubagents: z.number().int().positive(),
+    bashTimeoutMs: z.number().int().nonnegative(),
+  }),
+  backend: z.object({ id: z.string(), version: z.string(), capabilities: z.array(z.string()) }),
+});
+export type HostInfoView = z.infer<typeof HostInfoViewSchema>;
+
+/** thread/list 行收窄（worker 表：hub 是进程态真相）。 */
+export const WorkerRowViewSchema = z.object({
+  threadId: z.string(),
+  cwd: z.string(),
+  sessionPath: z.string().nullable(),
+  state: z.enum(['live', 'parked', 'dead']),
+  isStreaming: z.boolean(),
+  idleMs: z.number().int().nonnegative(),
+  subagents: z.number().int().nonnegative(),
+  rssBytes: z.number().int().nullable(),
+  keepalive: z.boolean(),
+});
+export type WorkerRowView = z.infer<typeof WorkerRowViewSchema>;
+
+/** 资源采样点（主进程 2s 采样环；null = 该来源当次不可得）。 */
+export const ResourceSampleViewSchema = z.object({
+  at: z.number().int(),
+  appRssBytes: z.number().int().nullable(),
+  appCpuPercent: z.number().nullable(),
+  hubRssBytes: z.number().int().nullable(),
+  hubCpuPercent: z.number().nullable(),
+  workersRssBytes: z.number().int().nullable(),
+  systemTotalBytes: z.number().int().nullable(),
+  systemAvailableBytes: z.number().int().nullable(),
+});
+export type ResourceSampleView = z.infer<typeof ResourceSampleViewSchema>;
+
+/** 监督事件（主进程内存环 ≤200 条；kind 词表 = 宿主监督面 + worker 生命周期）。 */
+export const RuntimeEventViewSchema = z.object({
+  at: z.number().int(),
+  level: z.enum(['info', 'warn', 'error']),
+  kind: z.enum(['host_phase', 'host_restart', 'heartbeat_stale', 'host_exit', 'frame_dropped', 'worker_recycled', 'worker_died', 'spawn_error']),
+  detail: z.string(),
+});
+export type RuntimeEventView = z.infer<typeof RuntimeEventViewSchema>;
+
+/** 运行状态快照（app/runtime 2s 轮询；不含 stderr——带宽纪律，按需 app/diagnosticLog）。 */
+export const RuntimeSnapshotViewSchema = z.object({
+  hostPhase: z.enum(['starting', 'ready', 'restarting', 'failed']).nullable(),
+  hostInfo: HostInfoViewSchema.nullable(),
+  /** 最近一次宿主心跳距今（ms）；null = 从未收到心跳。 */
+  heartbeatAgeMs: z.number().int().nullable(),
+  restarts: z.object({ count: z.number().int().nonnegative(), lastCause: z.string().nullable(), lastAt: z.number().int().nullable() }),
+  workers: z.array(WorkerRowViewSchema),
+  latest: ResourceSampleViewSchema.nullable(),
+  /** 近 30 分钟降采样（≤180 点）。 */
+  history: z.array(ResourceSampleViewSchema),
+  /** 最近监督事件（≤50 条，新在尾）。 */
+  events: z.array(RuntimeEventViewSchema),
+  idleRecycleMinutes: IdleRecycleMinutesSchema,
+  appVersion: z.string(),
+});
+export type RuntimeSnapshotView = z.infer<typeof RuntimeSnapshotViewSchema>;
 
 // ---------------------------------------------------------------------------
 // 方法 schema（单一真相）：api 服务端做参数校验，渲染层类型从此推导
@@ -441,16 +524,40 @@ export const ApiSchemas = {
     params: z.object({ name: z.string().min(1), modelId: z.string().min(1).optional() }).strict(),
     result: z.object({ latencyMs: z.number().int().nonnegative() }).strict(),
   },
-  /** 运行时诊断（M1）：host 相位/stderr 尾部/注册表会话数。 */
-  'app/diagnostics': {
+  /** 运行状态快照（T29 监控页 2s 轮询；host 未构建时安全降级 hostInfo=null）。 */
+  'app/runtime': {
     params: empty,
-    result: z
-      .object({
-        hostPhase: z.enum(['starting', 'ready', 'restarting', 'failed']).nullable(),
-        stderrTail: z.string(),
-        registrySessions: z.number().int().nonnegative(),
-      })
-      .strict(),
+    result: RuntimeSnapshotViewSchema,
+  },
+  /** 宿主 stderr 尾部（64KB 环；按需拉取不进 2s 快照）。 */
+  'app/diagnosticLog': {
+    params: empty,
+    result: z.object({ stderrTail: z.string() }).strict(),
+  },
+  /** 闲置回收档位（唯一写路径：settings 持久 + set_idle_retire_ms 运行期生效）。 */
+  'app/setIdleRecycle': {
+    params: z.object({ minutes: IdleRecycleMinutesSchema }).strict(),
+    result: z.object({ minutes: IdleRecycleMinutesSchema }).strict(),
+  },
+  /** 诊断包导出（userData/diagnostics/<ts>/ 目录 + Finder 定位）。 */
+  'app/exportDiagnostics': {
+    params: empty,
+    result: z.object({ directory: z.string() }).strict(),
+  },
+  /** 手动回收空闲 worker（thread/retire；会话保留转 parked）。 */
+  'session/retire': {
+    params: threadOnly,
+    result: z.null(),
+  },
+  /** 强制回收（clear_queue + abort + thread/retire 逐条容错；对失控生成一步到位）。 */
+  'session/forceRetire': {
+    params: threadOnly,
+    result: z.null(),
+  },
+  /** 常驻开关（registry 持久真相 + hub 表项置位；parked 未纳管先 register）。 */
+  'session/setKeepalive': {
+    params: z.object({ threadId: z.string().min(1), keepalive: z.boolean() }).strict(),
+    result: z.null(),
   },
   /** 手动重启 host（走既有 restart 链路；审计落账）。 */
   'app/restartHost': {

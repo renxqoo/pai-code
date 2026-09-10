@@ -11,14 +11,13 @@ function makeEnterActions(): { actions: EnterActions; calls: string[] } {
     refreshPermissionRules: () => calls.push('permissions'),
     refreshAgentDefinitions: () => calls.push('agents'),
     refreshSkills: () => calls.push('skills'),
-    fetchDiagnostics: () => calls.push('diagnostics'),
   } satisfies EnterActions;
   return { actions, calls };
 }
 
 describe('按开即读派发', () => {
   test('四个目录分区进入时派发对应拉取动作', () => {
-    for (const id of ['permissions', 'agents', 'skills', 'diagnostics'] as const) {
+    for (const id of ['permissions', 'agents', 'skills'] as const) {
       const { actions, calls } = makeEnterActions();
       dispatchSectionEnter(id, actions);
       expect(calls).toEqual([id]);

@@ -13,12 +13,6 @@ import { statsTargetsOf } from './stats-targets';
  * 唯一外来依赖是 hook 注入的 setState setter（引用本身恒定）。
  */
 
-export type WorkspaceDiagnostics = {
-  hostPhase: 'starting' | 'ready' | 'restarting' | 'failed' | null;
-  stderrTail: string;
-  registrySessions: number;
-};
-
 export type WorkspaceActions = {
   readonly submitDraft: (message: string, images?: readonly ImagePayload[], mode?: 'auto' | 'steer' | 'followUp') => Promise<string | null>;
   /** 指定线程投递（排队暂存的立即改向/轮末冲刷，目标可为后台线程）；失败通知与 submitDraft 同口径。 */
@@ -98,7 +92,6 @@ export type WorkspaceActions = {
   readonly forkFromEntry: (entryId: string) => Promise<string | null>;
   readonly reloadSessionTrusted: (threadId: string, trusted: boolean) => void;
   readonly steerSubagent: (subagentId: string, message: string) => void;
-  readonly fetchDiagnostics: () => void;
   readonly restartHost: () => void;
   /** 历史水化失败的重试（活跃会话全量重拉）。 */
   readonly retryHydration: () => void;
@@ -146,7 +139,7 @@ function notifySubmitFailure(reason: string | null): void {
   pushNotice(reason === 'resume_failed' ? copy.flow.resumeFailed : copy.flow.sendFailed(reason));
 }
 
-export function createWorkspaceActions(setDiagnostics: (value: WorkspaceDiagnostics | null) => void): WorkspaceActions {
+export function createWorkspaceActions(): WorkspaceActions {
   /** 建会话的共用路径（新会话入口与新建任务页首条提交）：失败推通知条，成功解除项目隐藏。 */
   const openSession = async (input: {
     cwd: string
@@ -295,9 +288,6 @@ export function createWorkspaceActions(setDiagnostics: (value: WorkspaceDiagnost
       const reason = await controller.writePermissionRules(rules);
       if (reason !== null) pushNotice(copy.settings.permissionSaveFailed);
       return reason === null;
-    },
-    fetchDiagnostics: () => {
-      void controller.fetchDiagnostics().then((data) => setDiagnostics(data));
     },
     refreshAllStats: () => {
       // stats 是 worker 级查询：parked 会话不发（会唤醒全部 worker——T27 预算），

@@ -36,9 +36,20 @@ export interface HostProcessPort {
   restart(reason: string): Promise<void>;
   /** 优雅停机：stdin EOF → 等 exit（上限内）→ SIGKILL 进程组兜底。 */
   dispose(): Promise<void>;
-  /** 只读诊断：当前相位与 host stderr 尾部（排障用）。 */
+  /** 只读诊断：当前相位、host stderr 尾部与重启事实（监控页/排障用）。 */
   readonly phase: HostPhase;
-  diagnostics(): { stderrTail: string };
+  diagnostics(): HostDiagnostics;
+}
+
+/** host 进程监督事实（create-host-process 单一真相；监控页快照的输入）。 */
+export interface HostDiagnostics {
+  stderrTail: string;
+  /** 本次宿主进程生命周期内的重启次数（挂死/退出/手动同计）。 */
+  restartCount: number;
+  /** 最近一次重启原因（'hang' | 'exit' | 'manual:*'）；null = 从未重启。 */
+  lastRestartCause: string | null;
+  /** 最近一次重启时刻（ms）；null = 从未重启。 */
+  lastRestartAt: number | null;
 }
 
 /** 会话注册表行：窗口打开的会话（恢复链与侧栏的真相源，实现：infra/registry-store）。 */
@@ -53,6 +64,8 @@ export interface SessionRow {
   createdAt: number;
   /** 会话最后活动时间（SessionView.lastActivityAt 的持久镜像）：只有新建/fork/turn 活动推进；恢复/改名等元数据写不推进。 */
   updatedAt: number;
+  /** 免闲置回收标志（v0.13 持久真相；hub 表项标志是运行期镜像，会话 live 化时 re-assert）。 */
+  keepalive: boolean;
 }
 
 export interface RegistryStorePort {

@@ -1,10 +1,12 @@
 import type {
   CommandView,
+  HostInfoView,
   ModelInfoView,
   SavedSessionView,
   SessionStatsView,
   SessionView,
   ThreadStateView,
+  WorkerRowView,
 } from '@paiapp/contracts';
 
 /**
@@ -153,6 +155,60 @@ export function previewCommands(skills: readonly { name: string; description: st
   for (const skill of skills) {
     if (skill.name.length === 0) continue;
     out.push({ name: `skill:${skill.name}`, description: skill.description, source: 'skill' });
+  }
+  return out;
+}
+
+/** get_host_info 响应 → 宿主信息视图（垃圾输入降级为全零形态，不抛）。 */
+export function hostInfoView(data: unknown): HostInfoView {
+  const d = recordOf(data);
+  const threads = recordOf(d.threads);
+  const subagents = recordOf(d.subagents);
+  const limits = recordOf(d.limits);
+  const backend = recordOf(d.backend);
+  const capabilities = Array.isArray(backend.capabilities) ? backend.capabilities.filter((item): item is string => typeof item === 'string') : [];
+  return {
+    version: str(d.version),
+    piVersion: str(d.piVersion),
+    bunVersion: str(d.bunVersion),
+    pid: num(d.pid, 0),
+    uptimeMs: num(d.uptimeMs, 0),
+    rssBytes: num(d.rssBytes, 0),
+    threads: { live: num(threads.live, 0), parked: num(threads.parked, 0), dead: num(threads.dead, 0) },
+    subagents: { running: num(subagents.running, 0) },
+    limits: {
+      maxThreads: num(limits.maxThreads, 1),
+      idleRetireMs: num(limits.idleRetireMs, 1),
+      workerStaleMs: num(limits.workerStaleMs, 1),
+      workerExitTimeoutMs: num(limits.workerExitTimeoutMs, 1),
+      maxSubagents: num(limits.maxSubagents, 1),
+      bashTimeoutMs: num(limits.bashTimeoutMs, 0),
+    },
+    backend: { id: str(backend.id), version: str(backend.version), capabilities },
+  };
+}
+
+/** thread/list 响应 → worker 行（缺 threadId 丢弃；观测字段垃圾输入降级零形态）。 */
+export function threadListRows(data: unknown): WorkerRowView[] {
+  const threads = recordOf(data)['threads'];
+  if (!Array.isArray(threads)) return [];
+  const out: WorkerRowView[] = [];
+  for (const item of threads) {
+    const t = recordOf(item);
+    const threadId = str(t.threadId);
+    if (threadId.length === 0) continue;
+    const state = t.state === 'live' || t.state === 'parked' || t.state === 'dead' ? t.state : 'dead';
+    out.push({
+      threadId,
+      cwd: str(t.cwd),
+      sessionPath: typeof t.sessionPath === 'string' ? t.sessionPath : null,
+      state,
+      isStreaming: t.isStreaming === true,
+      idleMs: num(t.idleMs, 0),
+      subagents: num(t.subagents, 0),
+      rssBytes: typeof t.rssBytes === 'number' && Number.isFinite(t.rssBytes) ? t.rssBytes : null,
+      keepalive: t.keepalive === true,
+    });
   }
   return out;
 }

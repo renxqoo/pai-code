@@ -13,6 +13,8 @@ import { defaultPermissionRules, parsePermissionRules, THINKING_LEVEL_ORDER, typ
 import { ApiSchemas, type ApiMethod, type ApiOutcome, type ApiParams, type ModelInfoView } from '@paiapp/contracts';
 
 import type { PaiRuntime } from './pai-runtime';
+import type { RuntimeMonitor } from './runtime-monitor/create-runtime-monitor';
+import { runtimeRoutes } from './api-routes-runtime';
 import type { createFileSettings } from './file-settings';
 import type { ProviderKeyStore } from './file-settings';
 
@@ -55,6 +57,10 @@ export interface ApiRouteDeps {
   pickDirectory: (defaultPath: string | null) => Promise<string | null>;
   /** 本地 git 分支能力（装配层可注入执行器替身；缺省走真实 git）。 */
   git?: GitBranches;
+  /** 运行状态监控器（T29 app/runtime 快照源）。 */
+  monitor: RuntimeMonitor;
+  /** 诊断包落盘（装配层注入：真实 fs + reveal；测试注入替身）。 */
+  exportDiagnosticsBundle: () => string;
   /** 额外放行的工作目录（本次运行中经系统选择器选过的目录）。 */
   extraCwds?: () => readonly string[];
 }
@@ -183,6 +189,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       pinnedSessions: [...settings.pinnedSessions],
       trustedDefault: settings.trustedDefault,
       hiddenProjects: [...settings.hiddenProjects],
+      idleRecycleMinutes: settings.idleRecycleMinutes,
     };
   };
 
@@ -535,17 +542,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       const outcome = await probe.probe(params.name, params.modelId);
       return outcome.ok ? { ok: true as const, data: { latencyMs: outcome.latencyMs } } : fail(outcome.reason);
     },
-    'app/diagnostics': () => {
-      // host 从未构建（路径未解析）时安全返回 null 相位，不 internal_error
-      return Promise.resolve({
-        ok: true as const,
-        data: {
-          hostPhase: runtime.hostPhase(),
-          stderrTail: runtime.hostStderrTail(),
-          registrySessions: runtime.registry.list().length,
-        },
-      });
-    },
+    ...runtimeRoutes({ runtime, monitor: deps.monitor, settings: deps.settings, command, fail, exportDiagnosticsBundle: deps.exportDiagnosticsBundle }),
     'app/restartHost': () => {
       deps.audit('restart_host:manual');
       if (runtime.hostPhase() === null) return Promise.resolve(fail('host_unavailable'));

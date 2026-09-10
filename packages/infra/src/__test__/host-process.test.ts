@@ -218,7 +218,10 @@ describe('createHostProcess（fake-host 集成）', () => {
     const host = launch(harness);
     await waitFor(() => host.phase === 'ready');
     const seen: string[] = [];
-    const off = host.onFrame((frame) => seen.push(frame.type));
+    // v0.13 起心跳帧也进订阅面（监控器资源折叠）——断言里过滤 1Hz 心跳
+    const off = host.onFrame((frame) => {
+      if (frame.type !== 'heartbeat') seen.push(frame.type);
+    });
     const outcome = await host.request({ type: 'emit' } as unknown as HubCommand, 2_000);
     expect(outcome.ok).toBe(true);
     await sleep(200);
@@ -356,7 +359,8 @@ describe('createHostProcess（fake-host 集成）', () => {
     await burst;
     const restartingAt = log.map((entry) => entry.kind === 'phase' && entry.type === 'restarting').lastIndexOf(true);
     expect(restartingAt).toBeGreaterThanOrEqual(0);
-    expect(log.slice(restartingAt + 1).filter((entry) => entry.kind === 'frame')).toEqual([]);
+    // 新进程自身的心跳（v0.13 订阅面透传）合法；除此之外不得有任何滞留帧穿透代际守卫
+    expect(log.slice(restartingAt + 1).filter((entry) => entry.kind === 'frame' && entry.type !== 'heartbeat')).toEqual([]);
     await host.dispose();
   }, 20_000);
 });

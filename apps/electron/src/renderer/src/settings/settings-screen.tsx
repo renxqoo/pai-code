@@ -1,7 +1,6 @@
 import type { SettingsScreenProps } from './use-settings-screen';
 
 import { AgentsSection } from './agents-section';
-import { DiagnosticsSection } from './diagnostics-section';
 import { GeneralSection } from './general-section';
 import { HistorySection } from './history-section';
 import { PermissionsSection } from './permissions-section';
@@ -14,7 +13,7 @@ import { SkillsSection } from './skills-section';
  * 分区状态/派发与数据装配都在 use-settings-screen，本组件只做展示分派。
  * Esc 关闭由父层全局监听，本组件不挂键盘事件。
  */
-function SettingsScreen({ open, onClose, section, onSelectSection, general, providers, permissions, agents, skills, history, diagnostics }: SettingsScreenProps) {
+function SettingsScreen({ open, onClose, section, onSelectSection, general, providers, permissions, agents, skills, history }: SettingsScreenProps) {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-40 flex bg-background">
@@ -33,10 +32,8 @@ function SettingsScreen({ open, onClose, section, onSelectSection, general, prov
             <AgentsSection {...agents} />
           ) : section === 'skills' ? (
             <SkillsSection {...skills} />
-          ) : section === 'history' ? (
-            <HistorySection {...history} />
           ) : (
-            <DiagnosticsSection {...diagnostics} />
+            <HistorySection {...history} />
           )}
         </div>
       </div>

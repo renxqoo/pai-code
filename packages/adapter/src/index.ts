@@ -12,6 +12,8 @@ export {
   sessionStatsView,
   sessionCommands,
   previewCommands,
+  hostInfoView,
+  threadListRows,
   type SessionViewInput,
 } from './response-views';
 export { isFileMutatingTool, diffFromPatch, diffFromWriteArgs } from './diff-extract';

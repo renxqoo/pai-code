@@ -40,6 +40,7 @@ function makeRoutes(work: string, git?: GitBranches) {
     },
     keyStore,
     providers: () => [],
+    idleRecycleMinutes: () => 5,
     hubPaths: () => ({ bunPath: 'bun', hubEntry: '/nonexistent/cli.js' }),
     logger: { log: () => undefined },
     emit: () => undefined,

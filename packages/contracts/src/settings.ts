@@ -76,6 +76,11 @@ export const ProviderConfigSchema = z
   .strict();
 export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
 
+/** 闲置自动回收档位（分钟）；词表顺序即 UI 选项顺序。 */
+export const IDLE_RECYCLE_MINUTE_OPTIONS = [3, 5, 10, 15] as const;
+export type IdleRecycleMinutes = (typeof IDLE_RECYCLE_MINUTE_OPTIONS)[number];
+export const IdleRecycleMinutesSchema = z.union([z.literal(3), z.literal(5), z.literal(10), z.literal(15)]);
+
 export const SettingsSchema = z
   .object({
     /** 宿主注入点：bun 与 pai-cli 入口；null = 装配层缺省（打包产物路径）。 */
@@ -95,6 +100,8 @@ export const SettingsSchema = z
     pinnedSessions: z.array(z.string()).default([]),
     /** 侧栏已移除（隐藏）的项目目录（cwd）；同目录新建任务即解除。 */
     hiddenProjects: z.array(z.string()).default([]),
+    /** worker 闲置自动回收时长（分钟；v0.13——spawn env PAI_IDLE_RETIRE_MS 注入 + 运行期 set_idle_retire_ms 同步）。 */
+    idleRecycleMinutes: IdleRecycleMinutesSchema.default(5),
   })
   .strict();
 
