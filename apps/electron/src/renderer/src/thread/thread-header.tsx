@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ChevronDown, Diff as DiffIcon, Folder, Maximize2, MoreHorizontal, PanelRight, Plus } from 'lucide-react';
+import { ChevronDown, Diff as DiffIcon, Folder, Maximize2, MoreHorizontal, Plus } from 'lucide-react';
 
 import { IconButton, MenuButton, type MenuItemDef } from '@paiapp/ui';
 
@@ -20,8 +20,8 @@ type ThreadHeaderProps = {
   deletions: number
   labels: {
     newTask: string
-    toggleSplitView: string
     toggleMaximize: string
+    viewMenuAria: string
     changes: string
     statusAria: string
     renameTitleAria: string
@@ -31,13 +31,14 @@ type ThreadHeaderProps = {
   }
   projectMenu: readonly MenuItemDef[]
   sessionMenu: readonly MenuItemDef[]
+  viewMenu: readonly MenuItemDef[]
   onProjectAction: (id: string) => void
+  onViewAction: (id: string) => void
   onRenameTitle: (name: string) => void
   onStatusJump: () => void
   onOpenChanges: () => void
   onSessionAction: (id: string) => void
   onNewTask: () => void
-  onToggleSplitView: () => void
   onToggleMaximize: () => void
 }
 
@@ -51,7 +52,7 @@ const STATUS_DOT_CLASS: Record<Exclude<ThreadStatusKind, 'idle'>, string> = {
 
 /**
  * 主区头部：全宽拖拽行（与标题覆盖块同排）——项目菜单 + 可编辑标题 + 状态 chip +
- * 变更入口 + 会话菜单 + 新建/布局开关；内容右端避让 Windows caption。
+ * 变更入口 + 会话菜单 + 新建 + 视图菜单 + 全屏开关；内容右端避让 Windows caption。
  * 「重命名」是头部内部 UX（点标题/菜单进入行内编辑），其余动作经回调上抛。
  */
 function ThreadHeader({
@@ -64,13 +65,14 @@ function ThreadHeader({
   labels,
   projectMenu,
   sessionMenu,
+  viewMenu,
   onProjectAction,
+  onViewAction,
   onRenameTitle,
   onStatusJump,
   onOpenChanges,
   onSessionAction,
   onNewTask,
-  onToggleSplitView,
   onToggleMaximize,
 }: ThreadHeaderProps) {
   const [editing, setEditing] = React.useState<TitleEditState>(null);
@@ -186,12 +188,20 @@ function ThreadHeader({
           {labels.newTask}
         </Button>
       </div>
-      <div className="app-no-drag  flex shrink-0 items-center gap-[10px]">
+      <div className="app-no-drag ml-[8px] flex shrink-0 items-center gap-[10px]">
+        <MenuButton
+          trigger={
+            <span className="flex size-[26px] cursor-pointer items-center justify-center rounded-full text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50">
+              <Plus className="size-[15px]" strokeWidth={1.75} />
+            </span>
+          }
+          items={viewMenu}
+          onSelect={onViewAction}
+          align="end"
+          aria-label={labels.viewMenuAria}
+        />
         <IconButton label={labels.toggleMaximize} size="sm" onClick={onToggleMaximize}>
           <Maximize2 strokeWidth={1.75} />
-        </IconButton>
-        <IconButton label={labels.toggleSplitView} size="sm" onClick={onToggleSplitView}>
-          <PanelRight strokeWidth={1.75} />
         </IconButton>
       </div>
     </header>

@@ -5,7 +5,7 @@ import { HostDownBanner } from '@/screens/host-down-banner';
 import { MessageList } from '@/thread/message-list';
 import { ScrollToBottomButton } from '@/thread/scroll-to-bottom-button';
 import { ThreadHeader } from '@/thread/thread-header';
-import { projectMenuItems, sessionMenuItems } from '@/thread/header-menus';
+import { projectMenuItems, sessionMenuItems, viewMenuItems } from '@/thread/header-menus';
 import { threadStatus } from '@/thread/thread-status';
 import { TurnAnchorRail } from '@/thread/turn-anchor-rail';
 import { turnAnchors } from '@/thread/turn-anchor-data';
@@ -23,7 +23,7 @@ type ThreadStageProps = {
   onOpenSettings: () => void
   onOpenDiff: () => void
   onNewTask: () => void
-  onToggleSplitView: () => void
+  onViewAction: (id: string) => void
   onEditUserMessage: (text: string) => void
   onForkUserMessage?: (entryId: string, text: string, images: ReadonlyArray<{ data: string; mimeType: string }>, autoResend: boolean) => void
 }
@@ -32,7 +32,7 @@ type ThreadStageProps = {
  * 会话舞台（主区固定结构，以 fragment 挂进主区根）：全宽菜单栏 + 掉线横幅 +
  * 页面滚动消息流；菜单栏不随滚动，贴底跟随、轮次锚点带、回底浮标挂本层。
  */
-function ThreadStage({ workspace, activeThreadId, sidebarCollapsed, hostDown, bottomInset, onOpenSettings, onOpenDiff, onNewTask, onToggleSplitView, onEditUserMessage, onForkUserMessage }: ThreadStageProps) {
+function ThreadStage({ workspace, activeThreadId, sidebarCollapsed, hostDown, bottomInset, onOpenSettings, onOpenDiff, onNewTask, onViewAction, onEditUserMessage, onForkUserMessage }: ThreadStageProps) {
   const { sessions, actions } = workspace;
   /** 页面滚动：菜单栏固定，消息流独占滚动容器，贴底跟随挂在容器上 */
   const { containerRef: scrollRef, onScroll, atBottom, scrollToBottom } = useStickToBottom();
@@ -60,6 +60,10 @@ function ThreadStage({ workspace, activeThreadId, sidebarCollapsed, hostDown, bo
   });
   const projectMenu = React.useMemo(
     () => projectMenuItems({ openMenu: copy.thread.openMenu, copyPath: copy.thread.copyPath }),
+    [],
+  );
+  const viewMenu = React.useMemo(
+    () => viewMenuItems({ diff: copy.panel.tabDiff, agents: copy.panel.tabAgents }),
     [],
   );
   const sessionMenu = React.useMemo(
@@ -115,8 +119,8 @@ function ThreadStage({ workspace, activeThreadId, sidebarCollapsed, hostDown, bo
         deletions={workspace.threadDiff.deletions}
         labels={{
           newTask: copy.thread.newTask,
-          toggleSplitView: copy.thread.toggleSplitView,
           toggleMaximize: copy.thread.toggleMaximize,
+          viewMenuAria: copy.thread.viewMenuAria,
           changes: copy.thread.changes,
           statusAria: copy.thread.statusAria,
           renameTitleAria: copy.thread.renameTitleAria,
@@ -126,13 +130,14 @@ function ThreadStage({ workspace, activeThreadId, sidebarCollapsed, hostDown, bo
         }}
         projectMenu={projectMenu}
         sessionMenu={sessionMenu}
+        viewMenu={viewMenu}
         onProjectAction={onProjectAction}
+        onViewAction={onViewAction}
         onRenameTitle={onRenameTitle}
         onStatusJump={scrollToBottom}
         onOpenChanges={onOpenDiff}
         onSessionAction={onSessionAction}
         onNewTask={onNewTask}
-        onToggleSplitView={onToggleSplitView}
         onToggleMaximize={toggleMaximize}
       />
       {hostDown ? (

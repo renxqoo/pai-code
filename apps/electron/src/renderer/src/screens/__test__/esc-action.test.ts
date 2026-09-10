@@ -10,7 +10,7 @@ function base(overrides: Partial<EscState> = {}): EscState {
     projectFilesOpen: false,
     newTaskOpen: false,
     settingsOpen: false,
-    panel: null,
+    panelOpen: false,
     bashRunning: false,
     confirmStop: false,
     generating: false,
@@ -33,8 +33,8 @@ describe('escActionFor', () => {
     expect(escActionFor(base({ usageOpen: true, newTaskOpen: true, sidebarSearchOpen: true }))).toEqual({ kind: 'close-usage' });
     expect(escActionFor(base({ newTaskOpen: true, settingsOpen: true, sidebarSearchOpen: true }))).toEqual({ kind: 'close-new-task' });
     expect(escActionFor(base({ settingsOpen: true, sidebarSearchOpen: true }))).toEqual({ kind: 'close-settings' });
-    expect(escActionFor(base({ sidebarSearchOpen: true, panel: 'diff' }))).toEqual({ kind: 'close-sidebar-search' });
-    expect(escActionFor(base({ panel: 'agents', bashRunning: true }))).toEqual({ kind: 'close-panel' });
+    expect(escActionFor(base({ sidebarSearchOpen: true, panelOpen: true }))).toEqual({ kind: 'close-sidebar-search' });
+    expect(escActionFor(base({ panelOpen: true, bashRunning: true }))).toEqual({ kind: 'close-panel' });
   });
 
   test('症状回归（T17 测试轮）：全屏覆盖层开着时不先收被遮挡的侧栏搜索（不吞 Esc 一拍）', () => {

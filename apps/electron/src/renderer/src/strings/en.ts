@@ -45,8 +45,8 @@ export const en = {
   },
   thread: {
     newTask: 'New',
-    toggleSplitView: 'Toggle split view',
     toggleMaximize: 'Toggle maximize',
+    viewMenuAria: 'Open view',
     openDiff: 'Open Diff',
     turnFailedLabel: 'Request failed',
     turnAbortedLabel: 'Aborted',
@@ -76,6 +76,12 @@ export const en = {
     reloadTrusted: 'Reload as trusted',
     reloadUntrusted: 'Reload as untrusted',
     reloadTrustFailed: 'Reloading the conversation failed. Try again.',
+  },
+  panel: {
+    tabDiff: 'Diff',
+    tabAgents: 'Agents',
+    close: 'Close panel',
+    closeTab: (label: string): string => `Close ${label}`,
   },
   flow: {
     openDiff: 'Open Diff',

@@ -1,34 +1,18 @@
 import * as React from 'react';
-import { X } from 'lucide-react';
 
-import { IconButton } from '@paiapp/ui';
-
-import { WINDOWS_CAPTION_WIDTH } from '@/lib/platform';
-import { copy } from '@/strings';
 import { DiffFileList } from '@/thread/diff-file-list';
 import { formatDiffDelta } from '@/thread/format-count-unit';
+import { copy } from '@/strings';
 import type { DiffSummaryModel } from '@/thread/thread-model';
 
 type DiffPanelProps = {
   diff: DiffSummaryModel
-  onClose: () => void
 }
 
-/** Diff 侧边栏：会话级文件变更列表（跨轮次聚合），底部总量汇总。 */
-function DiffPanel({ diff, onClose }: DiffPanelProps) {
+/** Diff pane（面板容器提供标签行与外框）：会话级文件变更列表 + 底部总量汇总。 */
+function DiffPanel({ diff }: DiffPanelProps) {
   return (
-    <aside className="flex h-full w-[360px] shrink-0 flex-col border-l border-border bg-background">
-      <div
-        className="flex h-[46px] shrink-0 items-center justify-between pl-[14px]"
-        style={{ paddingRight: WINDOWS_CAPTION_WIDTH + 14 }}
-      >
-        <h2 className="text-[10.5px] leading-none font-medium tracking-[0.08em] text-muted-foreground uppercase">
-          {copy.flow.diffPanelTitle}
-        </h2>
-        <IconButton label={copy.flow.closeDiffPanel} size="sm" onClick={onClose} className="-mr-1">
-          <X strokeWidth={1.75} />
-        </IconButton>
-      </div>
+    <>
       {diff.files.length === 0 ? (
         <div className="flex flex-1 items-center justify-center px-[14px] pb-[10px]">
           <p className="text-[12px] leading-[19px] text-muted-foreground/80">{copy.flow.diffPanelEmpty}</p>
@@ -51,7 +35,7 @@ function DiffPanel({ diff, onClose }: DiffPanelProps) {
           </div>
         </>
       )}
-    </aside>
+    </>
   );
 }
 

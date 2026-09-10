@@ -47,3 +47,16 @@ export function sessionMenuItems(labels: SessionMenuLabels, generating: boolean)
     { kind: 'item', id: 'close', label: labels.close },
   ];
 }
+
+export type ViewMenuLabels = {
+  diff: string;
+  agents: string;
+};
+
+/** 「+视图」菜单词条：打开（并聚焦）对应面板 tab；条目随 pane 类型扩展。 */
+export function viewMenuItems(labels: ViewMenuLabels): readonly MenuItemDef[] {
+  return [
+    { kind: 'item', id: 'diff', label: labels.diff },
+    { kind: 'item', id: 'agents', label: labels.agents },
+  ];
+}

@@ -46,8 +46,8 @@ export const zh: typeof en = {
   },
   thread: {
     newTask: '新建',
-    toggleSplitView: '切换分栏',
     toggleMaximize: '切换最大化',
+    viewMenuAria: '打开视图',
     openDiff: '打开 Diff',
     turnFailedLabel: '请求失败',
     turnAbortedLabel: '已中止',
@@ -77,6 +77,12 @@ export const zh: typeof en = {
     reloadTrusted: '以受信模式重开',
     reloadUntrusted: '以非受信模式重开',
     reloadTrustFailed: '重开会话失败，请重试。',
+  },
+  panel: {
+    tabDiff: 'Diff',
+    tabAgents: '子代理',
+    close: '收起面板',
+    closeTab: (label: string): string => `关闭 ${label}`,
   },
   flow: {
     openDiff: '打开 Diff',

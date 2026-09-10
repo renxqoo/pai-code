@@ -33,11 +33,12 @@ import { useProjectFiles } from '@/hooks/use-project-files';
 import { useSettingsScreen } from '@/settings/use-settings-screen';
 import { StopConfirmBar } from '@/thread/stop-confirm-bar';
 import { UsageScreen } from '@/screens/usage-screen';
-import type { SidePanel } from '@/screens/esc-action';
 import { useEscDismiss } from '@/screens/use-esc-dismiss';
 import { ThreadBanner } from '@/thread/thread-banner';
 import { AgentPanel } from '@/agent-panel/agent-panel';
 import { DiffPanel } from '@/diff-panel/diff-panel';
+import { PanelDock } from '@/panel/panel-dock';
+import { closeAllPanels, closePanelTab, focusPanelTab, openPanel, panelTabLabel, singletonTab, togglePanel, EMPTY_PANEL, type PanelState } from '@/panel/panel-state';
 import { ThreadStage } from '@/screens/thread-stage';
 import type { LiveWorkspaceView } from '@/live/use-live-workspace';
 
@@ -61,6 +62,8 @@ const uiState = {
   sidebarQuery: '',
   sidebarGroupFold: { collapsed: new Set<string>(), expanded: new Set<string>() } as GroupFold,
   settingsOpen: false,
+  /** 各会话的面板 tab 组态（切会话恢复；与草稿同档不落盘）。 */
+  panelByThread: {} as Record<string, PanelState>,
 };
 
 /** 尚未接线/不适用当前会话的动作统一落到空实现，接线点保持稳定。 */
@@ -88,7 +91,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const [confirmStop, setConfirmStop] = React.useState(false);
   /** Usage 总览页（I2；侧栏 footer 入口） */
   const usagePanel = useUsagePanel(workspace.sessions, workspace.statsById, workspace.actions.refreshAllStats);
-  const [panel, setPanel] = React.useState<SidePanel>(null);
+  const [panel, setPanel] = React.useState<PanelState>(EMPTY_PANEL);
   /** 输入浮层实际高度：消息流底部避让（贴底内容完整可见，上翻内容滑入浮层后面）。 */
   const [bottomInset, setBottomInset] = React.useState(160);
   const composerLayerRef = useObservedHeight<HTMLDivElement>((height) => {
@@ -98,6 +101,18 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const composerTextRef = React.useRef<HTMLTextAreaElement | null>(null);
   const { width } = useSidebarResize(uiState.sidebarWidth, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
   const { sessions, activeThreadId } = workspace;
+  const panelThreadRef = React.useRef(activeThreadId);
+  React.useEffect(() => {
+    if (panelThreadRef.current === activeThreadId) {
+      uiState.panelByThread[activeThreadId] = panel;
+      return;
+    }
+    // 切会话：旧会话面板组态存档后恢复新会话的（引用共享 uiState，无渲染副作用）
+    uiState.panelByThread[panelThreadRef.current] = panel;
+    panelThreadRef.current = activeThreadId;
+    setPanel(uiState.panelByThread[activeThreadId] ?? EMPTY_PANEL);
+  }, [activeThreadId, panel]);
+
 
   const draft = drafts[activeThreadId] ?? composerDraft;
   /** 以下回调均 useCallback：Composer 是 memo 边界，内联函数会把它击穿（流式 delta 每批重渲输入卡） */
@@ -179,7 +194,18 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   /** 全局 ⌘N/⌘K 在任一模态覆盖/对话框开着时不劫持（模态层优先于全局热键）。 */
   const hotkeysEnabled =
     workspace.dialogs.length === 0 && !newTask.open && !usageOpen && !settingsOpen && projectFilesView.target === null;
-  useCmdHotkeys({ onNewThread: openNewTask, onSearch: openSidebarSearch }, hotkeysEnabled);
+  const openAgents = React.useCallback(() => setPanel((current) => openPanel(current, singletonTab('agents'))), []);
+  const openDiff = React.useCallback(() => setPanel((current) => openPanel(current, singletonTab('diff'))), []);
+  const toggleAgentsPane = React.useCallback(() => setPanel((current) => togglePanel(current, 'agents')), []);
+  const toggleDiffPane = React.useCallback(() => setPanel((current) => togglePanel(current, 'diff')), []);
+  const closePanelTabById = React.useCallback((id: string) => setPanel((current) => closePanelTab(current, id)), []);
+  const focusPanelTabById = React.useCallback((id: string) => setPanel((current) => focusPanelTab(current, id)), []);
+  const closePanel = React.useCallback(() => setPanel(closeAllPanels()), []);
+
+  useCmdHotkeys(
+    { onNewThread: openNewTask, onSearch: openSidebarSearch, onToggleDiff: toggleDiffPane, onToggleAgents: toggleAgentsPane },
+    hotkeysEnabled,
+  );
 
   /** 分叉重发（B2/A5）：fork 到该用户消息之前；autoResend=true 原样重发（含图片），
    * 否则回填草稿与附件。仅水化消息可分叉（live 回显是 UUID，对账后才有协议 entryId）。 */
@@ -267,9 +293,6 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     [activeThreadId],
   );
 
-  const openAgents = React.useCallback(() => setPanel('agents'), []);
-  const openDiff = React.useCallback(() => setPanel('diff'), []);
-  const closePanel = React.useCallback(() => setPanel(null), []);
 
   useEscDismiss({
     /** 本地浮层也算对话框：浮层自行消费 Esc，全局链不穿透关闭整页 */
@@ -281,7 +304,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     usageOpen,
     newTaskOpen: newTask.open,
     settingsOpen,
-    panel,
+    panelOpen: panel.activeId !== null,
     bashRunning: workspace.bashRunning,
     confirmStop,
     generating: workspace.generating,
@@ -353,7 +376,16 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     ],
     [openSettings],
   );
-  const onToggleSplitView = React.useCallback(() => setPanel((current) => (current === 'agents' ? null : 'agents')), []);
+  /** 活跃 tab 的渲染目标（dock 内容；kind 与组件一一对应）。 */
+  const activePanelTab = panel.tabs.find((tab) => tab.id === panel.activeId) ?? null;
+  /** 「+视图」菜单：打开并聚焦对应面板 tab（toggle 语义只保留给快捷键）。 */
+  const onViewAction = React.useCallback(
+    (id: string) => {
+      if (id === 'diff') openDiff();
+      else if (id === 'agents') openAgents();
+    },
+    [openDiff, openAgents],
+  );
   /** 停止/中止：bash 在途→中止；有在途子代理→先确认；否则直接停止（与 Esc 链同语义） */
   const stopOrAbort = React.useCallback(() => {
     if (workspace.bashRunning) {
@@ -425,7 +457,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
               onOpenSettings={openSettings}
               onOpenDiff={openDiff}
               onNewTask={openNewTask}
-              onToggleSplitView={onToggleSplitView}
+              onViewAction={onViewAction}
               onEditUserMessage={editUserMessage}
               onForkUserMessage={forkUserMessage}
             />
@@ -496,10 +528,23 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         )}
       </div>
       {usageOpen ? <UsageScreen entries={usagePanel.entries} onClose={closeUsage} /> : null}
-      {panel === 'agents' ? (
-        <AgentPanel agents={workspace.activeThread.agents} now={workspace.now} onClose={closePanel} onSteer={workspace.actions.steerSubagent} />
-      ) : null}
-      {panel === 'diff' ? <DiffPanel diff={workspace.threadDiff} onClose={closePanel} /> : null}
+      {panel.tabs.length === 0 ? null : (
+        <PanelDock
+          tabs={panel.tabs.map((tab) => ({ id: tab.id, label: panelTabLabel(tab, { diff: copy.panel.tabDiff, agents: copy.panel.tabAgents }) }))}
+          activeId={panel.activeId}
+          onSelect={focusPanelTabById}
+          onCloseTab={closePanelTabById}
+          onClose={closePanel}
+          closeAria={copy.panel.close}
+          closeTabAria={copy.panel.closeTab}
+        >
+          {activePanelTab?.kind === 'agents' ? (
+            <AgentPanel agents={workspace.activeThread.agents} now={workspace.now} onSteer={workspace.actions.steerSubagent} />
+          ) : activePanelTab?.kind === 'diff' ? (
+            <DiffPanel diff={workspace.threadDiff} />
+          ) : null}
+        </PanelDock>
+      )}
       <TitleBarLeft
         titleName={copy.appTitle.name}
         titleSuffix={copy.appTitle.suffix}

@@ -5,8 +5,6 @@
  * 抽为纯函数使依赖面显式化（任一裁决输入缺订阅都会被用例钉住）。
  */
 
-export type SidePanel = 'diff' | 'agents' | null;
-
 export type EscAction =
   | { kind: 'none' }
   | { kind: 'dismiss-dialogs' }
@@ -31,7 +29,8 @@ export type EscState = {
   /** 新建任务页（整页）优先于底层动作：Esc 只返回会话视图，不穿透触发停止/清队列。 */
   newTaskOpen: boolean;
   settingsOpen: boolean;
-  panel: SidePanel;
+  /** 右侧面板容器有任一 tab（整组收起）。 */
+  panelOpen: boolean;
   bashRunning: boolean;
   confirmStop: boolean;
   generating: boolean;
@@ -48,7 +47,7 @@ export function escActionFor(state: EscState): EscAction {
   // 只有可见（侧栏未收起）时才参与链；面板替换列表区，先于搜索收起
   if (state.projectFilesOpen) return { kind: 'close-project-files' };
   if (state.sidebarSearchOpen) return { kind: 'close-sidebar-search' };
-  if (state.panel !== null) return { kind: 'close-panel' };
+  if (state.panelOpen) return { kind: 'close-panel' };
   if (state.bashRunning) return { kind: 'abort-bash' };
   if (state.confirmStop) return { kind: 'execute-confirmed-stop' };
   if (!state.generating) return { kind: 'none' };
