@@ -143,7 +143,7 @@ export const zh: typeof en = {
     },
   },
   composer: {
-    placeholder: '随便问；@ 引用文件，$ 使用技能，/ 选择命令',
+    placeholder: '随便问；@ 引用文件，/ 选择命令或技能',
     queuePlaceholder: '继续输入以排队后续修改',
     sendNow: '立即',
     editQueued: '编辑排队消息',
@@ -198,7 +198,7 @@ export const zh: typeof en = {
     subtitleMorning: '今天想构建点什么？',
     subtitleAfternoon: '接下来推进什么？',
     subtitleEvening: '今晚想构建点什么？',
-    placeholder: '向 pai 提问，使用 @ 添加上下文',
+    placeholder: '向 pai 提问，@ 添加上下文，/ 选择命令或技能',
     quickTasks: ['了解这个项目', '修复构建失败', '补充单元测试', '审查最近的改动'],
     quickTaskPrompt: (label: string): string => `请帮我${label}`,
     workspacePickerTitle: '选择工作区',

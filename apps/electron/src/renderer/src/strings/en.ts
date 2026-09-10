@@ -151,7 +151,7 @@ export const en = {
     },
   },
   composer: {
-    placeholder: 'Ask anything, @tag files/folders, $use skills, or / for commands',
+    placeholder: 'Ask anything, @tag files/folders, or / for commands and skills',
     queuePlaceholder: 'Type to queue a follow-up…',
     sendNow: 'Send now',
     editQueued: 'Edit queued message',
@@ -206,7 +206,7 @@ export const en = {
     subtitleMorning: 'What do you want to build today?',
     subtitleAfternoon: 'What should we move forward?',
     subtitleEvening: 'What do you want to build tonight?',
-    placeholder: 'Ask pai anything, use @ to add context',
+    placeholder: 'Ask pai anything, use @ to add context, / for commands and skills',
     quickTasks: ['Understand this project', 'Fix the build failure', 'Add unit tests', 'Review recent changes'],
     quickTaskPrompt: (label: string): string => `Help me ${label.toLowerCase()}`,
     workspacePickerTitle: 'Choose a workspace',
