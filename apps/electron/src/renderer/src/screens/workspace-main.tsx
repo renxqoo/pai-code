@@ -16,7 +16,6 @@ import { useCmdHotkeys } from '@/hooks/cmd-hotkeys';
 import { NoticeStrip } from '@/notices/notice-strip';
 import { SettingsScreen } from '@/settings/settings-screen';
 import { Sidebar } from '@/sidebar/sidebar';
-import { closeProjectFiles } from '@/sidebar/project-files';
 import { isImmediateSubmit, submitDraftText } from '@/screens/submit-draft';
 import { imagePayloadOf } from '@/composer/read-image-file';
 import { queuedDrafts } from '@/composer/queued-drafts';
@@ -28,6 +27,7 @@ import { useSettingsScreen } from '@/settings/use-settings-screen';
 import { StopConfirmBar } from '@/thread/stop-confirm-bar';
 import { UsageScreen } from '@/screens/usage-screen';
 import { useEscDismiss } from '@/screens/use-esc-dismiss';
+import { hotkeyGating } from '@/screens/hotkey-gating';
 import { ThreadBanner } from '@/thread/thread-banner';
 import { PanelLayer } from '@/screens/panel-layer';
 import { usePanelTabs } from '@/screens/use-panel-tabs';
@@ -46,7 +46,6 @@ const EMPTY_QUEUED_MESSAGES: readonly { id: number; text: string }[] = [];
 /** ui store 动作引用恒定（zustand 动作创建即稳定），模块级取出，渲染期零重建。 */
 const {
   openSidebarSearch,
-  closeSidebarSearch,
   openSettings,
   openSettingsAt,
   closeSettings,
@@ -61,7 +60,6 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const composerDraft = useStore(uiStore, (s) => s.composerDraft);
   const drafts = useStore(uiStore, (s) => s.drafts);
   const sidebarCollapsed = useStore(uiStore, (s) => s.sidebarCollapsed);
-  const searchOpen = useStore(uiStore, (s) => s.sidebarSearchOpen);
   /** 项目文件面板（T18）：开合门控读（target null = 关闭，侧栏内容区照旧） */
   const projectFilesState = useStore(uiStore, (s) => s.projectFiles);
   /** 侧栏宽度：拖拽真相在 ui store（resize 装配在 Sidebar 壳内），标题栏避让消费 */
@@ -102,7 +100,6 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   /** 新建任务页：生命周期与渲染属性装配（退出出口集中在该 hook 的 close） */
   const newTask = useNewTaskPage({ workspace, onOpenSettings: openSettings, onDraftRestore: restoreDraft });
   const openNewTask = React.useCallback(() => newTask.enter(''), [newTask.enter]);
-  const closeNewTask = newTask.close;
   /** 当前会话目录的分支视图（只读展示）；revision = 新建任务页 checkout 成功的失效信号 */
   const gitBranches = useGitBranches(workspace.activeCwd, workspace.actions.listGitBranches, newTask.branchRevision);
   /** 分支段 props 引用稳定（避免无关 store 变更时无谓重渲输入卡） */
@@ -230,13 +227,15 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     [],
   );
 
-  /** 全局 ⌘N/⌘K 在任一模态覆盖/对话框开着时不劫持（模态层优先于全局热键）。 */
-  const hotkeysEnabled =
-    workspace.dialogs.length === 0 && !paletteOpen && !newTask.open && !usageOpen && !settingsOpen && projectFilesState.target === null;
-  // ⌘P 独立门控：hub 对话框之外，整页覆盖（设置/用量/新建任务）开着也不唤起——
-  // 它们的层级盖住面板但 autoFocus 已抢焦点，会变成「不可见地执行动作」（T30 审查 高-3）
-  const paletteHotkeyEnabled =
-    workspace.dialogs.length === 0 && !newTask.open && !usageOpen && !settingsOpen;
+  /** ⌘N/⌘K/⌘P 门控矩阵单一真相在 hotkey-gating 纯函数（表驱动用例钉住）。 */
+  const { hotkeysEnabled, paletteHotkeyEnabled } = hotkeyGating({
+    dialogCount: workspace.dialogs.length,
+    paletteOpen,
+    newTaskOpen: newTask.open,
+    usageOpen,
+    settingsOpen,
+    projectFilesOpen: projectFilesState.target !== null,
+  });
   useCmdHotkeys(
     { onNewThread: openNewTask, onSearch: openSidebarSearch, onToggleDiff: toggleDiffPane, onToggleAgents: toggleAgentsPane, onPalette: togglePalette },
     hotkeysEnabled,
@@ -248,26 +247,14 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     dialogCount: workspace.dialogs.length + (newTask.dialogOpen ? 1 : 0),
     paletteOpen,
     onPaletteClose: closePalette,
-    /** 可见搜索才参与 Esc 链：收起态下的搜索不得吞掉一拍 Esc（过滤词保留，展开后恢复） */
-    sidebarSearchOpen: searchOpen && !sidebarCollapsed,
-    /** 面板同样以可见性参与（替换侧栏内容区，先于侧栏搜索收起） */
-    projectFilesOpen: projectFilesState.target !== null && !sidebarCollapsed,
-    usageOpen,
-    newTaskOpen: newTask.open,
-    settingsOpen,
     panelOpen: panel.activeId !== null,
+    onPanelClose: closePanel,
     bashRunning: workspace.bashRunning,
     confirmStop,
     generating: workspace.generating,
     agentsActive: workspace.agentsActive,
     abortBash: workspace.actions.abortBash,
     stopActiveTurn: workspace.actions.stopActiveTurn,
-    onSidebarSearchClose: closeSidebarSearch,
-    onProjectFilesClose: closeProjectFiles,
-    onUsageClose: closeUsage,
-    onNewTaskClose: closeNewTask,
-    onSettingsClose: closeSettings,
-    onPanelClose: closePanel,
     onConfirmStopChange: setConfirmStop,
   });
 

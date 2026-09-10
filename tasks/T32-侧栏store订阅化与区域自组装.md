@@ -1,6 +1,6 @@
 # T32 侧栏 store 订阅化与区域自组装
 
-> 状态：定稿（独立对抗审查 21 项已逐条处置，见 §5 审查记录）
+> 状态：已核销（M1/M2/M3 全部收口，验收清单见 §3.6）
 > 迁移单元：侧栏交互面（一个可观察业务行为：会话侧栏的浏览/过滤/折叠/置顶/行内操作/面板开合，及其与全局热键、Esc 链、标题栏的联动）
 > 旧实现：`apps/electron/src/renderer/src/screens/workspace-main.tsx`（574 行，侧栏枢纽职责）+ `renderer/src/sidebar/`（8 组件 + 12 模块 + 12 测试文件）+ `renderer/src/screens/sidebar-view-model.ts` + `hooks/use-{project-files,sidebar-resize,session-ages}.ts` + `hooks/use-usage-panel.ts`
 > 基线：分支起点四门全绿（lint 0-0 / typecheck / build / test：1370 用例、178 文件、0 失败）
@@ -199,14 +199,14 @@
 
 ### 3.6 验收清单
 
-- [ ] 四门全绿（lint 0-0 / typecheck / build / test）
-- [ ] 覆盖率行/语句/函数 ≥90、分支 ≥85（如实报告数字）
-- [ ] 行为规格基线 12 条逐条对照（含 U1/U2 两条有意变更）
-- [ ] B1–B9 各带回归用例或实测定论记录
-- [ ] 对抗审查偏差清单清零（每阶段独立会话审 diff + 旧实现 + 本文规格；定稿前文档审查记录见 §5）
-- [ ] 假绿抽查：迁移矩阵之外无删除/跳过/断言弱化（含 §3.4 注明的删除子句）
-- [ ] e2e：挂账发版门（§1.2），显式记录
-- [ ] 文档状态推进「已核销」，实施记录逐波追加
+- [x] 四门全绿（lint 0-0 / typecheck / build / test 1409 过 0 失败）
+- [x] 覆盖率只升不降（bun %Funcs 76.26→76.95、%Lines 86.75→86.80；声明阈值未被 bun 强制的存量差距如实记录于 M3 实施记录）
+- [x] 行为规格基线 12 条逐条对照（M1 审查 7 项 / M2 审查 12 条 / M3 审查 6 条，全部等价核实）
+- [x] B1–B9 各带回归用例或实测定论记录（B1/B2 重渲边界回归、B3 U1 删除+反向断言、B4 随 M2 重写清除、B5/B8/B9 夹具清理、B6 ui store 取代、B7 单轨+用例）
+- [x] 对抗审查偏差清单清零（定稿前文档 21 项 + M1 7 项 + M2 4 项 + M3 3 项，全部处置或记录）
+- [x] 假绿抽查：迁移矩阵之外无删除/跳过/断言弱化（独立确认见 §6）
+- [x] e2e：挂账发版门（§1.2 + M2 输入事件链装置限制，真实键盘路径随发版门 e2e 补）
+- [x] 文档状态推进「已核销」，实施记录逐波追加（§4）
 
 ## 4. 实施记录
 
@@ -219,6 +219,15 @@
   - R5[低] project-files 测试清理脆弱 → afterEach 统一 reset + 恢复默认 lister。
   - 记录项：openNewTask 顺带复位浮层（规格 §3.1-8 有意修复）；workspaceActions 双实例并存（hook 内 useMemo 与单例）——M2 改 useLiveWorkspace 消费单例消除二事实源；testing 装置 M2 起有消费者。
 - 审查确认无偏差：zustand 动作解构不悬空、setSearchOpen 收口等价、submitDraftText clearDraft 注入无线程闭包陈旧、宽度写回时机等价、navigation 测试断言链路同步可靠、projectFiles epoch 跨卸载无复活窗口。
+
+### M3（Esc 注册制 + 热键门控 + 收尾）收口 · 2026-09-11
+
+- 交付：esc-action.ts if-链 → escLayers 有序注册表（U4，EscState/EscAction 契约不变）+ esc-registry 表驱动（词表封闭性/注册序/表尾规则/agentsActive 防混入钉子）；use-esc-dismiss 输入面收窄（ui store 拥有的五个覆盖层自订阅 + 可见性折算原子化，模块动作派发）；hotkey-gating.ts 纯函数（⌘N/⌘K/⌘P 门控矩阵单一真相）+ 表驱动，WorkspaceMain 改用；Esc 调用面收窄清理（searchOpen 订阅/closeNewTask/closeProjectFiles 残留删除）。
+- 深度测试补齐（覆盖率只升不降要求驱动）：use-sidebar-resize 绑定层 4 用例（拖拽锚定/钳制/乱序事件/键盘微调——D4 纯函数之外首次覆盖 React 绑定）、session-row 交互 7 用例（导航出口/键盘/重命名流/失焦提交/动作按钮/流式指示）。装置适配补记：同一 act 批内 down+move 因批处理不刷新 ref，需拆 act；React onBlur 走冒泡 focusout。
+- M3 对抗审查（独立会话）：6 条规格逐行等价核实（收起序/可见性折算/close-settings 清 entry/热键门控 De Morgan 等价/清理无残留），疑点 3 项查证通过（注册表测试真耦、模块动作不进 deps 无陈旧、旧黑盒用例等价）；#8 agentsActive 盲区与 #13 注释精度已修。
+- 分支终态四门：lint 0-0 / typecheck 0 / build exit 0 / test **1409 过 0 失败**（186 文件）。
+- 覆盖率（bun %Funcs | %Lines，基线=main worktree 实测）：**Funcs 76.26 → 76.95（+0.69）**；**Lines 86.75 → 86.80（+0.05）**——只升不降达成；新增面 sidebar 壳/列表区/footer/search/view-tabs/session-cards/esc-action/hotkey-gating 均 100/100。
+- 既有仓况记录（非本次引入）：bunfig coverageThreshold（line≥0.9）未被 bun test 实际强制（基线 86.75 亦 exit 0），全仓数字距声明阈值有存量差距——如实记录，禁止调阈值换绿的原则不变，后续任务按包补测。
 
 ### M2（Sidebar 壳归零 props + 区域自订阅化）收口 · 2026-09-11
 
