@@ -108,7 +108,7 @@ function SessionRow({
           className="mr-1 h-[22px] min-w-0 flex-1 cursor-text rounded-[6px] border border-border bg-transparent px-[6px] text-[12px] leading-none text-foreground outline-none select-text focus-visible:ring-3 focus-visible:ring-ring/50"
         />
       ) : (
-        <span className="min-w-0 truncate text-[12.5px] leading-none font-medium text-foreground">{session.title}</span>
+        <span className="min-w-0 truncate text-[13px] leading-none  text-foreground">{session.title}</span>
       )}
       <span className="ml-auto flex shrink-0 items-center gap-[2px] pl-2">
         {/* 时间标签与动作钮占同一网格格：格宽按较大者常驻保留，hover 只切换透明度/可见性，行内布局零位移 */}
