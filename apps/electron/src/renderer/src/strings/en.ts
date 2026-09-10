@@ -17,7 +17,7 @@ export const en = {
     showMore: 'Show more',
     working: 'Working',
     collapseSidebarHint: 'Collapse sidebar',
-    toggleSidebar: 'Toggle sidebar',
+    expandSidebarHint: 'Show sidebar',
     settings: 'Settings',
     workflows: 'Workflows',
     usage: 'Usage',

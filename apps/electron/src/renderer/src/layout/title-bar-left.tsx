@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { PanelLeft } from 'lucide-react';
 
 import { IconButton } from '@paiapp/ui';
 
@@ -39,6 +39,11 @@ function TitleBarLeft({ titleName, titleSuffix, toggleLabel, collapsed, sidebarW
         maxWidth: collapsed ? undefined : sidebarWidth,
       }}
     >
+      {/*
+       * 侧栏开关用无箭头的 PanelLeft 单一图形：按钮内 svg 仅 16px，带箭头的
+       * panel-left-open/close 变体在此尺寸下箭头退化为不可辨的折线脏斑（观感
+       * 即「图标坏了」）。收起/展开语义交给 aria-expanded 与按状态切换的 tooltip。
+       */}
       <IconButton
         label={toggleLabel}
         size="sm"
@@ -46,7 +51,7 @@ function TitleBarLeft({ titleName, titleSuffix, toggleLabel, collapsed, sidebarW
         onClick={onToggle}
         className="app-no-drag pointer-events-auto -ml-1 text-muted-foreground/90"
       >
-        {collapsed ? <PanelLeftOpen strokeWidth={1.75} /> : <PanelLeftClose strokeWidth={1.75} />}
+        <PanelLeft strokeWidth={1.75} />
       </IconButton>
       <span className="min-w-0 truncate text-[13.5px] leading-none tracking-[-0.01em]">
         <span className="font-bold text-foreground">{titleName}</span>

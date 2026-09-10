@@ -546,7 +546,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
       <TitleBarLeft
         titleName={copy.appTitle.name}
         titleSuffix={copy.appTitle.suffix}
-        toggleLabel={copy.sidebar.toggleSidebar}
+        toggleLabel={sidebarCollapsed ? copy.sidebar.expandSidebarHint : copy.sidebar.collapseSidebarHint}
         collapsed={sidebarCollapsed}
         sidebarWidth={width}
         onToggle={() => setSidebarCollapsed((collapsed) => !collapsed)}

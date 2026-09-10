@@ -18,7 +18,7 @@ export const zh: typeof en = {
     showMore: '显示更多',
     working: '进行中',
     collapseSidebarHint: '收起侧栏',
-    toggleSidebar: '切换侧栏',
+    expandSidebarHint: '展开侧栏',
     settings: '设置',
     workflows: '工作流',
     usage: '用量',
