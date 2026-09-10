@@ -1,43 +1,26 @@
-import type { ReactNode } from 'react';
-
-import { ChartNoAxesColumn, GitPullRequest, RotateCw, Settings } from 'lucide-react';
+import { ChartNoAxesColumn, RotateCw, Settings } from 'lucide-react';
 
 import { IconButton } from '@paiapp/ui';
 
-export type SidebarFooterAction = {
-  label: string;
-  onSelect: () => void;
-};
+import { workspaceActions } from '@/live/workspace-runtime';
+import { copy } from '@/strings';
+import { uiStore } from '@/ui/ui-store';
 
-type SidebarFooterProps = {
-  actions: readonly [SidebarFooterAction, SidebarFooterAction, SidebarFooterAction];
-  refresh: SidebarFooterAction;
-};
+const { openSettings, openUsage } = uiStore.getState();
 
-/** 侧栏底部：左侧工具入口，右侧刷新。 */
-function SidebarFooter({ actions, refresh }: SidebarFooterProps) {
-  const entries: ReadonlyArray<{ action: SidebarFooterAction; icon: ReactNode }> = [
-    { action: actions[0], icon: <Settings strokeWidth={1.75} /> },
-    { action: actions[1], icon: <GitPullRequest strokeWidth={1.75} /> },
-    { action: actions[2], icon: <ChartNoAxesColumn strokeWidth={1.75} /> },
-  ];
-
+/** 侧栏底部：左侧设置/用量工具入口，右侧刷新；自订阅自派发（0 props）。 */
+function SidebarFooter(): React.JSX.Element {
   return (
     <div className="flex shrink-0 items-center px-4 pt-2 pb-2">
       <div className="flex items-center gap-2">
-        {entries.map(({ action, icon }) => (
-          <IconButton
-            key={action.label}
-            label={action.label}
-            size="sm"
-            onClick={action.onSelect}
-            className="text-muted-foreground/80"
-          >
-            {icon}
-          </IconButton>
-        ))}
+        <IconButton label={copy.sidebar.settings} size="sm" onClick={openSettings} className="text-muted-foreground/80">
+          <Settings strokeWidth={1.75} />
+        </IconButton>
+        <IconButton label={copy.sidebar.usage} size="sm" onClick={openUsage} className="text-muted-foreground/80">
+          <ChartNoAxesColumn strokeWidth={1.75} />
+        </IconButton>
       </div>
-      <IconButton label={refresh.label} size="sm" onClick={refresh.onSelect} className="ml-auto text-muted-foreground/80">
+      <IconButton label={copy.sidebar.refresh} size="sm" onClick={workspaceActions.refreshSaved} className="ml-auto text-muted-foreground/80">
         <RotateCw strokeWidth={1.75} />
       </IconButton>
     </div>

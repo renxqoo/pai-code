@@ -220,6 +220,13 @@
   - 记录项：openNewTask 顺带复位浮层（规格 §3.1-8 有意修复）；workspaceActions 双实例并存（hook 内 useMemo 与单例）——M2 改 useLiveWorkspace 消费单例消除二事实源；testing 装置 M2 起有消费者。
 - 审查确认无偏差：zustand 动作解构不悬空、setSearchOpen 收口等价、submitDraftText clearDraft 注入无线程闭包陈旧、宽度写回时机等价、navigation 测试断言链路同步可靠、projectFiles epoch 跨卸载无复活窗口。
 
+### M2（Sidebar 壳归零 props + 区域自订阅化）收口 · 2026-09-11
+
+- 交付：sidebar.tsx 重写为 0-props 壳（几何/折叠/面板开合自订阅 + memo 边界）；新增 session-list-region（live+ui 双 store 订阅 → 视图模型 → 列表/空态，ages tick 收敛区域内）、sidebar-search 组装层、session-cards 共享派生（toCards 抽出 + WeakMap，use-live-workspace 同步改用并消费 workspaceActions 单例消除二事实源）；SessionRow 收窄为 5 数据 props + 单例动作（C4）；sections 数据 props 化（ProjectSection 折叠细粒度订阅）；quick-actions/view-tabs/footer 0 props + U1 死钮删除（自动化保留）；view-model emptyState（D2）；project-files 控制器签名 openProjectFiles(cwd)（显示名内部推导 + 先收侧栏搜索归控制器）；WorkspaceMain 删全部侧栏装配（约 −120 行，<Sidebar /> 一行）；strings 删 workflows/pluginMarket。
+- 装置适配记录（U3）：happy-dom GlobalRegistrator 把 window 落成 globalThis 本体——window 定时器别名会覆盖全局并递归自身（挂载死锁，实测修复）；React 19 受控 input 的合成事件链在 happy-dom 不通（click/keydown 正常）——搜索框「输入→store」方向以 store 种子 + 受控回显单侧覆盖，真实键盘路径挂账 e2e（发版门）。
+- 测试：sidebar.test.tsx 重写 14 用例（SSR 冒烟 + 客户端渲染数据形态/交互/store 断言 + B1 订阅粒度 + B2 tick 边界）、session-row 改写 5 用例、view-model emptyState 5 用例、testing 装置自检 3 用例；全量 1392 过 / 0 失败，四门绿（lint 0-0 / build exit 0）。
+- M2 对抗审查（独立会话）：12 条基线 + 10 个疑点全部通过（含 expanded Set 引用等价、WeakMap 无泄漏、emptyState 与旧 listEmpty 严格等价证明、B1 新判据有效性论证）；4 项非阻断——#23 三集合依赖收细（已修）、#24 面板打开期 tick 暂停（接受，收敛设计意图）、#25 输入单向覆盖（已记录挂账 e2e）、#26 resize separators 无消费者（pre-existing = D4 已挂账）。
+
 ## 5. 定稿前对抗审查记录（独立会话，2026-09-11）
 
 审查范围：本文档 × 旧实现 33 文件全量对照 + 受影响符号全仓 grep。产出 21 项（高 4 / 中 8 / 低 9），处置：

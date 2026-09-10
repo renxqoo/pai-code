@@ -40,13 +40,14 @@ export function render(element: React.ReactElement): RenderHandle {
   };
 }
 
-/** 渲染计数探针：包在任意子树里数「实际执行了渲染体」的次数（重渲边界回归用）。 */
+/** 渲染计数探针：包在任意子树里数「父级渲染传导下来的次数」——不做 memo，
+ * 探针自身必须忠实随父级重渲（B1/B2 重渲边界回归的阴性/阳性对照）。 */
 export function renderProbe(id: string): { Probe: React.FC; count: () => number; reset: () => void } {
   let renders = 0;
-  const Probe = React.memo(function Probe(): null {
+  function Probe(): null {
     renders += 1;
     return null;
-  });
+  }
   Probe.displayName = `RenderProbe(${id})`;
   return { Probe, count: () => renders, reset: () => { renders = 0; } };
 }

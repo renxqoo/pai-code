@@ -8,14 +8,13 @@ import type { SessionCardModel } from '@/sidebar/session-card-model';
 import type { ThreadModel } from '@/thread/thread-model';
 import { collectThreadDiff } from '@/diff-panel/collect-thread-diff';
 import { summarizeAgents } from '@/thread/panel-summary';
-import { baseNameOf } from '@/lib/project-dirs';
 import { imagePayloadOf } from '@/composer/read-image-file';
 import { queuedDrafts, type QueuedDraft, type QueuedDraftSubmit } from '@/composer/queued-drafts';
 import { connectQueuedDraftFlush } from './queued-flush';
 
 import type { WorkspaceActions } from './workspace-actions';
-import { createWorkspaceActions } from './workspace-actions';
-import { bridgeClient, controller, store } from './workspace-runtime';
+import { bridgeClient, controller, store, workspaceActions } from './workspace-runtime';
+import { sessionCardsOf } from '@/sidebar/session-cards';
 import { threadModelOf, type LiveStoreState, type PendingDialog } from './store';
 
 /**
@@ -113,7 +112,7 @@ export function useLiveWorkspace(): LiveWorkspaceView {
   const [now, setNow] = React.useState(() => Date.now());
   const [effortLevels, setEffortLevels] = React.useState<readonly string[]>([]);
   const [commands, setCommands] = React.useState<readonly CommandView[]>([]);
-  const actions = React.useMemo(() => createWorkspaceActions(), []);
+  const actions = workspaceActions;
 
   const hostPhase = useStore(store, (s) => s.hostPhase);
   const bootstrapLoaded = useStore(store, (s) => s.bootstrapLoaded);
@@ -246,7 +245,7 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     bootstrapError,
     bridgeAvailable: bridgeClient.available,
     hostPhase,
-    sessions: React.useMemo(() => toCards(sessionViews), [sessionViews]),
+    sessions: sessionCardsOf(sessionViews),
     sessionById: sessionViews,
     activeThreadId,
     activeThread,
@@ -319,20 +318,4 @@ function buildComposer(
     effortOptions: levelLabels,
     contextUsed: stats[session?.threadId ?? '']?.contextUsage ?? 0,
   };
-}
-
-function toCards(sessions: Readonly<Record<string, SessionView>>): readonly SessionCardModel[] {
-  return Object.values(sessions)
-    .sort((a, b) => b.lastActivityAt - a.lastActivityAt)
-    .map((session) => ({
-      id: session.threadId,
-      projectName: baseNameOf(session.cwd) || session.cwd,
-      title: session.title,
-      version: session.model ?? '',
-      cwd: session.cwd,
-      sessionPath: session.sessionPath,
-      state: session.state,
-      streaming: session.streaming,
-      lastActivityAt: session.lastActivityAt,
-    }));
 }
