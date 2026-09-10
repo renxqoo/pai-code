@@ -82,11 +82,14 @@ export type SettingsScreenProps = {
   history: {
     saved: readonly SavedSession[];
     pinned: ReadonlySet<string>;
+    archived: ReadonlySet<string>;
     projects: readonly string[];
     onTogglePin: (sessionPath: string) => void;
     onReveal: (sessionPath: string) => void;
     onOpenSaved: (sessionPath: string) => void;
     onRefresh: () => void;
+    onRestore: (sessionPath: string) => void;
+    onOpenArchived: (sessionPath: string) => void;
   };
   diagnostics: { data: WorkspaceDiagnostics | null; onRefresh: () => void; onRestartHost: () => void };
 };
@@ -172,6 +175,7 @@ export function useSettingsScreen({ workspace, open, onClose, initialSection }: 
     history: {
       saved: workspace.saved,
       pinned,
+      archived: new Set(workspace.preferences.archivedSessions),
       projects,
       onTogglePin: actions.togglePinnedSession,
       onReveal: actions.revealSession,
@@ -180,6 +184,13 @@ export function useSettingsScreen({ workspace, open, onClose, initialSection }: 
         onClose();
       },
       onRefresh: actions.refreshSaved,
+      onRestore: actions.unarchiveSession,
+      onOpenArchived: (sessionPath) => {
+        // 打开即恢复：归档语义 = 不在列表，resume 后应重新可见
+        actions.unarchiveSession(sessionPath);
+        void actions.openSavedSession(sessionPath);
+        onClose();
+      },
     },
     diagnostics: { data: workspace.diagnostics, onRefresh: actions.fetchDiagnostics, onRestartHost: actions.restartHost },
   }), [open, onClose, section, onSelectSection, localeSetting, theme, setTheme, workspace, pinned, projects, actions]);

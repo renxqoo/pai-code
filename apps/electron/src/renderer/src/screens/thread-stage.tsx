@@ -74,6 +74,7 @@ function ThreadStage({ workspace, activeThreadId, sidebarCollapsed, hostDown, bo
           copyId: copy.thread.sessionCopyId,
           reloadTrusted: copy.thread.reloadTrusted,
           reloadUntrusted: copy.thread.reloadUntrusted,
+          archive: copy.thread.sessionArchive,
           close: copy.thread.sessionClose,
         },
         workspace.generating,
@@ -102,6 +103,7 @@ function ThreadStage({ workspace, activeThreadId, sidebarCollapsed, hostDown, bo
       if (id === 'copyId') void actions.copyText(activeThreadId);
       else if (id === 'reloadTrusted') actions.reloadSessionTrusted(activeThreadId, true);
       else if (id === 'reloadUntrusted') actions.reloadSessionTrusted(activeThreadId, false);
+      else if (id === 'archive') actions.archiveSession(activeThreadId);
       else if (id === 'close') actions.closeSession(activeThreadId);
     },
     [actions, activeThreadId],

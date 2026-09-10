@@ -113,6 +113,10 @@ export type WorkspaceActions = {
   readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; thinkingFormat?: ThinkingFormat; apiKey?: string }) => Promise<boolean>;
   readonly removeProvider: (name: string) => Promise<boolean>;
   readonly renameSession: (threadId: string, name: string) => Promise<boolean>;
+  /** 归档：关闭会话（文件保留）+ archivedSessions 偏好标记；侧栏与历史默认隐藏。 */
+  readonly archiveSession: (threadId: string) => void;
+  /** 取消归档（设置页历史分区恢复入口）。 */
+  readonly unarchiveSession: (sessionPath: string) => void;
   /** 在系统工具中打开已知项目目录（访达/终端/编辑器）；失败走通知条。 */
   readonly openInSystem: (cwd: string, target: 'finder' | 'terminal' | 'editor') => Promise<void>;
   /** 剪贴板写入（复制路径/会话 ID）；失败走通知条。 */
@@ -388,6 +392,27 @@ export function createWorkspaceActions(setDiagnostics: (value: WorkspaceDiagnost
       if (!outcome.ok) return null;
       return outcome.data;
     }),
+    archiveSession: (threadId) => {
+      // 先落偏好再关会话：关闭是 fire-and-forget，若先关，标记失败会话已从侧栏消失且无归档记录
+      const session = store.getState().sessions[threadId];
+      const sessionPath = session?.sessionPath ?? '';
+      if (sessionPath.length > 0) {
+        const current = store.getState().preferences.archivedSessions;
+        if (!current.includes(sessionPath)) {
+          void controller.updatePreferences({ archivedSessions: [...current, sessionPath] }).then((next) => {
+            if (next === null) pushNotice(copy.settings.preferenceSaveFailed);
+          });
+        }
+      }
+      void controller.closeSession(threadId);
+    },
+    unarchiveSession: (sessionPath) => {
+      const current = store.getState().preferences.archivedSessions;
+      if (!current.includes(sessionPath)) return;
+      void controller.updatePreferences({ archivedSessions: current.filter((path) => path !== sessionPath) }).then((next) => {
+        if (next === null) pushNotice(copy.settings.preferenceSaveFailed);
+      });
+    },
     togglePinnedSession: (sessionPath) => {
       const current = store.getState().preferences.pinnedSessions;
       const pinnedSessions = current.includes(sessionPath)

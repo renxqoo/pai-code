@@ -58,6 +58,7 @@ export const en = {
     sessionRename: 'Rename',
     sessionCopyId: 'Copy session ID',
     sessionClose: 'Close session',
+    sessionArchive: 'Archive session',
     renameTitleAria: 'Rename conversation',
     statusAria: 'Conversation status',
     status: {

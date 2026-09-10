@@ -76,6 +76,8 @@ export const zhSettings: typeof enSettings = {
     formIncomplete: '名称、Base URL 和至少一个模型 id 必填。',
     formFailed: '保存失败，请检查后重试。',
     historyTitle: '历史',
+    historyArchivedTitle: '已归档',
+    historyRestore: '恢复',
     historyDesc: '恢复或管理已保存会话。',
     historyEmpty: '还没有已保存的会话。',
     historyFilterAll: '全部项目',

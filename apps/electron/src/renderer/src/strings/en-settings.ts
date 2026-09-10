@@ -74,6 +74,8 @@ export const enSettings = {
     formIncomplete: 'Name, base URL and at least one model id are required.',
     formFailed: 'Save failed. Check the values and try again.',
     historyTitle: 'History',
+    historyArchivedTitle: 'Archived',
+    historyRestore: 'Restore',
     historyDesc: 'Saved sessions to resume or manage.',
     historyEmpty: 'No saved sessions yet.',
     historyFilterAll: 'All projects',

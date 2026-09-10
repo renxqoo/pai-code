@@ -12,6 +12,7 @@ const SESSION_LABELS = {
   copyId: '复制会话 ID',
   reloadTrusted: '以受信模式重开',
   reloadUntrusted: '以非受信模式重开',
+  archive: '归档会话',
   close: '关闭会话',
 };
 
@@ -43,6 +44,7 @@ describe('sessionMenuItems', () => {
       'sep',
       'reloadTrusted',
       'reloadUntrusted',
+      'archive',
       'sep',
       'close',
     ]);

@@ -264,9 +264,14 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     () => new Set(workspace.preferences.hiddenProjects),
     [workspace.preferences.hiddenProjects],
   );
+  /** 已归档会话（sessionPath 键）：侧栏过滤与设置页历史分区共用同一真相。 */
+  const archivedSessions = React.useMemo(
+    () => new Set(workspace.preferences.archivedSessions),
+    [workspace.preferences.archivedSessions],
+  );
   const sidebarLists = React.useMemo(
-    () => buildSidebarViewModel(sessions, hiddenProjects, pinnedSessions, sidebarQuery, groupFold.expanded),
-    [sessions, hiddenProjects, pinnedSessions, sidebarQuery, groupFold],
+    () => buildSidebarViewModel(sessions, hiddenProjects, pinnedSessions, archivedSessions, sidebarQuery, groupFold.expanded),
+    [sessions, hiddenProjects, pinnedSessions, archivedSessions, sidebarQuery, groupFold],
   );
   const { pinned: pinnedList, timeList, projectGroups } = sidebarLists;
   const ages = useSessionAges(sessions);

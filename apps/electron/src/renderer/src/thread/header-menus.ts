@@ -27,10 +27,12 @@ export type SessionMenuLabels = {
   copyId: string;
   reloadTrusted: string;
   reloadUntrusted: string;
+  archive: string;
   close: string;
 };
 
 export function sessionMenuItems(labels: SessionMenuLabels, generating: boolean): readonly MenuItemDef[] {
+  // 归档与重开都需先停轮（重开链 stop→resume；归档关闭在途线程），生成中一起隐藏
   const reloadItems: MenuItemDef[] =
     generating
       ? []
@@ -38,6 +40,7 @@ export function sessionMenuItems(labels: SessionMenuLabels, generating: boolean)
           { kind: 'separator' },
           { kind: 'item', id: 'reloadTrusted', label: labels.reloadTrusted },
           { kind: 'item', id: 'reloadUntrusted', label: labels.reloadUntrusted },
+          { kind: 'item', id: 'archive', label: labels.archive },
         ];
   return [
     { kind: 'item', id: 'rename', label: labels.rename },

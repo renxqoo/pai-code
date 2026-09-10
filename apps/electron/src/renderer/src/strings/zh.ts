@@ -59,6 +59,7 @@ export const zh: typeof en = {
     sessionRename: '重命名',
     sessionCopyId: '复制会话 ID',
     sessionClose: '关闭会话',
+    sessionArchive: '归档会话',
     renameTitleAria: '重命名会话',
     statusAria: '会话状态',
     status: {
