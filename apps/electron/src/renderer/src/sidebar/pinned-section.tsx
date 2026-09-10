@@ -13,6 +13,7 @@ type PinnedSectionProps = {
   onClose?: (sessionId: string) => void
   onRename?: (sessionId: string, name: string) => void
   onTogglePin?: (sessionPath: string) => void
+  onRetire?: (sessionId: string) => void
 }
 
 /** 已置顶区：小标题 + 置顶会话行；分组/项目两视图共用，固定在列表区顶部。 */
@@ -24,6 +25,7 @@ function PinnedSection({
   onClose,
   onRename,
   onTogglePin,
+  onRetire,
 }: PinnedSectionProps) {
   return (
     <section className="flex flex-col gap-[2px] pb-1">
@@ -41,6 +43,7 @@ function PinnedSection({
           onClose={onClose}
           onRename={onRename}
           onTogglePin={onTogglePin}
+          onRetire={onRetire}
         />
       ))}
     </section>

@@ -118,6 +118,8 @@ export const enSettings = {
     appearanceHint: 'Color scheme of the interface; applies immediately.',
     generalTrustedDefault: 'Trust new projects by default',
     generalTrustedHint: 'Trusted sessions load project extensions and project-level agents from the working directory.',
+    generalIdleRecycle: 'Idle worker recycle',
+    generalIdleRecycleHint: 'Workers idle beyond this window are archived; the conversation reopens on demand.',
     onboardingCardTitle: 'Guided setup',
     onboardingCardDesc: 'Re-run the setup guide to configure providers, pick a default model and create your first conversation.',
     onboardingCardAction: 'Re-run',

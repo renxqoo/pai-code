@@ -29,6 +29,8 @@ function makeProps(overrides: Partial<SettingsScreenProps> = {}): SettingsScreen
       onThemeChange: noop,
       trustedDefault: false,
       onSaveTrustedDefault: ok,
+      idleRecycleMinutes: 5,
+      onIdleRecycleChange: noop,
       onRestartOnboarding: noop,
     },
     providers: {

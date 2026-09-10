@@ -64,3 +64,32 @@ describe('writeDiagnosticsBundle（诊断包导出）', () => {
     }
   });
 });
+
+
+test('日志副本失败不阻断导出（copyFileSync 抛错走 catch）', () => {
+  const work = mkdtempSync(join(tmpdir(), 'pai-export3-'));
+  try {
+    // 目录作 copyFileSync 源：读即抛 EISDIR → main.log 缺失但 summary 照常
+    const directory = writeDiagnosticsBundle(work, {
+      snapshot: {
+        hostPhase: 'ready',
+        hostInfo: null,
+        heartbeatAgeMs: null,
+        restarts: { count: 0, lastCause: null, lastAt: null },
+        workers: [],
+        latest: null,
+        history: [],
+        events: [],
+        idleRecycleMinutes: 5 as const,
+        appVersion: 'x',
+      },
+      events: [],
+      stderrTail: '',
+      logFile: work,
+    });
+    expect(existsSync(join(directory, 'summary.md'))).toBe(true);
+    expect(existsSync(join(directory, 'main.log'))).toBe(false);
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
+});

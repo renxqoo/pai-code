@@ -177,6 +177,8 @@ export const zhSettings: typeof enSettings = {
     appearanceHint: '界面配色，即时生效。',
     generalTrustedDefault: '默认信任新项目',
     generalTrustedHint: '受信会话会加载工作目录中的项目扩展与项目级 agent。',
+    generalIdleRecycle: '闲置自动回收',
+    generalIdleRecycleHint: 'Worker 闲置超过该时长会被归档；会话再次使用时自动唤醒。',
     onboardingCardTitle: '引导',
     onboardingCardDesc: '重新运行新手引导：配置 Provider、选择默认模型并创建首个会话。',
     onboardingCardAction: '重新运行',

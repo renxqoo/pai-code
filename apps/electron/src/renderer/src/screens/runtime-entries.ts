@@ -8,6 +8,8 @@ import type { RuntimeSnapshotView, SessionStatsView, SessionView, WorkerRowView 
 export interface RuntimeWorkerRow extends WorkerRowView {
   /** 侧栏标题（注册表视图）；hub 表外会话回落 threadId 前缀。 */
   title: string;
+  /** 模型展示名（provider/modelId；null = 未知）。 */
+  model: string | null;
   stats: SessionStatsView | null;
   /** steering + followUp 深度（渲染层队列镜像，仅 live 准确）。 */
   queueCount: number;
@@ -31,6 +33,7 @@ export function buildRuntimeRows(input: RuntimeRowsInput): RuntimeWorkerRow[] {
     return {
       ...worker,
       title: session?.title ?? fallbackTitle(worker.threadId),
+      model: session?.model ?? null,
       stats: input.statsById[worker.threadId] ?? null,
       queueCount: input.queueCountOf(worker.threadId),
       recycleInMs:

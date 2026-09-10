@@ -1,11 +1,11 @@
 import { cn } from 'cn'
 
-export type SegmentedControlOption<T extends string> = {
+export type SegmentedControlOption<T extends string | number> = {
   value: T
   label: string
 }
 
-type SegmentedControlProps<T extends string> = {
+type SegmentedControlProps<T extends string | number> = {
   options: readonly SegmentedControlOption<T>[]
   value: T
   onChange: (value: T) => void
@@ -14,8 +14,9 @@ type SegmentedControlProps<T extends string> = {
   className?: string
 }
 
-/** 分段控件（受控单选）：胶囊容器内互斥段，选中段反色填充；选项文案随渲染取当前 locale。 */
-function SegmentedControl<T extends string>({ options, value, onChange, className, 'aria-label': ariaLabel }: SegmentedControlProps<T>) {
+/** 分段控件（受控单选）：胶囊容器内互斥段，选中段反色填充；选项文案随渲染取当前 locale。
+ * 值支持字符串或数字（数字档位如闲置回收分钟数直接作 value，调用方免二次映射）。 */
+function SegmentedControl<T extends string | number>({ options, value, onChange, className, 'aria-label': ariaLabel }: SegmentedControlProps<T>) {
   return (
     <div role="radiogroup" aria-label={ariaLabel} className={cn('inline-flex items-center rounded-lg border border-border p-[3px]', className)}>
       {options.map((option) => {

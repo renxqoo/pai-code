@@ -29,10 +29,12 @@ import { branchSegmentOf } from '@/composer/branch-segment';
 import type { ComposerAttachment } from '@/composer/prompt-card';
 import { useGitBranches } from '@/hooks/use-git-branches';
 import { useUsagePanel } from '@/hooks/use-usage-panel';
+import { useRuntimePanel } from '@/hooks/use-runtime-panel';
 import { useProjectFiles } from '@/hooks/use-project-files';
 import { useSettingsScreen } from '@/settings/use-settings-screen';
 import { StopConfirmBar } from '@/thread/stop-confirm-bar';
 import { UsageScreen } from '@/screens/usage-screen';
+import { RuntimeScreen } from '@/screens/runtime-screen';
 import type { SidePanel } from '@/screens/esc-action';
 import { useEscDismiss } from '@/screens/use-esc-dismiss';
 import { ThreadBanner } from '@/thread/thread-banner';
@@ -88,6 +90,12 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const [confirmStop, setConfirmStop] = React.useState(false);
   /** Usage 总览页（I2；侧栏 footer 入口） */
   const usagePanel = useUsagePanel(workspace.sessions, workspace.statsById, workspace.actions.refreshAllStats);
+  /** 运行状态页（T29；侧栏快捷行入口；开启期间 2s 轮询快照） */
+  const runtimePanel = useRuntimePanel(workspace.actions, {
+    sessions: workspace.sessionById,
+    statsById: workspace.statsById,
+    queueCountOf: workspace.queueCountOf,
+  });
   const [panel, setPanel] = React.useState<SidePanel>(null);
   /** 输入浮层实际高度：消息流底部避让（贴底内容完整可见，上翻内容滑入浮层后面）。 */
   const [bottomInset, setBottomInset] = React.useState(160);
@@ -133,6 +141,8 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
 
   const usageOpen = usagePanel.usageOpen;
   const closeUsage = usagePanel.closeUsage;
+  const runtimeOpen = runtimePanel.open;
+  const closeRuntime = runtimePanel.closeRuntime;
   const openSettings = React.useCallback(() => setSettingsOpen(true), []);
   const closeSettings = React.useCallback(() => setSettingsOpen(false), []);
   /** 界面语言与全部设置页数据/动作经 use-settings-screen 装配（语言广播后 app 根重挂载） */
@@ -178,7 +188,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   );
   /** 全局 ⌘N/⌘K 在任一模态覆盖/对话框开着时不劫持（模态层优先于全局热键）。 */
   const hotkeysEnabled =
-    workspace.dialogs.length === 0 && !newTask.open && !usageOpen && !settingsOpen && projectFilesView.target === null;
+    workspace.dialogs.length === 0 && !newTask.open && !usageOpen && !runtimeOpen && !settingsOpen && projectFilesView.target === null;
   useCmdHotkeys({ onNewThread: openNewTask, onSearch: openSidebarSearch }, hotkeysEnabled);
 
   /** 分叉重发（B2/A5）：fork 到该用户消息之前；autoResend=true 原样重发（含图片），
@@ -279,6 +289,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     /** 面板同样以可见性参与（替换侧栏内容区，先于侧栏搜索收起） */
     projectFilesOpen: projectFilesView.target !== null && !sidebarCollapsed,
     usageOpen,
+    runtimeOpen,
     newTaskOpen: newTask.open,
     settingsOpen,
     panel,
@@ -289,6 +300,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     abortBash: workspace.actions.abortBash,
     stopActiveTurn: workspace.actions.stopActiveTurn,
     onSidebarSearchClose: closeSidebarSearch,
+    onRuntimeClose: closeRuntime,
     onProjectFilesClose: projectFilesView.close,
     onUsageClose: closeUsage,
     onNewTaskClose: closeNewTask,
@@ -301,6 +313,11 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const refreshAction = React.useMemo(() => ({ label: copy.sidebar.refresh, onSelect: refreshSaved }), [refreshSaved]);
   /** 宿主掉线（从未构建或 failed）：置顶横幅 + 模型位换「宿主未连接」，不得伪装成「未配置模型」。 */
   const hostDown = workspace.hostPhase === null || workspace.hostPhase === 'failed';
+  /** 运行状态入口异常亮标：宿主相位非 ready 或存在 dead worker（hook 视图派生，不进 store）。 */
+  const runtimeAttention = React.useMemo(() => {
+    if (workspace.hostPhase !== 'ready') return true;
+    return Object.values(workspace.sessionById).some((session) => session.state === 'dead');
+  }, [workspace.hostPhase, workspace.sessionById]);
   /** 置顶键集合（sessionPath）：设置页已保存列表与侧栏已置顶区共用同一真相。 */
   const pinnedSessions = React.useMemo(() => new Set(workspace.preferences.pinnedSessions), [workspace.preferences.pinnedSessions]);
   /** 已移除（隐藏）项目：两视图共用同一过滤（置顶/分组/项目组三列表同源） */
@@ -324,6 +341,16 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const onTogglePin = React.useCallback(
     (sessionPath: string) => workspace.actions.togglePinnedSession(sessionPath),
     [workspace.actions],
+  );
+  /** 侧栏行内回收（T29）：worker 转 parked，会话保留可唤醒；失败通知条由 action 内部给出。 */
+  const retireSession = React.useCallback((threadId: string) => void workspace.actions.retireSession(threadId), [workspace.actions]);
+  /** 运行状态页「打开会话」：选中即导航（parked 自动唤醒），并收起整页。 */
+  const openSessionFromRuntime = React.useCallback(
+    (threadId: string) => {
+      workspace.actions.selectSession(threadId);
+      closeRuntime();
+    },
+    [workspace.actions, closeRuntime],
   );
 
   /** 侧栏/顶栏回调与常量 props：引用恒定（actions 已稳定），Sidebar/ThreadHeader memo 不被父级重渲击穿。 */
@@ -402,9 +429,12 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         onNewThread={openNewTask}
         onCollapseSidebar={collapseSidebar}
         onSelectSession={onSelectSession}
+        onOpenRuntime={runtimePanel.openRuntime}
+        runtimeAttention={runtimeAttention}
         onCloseSession={workspace.actions.closeSession}
         onRenameSession={onRenameSession}
         onTogglePin={onTogglePin}
+        onRetireSession={retireSession}
         onNewTaskInProject={openNewThreadInProject}
         onRemoveProject={removeProject}
         onProjectFiles={showProjectFiles}
@@ -496,6 +526,17 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         )}
       </div>
       {usageOpen ? <UsageScreen entries={usagePanel.entries} onClose={closeUsage} /> : null}
+      {runtimeOpen ? (
+        <RuntimeScreen
+          snapshot={runtimePanel.snapshot}
+          rows={runtimePanel.rows}
+          diagnosticLog={runtimePanel.diagnosticLog}
+          actions={workspace.actions}
+          onLoadDiagnosticLog={runtimePanel.loadDiagnosticLog}
+          onClose={closeRuntime}
+          onOpenSession={openSessionFromRuntime}
+        />
+      ) : null}
       {panel === 'agents' ? (
         <AgentPanel agents={workspace.activeThread.agents} now={workspace.now} onClose={closePanel} onSteer={workspace.actions.steerSubagent} />
       ) : null}

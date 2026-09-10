@@ -191,3 +191,20 @@ describe('createRuntimeMonitor', () => {
     expect((history[history.length - 1] as ResourceSampleView).hubRssBytes).toBe(399);
   });
 });
+
+
+describe('定时器生命周期', () => {
+  test('start 置 interval、stop 清除且幂等；未 start 的 poll 也可手动驱动', async () => {
+    const monitor = createRuntimeMonitor({ ...makeDeps(makePort()), intervalMs: 10 });
+    monitor.start();
+    monitor.start(); // 幂等：不叠第二个 interval
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 30);
+    });
+    monitor.stop();
+    monitor.stop(); // 幂等
+    // 手动 poll 仍可用（页面即时刷新路径）
+    await monitor.poll();
+    expect(monitor.snapshot().hostInfo).not.toBeNull();
+  });
+});

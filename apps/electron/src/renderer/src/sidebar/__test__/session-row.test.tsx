@@ -17,6 +17,7 @@ function makeSession(overrides: Partial<SessionCardModel> = {}): SessionCardMode
     version: '0.1.0',
     cwd: '/tmp/pai',
     sessionPath: '/tmp/pai/sessions/session-1.jsonl',
+    state: 'live',
     streaming: false,
     lastActivityAt: 1000,
     ...overrides,
@@ -60,5 +61,24 @@ describe('SessionRow hover 动作区', () => {
     );
     expect(html).toContain('aria-label="进行中"');
     expect(html.indexOf('aria-label="进行中"')).toBeLessThan(html.indexOf('会话标题'));
+  });
+
+  test('回收入口（T29）：live 且非流式的行给「回收 Worker」，流式/parked/未接回调的行不给', () => {
+    const live = renderToStaticMarkup(
+      <SessionRow session={makeSession()} age="3小时" active={false} onSelect={noop} onRetire={noop} />,
+    );
+    expect(live).toContain('aria-label="回收 Worker"');
+    const streaming = renderToStaticMarkup(
+      <SessionRow session={makeSession({ streaming: true })} age="3小时" active={false} onSelect={noop} onRetire={noop} />,
+    );
+    expect(streaming).not.toContain('aria-label="回收 Worker"');
+    const parked = renderToStaticMarkup(
+      <SessionRow session={makeSession({ state: 'parked' })} age="3小时" active={false} onSelect={noop} onRetire={noop} />,
+    );
+    expect(parked).not.toContain('aria-label="回收 Worker"');
+    const unwired = renderToStaticMarkup(
+      <SessionRow session={makeSession()} age="3小时" active={false} onSelect={noop} />,
+    );
+    expect(unwired).not.toContain('aria-label="回收 Worker"');
   });
 });

@@ -1,3 +1,5 @@
+export { AreaTimeChart, type AreaTimeChartProps, type AreaTimeChartSeries } from './area-time-chart';
+export { AreaTimeChartTooltip, type AreaTimeChartTooltipProps } from './area-time-chart-tooltip';
 export { AutocompleteGroupList, canScrollMore, type AutocompleteGroup, type AutocompleteGroupItem, type AutocompleteGroupListProps } from './autocomplete-group-list';
 export { CaretToggle, type CaretToggleProps } from './caret-toggle';
 export { ChatBubble, type ChatBubbleProps } from './chat-bubble';

@@ -37,9 +37,8 @@ describe('按开即读派发', () => {
       refreshPermissionRules: 'refreshPermissionRules',
       refreshAgentDefinitions: 'refreshAgentDefinitions',
       refreshSkills: 'refreshSkills',
-      fetchDiagnostics: 'fetchDiagnostics',
     };
-    expect(Object.keys(check).length).toBe(4);
+    expect(Object.keys(check).length).toBe(3);
   });
 });
 

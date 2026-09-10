@@ -4,7 +4,7 @@ import { filterSessions } from '../filter-sessions';
 import type { SessionCardModel } from '../session-card-model';
 
 function card(id: string, title: string, projectName: string): SessionCardModel {
-  return { id, projectName, title, version: 'm', cwd: `/w/${projectName}`, sessionPath: `/s/${id}.jsonl`, streaming: false, lastActivityAt: 0 };
+  return { id, projectName, title, version: 'm', cwd: `/w/${projectName}`, sessionPath: `/s/${id}.jsonl`, state: 'live', streaming: false, lastActivityAt: 0 };
 }
 
 const sessions = [

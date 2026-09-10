@@ -6,6 +6,7 @@ import type { WorkspaceActions } from '@/live/workspace-actions';
 type UseEscDismissInput = {
   dialogCount: number;
   sidebarSearchOpen: boolean;
+  runtimeOpen: boolean;
   usageOpen: boolean;
   projectFilesOpen: boolean;
   newTaskOpen: boolean;
@@ -18,6 +19,7 @@ type UseEscDismissInput = {
   abortBash: WorkspaceActions['abortBash'];
   stopActiveTurn: WorkspaceActions['stopActiveTurn'];
   onSidebarSearchClose: () => void;
+  onRuntimeClose: () => void;
   onUsageClose: () => void;
   onProjectFilesClose: () => void;
   onNewTaskClose: () => void;
@@ -29,15 +31,18 @@ type UseEscDismissInput = {
 /** Esc 键全局分发（语义裁决在 escActionFor 纯函数，本 hook 只做动作映射）。
  * 裁决输入与分发函数全量进依赖：actions 稳定化后本 effect 不再每渲染重挂，漏依赖即闭包陈旧。 */
 export function useEscDismiss(input: UseEscDismissInput): void {
-  const { dialogCount, sidebarSearchOpen, usageOpen, projectFilesOpen, newTaskOpen, settingsOpen, panel, bashRunning, confirmStop, generating, agentsActive } = input;
-  const { abortBash, stopActiveTurn, onSidebarSearchClose, onUsageClose, onProjectFilesClose, onNewTaskClose, onSettingsClose, onPanelClose, onConfirmStopChange } = input;
+  const { dialogCount, sidebarSearchOpen, runtimeOpen, usageOpen, projectFilesOpen, newTaskOpen, settingsOpen, panel, bashRunning, confirmStop, generating, agentsActive } = input;
+  const { abortBash, stopActiveTurn, onSidebarSearchClose, onRuntimeClose, onUsageClose, onProjectFilesClose, onNewTaskClose, onSettingsClose, onPanelClose, onConfirmStopChange } = input;
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') return;
-      const action = escActionFor({ dialogCount, sidebarSearchOpen, usageOpen, projectFilesOpen, newTaskOpen, settingsOpen, panel, bashRunning, confirmStop, generating, agentsActive });
+      const action = escActionFor({ dialogCount, sidebarSearchOpen, runtimeOpen, usageOpen, projectFilesOpen, newTaskOpen, settingsOpen, panel, bashRunning, confirmStop, generating, agentsActive });
       switch (action.kind) {
         case 'close-sidebar-search':
           onSidebarSearchClose();
+          break;
+        case 'close-runtime':
+          onRuntimeClose();
           break;
         case 'close-usage':
           onUsageClose();
@@ -73,5 +78,5 @@ export function useEscDismiss(input: UseEscDismissInput): void {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [dialogCount, sidebarSearchOpen, usageOpen, projectFilesOpen, newTaskOpen, settingsOpen, panel, bashRunning, confirmStop, generating, agentsActive, abortBash, stopActiveTurn, onSidebarSearchClose, onUsageClose, onProjectFilesClose, onNewTaskClose, onSettingsClose, onPanelClose, onConfirmStopChange]);
+  }, [dialogCount, sidebarSearchOpen, runtimeOpen, usageOpen, projectFilesOpen, newTaskOpen, settingsOpen, panel, bashRunning, confirmStop, generating, agentsActive, abortBash, stopActiveTurn, onSidebarSearchClose, onRuntimeClose, onUsageClose, onProjectFilesClose, onNewTaskClose, onSettingsClose, onPanelClose, onConfirmStopChange]);
 }

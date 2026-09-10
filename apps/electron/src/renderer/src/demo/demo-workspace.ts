@@ -82,6 +82,7 @@ function session(id: string, title: string, ageInDays: number): SessionCardModel
     version: 'v1.0.0',
     cwd: '/demo/bun-koa',
     sessionPath: `/demo/sessions/${id}.jsonl`,
+    state: 'live',
     streaming: false,
     lastActivityAt: now - ageInDays * DAY,
   };

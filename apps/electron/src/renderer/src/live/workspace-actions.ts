@@ -93,6 +93,8 @@ export type WorkspaceActions = {
   readonly reloadSessionTrusted: (threadId: string, trusted: boolean) => void;
   readonly steerSubagent: (subagentId: string, message: string) => void;
   readonly restartHost: () => void;
+  /** 指定线程停止当前轮（运行状态页执行中行的停止操作；活跃线程走 stopActiveTurn）。 */
+  readonly stopThread: (threadId: string) => void;
   /** 运行状态快照（T29 监控页轮询；失败 null 保持旧值）。 */
   readonly fetchRuntime: () => Promise<RuntimeSnapshotView | null>;
   /** 宿主 stderr 尾部（按需）。 */
@@ -104,8 +106,8 @@ export type WorkspaceActions = {
   readonly setKeepalive: (threadId: string, keepalive: boolean) => Promise<void>;
   /** 闲置回收档位（失败推通知条）。 */
   readonly setIdleRecycle: (minutes: IdleRecycleMinutes) => Promise<void>;
-  /** 诊断包导出（成功通知目录已打开；失败推通知条）。 */
-  readonly exportDiagnostics: () => Promise<void>;
+  /** 诊断包导出；失败推通知条，返回是否成功（成功提示由调用方给）。 */
+  readonly exportDiagnostics: () => Promise<boolean>;
   /** 历史水化失败的重试（活跃会话全量重拉）。 */
   readonly retryHydration: () => void;
   /** 打开 Usage 页时对全部活跃线程补拉 stats（防未访问会话显示 0）。 */
@@ -327,6 +329,7 @@ export function createWorkspaceActions(): WorkspaceActions {
       return true;
     },
     restartHost: () => controller.restartHost(),
+    stopThread: (threadId) => void controller.stopActiveTurn(threadId),
     fetchRuntime: () => controller.runtime.fetchRuntimeSnapshot(),
     fetchDiagnosticLog: () => controller.runtime.fetchDiagnosticLog(),
     retireSession: async (threadId) => {
@@ -347,7 +350,11 @@ export function createWorkspaceActions(): WorkspaceActions {
     },
     exportDiagnostics: async () => {
       const directory = await controller.runtime.exportDiagnostics();
-      if (directory === null) pushNotice(copy.runtime.exportFailed);
+      if (directory === null) {
+        pushNotice(copy.runtime.exportFailed);
+        return false;
+      }
+      return true;
     },
     reloadSessionTrusted: (threadId, trusted) => {
       void controller.reloadSessionTrusted(threadId, trusted).then((ok) => {

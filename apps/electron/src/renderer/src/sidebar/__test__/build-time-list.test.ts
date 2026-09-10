@@ -4,7 +4,7 @@ import { buildTimeList } from '../build-time-list';
 import type { SessionCardModel } from '../session-card-model';
 
 function card(id: string, sessionPath: string | null, lastActivityAt: number): SessionCardModel {
-  return { id, projectName: 'app', title: id, version: 'm', cwd: '/w/app', sessionPath, streaming: false, lastActivityAt };
+  return { id, projectName: 'app', title: id, version: 'm', cwd: '/w/app', sessionPath, state: 'live', streaming: false, lastActivityAt };
 }
 
 test('排除置顶会话后按最近活跃倒序', () => {

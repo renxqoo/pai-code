@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import type { AgentDefinition, PermissionRules, ProviderConfigView, ProviderModel, SkillView, ThinkingFormat } from '@paiapp/contracts';
+import type { AgentDefinition, IdleRecycleMinutes, PermissionRules, ProviderConfigView, ProviderModel, SkillView, ThinkingFormat } from '@paiapp/contracts';
 import { AGENT_TOOL_IDS } from '@paiapp/contracts';
 import type { Theme } from '@/components/theme-context';
 import { useTheme } from '@/components/use-theme';
@@ -44,6 +44,9 @@ export type SettingsScreenProps = {
     onThemeChange: (next: Theme) => void;
     trustedDefault: boolean;
     onSaveTrustedDefault: (trustedDefault: boolean) => Promise<boolean>;
+    /** worker 闲置自动回收档位（3/5/10/15 分钟；写路径唯一是 setIdleRecycle）。 */
+    idleRecycleMinutes: IdleRecycleMinutes;
+    onIdleRecycleChange: (minutes: IdleRecycleMinutes) => void;
     onRestartOnboarding: () => void;
   };
   providers: {
@@ -133,6 +136,10 @@ export function useSettingsScreen({ workspace, open, onClose }: UseSettingsScree
       onThemeChange: setTheme,
       trustedDefault: workspace.preferences.trustedDefault,
       onSaveTrustedDefault: (trustedDefault) => actions.saveGeneralPreferences({ trustedDefault }),
+      idleRecycleMinutes: workspace.preferences.idleRecycleMinutes,
+      onIdleRecycleChange: (minutes) => {
+        void actions.setIdleRecycle(minutes);
+      },
       onRestartOnboarding: () => {
         void actions.restartOnboarding().then((ok) => {
           if (ok) onClose();
