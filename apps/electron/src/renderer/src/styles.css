@@ -237,30 +237,6 @@
 }
 
 /*
- * 流式预览跑马灯（TickerText）：收起态思考预览一行放不下且内容仍在输出时，
- * 双份文本的轨道以 -50% 位移无缝循环滑动，滑动时长由实例按文本长度内联注入。
- * 系统减弱动态偏好下停帧，退化为静态溢出裁切。
- */
-.ticker-track {
-  animation: ticker-slide 12s linear infinite;
-}
-
-@keyframes ticker-slide {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-50%);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ticker-track {
-    animation: none;
-  }
-}
-
-/*
  * 嵌套滚动区（思考正文阅读区）细滚动条：轨道全透明，拇指比全局窄，
  * 悬停变色沿用全局 thumb:hover 规则（background-clip 一并继承）。
  */

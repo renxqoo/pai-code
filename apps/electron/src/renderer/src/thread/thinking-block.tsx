@@ -1,27 +1,23 @@
 import * as React from 'react';
 import { BrainCircuit } from 'lucide-react';
 
-import { ChevronToggle, TickerText } from '@paiapp/ui';
+import { ChevronToggle, TypewriterText } from '@paiapp/ui';
 
 import { copy } from '@/strings';
 import { cn } from '@/lib/utils';
-import { previewLine } from './preview-line';
 import { thinkingParagraphs } from './thinking-paragraphs';
 import { useStickToBottom } from './use-stick-to-bottom';
 import { resolveOpen, type CollapsePref } from './collapse-state';
 
-/** 跑马灯预览取用的文本上限：足够铺满任意行宽，又不让 DOM 节点失控 */
-const TICKER_PREVIEW_CHARS = 240;
-
 type ThinkingBlockProps = {
   text: string;
-  /** 轮次是否仍在走表：驱动标签加载态、收起预览滚动与展开区贴底跟随 */
+  /** 轮次是否仍在走表：驱动标签加载态、收起预览打字输出与展开区贴底跟随 */
   running: boolean;
 };
 
 /**
  * 思考单元：展示开关只听用户手动（默认收起，展开与否完全由用户决定）。
- * 运行中：标签呈波纹加载态；收起时预览行以跑马灯滑动呈现流式输出；
+ * 运行中：标签呈波纹加载态，收起时预览行跟随流式尾部打字输出；
  * 展开时正文限高滚动，流式追加期间贴底跟随最新推理，上翻即让位。
  */
 function ThinkingBlock({ text, running }: ThinkingBlockProps) {
@@ -53,9 +49,9 @@ function ThinkingBlock({ text, running }: ThinkingBlockProps) {
             {running ? copy.flow.thinking : copy.flow.thought}
           </span>
           {open ? null : (
-            <TickerText
+            <TypewriterText
               active={running}
-              text={previewLine(text, TICKER_PREVIEW_CHARS)}
+              text={text}
               className="min-w-0 flex-1 text-[12.5px] leading-[20px] text-meta-faint"
             />
           )}
