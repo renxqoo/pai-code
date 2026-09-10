@@ -103,6 +103,7 @@ describe('Settings zod：round-trip 与拒绝表', () => {
       projectModels: { '/w': 'glm/glm-5.3' },
       pinnedSessions: ['/a.jsonl'],
       hiddenProjects: ['/w/gone'],
+      archivedSessions: ['/b.jsonl'],
     };
     expect(SettingsSchema.parse(input)).toEqual(input);
   });

@@ -93,6 +93,8 @@ export const SettingsSchema = z
     projectModels: z.record(z.string(), z.string()).default({}),
     /** 置顶的历史会话文件（sessionPath 集合的数组形态）。 */
     pinnedSessions: z.array(z.string()).default([]),
+    /** 已归档的历史会话文件（sessionPath 键）：侧栏与历史列表默认隐藏，设置页可恢复。 */
+    archivedSessions: z.array(z.string()).default([]),
     /** 侧栏已移除（隐藏）的项目目录（cwd）；同目录新建任务即解除。 */
     hiddenProjects: z.array(z.string()).default([]),
   })

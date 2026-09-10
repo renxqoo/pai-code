@@ -299,7 +299,7 @@ function initialStoreState(): LiveStoreState {
     providers: [],
     agentDefinitions: [],
     skills: [],
-    preferences: { defaultModel: null, onboarded: false, projectModels: {}, pinnedSessions: [], trustedDefault: false, hiddenProjects: [] },
+    preferences: { defaultModel: null, onboarded: false, projectModels: {}, pinnedSessions: [], trustedDefault: false, hiddenProjects: [], archivedSessions: [] },
     permissionRules: null,
     sessionRules: null,
     threads: {},

@@ -181,6 +181,7 @@ export const PreferencesViewSchema = z.object({
   pinnedSessions: z.array(z.string()),
   trustedDefault: z.boolean(),
   hiddenProjects: z.array(z.string()),
+  archivedSessions: z.array(z.string()),
 });
 export type PreferencesView = z.infer<typeof PreferencesViewSchema>;
 
@@ -353,6 +354,26 @@ export const ApiSchemas = {
     params: z.object({ cwd: z.string().min(1), query: z.string() }).strict(),
     result: z.array(z.string()),
   },
+  /**
+   * 读取项目文件文本（代码查看器/Markdown 预览数据源）：只读、相对路径、
+   * 点前缀段拒绝（与 file/search 枚举面一致，越界 cwd 同为 cwd_forbidden）；
+   * size 为磁盘真实字节数，超过读取上限时截断并 truncated=true。
+   */
+  'file/read': {
+    params: z.object({ cwd: z.string().min(1), path: z.string().min(1) }).strict(),
+    result: z
+      .object({
+        content: z.string(),
+        truncated: z.boolean(),
+        size: z.number().int().nonnegative(),
+      })
+      .strict(),
+  },
+  /** 在系统工具中打开已知项目目录（访达/文件管理器、终端、编辑器）；动作落审计。 */
+  'shell/open': {
+    params: z.object({ cwd: z.string().min(1), target: z.enum(['finder', 'terminal', 'editor']) }).strict(),
+    result: z.null(),
+  },
   /** 从历史条目分叉（position before|at，默认 before）→ 新会话视图。 */
   'session/fork': {
     params: z.object({ threadId: z.string().min(1), entryId: z.string().min(1), position: z.enum(['before', 'at']).optional() }).strict(),
@@ -469,6 +490,7 @@ export const ApiSchemas = {
         pinnedSessions: z.array(z.string()).optional(),
         trustedDefault: z.boolean().optional(),
         hiddenProjects: z.array(z.string()).optional(),
+        archivedSessions: z.array(z.string()).optional(),
       })
       .strict()
       .refine(
@@ -478,7 +500,8 @@ export const ApiSchemas = {
           value.projectModels !== undefined ||
           value.pinnedSessions !== undefined ||
           value.trustedDefault !== undefined ||
-          value.hiddenProjects !== undefined,
+          value.hiddenProjects !== undefined ||
+          value.archivedSessions !== undefined,
         { message: 'empty_preference' },
       ),
     result: PreferencesViewSchema,
