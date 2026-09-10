@@ -192,6 +192,8 @@
 | sidebar-drag.test.ts | 原文件 | 移植不动 |
 | （无既有 use-project-files 测试） | project-files.test.ts | 新增（代次竞态行为首次入测） |
 | （无） | ui-store.test.ts / sidebar-view-model emptyState 用例 / B1、B2 重渲边界回归 / 热键门控矩阵用例 / U2 派生语义用例 | 新增 |
+| 旧 sidebar.test SSR 的 DOM 症状钉子（项目组折叠 aria/更多菜单触发器/hover 淡入/焦点环/gap-[2px]/⌘K 徽标/清空搜索钮/显示更多条件） | sections.test.tsx（分区级 SSR）+ sidebar.test 增补（⌘K 徽标/清空搜索钮/显示更多点击接线） | 改写（核销期假绿抽查上报项 B：初版迁移漏建去处，已补齐并钉回全部钉子） |
+| workspace-navigation 旧「openSavedSession 委派调用序列」断言 | 原文件 | 装置适配：离线 bridge 下委派效果不可观测（返回 unavailable），委派目标行为由 controller/openSavedSession 既有单测承担；编排断言保留（关整页 + 关设置页终态） |
 
 ### 3.5 回滚方案
 
@@ -235,6 +237,15 @@
 - 装置适配记录（U3）：happy-dom GlobalRegistrator 把 window 落成 globalThis 本体——window 定时器别名会覆盖全局并递归自身（挂载死锁，实测修复）；React 19 受控 input 的合成事件链在 happy-dom 不通（click/keydown 正常）——搜索框「输入→store」方向以 store 种子 + 受控回显单侧覆盖，真实键盘路径挂账 e2e（发版门）。
 - 测试：sidebar.test.tsx 重写 14 用例（SSR 冒烟 + 客户端渲染数据形态/交互/store 断言 + B1 订阅粒度 + B2 tick 边界）、session-row 改写 5 用例、view-model emptyState 5 用例、testing 装置自检 3 用例；全量 1392 过 / 0 失败，四门绿（lint 0-0 / build exit 0）。
 - M2 对抗审查（独立会话）：12 条基线 + 10 个疑点全部通过（含 expanded Set 引用等价、WeakMap 无泄漏、emptyState 与旧 listEmpty 严格等价证明、B1 新判据有效性论证）；4 项非阻断——#23 三集合依赖收细（已修）、#24 面板打开期 tick 暂停（接受，收敛设计意图）、#25 输入单向覆盖（已记录挂账 e2e）、#26 resize separators 无消费者（pre-existing = D4 已挂账）。
+
+## 6. 假绿对抗抽查记录（独立会话，核销门，2026-09-11）
+
+抽查范围：全分支测试 diff × T32 §3.4 矩阵逐行核对 + 跳过/门槛/配置面 grep + 新增断言质量审查。结论：非「换绿型」（被删断言对应实现均保留），但抓出三类保真度缺陷，已全部处置：
+- **上报项 A**：矩阵行 1 点名的「显示更多」去处落空（渲染条件与点击接线零覆盖）→ 已补 sections.test.tsx（截断/已展开两态渲染断言）+ sidebar.test 点击接线用例（store expanded + 行数增加断言）。
+- **上报项 B**：7 类矩阵外 DOM 症状钉子删除未声明 → 钉子全部测回（sections.test.tsx 六组 + sidebar.test ⌘K 徽标/清空搜索钮），矩阵补行声明去处。
+- **上报项 C**：navigation「openSavedSession 委派调用」断言弱化 → 矩阵登记装置适配理由（离线不可观测，委派目标行为由 controller 单测承担）。
+- 确认项：esc-action.test 除删 runtimeOpen 行逐字未动；sidebar-drag 与纯函数 10 文件零 diff；无 skip/todo/only；bunfig/CI/oxlint 配置零改动；新增断言无自我循环；harness 用例三段式防假阳性。
+- 复核：补救后 sidebar/sections 套件 23 过 0 失败。
 
 ## 5. 定稿前对抗审查记录（独立会话，2026-09-11）
 

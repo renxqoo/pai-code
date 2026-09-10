@@ -103,6 +103,7 @@ describe('Sidebar 壳（SSR 初始态冒烟）', () => {
     const html = renderToStaticMarkup(<Sidebar />);
     expect(html).toContain('暂无任务');
     expect(html).toMatch(/(⌘\+N|Ctrl\+N)/);
+    expect(html).toMatch(/(⌘\+K|Ctrl\+K)/); // 搜索行快捷键徽标
   });
 });
 
@@ -230,6 +231,44 @@ describe('Sidebar 交互（客户端渲染，动作直落 store）', () => {
     });
     expect(uiStore.getState().projectFiles.target).toBe(null);
     expect(view.container.textContent).toContain('新建任务');
+    view.unmount();
+  });
+
+  test('清空搜索钮：查询非空时在位，空查询不渲染', () => {
+    seedLive({ a: makeSession('a') });
+    uiStore.getState().openSidebarSearch();
+    uiStore.setState({ sidebarQuery: 'x' });
+    const view = render(<Sidebar />);
+    const input = view.container.querySelector('input[aria-label="搜索"]') as HTMLInputElement;
+    expect(input).not.toBeNull();
+    expect(input.value).toBe('x'); // 受控回显
+    React.act(() => {
+      uiStore.getState().setSidebarQuery('');
+    });
+    expect(view.container.querySelector('button[aria-label="清空搜索"]')).toBeNull();
+    React.act(() => {
+      uiStore.getState().setSidebarQuery('x');
+    });
+    expect(view.container.querySelector('button[aria-label="清空搜索"]')).not.toBeNull();
+    view.unmount();
+  });
+
+  test('显示更多接线（T32 §3.4 矩阵行 1）：截断组给入口，点击解除截断（store expanded + 行数增加）', () => {
+    const sessions: Record<string, SessionView> = {};
+    for (let i = 0; i < 8; i += 1) {
+      sessions[`s${i}`] = makeSession(`s${i}`, { cwd: '/tmp/pai', title: `任务-${i}` });
+    }
+    seedLive(sessions);
+    uiStore.setState({ sidebarView: 'projects' });
+    const view = render(<Sidebar />);
+    const rowsBefore = view.container.querySelectorAll('[data-active]').length;
+    expect(view.container.textContent).toContain('显示更多');
+    React.act(() => {
+      [...view.container.querySelectorAll('button')].find((b) => b.textContent === '显示更多')?.click();
+    });
+    expect(uiStore.getState().sidebarGroupFold.expanded.has('/tmp/pai')).toBe(true);
+    expect(view.container.textContent).not.toContain('显示更多');
+    expect(view.container.querySelectorAll('[data-active]').length).toBeGreaterThan(rowsBefore);
     view.unmount();
   });
 
