@@ -206,6 +206,22 @@ describe('response-views', () => {
     expect(modelInfos({ models: [{ provider: 'glm', id: 'm1' }, { provider: '', id: 'm2' }, 3] })).toEqual([{ provider: 'glm', modelId: 'm1' }]);
   });
 
+  test('modelInfos：思考能力面放行（reasoning 仅 true 落位；map 只收 string|null，垃圾值丢弃）', () => {
+    const views = modelInfos({
+      models: [
+        { provider: 'glm', id: 'm1', reasoning: true, thinkingLevelMap: { high: 'high', xhigh: null, bad: 3 } },
+        { provider: 'glm', id: 'm2', reasoning: 'yes', thinkingLevelMap: 'nope' },
+      ],
+    });
+    expect(views[0]).toEqual({
+      provider: 'glm',
+      modelId: 'm1',
+      reasoning: true,
+      thinkingLevelMap: { high: 'high', xhigh: null },
+    });
+    expect(views[1]).toEqual({ provider: 'glm', modelId: 'm2' });
+  });
+
   test('sessionStatsView：contextUsage.percent（0-100 刻度）归一为 0-1 比率；垃圾/缺省 → null', () => {
     expect(sessionStatsView({ userMessages: 2, assistantMessages: 3, toolCalls: 4, tokens: { total: 99 }, cost: 0.5, contextUsage: { tokens: 10, contextWindow: 100, percent: 10 } })).toEqual({
       userMessages: 2,

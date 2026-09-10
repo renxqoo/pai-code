@@ -297,14 +297,22 @@ test('createSession 选项化：start 成功后后置应用 thinkingLevel 与 pe
   });
 });
 
-test('createSession：不传后置项时不多发命令；全局规则未加载时跳过 sidecar；start 失败透传原因', async () => {
+test('createSession：不传后置项时不多发命令；全局规则未加载时先现拉再定；start 失败透传原因', async () => {
   const bare = makeClient({ 'session/start': { ok: true, data: startData } });
   expect(await createLiveController(bare, createLiveStore()).createSession({ cwd: '/w' })).toEqual({ ok: true, threadId: 't1' });
   expect(bare.calls.some((call) => call.method === 'session/setThinking')).toBe(false);
   expect(bare.calls.some((call) => call.method === 'permission/sessionWrite')).toBe(false);
 
-  // 全局规则未加载（store 为 null）时，permissionMode 不写 sidecar（无基线可比，宁缺勿错）
-  const noRules = makeClient({ 'session/start': { ok: true, data: startData } });
+  // 症状回归：全局规则未入 store 时建会话现拉（新任务页的权限选择不再静默丢失）
+  const lateRules = makeClient({ 'session/start': { ok: true, data: startData }, 'permission/read': { ok: true, data: rules } });
+  expect(await createLiveController(lateRules, createLiveStore()).createSession({ cwd: '/w', permissionMode: 'allow-all' })).toEqual({ ok: true, threadId: 't1' });
+  expect(lateRules.calls.find((call) => call.method === 'permission/sessionWrite')?.params).toEqual({
+    threadId: 't1',
+    rules: { ...rules, mode: 'allow-all' },
+  });
+
+  // 现拉也拿不到（无基线可比，宁缺勿错）
+  const noRules = makeClient({ 'session/start': { ok: true, data: startData }, 'permission/read': { ok: false, reason: 'io' } });
   expect(await createLiveController(noRules, createLiveStore()).createSession({ cwd: '/w', permissionMode: 'allow-all' })).toEqual({
     ok: true,
     threadId: 't1',
@@ -316,4 +324,22 @@ test('createSession：不传后置项时不多发命令；全局规则未加载�
     ok: false,
     reason: 'cwd_missing',
   });
+});
+
+test('症状回归：bootstrap 后即拉全局权限规则（新任务页权限控件数据源，不再等进设置页才可见）', async () => {
+  const client = makeClient({
+    'app/bootstrap': {
+      ok: true,
+      data: { sessions: [], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } },
+    },
+    'permission/read': { ok: true, data: rules },
+  });
+  const store = createLiveStore();
+  await createLiveController(client, store).start();
+  // 启动内全局规则拉取是 fire-and-forget，让在途 promise 落地
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, 0);
+  });
+  expect(client.calls.some((call) => call.method === 'permission/read')).toBe(true);
+  expect(store.getState().permissionRules).toEqual(rules);
 });

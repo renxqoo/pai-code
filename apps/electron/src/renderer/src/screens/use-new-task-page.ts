@@ -80,6 +80,7 @@ export function useNewTaskPage(input: {
         trusted: start.trusted,
         model: start.model,
         permissionMode: start.permissionMode,
+        thinkingLevel: start.thinkingLevel,
         text: start.text,
         images: start.attachments.map((item: ComposerAttachment) => imagePayloadOf(item.payload)),
       });
@@ -101,6 +102,7 @@ export function useNewTaskPage(input: {
               trustedDefault: workspace.preferences.trustedDefault,
               defaultModelFor: actions.defaultModelFor,
               modelOptions: workspace.composer.modelOptions,
+              effortOptionsFor: workspace.effortOptionsFor,
               noModelsLabel: hostDown ? copy.composer.hostDownModels : copy.composer.noModels,
               onOpenSettings,
               globalPermissionMode: workspace.permissionRules === null ? null : workspace.permissionRules.mode,

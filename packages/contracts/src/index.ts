@@ -2,6 +2,7 @@ export * from './hub-protocol';
 export * from './ui-events';
 export * from './commands';
 export * from './api';
+export * from './thinking-levels';
 export * from './agents';
 export * from './client';
 export * from './settings';

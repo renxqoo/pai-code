@@ -94,6 +94,10 @@ export type SessionStatsView = z.infer<typeof SessionStatsViewSchema>;
 export const ModelInfoViewSchema = z.object({
   provider: z.string(),
   modelId: z.string(),
+  /** 模型思考能力（新任务页按模型计算可用思考档的数据面；缺省 = 不支持思考）。 */
+  reasoning: z.boolean().optional(),
+  /** pi models.json thinkingLevelMap 的镜像（键 = 档位，值 null = 该档不支持）。 */
+  thinkingLevelMap: z.record(z.string(), z.union([z.string(), z.null()])).optional(),
 });
 export type ModelInfoView = z.infer<typeof ModelInfoViewSchema>;
 

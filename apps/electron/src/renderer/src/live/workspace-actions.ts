@@ -1,4 +1,5 @@
 import type { AgentDefinition, ApiOutcome, ImagePayload, PermissionRules, ProviderModel, ThinkingFormat } from '@paiapp/contracts';
+import { thinkingLevelOfLabel } from '@paiapp/contracts';
 
 import { copy } from '@/strings';
 import { parseModelKey, pickSessionModel } from './pick-session-model';
@@ -10,16 +11,6 @@ import { bridgeClient, controller, store } from './workspace-runtime';
  * 消灭闭包旧值与「actions 换引用击穿子组件 memo / effect 重挂」两类问题。
  * 唯一外来依赖是 hook 注入的 setState setter（引用本身恒定）。
  */
-
-const EFFORT_LABELS: Readonly<Record<string, string>> = {
-  off: 'Off',
-  minimal: 'Minimal',
-  low: 'Low',
-  medium: 'Medium',
-  high: 'High',
-  xhigh: 'X-high',
-  max: 'Max',
-};
 
 export type WorkspaceDiagnostics = {
   hostPhase: 'starting' | 'ready' | 'restarting' | 'failed' | null;
@@ -49,6 +40,8 @@ export type WorkspaceActions = {
     model: string
     /** null = 跟随全局规则 */
     permissionMode: PermissionRules['mode'] | null
+    /** 思考档（协议档位值；null = 跟随模型默认） */
+    thinkingLevel: string | null
     text: string
     images?: readonly ImagePayload[]
   }) => Promise<{ ok: true; threadId: string; sendFailed: boolean } | { ok: false }>;
@@ -224,6 +217,7 @@ export function createWorkspaceActions(setDiagnostics: (value: WorkspaceDiagnost
         cwd: input.cwd,
         trusted: input.trusted,
         model: input.model,
+        thinkingLevel: input.thinkingLevel ?? undefined,
         permissionMode: input.permissionMode ?? undefined,
       });
       if (!created.ok) return { ok: false };
@@ -236,8 +230,7 @@ export function createWorkspaceActions(setDiagnostics: (value: WorkspaceDiagnost
     openSavedSession: (sessionPath) => controller.openSavedSession(sessionPath),
     closeSession: (threadId) => void controller.closeSession(threadId),
     selectEffort: (value: string) => {
-      const level = Object.entries(EFFORT_LABELS).find(([, label]) => label === value)?.[0];
-      if (level !== undefined) void controller.selectThinking(activeThreadOf(), level);
+      void controller.selectThinking(activeThreadOf(), thinkingLevelOfLabel(value));
     },
     selectModel: (value: string) => {
       const state = store.getState();

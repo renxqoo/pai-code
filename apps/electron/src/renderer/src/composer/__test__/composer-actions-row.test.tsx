@@ -3,22 +3,25 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { copy } from '@/strings';
 
-import { ComposerActionsRow, type SessionControls } from '../composer-actions-row';
+import { ComposerActionsRow, type EffortControls, type UsageControls } from '../composer-actions-row';
 
 /**
- * 渲染冒烟：模型触发器（T21 起为弹窗入口）与无模型引导分支；会话面控件（思考档/压缩/用量环）
- * 按 session 组有无渲染；弹窗内交互（搜索/键盘/选择）由 cmdk 内建 + 真机走查覆盖（仓库静态口径）。
+ * 渲染冒烟：模型触发器（T21 起为弹窗入口）与无模型引导分支；思考档与用量环是两个独立
+ * 控制组（新任务页只有思考档面）；弹窗内交互（搜索/键盘/选择）由 cmdk 内建 + 真机走查覆盖（仓库静态口径）。
  */
 function noop(): void {}
 
-const SESSION: SessionControls = {
-  effort: 'high',
-  effortOptions: ['low', 'high'],
-  onSelectEffort: noop,
+const EFFORT: EffortControls = {
+  value: 'high',
+  options: ['low', 'high'],
+  onSelect: noop,
+  unavailableLabel: copy.composer.effortUnavailable,
+};
+
+const USAGE: UsageControls = {
   contextUsed: 0,
   stats: null,
-  contextUsageLabel: copy.composer.contextUsage,
-  effortUnavailableLabel: copy.composer.effortUnavailable,
+  label: copy.composer.contextUsage,
 };
 
 function makeProps(overrides: Partial<Parameters<typeof ComposerActionsRow>[0]> = {}): Parameters<typeof ComposerActionsRow>[0] {
@@ -38,7 +41,8 @@ function makeProps(overrides: Partial<Parameters<typeof ComposerActionsRow>[0]> 
     permissionFollowsGlobal: false,
     onSelectPermissionMode: noop,
     onFollowPermissionGlobal: noop,
-    session: SESSION,
+    effort: EFFORT,
+    usage: USAGE,
     ...overrides,
   };
 }
@@ -66,21 +70,25 @@ describe('输入框底行模型选择（弹窗入口）', () => {
     expect(html).not.toContain(copy.composer.noModels);
   });
 
-  test('会话面控件按 session 组渲染：有会话出思考档/用量环，无会话两项皆无（新任务页不摆假控件）；压缩入口已下线为 /compact 命令', () => {
-    const withSession = renderToStaticMarkup(<ComposerActionsRow {...makeProps()} />);
-    expect(withSession).toContain(copy.composer.contextUsage);
-    expect(withSession).toContain('high');
+  test('症状回归：新建任务页（只有思考档面、无用量面）思考档仍可选，用量环不摆假控件', () => {
+    const html = renderToStaticMarkup(<ComposerActionsRow {...makeProps({ usage: null })} />);
+    // 思考档控件渲染且展示当前值
+    expect(html).toContain('high');
+    // 用量环是会话面数据，不渲染
+    expect(html).not.toContain(copy.composer.contextUsage);
+    // 附件与发送仍在
+    expect(html).toContain(copy.composer.attach);
+    expect(html).toContain(copy.composer.send);
+  });
 
-    const withoutSession = renderToStaticMarkup(<ComposerActionsRow {...makeProps({ session: null })} />);
-    expect(withoutSession).not.toContain(copy.composer.contextUsage);
-    expect(withoutSession).not.toContain(copy.composer.effortUnavailable);
-    // 附件与发送仍在（新任务页可附图提交）
-    expect(withoutSession).toContain(copy.composer.attach);
-    expect(withoutSession).toContain(copy.composer.send);
+  test('思考档与用量环都缺（双 null）时两项皆不渲染', () => {
+    const html = renderToStaticMarkup(<ComposerActionsRow {...makeProps({ effort: null, usage: null })} />);
+    expect(html).not.toContain(copy.composer.contextUsage);
+    expect(html).not.toContain(copy.composer.effortUnavailable);
   });
 
   test('思考档不可用（档位为空）时给禁用原因文案', () => {
-    const html = renderToStaticMarkup(<ComposerActionsRow {...makeProps({ session: { ...SESSION, effortOptions: [] } })} />);
+    const html = renderToStaticMarkup(<ComposerActionsRow {...makeProps({ effort: { ...EFFORT, options: [] } })} />);
     expect(html).toContain(copy.composer.effortUnavailable);
   });
 });

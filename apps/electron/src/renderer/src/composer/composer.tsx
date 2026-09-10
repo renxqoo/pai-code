@@ -11,7 +11,6 @@ import { QueuedMessageCard } from '@/composer/queued-message-card';
 import { type PendingImage } from '@/composer/read-image-file';
 import { baseNameOf } from '@/lib/project-dirs';
 import { copy } from '@/strings';
-
 type ComposerProps = {
   value: string
   placeholder: string
@@ -178,15 +177,13 @@ function Composer({
             onSelectPermissionMode={onSelectPermissionMode}
             onFollowPermissionGlobal={onFollowPermissionGlobal}
             agents={{ working: agentsWorking, onOpen: onOpenAgents }}
-            session={{
-              effort,
-              effortOptions,
-              onSelectEffort,
-              contextUsed,
-              stats,
-              contextUsageLabel,
-              effortUnavailableLabel,
+            effort={{
+              value: effort,
+              options: effortOptions,
+              onSelect: onSelectEffort,
+              unavailableLabel: effortUnavailableLabel,
             }}
+            usage={{ contextUsed, stats, label: contextUsageLabel }}
           />
         )}
       />

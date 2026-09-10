@@ -15,16 +15,20 @@ import { PermissionModeMenu } from './permission-mode-menu';
 import { AgentStatusButton } from './agent-status-button';
 import { menuTriggerClassName } from './menu-trigger-style';
 
-/** 会话面控件组：无会话（新任务页）传 null，三项都不渲染——不摆没有数据面的假控件。 */
-type SessionControls = {
-  effort: string
-  effortOptions: readonly string[]
-  onSelectEffort: (value: string) => void
+/** 思考档控件组：有会话走 hub 线程真相，新任务页按所选模型本地计算，两者都渲染。 */
+type EffortControls = {
+  value: string
+  options: readonly string[]
+  onSelect: (value: string) => void
+  unavailableLabel: string
+}
+
+/** 用量环控件组（会话面数据；无会话不渲染，不摆没有数据面的假控件）。 */
+type UsageControls = {
   contextUsed: number
   /** 用量明细（I1）；null = 未拉取，环不可点。 */
   stats: SessionStatsView | null
-  contextUsageLabel: string
-  effortUnavailableLabel: string
+  label: string
 }
 
 type ComposerActionsRowProps = {
@@ -51,8 +55,10 @@ type ComposerActionsRowProps = {
   onFollowPermissionGlobal: () => void
   /** 会话面：工作中子代理状态徽标（不传 = 无会话面，不渲染）。 */
   agents?: { working: number; onOpen: () => void }
-  /** 会话面控件（思考档 / 压缩 / 用量环） */
-  session: SessionControls | null
+  /** 思考档控件（null = 不渲染） */
+  effort: EffortControls | null
+  /** 用量环控件（null = 无会话数据面，不渲染） */
+  usage: UsageControls | null
 }
 
 function optionItems(options: readonly string[], selected: string) {
@@ -61,8 +67,9 @@ function optionItems(options: readonly string[], selected: string) {
 
 /**
  * 输入框底行：左侧附件与权限模式，右侧用量环 / 模型 / 思考档 / 发送（生成中为停止）。
- * 模型选择走统一 CommandDialog 弹窗（T21）；思考档与用量环只在有会话时出现。
- * 压缩入口是斜杠命令 /compact（按钮已下线；hub prompt 通路拦截，见 T26）。
+ * 模型选择走统一 CommandDialog 弹窗（T21）；思考档在会话与新建任务页都可用
+ * （选项数据源不同：会话走 hub 线程真相，新建页按模型能力本地计算）；
+ * 用量环只在有会话时出现。压缩入口是斜杠命令 /compact（按钮已下线；hub prompt 通路拦截，见 T26）。
  */
 function ComposerActionsRow({
   model,
@@ -82,7 +89,8 @@ function ComposerActionsRow({
   onSelectPermissionMode,
   onFollowPermissionGlobal,
   agents,
-  session,
+  effort,
+  usage,
 }: ComposerActionsRowProps) {
   const [usageOpen, setUsageOpen] = React.useState(false);
   const [modelPickerOpen, setModelPickerOpen] = React.useState(false);
@@ -101,24 +109,24 @@ function ComposerActionsRow({
       ) : null}
       {agents === undefined ? null : <AgentStatusButton count={agents.working} onOpen={agents.onOpen} />}
       <div className="ml-auto flex items-center gap-[9px]">
-        {session === null ? null : (
+        {usage === null ? null : (
           <>
             <span className="relative flex items-center">
-              {usageOpen && session.stats !== null ? <UsageDetails stats={session.stats} /> : null}
-              {session.stats === null ? (
-                <span title={session.contextUsageLabel}>
-                  <UsageRing value={session.contextUsed} size={17} className="text-muted-foreground/70" />
+              {usageOpen && usage.stats !== null ? <UsageDetails stats={usage.stats} /> : null}
+              {usage.stats === null ? (
+                <span title={usage.label}>
+                  <UsageRing value={usage.contextUsed} size={17} className="text-muted-foreground/70" />
                 </span>
               ) : (
                 <button
                   type="button"
-                  title={session.contextUsageLabel}
-                  aria-label={session.contextUsageLabel}
+                  title={usage.label}
+                  aria-label={usage.label}
                   aria-expanded={usageOpen}
                   onClick={() => setUsageOpen((open) => !open)}
                   className="cursor-pointer rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
                 >
-                  <UsageRing value={session.contextUsed} size={17} className="text-muted-foreground/70" />
+                  <UsageRing value={usage.contextUsed} size={17} className="text-muted-foreground/70" />
                 </button>
               )}
             </span>
@@ -155,24 +163,24 @@ function ComposerActionsRow({
             />
           </>
         )}
-        {session === null ? null : session.effortOptions.length === 0 ? (
+        {effort === null ? null : effort.options.length === 0 ? (
           <span
-            title={session.effortUnavailableLabel}
+            title={effort.unavailableLabel}
             className="flex cursor-default items-center gap-2 rounded-lg py-1 pr-1 pl-1.5 text-[12px] leading-none text-muted-foreground/60 select-none"
           >
-            <span className="whitespace-nowrap">{session.effortUnavailableLabel}</span>
+            <span className="whitespace-nowrap">{effort.unavailableLabel}</span>
           </span>
         ) : (
           <MenuButton
-            aria-label={session.effort}
+            aria-label={effort.value}
             align="end"
             popupMinWidth={168}
-            items={optionItems(session.effortOptions, session.effort)}
-            onSelect={session.onSelectEffort}
+            items={optionItems(effort.options, effort.value)}
+            onSelect={effort.onSelect}
             triggerClassName={menuTriggerClassName}
             trigger={
               <>
-                <span className="whitespace-nowrap">{session.effort}</span>
+                <span className="whitespace-nowrap">{effort.value}</span>
                 <ChevronDown className="size-3 text-muted-foreground/70" strokeWidth={2} />
               </>
             }
@@ -205,4 +213,4 @@ function ComposerActionsRow({
 }
 
 export { ComposerActionsRow };
-export type { ComposerActionsRowProps, SessionControls };
+export type { ComposerActionsRowProps, EffortControls, UsageControls };

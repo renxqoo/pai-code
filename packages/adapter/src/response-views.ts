@@ -102,7 +102,25 @@ export function modelInfos(data: unknown): ModelInfoView[] {
     const provider = str(m.provider);
     const modelId = str(m.id);
     if (provider.length === 0 || modelId.length === 0) continue;
-    out.push({ provider, modelId });
+    // 思考能力面（新任务页按模型算档位）：非布尔/非映射形状直接丢弃，按不支持降级；
+    // 解析出的空 map 不落字段（空 map 与缺省对档位计算同义）
+    const map = m.thinkingLevelMap !== undefined ? thinkingLevelMapOf(m.thinkingLevelMap) : undefined;
+    out.push({
+      provider,
+      modelId,
+      ...(m.reasoning === true ? { reasoning: true } : {}),
+      ...(map !== undefined && Object.keys(map).length > 0 ? { thinkingLevelMap: map } : {}),
+    });
+  }
+  return out;
+}
+
+/** thinkingLevelMap 宽容解析：键保留字符串档位，值只认 string | null，其余丢弃。 */
+function thinkingLevelMapOf(data: unknown): Record<string, string | null> {
+  const out: Record<string, string | null> = {};
+  for (const [level, mapped] of Object.entries(recordOf(data))) {
+    if (typeof mapped === 'string') out[level] = mapped;
+    else if (mapped === null) out[level] = null;
   }
   return out;
 }

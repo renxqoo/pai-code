@@ -10,7 +10,7 @@ import { createGitBranches, type GitBranches } from './git-branches';
 import { buildSkillInventory, parseSkillPatterns, toggleSkillPatterns } from './skills-inventory';
 import type { AgentDirFiles } from './agent-dir-files';
 import type { AgentDefinitionsStore } from './agent-definitions-store';
-import { defaultPermissionRules, parsePermissionRules, type ProviderModel, type ThinkingFormat } from '@paiapp/contracts';
+import { defaultPermissionRules, parsePermissionRules, THINKING_LEVEL_ORDER, type ProviderModel, type ThinkingFormat, type ThinkingLevel } from '@paiapp/contracts';
 import { ApiSchemas, type ApiMethod, type ApiOutcome, type ApiParams, type ModelInfoView } from '@paiapp/contracts';
 
 import type { PaiRuntime } from './pai-runtime';
@@ -559,9 +559,8 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     void routes['session/state']({ threadId }).catch(() => undefined);
   };
 
-  function parseThinkingLevel(level: string): 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | null {
-    const allowed = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
-    return allowed.includes(level as (typeof allowed)[number]) ? (level as (typeof allowed)[number]) : null;
+  function parseThinkingLevel(level: string): ThinkingLevel | null {
+    return (THINKING_LEVEL_ORDER as readonly string[]).includes(level) ? (level as ThinkingLevel) : null;
   }
 
   return {

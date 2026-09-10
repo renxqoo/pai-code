@@ -181,6 +181,14 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     await controller.readSessionRules(active).catch(() => undefined);
   };
 
+  /** 只拉全局规则文件真相（不带活跃会话回读——boot 阶段活跃线程可能是 parked 占位）。 */
+  const refreshGlobalRules = async (): Promise<PermissionRules | null> => {
+    const outcome = await client.invoke('permission/read', {});
+    if (!outcome.ok) return null;
+    store.setState({ permissionRules: outcome.data });
+    return outcome.data;
+  };
+
   /** 对话框本地结算：ui_response 只有 ack 无事件回执，宿主侧超时/未知 id 均静默——弹窗关闭由客户端自治。 */
   const settleDialog = (requestId: string): void => {
     const timer = dialogTimers.get(requestId);
@@ -261,6 +269,8 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       }
       if (outcome === null) return;
       store.getState().bootstrap(outcome.data);
+      // 全局权限规则启动即载（新任务页权限控件的唯一数据源；此前仅设置页进入时拉取）
+      void refreshGlobalRules();
       // 聚焦会话懒恢复：启动不再全量 resume，bootstrap 自动选中的会话若是 parked 占位需唤醒
       // （历史水化由工作区激活 effect 跟随 state 翻转完成，此处只负责唤活与激活）
       const active = store.getState().activeThreadId;
@@ -322,7 +332,8 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
         await client.invoke('session/setThinking', { threadId, level: input.thinkingLevel });
       }
       if (input.permissionMode !== undefined) {
-        const globalRules = store.getState().permissionRules;
+        // 全局规则未载时现拉（建会话后置应用的基线；拉不到则本次选择放弃，不臆造基线）
+        const globalRules = store.getState().permissionRules ?? (await refreshGlobalRules());
         const rules = globalRules === null ? null : nextSessionRulesForMode(globalRules, input.permissionMode);
         if (rules !== null) await client.invoke('permission/sessionWrite', { threadId, rules });
       }
@@ -402,11 +413,10 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       if (outcome.ok) store.setState({ models: outcome.data });
     },
     async refreshPermissionRules(): Promise<PermissionRules | null> {
-      const outcome = await client.invoke('permission/read', {});
-      if (!outcome.ok) return null;
-      store.setState({ permissionRules: outcome.data });
+      const rules = await refreshGlobalRules();
+      if (rules === null) return null;
       await refreshActiveSessionRules();
-      return outcome.data;
+      return rules;
     },
     async writePermissionRules(rules: PermissionRules): Promise<string | null> {
       const outcome = await client.invoke('permission/write', { rules });

@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import type { AgentDefinition, CommandView, PermissionRules, PreferencesView, ProviderConfigView, SessionStatsView, SessionView, SkillView } from '@paiapp/contracts';
+import { supportedThinkingLevels, thinkingLevelLabel } from '@paiapp/contracts';
 import { useStore } from 'zustand';
 
 import type { SessionCardModel } from '@/sidebar/session-card-model';
@@ -89,21 +90,12 @@ export type LiveWorkspaceView = {
   /** 会话级规则（null = 未加载；source=thread 表示存在 sidecar）。 */
   sessionRules: { rules: PermissionRules; source: 'thread' | 'global' } | null;
   thinkingLevels: readonly string[];
+  /** 指定模型的可用思考档（展示名序；新任务页无线程，按模型能力本地计算）。 */
+  effortOptionsFor: (modelKey: string) => readonly string[];
   actions: WorkspaceActions;
 };
 
-const EFFORT_LABELS: Readonly<Record<string, string>> = {
-  off: 'Off',
-  minimal: 'Minimal',
-  low: 'Low',
-  medium: 'Medium',
-  high: 'High',
-  xhigh: 'X-high',
-  max: 'Max',
-};
-
 const EMPTY_QUEUE: { steering: readonly string[]; followUp: readonly string[] } = { steering: [], followUp: [] };
-
 /** useSyncExternalStore 订阅句柄：引用恒定（queuedDrafts 是模块单例）。 */
 const subscribeQueuedDrafts = (listener: () => void): (() => void) => queuedDrafts.subscribe(listener);
 
@@ -148,6 +140,15 @@ export function useLiveWorkspace(): LiveWorkspaceView {
   const isThreadStreaming = React.useCallback(
     (threadId: string) => store.getState().threads[threadId]?.streaming === true,
     [],
+  );
+
+  /** 模型 → 可用思考档展示名（新任务页数据源：hub 档位命令只按线程寻址，无线程时按模型能力算）。 */
+  const effortOptionsFor = React.useCallback(
+    (modelKey: string): string[] => {
+      const model = models.find((entry) => `${entry.provider}/${entry.modelId}` === modelKey);
+      return supportedThinkingLevels(model).map((level) => thinkingLevelLabel(level));
+    },
+    [models],
   );
 
   // 暂存排队消息的轮末冲刷（连接器单一真相 live/queued-flush：结算冲刷/
@@ -268,6 +269,7 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     permissionRules,
     sessionRules,
     thinkingLevels: effortLevels,
+    effortOptionsFor,
     actions,
   };
 }
@@ -282,8 +284,8 @@ function buildComposer(
   const modelOptions = models.map((model) => `${model.provider}/${model.modelId}`);
   const currentModel = session?.model ?? modelOptions[0] ?? '';
   // 思考档以模型能力列表为真相：拉取前/不支持时为空，composer 侧禁用并给原因（不臆造默认档）
-  const levelLabels = effortLevels.map((level) => EFFORT_LABELS[level] ?? level);
-  const currentLabel = session?.thinkingLevel !== undefined && session?.thinkingLevel !== null ? EFFORT_LABELS[session.thinkingLevel] : undefined;
+  const levelLabels = effortLevels.map((level) => thinkingLevelLabel(level));
+  const currentLabel = session?.thinkingLevel !== undefined && session?.thinkingLevel !== null ? thinkingLevelLabel(session.thinkingLevel) : undefined;
   // 未知档位回落到第一个可选档；无可选档时留空（触发禁用态）
   const effort = currentLabel ?? levelLabels[0] ?? '';
   return {

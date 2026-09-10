@@ -19,6 +19,7 @@ function renderScreen(overrides: Partial<Parameters<typeof NewTaskScreen>[0]> = 
       trustedDefault={false}
       defaultModelFor={() => 'glm/glm-4.7'}
       modelOptions={['glm/glm-4.7', 'glm/glm-5.3']}
+      effortOptionsFor={() => ['Off', 'Low', 'High']}
       noModelsLabel={copy.composer.noModels}
       globalPermissionMode="ask"
       onSearchFiles={() => Promise.resolve(null)}
@@ -49,9 +50,12 @@ describe('NewTaskScreen', () => {
     expect(html).toContain(copy.composer.branchLoading);
   });
 
-  test('无会话面控件：不渲染思考档/用量环（不摆没有数据面的假控件）', () => {
+  test('症状回归：新建页思考档默认态可选（跟随模型默认），用量环仍不渲染（无会话数据面）', () => {
     const html = renderScreen();
+    // 思考档控件以「默认」态渲染——发消息前即可选择
+    expect(html).toContain(copy.composer.effortDefault);
     expect(html).not.toContain(copy.composer.effortUnavailable);
+    // 用量环是会话面数据，不摆假控件
     expect(html).not.toContain(copy.composer.contextUsage);
     // 附件与发送保留（可附图提交）
     expect(html).toContain(copy.composer.attach);

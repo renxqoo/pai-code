@@ -152,6 +152,7 @@ export const zh: typeof en = {
     noModels: '还没有模型——去设置添加',
     hostDownModels: '宿主未连接——模型暂不可选',
     effortUnavailable: '思考不可用',
+    effortDefault: '默认',
     slashAria: '命令建议',
     fileAria: '文件建议',
     groupCommands: '命令',

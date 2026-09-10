@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import type { ApiOutcome, PermissionRules } from '@paiapp/contracts';
+import { thinkingLevelLabel, thinkingLevelOfLabel, type ApiOutcome, type PermissionRules } from '@paiapp/contracts';
 import { SparkMark } from '@paiapp/ui';
 
 import { BranchPickerDialog } from '@/composer/branch-picker-dialog';
@@ -30,6 +30,8 @@ export type NewTaskStart = {
   model: string
   /** null = 跟随全局规则 */
   permissionMode: PermissionRules['mode'] | null
+  /** 思考档（协议档位值；null = 跟随模型默认） */
+  thinkingLevel: string | null
   text: string
   attachments: readonly ComposerAttachment[]
 }
@@ -44,6 +46,8 @@ type NewTaskScreenProps = {
   /** 初始模型（项目记忆 → 全局默认 → 当前会话 → 首个可用；cwd 变化后重取） */
   defaultModelFor: (cwd: string) => string
   modelOptions: readonly string[]
+  /** 所选模型的可用思考档（展示名序；新建页无线程，按模型能力本地计算） */
+  effortOptionsFor: (modelKey: string) => readonly string[]
   /** 无可选模型时的引导文案（点击跳设置） */
   noModelsLabel: string
   onOpenSettings?: () => void
@@ -65,7 +69,7 @@ type NewTaskScreenProps = {
 /**
  * 新建任务整页：问候语 + 项目/分支条 + 白卡输入框 + 快捷任务胶囊。
  * 与线程页共用 PromptCard / PromptInputArea / PromptContextBar / ComposerActionsRow；
- * 会话尚未创建，故思考档、压缩、用量环无数据面（session=null 不渲染）。
+ * 会话尚未创建：思考档按所选模型本地计算（跟随模型默认可退回），压缩与用量环无数据面不渲染。
  */
 function NewTaskScreen({
   knownDirs,
@@ -73,6 +77,7 @@ function NewTaskScreen({
   trustedDefault,
   defaultModelFor,
   modelOptions,
+  effortOptionsFor,
   noModelsLabel,
   onOpenSettings,
   globalPermissionMode,
@@ -92,6 +97,8 @@ function NewTaskScreen({
   const [model, setModel] = React.useState<string | null>(null);
   /** null = 跟随全局权限规则 */
   const [permissionMode, setPermissionMode] = React.useState<PermissionRules['mode'] | null>(null);
+  /** 思考档（协议档位值；null = 跟随模型默认，创建时不干预） */
+  const [thinkingLevel, setThinkingLevel] = React.useState<string | null>(null);
   const [dialog, setDialog] = React.useState<NewTaskDialog>(null);
   const [picking, setPicking] = React.useState(false);
   const [checkingOut, setCheckingOut] = React.useState(false);
@@ -120,6 +127,7 @@ function NewTaskScreen({
     setCwd(next);
     // 换项目即回到该项目默认模型记忆（不把上一个项目的选择带过去），并清掉旧目录的失败文案
     setModel(null);
+    setThinkingLevel(null);
     setBranchError(null);
     setDialog(null);
   };
@@ -187,7 +195,7 @@ function NewTaskScreen({
     if (busyRef.current || cwd.length === 0) return Promise.resolve(false);
     busyRef.current = true;
     setCreating(true);
-    return onCreate({ cwd, trusted, model: effectiveModel, permissionMode, text, attachments }).then(
+    return onCreate({ cwd, trusted, model: effectiveModel, permissionMode, thinkingLevel, text, attachments }).then(
       (ok) => {
         busyRef.current = false;
         setCreating(false);
@@ -205,6 +213,18 @@ function NewTaskScreen({
   const prefill = (prompt: string): void => {
     setDraft(prompt);
     textareaRef.current?.focus();
+  };
+
+  /** 换模型即重置思考档：档位是模型能力，不把旧模型的选择带过去。 */
+  const selectModel = (value: string): void => {
+    setModel(value);
+    setThinkingLevel(null);
+  };
+
+  const effortOptions = effortOptionsFor(effectiveModel);
+  const effortDefaultValue = copy.composer.effortDefault;
+  const selectEffort = (label: string): void => {
+    setThinkingLevel(label === effortDefaultValue ? null : thinkingLevelOfLabel(label));
   };
 
   return (
@@ -258,7 +278,7 @@ function NewTaskScreen({
               <ComposerActionsRow
                 model={effectiveModel}
                 modelOptions={modelOptions}
-                onSelectModel={setModel}
+                onSelectModel={selectModel}
                 noModelsLabel={noModelsLabel}
                 onOpenSettings={onOpenSettings}
                 attachLabel={copy.composer.attach}
@@ -268,11 +288,17 @@ function NewTaskScreen({
                 canSend={canSubmit}
                 generating={false}
                 onStop={() => undefined}
-                permissionMode={globalPermissionMode}
+                permissionMode={permissionMode ?? globalPermissionMode}
                 permissionFollowsGlobal={permissionMode === null}
                 onSelectPermissionMode={setPermissionMode}
                 onFollowPermissionGlobal={() => setPermissionMode(null)}
-                session={null}
+                effort={{
+                  value: thinkingLevel === null ? effortDefaultValue : thinkingLevelLabel(thinkingLevel),
+                  options: [effortDefaultValue, ...effortOptions],
+                  onSelect: selectEffort,
+                  unavailableLabel: copy.composer.effortUnavailable,
+                }}
+                usage={null}
               />
             )}
           />

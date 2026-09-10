@@ -160,6 +160,7 @@ export const en = {
     noModels: 'No models yet — open Settings',
     hostDownModels: 'Host not connected — models unavailable',
     effortUnavailable: 'Thinking unavailable',
+    effortDefault: 'Default',
     slashAria: 'Command suggestions',
     fileAria: 'File suggestions',
     groupCommands: 'Commands',
