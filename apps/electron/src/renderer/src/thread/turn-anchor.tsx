@@ -29,10 +29,13 @@ function TurnAnchor({ time, summary, onJump }: TurnAnchorProps) {
       />
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute top-1/2 left-full z-10 ml-[10px] -translate-y-1/2 max-h-[46px] w-max max-w-[280px] overflow-hidden rounded-[8px] bg-foreground px-[10px] py-[6px] text-left text-[12px] leading-[17px] text-background opacity-0 shadow-[0_6px_16px_-6px_rgba(24,24,28,0.35)] transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100 motion-reduce:transition-none"
+        className="pointer-events-none absolute top-1/2 left-full z-10 ml-[10px] -translate-y-1/2 w-max rounded-[8px] bg-foreground px-[10px] py-[6px] text-left opacity-0 shadow-[0_6px_16px_-6px_rgba(24,24,28,0.35)] transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100 motion-reduce:transition-none"
       >
-        <span className="font-medium">{time}</span>
-        {summary.length > 0 ? <span className="opacity-75"> · {summary}</span> : null}
+        {/* clamp 层不带 padding：overflow 裁剪在 padding 盒边缘，带 padding 会漏出下一行字形的上沿 */}
+        <span className="line-clamp-2 block max-w-[280px] text-[12px] leading-[17px] text-background">
+          <span className="font-medium">{time}</span>
+          {summary.length > 0 ? <span className="opacity-75"> · {summary}</span> : null}
+        </span>
       </span>
     </button>
   );

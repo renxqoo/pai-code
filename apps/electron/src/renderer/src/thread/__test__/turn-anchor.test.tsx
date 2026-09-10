@@ -32,4 +32,15 @@ describe('TurnAnchor 渲染', () => {
     expect(html).toContain('group-focus-visible:bg-foreground');
     expect(html).toContain('motion-reduce:transition-none');
   });
+
+  test('长摘要两行封顶省略号收尾，不出现第三行拦腰截断（clamp 层无 padding、气泡层不裁剪）', () => {
+    const html = renderToStaticMarkup(
+      <TurnAnchor time="8:20 PM" summary="比如继续推进 tasks/ 里的任务、修 bug、写测试，先来看看代码" onJump={() => undefined} />,
+    );
+    // clamp 在无 padding 内层：overflow 裁剪发生在 padding 盒边缘，带 padding 的层裁剪会漏出下一行字形上沿
+    expect(html).toContain('line-clamp-2 block max-w-[280px]');
+    // 气泡外观层不承担裁剪：禁 max-height 硬截与 overflow 裁剪
+    expect(html).not.toContain('max-h-');
+    expect(html).not.toContain('overflow-hidden');
+  });
 });
