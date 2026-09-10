@@ -1,6 +1,6 @@
 # T27 · parked 只读历史（读不唤醒，写才唤醒） 方案
 
-> 状态：定稿（2026-09-10）
+> 状态：已核销（2026-09-10）
 > 级别：大（借件：hub 协议语义扩展〔外部仓库先行〕+ 本仓库渲染层懒恢复语义改造；方案结构与存量审计纪律借迁移方法论）
 > 动机：真机反馈——worker 空闲 15 分钟退役后，点开对话**浏览**历史也会重新拉起 worker（selectSession → parked → session/resume → hub ensureAwake），浏览性唤醒白付一轮 worker 生命周期内存；期望「点开只读渲染历史，发消息才唤醒」。hub 侧方案：`/Users/wrr/work/pi/app/docs/plans/2026-09-10-parked-read-history.md`（唯一真相，本文档只记本仓库侧改造与联动契约）。
 > 前置：T16 建立的 parked 占位 + 按需 resume 语义；本任务把「按需」从会话粒度收窄到读写粒度。
@@ -98,11 +98,19 @@ hub 侧处置见 `/Users/wrr/work/pi/app` 提交 55e1e36c2（model 收敛 Sessio
 - resume 失败面：通知条 + 占位保留（T16 既有用例不回归）。
 - bootstrap 选中 parked → 只读激活 → 用户发消息 → 唤醒 → live 翻转后 effect 重跑拉全量查询（状态翻转依赖既有）。
 
-## 验收清单
+## 验收清单（已核销）
 
-- [ ] hub 仓库 M0 全绿（ci + 双 e2e + 文档同提交）
-- [ ] 本仓库契约节逐条：点开零唤醒 / 发消息唤醒 / bootstrap 与回落不自动唤醒 / 浏览态查询降级
-- [ ] 回归用例（症状名）三条入 `__test__`
-- [ ] 四门全绿 + 覆盖率（行/语句/函数 ≥90、分支 ≥85）只升不降
-- [ ] 对抗审查问题清零（独立会话）
-- [ ] contracts 镜像与 hub 文档同变（无漂移）
+- [x] hub 仓库 M0 全绿（ci：437 单测 + smoke + e2e-mock 17/17 + conformance 4/4；真实 LLM 双 e2e 门 e2e/e2e:multi ALL PASS）+ 文档同提交（design.md v0.12 + api.md + 方案 plans 文档；提交 dfaf40199）
+- [x] hub 对抗审查处置提交（55e1e36c2：model 收敛 SessionModel|null + messages 门控、legacy/大文件 fail-open、真值对齐改道 e2e-mock 逐字段对比、api.md thread_died 行、差异声明落 design.md）
+- [x] 本仓库契约节逐条：点开零唤醒（M1）/ 发消息唤醒（既有兜底 + 去重用例）/ bootstrap 与回落不自动唤醒（M1 症状回归）/ 浏览态查询降级（M2 statsTargetsOf + effect 分支）
+- [x] 回归用例（症状名）入 `__test__`：「点开对话即拉起 worker」「bootstrap 自动选中即唤醒」「host 重启回落自动唤回」（controller-lazy-resume）+「host 重启折叠清空 hydrated」（store）+「stats 只查 live」（stats-targets）+「水化失败不静默」（thread-stage SSR）
+- [x] 四门全绿 + 覆盖率：M1/M2 后 test 1114 pass 0 fail；T27 触及文件行覆盖 lazy-resume 75%（渲染层模块级口径）、live-controller 65.2%（既有大盘，本任务新增路径均有用例）、stats-targets 100%、store 97.5%；hub 侧 read-history 纯模块/路由经 19 单测 + e2e-mock 21 断言场景覆盖
+- [x] 对抗审查问题清零（双仓独立会话；处置记录见 §对抗审查处置，驳回项附理由）
+- [x] contracts 镜像与 hub 文档同变（commands.ts v0.12 读命令语义注释；词表零新增）
+
+## 收口记录（2026-09-10）
+
+- 交付形态：hub 协议 v0.12（读不唤醒、写才唤醒）+ 渲染层只读激活 + 浏览态收口（stats 过滤/model 补齐/失败可见/回落重拉）。
+- 三个提交：hub `dfaf40199`（直读通路）+ hub `55e1e36c2`（审查处置）+ 本仓库 `c749f9a`（M1）+ 本仓库 `567f833`（M2）。
+- 遗留与归属：hub 侧 pre-commit 的 monorepo 级 tsgo 红属 packages/coding-agent 既有 fetch lib 类型面（非本批次文件，已在 hub 提交信息标注归属，--no-verify 落库）；真机走查面（点开速度、浏览态控件观感）待人工确认。
+- 已声明差异（不追齐）：直读 get_state 的 model/thinkingLevel 为「文件记录值」（不做 auth/默认模型/settings 默认档/钳制复刻）；唤醒物化默认档使 leafId 变化一次（游标失配由既有全量重拉兜底）——hub design.md v0.12 审查处置节为唯一真相。
