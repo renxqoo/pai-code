@@ -2,7 +2,7 @@
 import { enSettings } from './en-settings';
 export const en = {
   /** 标题行双色文案：名称重字重、产品线后缀轻字重（与设计稿一致） */
-  appTitle: { name: 'T3', suffix: 'Code' },
+  appTitle: { name: 'Pai', suffix: 'Code' },
   sidebar: {
     search: 'Search',
     newTask: 'New task',

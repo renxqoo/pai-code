@@ -3,7 +3,7 @@ import { zhSettings } from './zh-settings';
 import type { en } from './en';
 
 export const zh: typeof en = {
-  appTitle: { name: 'T3', suffix: 'Code' },
+  appTitle: { name: 'Pai', suffix: 'Code' },
   sidebar: {
     search: '搜索',
     newTask: '新建任务',
