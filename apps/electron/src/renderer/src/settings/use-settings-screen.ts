@@ -5,6 +5,7 @@ import { AGENT_TOOL_IDS } from '@paiapp/contracts';
 import type { Theme } from '@/components/theme-context';
 import { useTheme } from '@/components/use-theme';
 import type { LiveWorkspaceView } from '@/live/use-live-workspace';
+import { useRuntimePanel } from '@/hooks/use-runtime-panel';
 import type { WorkspaceActions } from '@/live/workspace-actions';
 import { changeLocaleSetting, getLocaleSetting, type LocaleSetting } from '@/strings';
 import { FETCH_ON_ENTER_SECTIONS, SETTINGS_FIRST_SECTION, type SettingsSectionId } from './settings-sections';
@@ -32,11 +33,17 @@ export function pinnedSetOf(pinnedSessions: readonly string[]): ReadonlySet<stri
   return new Set(pinnedSessions);
 }
 
+import type { RuntimeContentProps } from '@/screens/runtime-content';
+
 export type SettingsScreenProps = {
   open: boolean;
   onClose: () => void;
   section: SettingsSectionId;
   onSelectSection: (id: SettingsSectionId) => void;
+  /** 运行状态分区（T30）：轮询随分区激活启停。 */
+  runtime: RuntimeContentProps;
+  /** 导航红点：宿主非就绪或存在异常会话。 */
+  runtimeAttention: boolean;
   general: {
     localeSetting: LocaleSetting;
     onLocaleSettingChange: (next: LocaleSetting) => void;
@@ -109,6 +116,11 @@ export function useSettingsScreen({ workspace, open, onClose }: UseSettingsScree
   const { theme, setTheme } = useTheme();
   const { actions } = workspace;
   // 每次打开回到首分区（重进分区会重触发按开即读）
+  const runtimePanel = useRuntimePanel(
+    actions,
+    { sessions: workspace.sessionById, statsById: workspace.statsById, queueCountOf: (threadId) => workspace.queueCountOf(threadId) },
+    open && section === 'runtime',
+  );
   React.useEffect(() => {
     if (open) setSection(SETTINGS_FIRST_SECTION);
   }, [open]);
@@ -184,5 +196,20 @@ export function useSettingsScreen({ workspace, open, onClose }: UseSettingsScree
       },
       onRefresh: actions.refreshSaved,
     },
+    runtime: {
+      snapshot: runtimePanel.snapshot,
+      rows: runtimePanel.rows,
+      diagnosticLog: runtimePanel.diagnosticLog,
+      actions,
+      onLoadDiagnosticLog: runtimePanel.loadDiagnosticLog,
+      onOpenSession: (threadId: string) => {
+        // 行打开走既有 saved 恢复链（row.sessionPath）；关闭设置回到会话视图
+        const row = runtimePanel.rows.find((item) => item.threadId === threadId);
+        if (row?.sessionPath != null) void actions.openSavedSession(row.sessionPath);
+        onClose();
+      },
+    },
+    runtimeAttention:
+      workspace.hostPhase !== 'ready' || Object.values(workspace.sessionById).some((session) => session.state === 'dead'),
   }), [open, onClose, section, onSelectSection, localeSetting, theme, setTheme, workspace, pinned, projects, actions]);
 }

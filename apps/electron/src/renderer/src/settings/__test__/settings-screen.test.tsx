@@ -60,6 +60,24 @@ function makeProps(overrides: Partial<SettingsScreenProps> = {}): SettingsScreen
       onOpenSaved: noop,
       onRefresh: noop,
     },
+    runtime: {
+      snapshot: null,
+      rows: [],
+      diagnosticLog: null,
+      actions: {
+        stopThread: () => undefined,
+        retireSession: () => Promise.resolve(),
+        forceRetireSession: () => Promise.resolve(),
+        setKeepalive: () => Promise.resolve(),
+        setIdleRecycle: () => Promise.resolve(),
+        showNotice: () => undefined,
+        exportDiagnostics: () => Promise.resolve(true),
+        restartHost: () => undefined,
+      },
+      onLoadDiagnosticLog: () => undefined,
+      onOpenSession: () => undefined,
+    },
+    runtimeAttention: false,
     ...overrides,
   };
 }
@@ -105,6 +123,7 @@ describe('设置页渲染冒烟', () => {
       { section: 'agents', marks: [copy.settings.agentsTitle, copy.settings.agentsEmpty] },
       { section: 'skills', marks: [copy.settings.skillsTitle, copy.settings.skillsEmpty] },
       { section: 'history', marks: [copy.settings.historyTitle, copy.settings.historyEmpty] },
+      { section: 'runtime', marks: [copy.settings.runtimeTitle, copy.runtime.autoRefresh] },
     ];
     for (const { section, marks } of cases) {
       const html = renderToStaticMarkup(<SettingsScreen {...makeProps({ section })} />);

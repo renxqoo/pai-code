@@ -14,6 +14,7 @@ const ALL_SECTIONS: readonly SettingsSectionId[] = [
   'agents',
   'skills',
   'history',
+  'runtime',
 ];
 
 describe('设置分区模型', () => {

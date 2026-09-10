@@ -22,7 +22,7 @@ export const zh: typeof en = {
     settings: '设置',
     workflows: '工作流',
     usage: '用量',
-    runtime: '运行状态',
+    automation: '自动化',
     runtimeAttention: '宿主或 worker 需要关注',
     retireSession: '回收 Worker',
     refresh: '刷新会话',

@@ -50,7 +50,6 @@ function makeProps(overrides: Partial<SidebarProps> = {}): SidebarProps {
     onSearchOpenChange: noop,
     onOpenSearch: noop,
     onOpenRuntime: noop,
-    runtimeAttention: false,
     searchFocusToken: 0,
     searchQuery: '',
     onSearchQueryChange: noop,
@@ -88,7 +87,6 @@ describe('Sidebar 渲染冒烟', () => {
     const html = renderToStaticMarkup(<Sidebar {...makeProps()} />);
     expect(html).toContain('新建任务');
     expect(html).toContain('搜索');
-    expect(html).toContain('运行状态');
     expect(html).toContain('插件市场');
     expect(html).toContain(`${MODIFIER_KEY_LABEL}N`);
     expect(html).toContain(`${MODIFIER_KEY_LABEL}K`);
@@ -97,12 +95,6 @@ describe('Sidebar 渲染冒烟', () => {
     expect(html).toContain('收起侧栏');
   });
 
-  test('运行状态行异常亮标（T29）：runtimeAttention 为 true 给读屏提示，false 不给', () => {
-    const attention = renderToStaticMarkup(<Sidebar {...makeProps({ runtimeAttention: true })} />);
-    expect(attention).toContain('aria-label="运行状态 · 宿主或 worker 需要关注"');
-    const calm = renderToStaticMarkup(<Sidebar {...makeProps({ runtimeAttention: false })} />);
-    expect(calm).not.toContain('aria-label="运行状态 · 宿主或 worker 需要关注"');
-  });
 
   test('分组视图：平铺会话行渲染标题与相对时间标签', () => {
     const html = renderToStaticMarkup(

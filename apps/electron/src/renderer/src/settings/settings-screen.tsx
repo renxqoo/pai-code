@@ -1,10 +1,13 @@
-import type { SettingsScreenProps } from './use-settings-screen';
+import { copy } from '@/strings';
+import { RuntimeContent } from '@/screens/runtime-content';
 
+import type { SettingsScreenProps } from './use-settings-screen';
 import { AgentsSection } from './agents-section';
 import { GeneralSection } from './general-section';
 import { HistorySection } from './history-section';
 import { PermissionsSection } from './permissions-section';
 import { ProvidersSection } from './providers-section';
+import { SettingsPageHeader } from './settings-page-header';
 import { SettingsSectionNav } from './settings-section-nav';
 import { SkillsSection } from './skills-section';
 
@@ -13,12 +16,12 @@ import { SkillsSection } from './skills-section';
  * 分区状态/派发与数据装配都在 use-settings-screen，本组件只做展示分派。
  * Esc 关闭由父层全局监听，本组件不挂键盘事件。
  */
-function SettingsScreen({ open, onClose, section, onSelectSection, general, providers, permissions, agents, skills, history }: SettingsScreenProps) {
+function SettingsScreen({ open, onClose, section, onSelectSection, general, providers, permissions, agents, skills, history, runtime, runtimeAttention }: SettingsScreenProps) {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-40 flex bg-background">
       <aside className="h-full w-[320px] shrink-0 border-r border-border bg-sidebar">
-        <SettingsSectionNav section={section} onSelectSection={onSelectSection} onClose={onClose} />
+        <SettingsSectionNav section={section} onSelectSection={onSelectSection} onClose={onClose} runtimeAttention={runtimeAttention} />
       </aside>
       <div className="min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex w-full max-w-[1000px] flex-col px-[80px] py-[56px]">
@@ -32,8 +35,13 @@ function SettingsScreen({ open, onClose, section, onSelectSection, general, prov
             <AgentsSection {...agents} />
           ) : section === 'skills' ? (
             <SkillsSection {...skills} />
-          ) : (
+          ) : section === 'history' ? (
             <HistorySection {...history} />
+          ) : (
+            <>
+              <SettingsPageHeader title={copy.settings.runtimeTitle} description={copy.settings.runtimeDesc} />
+              <RuntimeContent {...runtime} />
+            </>
           )}
         </div>
       </div>

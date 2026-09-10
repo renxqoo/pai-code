@@ -6,8 +6,8 @@ import type { RuntimeSnapshotView } from '@paiapp/contracts';
 import { copy } from '@/strings';
 
 import type { RuntimeWorkerRow } from '../runtime-entries';
-import type { RuntimeScreenActions } from '../runtime-screen';
-import { RuntimeScreen } from '../runtime-screen';
+import type { RuntimeScreenActions } from '../runtime-content';
+import { RuntimeContent } from '../runtime-content';
 
 /** 运行状态整页冒烟（静态口径：SSR 不跑轮询 effect；交互与真机走查走 demo/E2E）。 */
 
@@ -89,25 +89,24 @@ function row(overrides: Partial<RuntimeWorkerRow> = {}): RuntimeWorkerRow {
   };
 }
 
-function renderScreen(overrides: Partial<Parameters<typeof RuntimeScreen>[0]> = {}): string {
+function renderScreen(overrides: Partial<Parameters<typeof RuntimeContent>[0]> = {}): string {
   return renderToStaticMarkup(
-    <RuntimeScreen
+    <RuntimeContent
       snapshot={snapshot()}
       rows={[]}
       diagnosticLog={null}
       actions={actions}
       onLoadDiagnosticLog={() => undefined}
-      onClose={() => undefined}
       onOpenSession={() => undefined}
       {...overrides}
     />,
   );
 }
 
-describe('RuntimeScreen', () => {
+describe('RuntimeContent', () => {
   test('正常快照：健康灯/相位/容量/内存与走势标题齐全，健康档为健康', () => {
     const html = renderScreen();
-    expect(html).toContain(copy.runtime.title);
+    // 设置分区形态：标题由 SettingsPageHeader 承担，内容首行为健康灯
     expect(html).toContain(copy.runtime.healthHealthy);
     expect(html).toContain(copy.runtime.phaseReady);
     expect(html).toContain(copy.runtime.heartbeatAgo(2));

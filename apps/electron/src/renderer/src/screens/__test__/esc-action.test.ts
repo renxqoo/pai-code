@@ -29,10 +29,6 @@ describe('escActionFor', () => {
     expect(escActionFor(base({ bashRunning: true }))).toEqual({ kind: 'abort-bash' });
   });
 
-  test('运行状态页（T29）：与 Usage 同为全屏覆盖层，先于 Usage 收起、不穿透底层动作', () => {
-    expect(escActionFor(base({ runtimeOpen: true, usageOpen: true, sidebarSearchOpen: true }))).toEqual({ kind: 'close-runtime' });
-    expect(escActionFor(base({ runtimeOpen: true, bashRunning: true, generating: true }))).toEqual({ kind: 'close-runtime' });
-  });
 
   test('逐层收起优先级：对话框 → Usage → 新建任务页 → 设置 → 可见侧栏搜索 → 面板 → bash/停止', () => {
     expect(escActionFor(base({ dialogCount: 1, sidebarSearchOpen: true, usageOpen: true, settingsOpen: true }))).toEqual({ kind: 'dismiss-dialogs' });

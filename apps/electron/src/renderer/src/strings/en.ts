@@ -21,7 +21,7 @@ export const en = {
     settings: 'Settings',
     workflows: 'Workflows',
     usage: 'Usage',
-    runtime: 'Runtime',
+    automation: 'Automation',
     runtimeAttention: 'Host or worker needs attention',
     retireSession: 'Recycle worker',
     refresh: 'Refresh sessions',

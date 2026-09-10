@@ -6,8 +6,8 @@ import { buildRuntimeRows, type RuntimeWorkerRow } from '@/screens/runtime-entri
 import type { WorkspaceActions } from '@/live/workspace-actions';
 
 /**
- * 运行状态页面板（T29）：开合 + 打开期间 2s 轮询快照（关页即停）+ worker 行装配。
- * 快照不进 store（单页消费，useState 持有——usage-panel 同型）。
+ * 运行状态面板（T29/T30）：受控 open（设置 runtime 分区激活）期间 2s 轮询快照
+ * （切走/关设置即停）+ worker 行装配。快照不进 store（单页消费，useState 持有）。
  */
 
 const POLL_INTERVAL_MS = 2_000;
@@ -20,17 +20,13 @@ export interface RuntimePanelView {
 }
 
 export interface RuntimePanel {
-  open: boolean;
-  openRuntime: () => void;
-  closeRuntime: () => void;
   snapshot: RuntimeSnapshotView | null;
   rows: readonly RuntimeWorkerRow[];
   diagnosticLog: string | null;
   loadDiagnosticLog: () => void;
 }
 
-export function useRuntimePanel(actions: Pick<WorkspaceActions, 'fetchRuntime' | 'fetchDiagnosticLog'>, view: RuntimePanelView): RuntimePanel {
-  const [open, setOpen] = React.useState(false);
+export function useRuntimePanel(actions: Pick<WorkspaceActions, 'fetchRuntime' | 'fetchDiagnosticLog'>, view: RuntimePanelView, open: boolean): RuntimePanel {
   const [snapshot, setSnapshot] = React.useState<RuntimeSnapshotView | null>(null);
   const [diagnosticLog, setDiagnosticLog] = React.useState<string | null>(null);
 
@@ -69,9 +65,6 @@ export function useRuntimePanel(actions: Pick<WorkspaceActions, 'fetchRuntime' |
   }, [actions]);
 
   return {
-    open,
-    openRuntime: () => setOpen(true),
-    closeRuntime: () => setOpen(false),
     snapshot,
     rows,
     diagnosticLog,

@@ -27,9 +27,7 @@ type SidebarProps = {
   /** 快捷区「搜索」行入口：展开 + 聚焦（已展开时重新聚焦；含收起态展开侧栏）。 */
   onOpenSearch: () => void
   /** 快捷区「运行状态」行入口：打开运行状态监控页。 */
-  onOpenRuntime: () => void
   /** 快捷区「运行状态」行的异常亮标数据（宿主相位异常或存在 dead worker）。 */
-  runtimeAttention: boolean
   /** 聚焦信号：每次 ⌘K/快捷行触发递增，驱动已展开的搜索框重新聚焦。 */
   searchFocusToken: number
   /** 会话过滤查询（受控）：空串 = 不过滤。 */
@@ -92,8 +90,6 @@ function Sidebar({
   searchOpen,
   onSearchOpenChange,
   onOpenSearch,
-  onOpenRuntime,
-  runtimeAttention,
   searchFocusToken,
   searchQuery,
   onSearchQueryChange,
@@ -151,7 +147,7 @@ function Sidebar({
         <>
             <div className="flex min-h-0 flex-1 flex-col pt-2 ">
               <div className="px-2 ">
-            <QuickActionsRow onNewThread={onNewThread} onOpenSearch={onOpenSearch} onOpenRuntime={onOpenRuntime} runtimeAttention={runtimeAttention} />
+            <QuickActionsRow onNewThread={onNewThread} onOpenSearch={onOpenSearch} />
             {searchOpen ? (
               <div className="pt-1.5">
                 <SidebarSearchInput

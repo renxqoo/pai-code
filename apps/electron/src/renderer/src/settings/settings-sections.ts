@@ -8,7 +8,8 @@ export type SettingsSectionId =
   | 'permissions'
   | 'agents'
   | 'skills'
-  | 'history';
+  | 'history'
+  | 'runtime';
 
 /** 打开设置页时回到的首分区。 */
 export const SETTINGS_FIRST_SECTION: SettingsSectionId = 'general';
@@ -31,5 +32,5 @@ export type SettingsNavGroup = {
 export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
   { id: 'basics', sections: ['general', 'providers'] },
   { id: 'agent', sections: ['permissions', 'agents', 'skills'] },
-  { id: 'data', sections: ['history'] },
+  { id: 'data', sections: ['history', 'runtime'] },
 ];

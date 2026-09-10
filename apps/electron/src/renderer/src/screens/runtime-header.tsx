@@ -1,11 +1,9 @@
 import { copy } from '@/strings';
 import { cn } from '@/lib/utils';
-import { isWindowsPlatform, TITLEBAR_LEFT_PADDING } from '@/lib/platform';
 import { healthLabel, type RuntimeHealthTone } from '@/screens/runtime-format';
 
 type RuntimeHeaderProps = {
   health: RuntimeHealthTone
-  onClose: () => void
 }
 
 const healthDotClass: Record<RuntimeHealthTone, string> = {
@@ -14,18 +12,11 @@ const healthDotClass: Record<RuntimeHealthTone, string> = {
   failed: 'bg-destructive',
 };
 
-/** 页头：标题 + 健康灯 + 自动刷新指示 + 关闭；左右留出自绘标题栏/系统 caption 的几何。 */
-function RuntimeHeader({ health, onClose }: RuntimeHeaderProps) {
+/** 内容首行：健康灯 + 自动刷新指示（分区标题由 SettingsPageHeader 承担）。 */
+function RuntimeHeader({ health }: RuntimeHeaderProps) {
   const attention = health !== 'healthy';
   return (
-    <header
-      className="flex h-[46px] shrink-0 items-center gap-[12px] border-b border-border pr-[22px] pl-[22px]"
-      style={{
-        paddingLeft: TITLEBAR_LEFT_PADDING,
-        paddingRight: isWindowsPlatform ? 148 : 22,
-      }}
-    >
-      <p className="text-[13.5px] font-medium">{copy.runtime.title}</p>
+    <header className="flex h-[34px] shrink-0 items-center gap-[10px] rounded-lg border border-border px-[12px]">
       <span
         role="status"
         aria-label={copy.runtime.healthLabel}
@@ -47,13 +38,6 @@ function RuntimeHeader({ health, onClose }: RuntimeHeaderProps) {
         </span>
         {copy.runtime.autoRefresh}
       </span>
-      <button
-        type="button"
-        onClick={onClose}
-        className="cursor-pointer text-[12px] text-muted-foreground outline-none select-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
-      >
-        {copy.runtime.close}
-      </button>
     </header>
   );
 }

@@ -15,9 +15,9 @@ import { RuntimeTrendCard } from '@/screens/runtime-trend-card';
 import { RuntimeWorkerTable } from '@/screens/runtime-worker-table';
 
 /**
- * 运行状态页（T29）：健康灯页头 + 总览三卡（宿主/容量/内存）+ 资源走势 +
- * Worker 管理表 + 诊断区。数据由 use-runtime-panel 轮询装配；本组件只做展示分派
- * （快照未就绪的等待帧也完整可用——诊断区正是宿主不可用时的排障落点）。
+ * 运行状态内容（T29/T30，设置 runtime 分区主体）：健康灯行 + 总览三卡（宿主/容量/
+ * 内存）+ 资源走势 + Worker 管理表 + 诊断区。数据由 use-runtime-panel 轮询装配；
+ * 本组件只做展示分派（快照未就绪的等待帧也完整可用——诊断区正是宿主不可用时的排障落点）。
  */
 
 export type RuntimeScreenActions = Pick<
@@ -25,18 +25,17 @@ export type RuntimeScreenActions = Pick<
   'stopThread' | 'retireSession' | 'forceRetireSession' | 'setKeepalive' | 'setIdleRecycle' | 'showNotice' | 'exportDiagnostics' | 'restartHost'
 >;
 
-type RuntimeScreenProps = {
+type RuntimeContentProps = {
   snapshot: RuntimeSnapshotView | null
   rows: readonly RuntimeWorkerRow[]
   diagnosticLog: string | null
   actions: RuntimeScreenActions
   onLoadDiagnosticLog: () => void
-  onClose: () => void
-  /** 打开会话：选中并回到会话视图（调用方负责收起本页）。 */
+  /** 打开会话：选中并回到会话视图（调用方负责收起设置页）。 */
   onOpenSession: (threadId: string) => void
 }
 
-function RuntimeScreen({ snapshot, rows, diagnosticLog, actions, onLoadDiagnosticLog, onClose, onOpenSession }: RuntimeScreenProps) {
+function RuntimeContent({ snapshot, rows, diagnosticLog, actions, onLoadDiagnosticLog, onOpenSession }: RuntimeContentProps) {
   const health = snapshot === null ? 'degraded' : runtimeHealthLevel(snapshot);
   const hostDown = snapshot !== null && (snapshot.hostPhase === null || snapshot.hostPhase === 'failed');
   const copySummary = (): void => {
@@ -59,17 +58,17 @@ function RuntimeScreen({ snapshot, rows, diagnosticLog, actions, onLoadDiagnosti
     void actions.setIdleRecycle(minutes);
   };
   return (
-    <div className="fixed inset-0 z-40 flex flex-col bg-background">
-      <RuntimeHeader health={health} onClose={onClose} />
+    <div className="flex flex-col gap-[12px]">
+      <RuntimeHeader health={health} />
       {hostDown ? (
-        <div className="shrink-0 border-b border-destructive/20 bg-destructive/8">
-          <p className="mx-auto max-w-[1060px] px-[28px] py-[8px] text-[11.5px] leading-[16px] text-destructive">
+        <div className="shrink-0 rounded-lg border border-destructive/20 bg-destructive/8">
+          <p className="px-[14px] py-[8px] text-[11.5px] leading-[16px] text-destructive">
             {copy.runtime.hostUnavailable}
           </p>
         </div>
       ) : null}
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto flex w-full max-w-[1060px] flex-col gap-[12px] px-[28px] pt-[16px] pb-[40px]">
+      <div>
+        <div className="flex w-full flex-col gap-[12px] pb-[8px]">
           {snapshot === null ? (
             <p className="py-[120px] text-center text-[12px] text-muted-foreground">{copy.runtime.emptyHistory}</p>
           ) : (
@@ -113,5 +112,5 @@ function RuntimeScreen({ snapshot, rows, diagnosticLog, actions, onLoadDiagnosti
   );
 }
 
-export { RuntimeScreen };
-export type { RuntimeScreenProps };
+export { RuntimeContent };
+export type { RuntimeContentProps };

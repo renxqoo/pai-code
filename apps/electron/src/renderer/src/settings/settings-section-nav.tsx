@@ -1,4 +1,4 @@
-import { ArrowLeft, Bot, Boxes, History, Rocket, Settings2, ShieldCheck, Sparkles } from 'lucide-react';
+import { Activity, ArrowLeft, Bot, Boxes, History, Rocket, Settings2, ShieldCheck, Sparkles } from 'lucide-react';
 
 import type { LucideIcon } from 'lucide-react';
 
@@ -14,6 +14,7 @@ const SECTION_ICONS: Record<SettingsSectionId, LucideIcon> = {
   agents: Bot,
   skills: Sparkles,
   history: History,
+  runtime: Activity,
 };
 
 type SettingsSectionNavProps = {
@@ -21,10 +22,12 @@ type SettingsSectionNavProps = {
   onSelectSection: (id: SettingsSectionId) => void
   /** 顶部「返回工作区」= 关闭设置页。 */
   onClose: () => void
+  /** 运行状态分区行的异常红点（宿主非就绪或存在异常会话）。 */
+  runtimeAttention: boolean
 }
 
 /** 设置分区导航：返回链接 + 三组条目（图标+文案，选中灰胶囊）+ 底部虚线引导入口。 */
-function SettingsSectionNav({ section, onSelectSection, onClose }: SettingsSectionNavProps) {
+function SettingsSectionNav({ section, onSelectSection, onClose, runtimeAttention }: SettingsSectionNavProps) {
   const groupTitles: Record<(typeof SETTINGS_NAV_GROUPS)[number]['id'], string> = {
     basics: copy.settings.navGroupBasics,
     agent: copy.settings.navGroupAgent,
@@ -37,6 +40,7 @@ function SettingsSectionNav({ section, onSelectSection, onClose }: SettingsSecti
     agents: copy.settings.agentsTitle,
     skills: copy.settings.skillsTitle,
     history: copy.settings.historyTitle,
+    runtime: copy.settings.runtimeTitle,
   };
   return (
     <nav aria-label={copy.settings.title} className="flex h-full min-h-0 flex-col px-[16px] pb-[16px] pt-[20px]">
@@ -71,6 +75,9 @@ function SettingsSectionNav({ section, onSelectSection, onClose }: SettingsSecti
                   >
                     <Icon className="size-[15px] shrink-0 text-muted-foreground" strokeWidth={1.75} />
                     <span className="min-w-0 truncate">{sectionLabels[id]}</span>
+                    {id === 'runtime' && runtimeAttention ? (
+                      <span aria-label={copy.settings.runtimeAttention} className="ml-auto inline-flex size-[6px] shrink-0 rounded-full bg-destructive" />
+                    ) : null}
                   </button>
                 );
               })}
