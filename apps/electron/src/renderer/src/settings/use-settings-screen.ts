@@ -126,8 +126,12 @@ export function useSettingsScreen({ workspace, open, onClose, initialSection }: 
     { sessions: workspace.sessionById, statsById: workspace.statsById, queueCountOf: (threadId) => workspace.queueCountOf(threadId) },
     open && section === 'runtime',
   );
+  /** 分区进入只在开沿消费一次性 entry：entry 随后被调用方清除（prop 变 undefined），
+   * 不得把已打开的设置页拽回首分区。 */
+  const wasOpen = React.useRef(false);
   React.useEffect(() => {
-    if (open) setSection(initialSection ?? SETTINGS_FIRST_SECTION);
+    if (open && !wasOpen.current) setSection(initialSection ?? SETTINGS_FIRST_SECTION);
+    wasOpen.current = open;
   }, [open, initialSection]);
 
   const onSelectSection = React.useCallback((id: SettingsSectionId) => {

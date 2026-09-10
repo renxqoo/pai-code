@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useStore } from 'zustand';
 
 import type { CommandView } from '@paiapp/contracts';
 
@@ -7,6 +8,7 @@ import { imagePayloadOf } from '@/composer/read-image-file';
 import type { LiveWorkspaceView } from '@/live/use-live-workspace';
 import { projectDirsOf } from '@/lib/project-dirs';
 import { copy } from '@/strings';
+import { uiStore } from '@/ui/ui-store';
 import type { NewTaskScreenProps, NewTaskStart } from './new-task-screen';
 
 /** 新任务页已知目录快捷条上限（更多走系统文件夹选择）。 */
@@ -36,11 +38,11 @@ export function useNewTaskPage(input: {
   onDraftRestore: (threadId: string, text: string) => void
 }): NewTaskPageHandle {
   const { workspace, onOpenSettings, onDraftRestore } = input;
-  const [open, setOpen] = React.useState(false);
-  /** 每次进入递增：整页重挂载即重置页内状态（cwd/草稿/浮层），与旧弹窗「打开即重置」同语义 */
-  const [key, setKey] = React.useState(0);
-  const [cwd, setCwd] = React.useState('');
-  const [dialogOpen, setDialogOpen] = React.useState(false);
+  /** 开合/目录/重挂载代次/页内浮层在 ui store（跨语言重挂载存活）；页内派生态仍本地 */
+  const open = useStore(uiStore, (s) => s.newTaskOpen);
+  const key = useStore(uiStore, (s) => s.newTaskKey);
+  const cwd = useStore(uiStore, (s) => s.newTaskCwd);
+  const dialogOpen = useStore(uiStore, (s) => s.newTaskDialogOpen);
   const [branchRevision, setBranchRevision] = React.useState(0);
   /** 预会话命令目录（`/` 补全数据源）：每次打开重拉（技能启停/目录变化即时生效） */
   const [commands, setCommands] = React.useState<readonly CommandView[]>([]);
@@ -70,13 +72,10 @@ export function useNewTaskPage(input: {
     [workspace.sessions, workspace.saved],
   );
 
-  const enter = React.useCallback((next: string) => {
-    setCwd(next);
-    setOpen(true);
-    setKey((current) => current + 1);
-  }, []);
-  const close = React.useCallback(() => setOpen(false), []);
-  const onDialogOpenChange = React.useCallback((next: boolean) => setDialogOpen(next), []);
+  /** 进入 = ui store 复合动作（open/cwd/key 递增/浮层复位，重复进入即重挂载） */
+  const enter = React.useCallback((next: string) => uiStore.getState().openNewTask(next), []);
+  const close = React.useCallback(() => uiStore.getState().closeNewTask(), []);
+  const onDialogOpenChange = React.useCallback((next: boolean) => uiStore.getState().setNewTaskDialogOpen(next), []);
 
   /** 切分支包装：成功即失效线程页只读分支段（切完后返回会话页必须看到新分支） */
   const checkoutBranch = React.useCallback(

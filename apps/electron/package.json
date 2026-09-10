@@ -12,6 +12,7 @@
   "devDependencies": {
     "@base-ui/react": "^1.8.0",
     "@fontsource-variable/geist": "^5.3.0",
+    "@happy-dom/global-registrator": "^20.14.3",
     "@paiapp/adapter": "workspace:*",
     "@paiapp/api": "workspace:*",
     "@paiapp/contracts": "workspace:*",
@@ -31,6 +32,7 @@
     "electron": "^44.2.0",
     "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
+    "happy-dom": "^20.14.3",
     "katex": "0.16.47",
     "lucide-react": "^1.41.0",
     "react": "^19.2.0",

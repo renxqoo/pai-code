@@ -49,7 +49,6 @@ function makeProps(overrides: Partial<SidebarProps> = {}): SidebarProps {
     searchOpen: false,
     onSearchOpenChange: noop,
     onOpenSearch: noop,
-    onOpenRuntime: noop,
     searchFocusToken: 0,
     searchQuery: '',
     onSearchQueryChange: noop,
