@@ -108,6 +108,14 @@ hub 侧处置见 `/Users/wrr/work/pi/app` 提交 55e1e36c2（model 收敛 Sessio
 - [x] 对抗审查问题清零（双仓独立会话；处置记录见 §对抗审查处置，驳回项附理由）
 - [x] contracts 镜像与 hub 文档同变（commands.ts v0.12 读命令语义注释；词表零新增）
 
+## 真机回归处置（2026-09-10 收口后）：冷启动表外会话「历史加载失败」
+
+真机症状：所有历史对话报「历史加载失败，未能读取该会话的历史记录」。根因：冷启动 hub 表为空（对账只 `list_saved` 不建表项，T16 语义），读命令按 threadId 寻址对表外会话回 `Unknown threadId`——M1 的只读激活跳过了建表，直读短路又要求表项存在。host 重启回落同因。单测 stub 了成功响应、e2e 场景会话均经 retire（表内 parked）——两个测试面都没覆盖「表外」形态（M2 审查曾点出该用例「标题虚标」，实际是真缺陷）。
+
+修复（hub 提交 1ee889758 + 本仓库本提交）：hub 新命令 `thread/register {sessionPath, trusted?}`（host 本地、零 worker、幂等；裁决序 live 占用 → id/路径幂等 → 建 parked 表项）；本仓库 `session/register` 路由（白名单同 resume、trusted 从注册表行补全、纳管不激活——视图保持 parked 零副作用，id 分歧怪态显式失败）+ 渲染层 `ensureHydrated` 对 parked 会话先纳管再水化（model 补齐的 session/state 收进同一链尾保序）。发消息唤醒链不变（resume admission 照常替换表项）。
+
+回归锁定：e2e-mock parked-read-history 场景增冷启动腿（症状复现 `Unknown threadId` → register 零 worker → 直读成功 → 幂等）；controller 用例「症状回归『所有历史对话报历史加载失败』」（register→entries 链序、失败面可重试、live 会话不纳管）；thread-register 单测（幂等三态/already-open/表项替换通路）。
+
 ## 收口记录（2026-09-10）
 
 - 交付形态：hub 协议 v0.12（读不唤醒、写才唤醒）+ 渲染层只读激活 + 浏览态收口（stats 过滤/model 补齐/失败可见/回落重拉）。

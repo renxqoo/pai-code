@@ -41,6 +41,14 @@ export interface ThreadResumeCmd {
   trusted?: boolean;
 }
 
+/** hub 契约 v0.12：会话文件纳管为 parked 表项（host 本地、零 worker、幂等）——
+ * 冷启动 host 表为空时读命令（直读）按 threadId 寻址的前置。 */
+export interface ThreadRegisterCmd {
+  type: 'thread/register';
+  sessionPath: string;
+  trusted?: boolean;
+}
+
 export interface ThreadStopCmd {
   type: 'thread/stop';
   threadId: string;
@@ -245,6 +253,7 @@ export interface SubagentSteerCmd {
 export type HubCommand =
   | (ThreadStartCmd & { id?: string })
   | (ThreadResumeCmd & { id?: string })
+  | (ThreadRegisterCmd & { id?: string })
   | (ThreadStopCmd & { id?: string })
   | (ThreadListCmd & { id?: string })
   | (ThreadListSavedCmd & { id?: string })
@@ -284,6 +293,7 @@ export type HubCommand =
 export const HUB_COMMAND_TYPES = [
   'thread/start',
   'thread/resume',
+  'thread/register',
   'thread/stop',
   'thread/list',
   'thread/list_saved',

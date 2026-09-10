@@ -40,11 +40,11 @@ describe('词表封闭（双向）', () => {
     );
   });
 
-  test('hub 命令词表 == 36（v0.5）', () => {
-    expect(HUB_COMMAND_TYPES.length).toBe(36);
+  test('hub 命令词表 == 37（v0.5 + v0.12 thread/register）', () => {
+    expect(HUB_COMMAND_TYPES.length).toBe(37);
     expect([...HUB_COMMAND_TYPES].sort(byStr)).toEqual(
       [
-        'thread/start', 'thread/resume', 'thread/stop', 'thread/list', 'thread/list_saved',
+        'thread/start', 'thread/resume', 'thread/register', 'thread/stop', 'thread/list', 'thread/list_saved',
         'prompt', 'steer', 'follow_up', 'abort', 'clear_queue', 'compact',
         'get_state', 'get_messages', 'get_entries', 'get_tree', 'get_session_stats', 'set_session_name', 'get_commands', 'get_fork_messages',
         'fork', 'clone', 'navigate_tree',

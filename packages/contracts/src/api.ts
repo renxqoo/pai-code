@@ -230,6 +230,11 @@ export const ApiSchemas = {
     params: z.object({ sessionPath: z.string().min(1), trusted: z.boolean().optional() }).strict(),
     result: SessionViewSchema,
   },
+  'session/register': {
+    // parked 会话纳管（hub 契约 v0.12）：冷启动表外会话读命令的前置；幂等、零 worker
+    params: z.object({ sessionPath: z.string().min(1) }).strict(),
+    result: SessionViewSchema,
+  },
   'session/stop': {
     // remove：true = 用户关闭（注册表删行）；false = 内部重开链中间步骤（保行，title/trusted 是 resume 补全源）
     params: z.object({ threadId: z.string().min(1), remove: z.boolean() }).strict(),

@@ -182,15 +182,13 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     setCommands([]);
     store.setState({ agentDefinitions: [] });
     if (activeThreadId.length === 0) return;
-    // parked 浏览态（T27）：历史经 host 直读水化（读不唤醒 worker）；
-    // thinkingLevels/commands/stats 是 worker 级查询——不发，思考档控件用
-    // 模型能力本地推导（与新任务页同源），其余控件在 live 翻转后由本 effect 重跑补齐
+    // parked 浏览态（T27）：历史经 host 直读水化（ensureHydrated 内先纳管表项——
+    // 冷启动 hub 表空，读命令按 threadId 寻址；纳管零 worker 且幂等，model 元数据
+    // 在同一链尾补齐）；thinkingLevels/commands/stats 是 worker 级查询——不发，
+    // 思考档控件用模型能力本地推导（与新任务页同源），其余控件在 live 翻转后由本 effect 重跑补齐
     void controller.ensureHydrated(activeThreadId);
     void controller.readSessionRules(activeThreadId);
     if (activeSessionState !== 'live') {
-      // 直读 get_state 补 model 元数据：主进程 touchSession 落视图 + sessionUpdated
-      // 推送（model 变化重跑本 effect，本地档位推导随新值收敛）
-      void bridgeClient.invoke('session/state', { threadId: activeThreadId }).catch(() => undefined);
       setEffortLevels(effortLevelsForModel(store.getState().models, activeSessionModel ?? ''));
       return;
     }

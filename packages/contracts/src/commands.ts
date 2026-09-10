@@ -12,6 +12,7 @@ import type { HubCommand } from './hub-protocol';
 export type PaiCommandType =
   | 'thread/start'
   | 'thread/resume'
+  | 'thread/register'
   | 'thread/stop'
   | 'thread/list'
   | 'thread/list_saved'
@@ -44,6 +45,7 @@ export type PaiCommand = Extract<HubCommand, { type: PaiCommandType }>;
 export const PAI_COMMAND_TYPES = [
   'thread/start',
   'thread/resume',
+  'thread/register',
   'thread/stop',
   'thread/list',
   'thread/list_saved',

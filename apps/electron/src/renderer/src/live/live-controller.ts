@@ -569,6 +569,23 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       const thread = store.getState().threads[threadId];
       // hydrated 标志判定（空会话 cursor 恒 null，不能以 cursor 判，否则切回即重水化抹掉在途现场）
       if (thread?.hydrated) return;
+      // parked 会话在 hub 表可能不存在（冷启动对账/重启回落都不建表项）：
+      // 读命令按 threadId 寻址会回 Unknown threadId——先纳管（host 本地零 worker、
+      // 幂等）再水化；失败交 hydrate/failed 失败面（可重试）
+      const session = store.getState().sessions[threadId];
+      if (session?.state === 'parked' && session.sessionPath !== null) {
+        const outcome = await client.invoke('session/register', { sessionPath: session.sessionPath });
+        if (disposed) return;
+        if (!outcome.ok) {
+          store.getState().hydrate(threadId, { kind: 'hydrate/failed' });
+          return;
+        }
+        await hydrateFull(threadId).catch(() => undefined);
+        // 直读 get_state 补 model 元数据（主进程 touchSession 落视图 + 推送；
+        // 失败静默——注册表 model 缺省时控件本地推导兜底）
+        void client.invoke('session/state', { threadId }).catch(() => undefined);
+        return;
+      }
       await hydrateFull(threadId).catch(() => undefined);
     },
     ensureLiveSession,

@@ -284,6 +284,21 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       fillSessionMeta(threadId);
       return { ok: true as const, data: view };
     },
+    'session/register': async (params) => {
+      // 白名单/trusted 补全同 resume。纳管 ≠ 激活：视图保持 parked 占位零副作用；会话头
+      // id 与注册表行分歧（外部改写怪态）不落表不换行，交水化失败面显式暴露
+      if (!insideSessionsRoot(params.sessionPath)) return fail('session_path_forbidden');
+      const known = findRegistryRowByPath(params.sessionPath);
+      if (known === null) return fail('unknown_session');
+      const result = await command({ type: 'thread/register', sessionPath: params.sessionPath, trusted: known.trusted ?? false });
+      // 文件已删（对账之后失效）：与 resume 同语义删行，占位不再反复失败
+      if (!result.ok && /not found|no such|not readable/i.test(result.reason)) runtime.removeSession(known.threadId);
+      if (!result.ok) return fail(result.reason);
+      const threadId = (result.data as { threadId?: string }).threadId ?? '';
+      if (threadId !== known.threadId) return fail('thread_id_mismatch');
+      const existing = runtime.sessions().find((row) => row.threadId === known.threadId);
+      return existing === undefined ? fail('unknown_session') : { ok: true as const, data: existing };
+    },
     'session/stop': async (params) => {
       const result = await command({ type: 'thread/stop', threadId: params.threadId });
       if (!result.ok) return fail(result.reason);
