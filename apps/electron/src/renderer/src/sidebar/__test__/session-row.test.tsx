@@ -55,6 +55,24 @@ describe('SessionRow hover 动作区', () => {
     expect(html).not.toContain('group-hover/row:opacity-0');
   });
 
+  test('点击关闭按钮无反应：淡出的时间标签（opacity<1 层叠抬升）须退出命中测试，不得盖住动作钮', () => {
+    const html = renderToStaticMarkup(
+      <SessionRow
+        session={makeSession()}
+        age="3小时"
+        active={false}
+        onSelect={noop}
+        onClose={noop}
+        onRename={noop}
+        onTogglePin={noop}
+      />,
+    );
+    // 时间标签 span（含相对时间文案的那个）必须带 pointer-events-none
+    const ageSpan = /<span class="([^"]*)"[^>]*>3小时<\/span>/.exec(html);
+    expect(ageSpan).not.toBeNull();
+    expect(ageSpan?.[1]).toContain('pointer-events-none');
+  });
+
   test('流式会话 loading 症状（指示器出现在文案后面）：活动指示渲染在标题前的行首状态位', () => {
     const html = renderToStaticMarkup(
       <SessionRow session={makeSession({ streaming: true })} age="3小时" active={false} onSelect={noop} />,

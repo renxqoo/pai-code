@@ -115,7 +115,9 @@ function SessionRow({
         <span className="grid items-center justify-items-end">
           <span
             className={cn(
-              'col-start-1 row-start-1 text-[10.5px] leading-none text-muted-foreground/80 transition-opacity duration-150 motion-reduce:transition-none',
+              // 淡出态 opacity<1 创建层叠上下文，会把纯文本标签抬到动作钮之上参与命中测试、
+              // 吃掉最右按钮（关闭）的点击——纯展示标签必须永久退出命中（pointer-events-none）
+              'pointer-events-none col-start-1 row-start-1 text-[10.5px] leading-none text-muted-foreground/80 transition-opacity duration-150 motion-reduce:transition-none',
               showActions && 'group-hover/row:opacity-0 group-focus-within/row:opacity-0',
             )}
           >
