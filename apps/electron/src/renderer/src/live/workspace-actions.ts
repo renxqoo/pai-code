@@ -1,6 +1,7 @@
 import type { AgentDefinition, ApiOutcome, CommandView, ImagePayload, PermissionRules, ProviderModel, ThinkingFormat } from '@paiapp/contracts';
 import { thinkingLevelOfLabel } from '@paiapp/contracts';
 
+import { writeClipboard } from '@/lib/write-clipboard';
 import { copy } from '@/strings';
 import { parseModelKey, pickSessionModel } from './pick-session-model';
 import { nextSessionRulesForMode } from './permission-mode';
@@ -112,6 +113,10 @@ export type WorkspaceActions = {
   readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; thinkingFormat?: ThinkingFormat; apiKey?: string }) => Promise<boolean>;
   readonly removeProvider: (name: string) => Promise<boolean>;
   readonly renameSession: (threadId: string, name: string) => Promise<boolean>;
+  /** 在系统工具中打开已知项目目录（访达/终端/编辑器）；失败走通知条。 */
+  readonly openInSystem: (cwd: string, target: 'finder' | 'terminal' | 'editor') => Promise<void>;
+  /** 剪贴板写入（复制路径/会话 ID）；失败走通知条。 */
+  readonly copyText: (text: string) => Promise<boolean>;
 };
 
 /** 通知条写入（store 动作的便捷别名；保留最近 5 条）。 */
@@ -406,6 +411,18 @@ export function createWorkspaceActions(setDiagnostics: (value: WorkspaceDiagnost
     renameSession: async (threadId, name) => {
       const ok = await controller.renameSession(threadId, name);
       if (!ok) pushNotice(copy.sidebar.renameFailed);
+      return ok;
+    },
+    openInSystem: async (cwd, target) => {
+      if (cwd.length === 0) return;
+      const outcome = await bridgeClient.invoke('shell/open', { cwd, target });
+      if (!outcome.ok) {
+        pushNotice(outcome.reason === 'editor_not_found' ? copy.thread.openEditorMissing : copy.thread.openFailed(outcome.reason));
+      }
+    },
+    copyText: async (text) => {
+      const ok = await writeClipboard(text);
+      if (!ok) pushNotice(copy.thread.copyFailed);
       return ok;
     },
     steerSubagent: (subagentId, message) => {

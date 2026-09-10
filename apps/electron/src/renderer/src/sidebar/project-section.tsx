@@ -86,7 +86,7 @@ function ProjectSection({
         {/* 菜单打开中即使鼠标已移出行也要保持锚点可见（data-popup-open 由 Base UI 落在触发器上） */}
         <span className="grid size-5 shrink-0 place-items-center">
           <MenuButton
-            aria-label={copy.thread.addAction}
+            aria-label={copy.thread.projectMenuAria}
             align="end"
             popupMinWidth={148}
             trigger={<ListTree className="size-3" strokeWidth={1.75} />}

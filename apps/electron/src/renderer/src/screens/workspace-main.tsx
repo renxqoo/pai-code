@@ -420,12 +420,12 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
               workspace={workspace}
               activeThreadId={activeThreadId}
               sidebarCollapsed={sidebarCollapsed}
-              panel={panel}
-              onToggleSplitView={onToggleSplitView}
               hostDown={hostDown}
               bottomInset={bottomInset}
               onOpenSettings={openSettings}
               onOpenDiff={openDiff}
+              onNewTask={openNewTask}
+              onToggleSplitView={onToggleSplitView}
               onEditUserMessage={editUserMessage}
               onForkUserMessage={forkUserMessage}
             />
