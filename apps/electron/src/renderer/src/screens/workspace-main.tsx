@@ -40,7 +40,8 @@ const {
 } = uiStore.getState();
 
 /** 输入浮层高度通道（T34 U3）：测量回调模块级恒定引用写 ui store（+24 偏移在动作内），
- * 高度变化只重渲舞台订阅处——WorkspaceMain 仅读值喂 props（M2 起舞台自订，此订阅移除）。 */
+ * 高度变化只重渲舞台订阅处。观测以回调 ref 形态挂在浮层容器上——新建任务页
+ * 往返重挂容器即重挂观测，高度永不冻结。 */
 const publishComposerInset = (height: number): void => {
   uiStore.getState().setComposerInset(height);
 };
@@ -62,7 +63,7 @@ function WorkspaceMain(): React.JSX.Element {
   const newTaskKey = useStore(uiStore, (s) => s.newTaskKey);
   const newTaskDialogOpen = useStore(uiStore, (s) => s.newTaskDialogOpen);
   const openNewTask = React.useCallback(() => uiStore.getState().openNewTask(''), []);
-  const composerLayerRef = useObservedHeight<HTMLDivElement>(publishComposerInset);
+  const observeComposerLayer = useObservedHeight<HTMLDivElement>(publishComposerInset);
   /** Usage 总览页（I2；侧栏 footer 入口）——开合在 ui store，条目 UsageScreen 自取 */
   const usagePanel = useUsagePanel();
   const dialogs = useStore(liveStore, (s) => s.dialogs);
@@ -141,7 +142,7 @@ function WorkspaceMain(): React.JSX.Element {
         {!newTaskOpen ? (
           <>
             <ThreadStage />
-            <div ref={composerLayerRef} className="pointer-events-none absolute inset-x-0 bottom-0 z-10 px-[40px] pb-[18px]">
+            <div ref={observeComposerLayer} className="pointer-events-none absolute inset-x-0 bottom-0 z-10 px-[40px] pb-[18px]">
           {confirmStop ? (
             <StopConfirmBar
               onConfirm={() => {
