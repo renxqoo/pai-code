@@ -22,7 +22,7 @@ const keyStore: ProviderKeyStore = {
   keyNames: [],
 };
 
-function makeRoutes(work: string) {
+function makeRoutes(work: string, deps?: { onCommandSettled?: () => void }) {
   const agentDir = join(work, "agent");
   mkdirSync(join(agentDir, "sessions"), { recursive: true });
   const settings = createFileSettings(join(work, "settings.json"), keyStore);
@@ -52,6 +52,7 @@ function makeRoutes(work: string) {
     agentDefinitions: createAgentDefinitionsStore(agentDir),
     revealPath: () => undefined,
     pickDirectory: () => Promise.resolve(null),
+    ...(deps?.onCommandSettled !== undefined ? { onCommandSettled: deps.onCommandSettled } : {}),
   });
   return { routes, audits, agentDir };
 }
@@ -318,5 +319,47 @@ describe("api-routes agent 定义面（T20）", () => {
     expect(removed.ok).toBe(true);
     expect(audits).toContain("agent_upsert: user/search");
     expect(audits).toContain("agent_remove: user/search");
+  });
+});
+
+describe("api-routes 单一全序钩子（T35 §13 M4）", () => {
+  test("onCommandSettled 在 invoke 结算后、结果返回前同步调用（主进程借此冲事件批）", async () => {
+    const work = mkdtempSync(join(tmpdir(), "pai-sec-order-"));
+    const order: string[] = [];
+    const { routes } = makeRoutes(work, { onCommandSettled: () => order.push("settled") });
+    const outcome = (await routes.invoke("session/inflight", { threadId: "t1" })) as { ok: boolean };
+    order.push("returned");
+    expect(outcome.ok).toBe(false); // 本装置无 host：failure 路径同样要过钩子
+    expect(order).toEqual(["settled", "returned"]);
+  });
+
+  test("无效方法（unknown_method）不触发钩子（未到达命令层，无全序义务）", async () => {
+    const work = mkdtempSync(join(tmpdir(), "pai-sec-order2-"));
+    let settled = 0;
+    const { routes } = makeRoutes(work, { onCommandSettled: () => (settled += 1) });
+    await routes.invoke("session/nope" as never, {});
+    expect(settled).toBe(0);
+  });
+});
+
+describe("api-routes 收敛读口门禁（T35 对抗审查补：新方法必须走同一注册表校验）", () => {
+  test("三个新读口缺 threadId → invalid_params（不落 host_unavailable）", async () => {
+    const work = mkdtempSync(join(tmpdir(), "pai-sec-inflight-"));
+    const { routes } = makeRoutes(work);
+    for (const method of ["session/inflight", "session/subagents", "session/pendingDialogs"] as const) {
+      const bad = (await routes.invoke(method, {})) as { ok: boolean; reason?: string };
+      expect({ method, bad }).toEqual({ method, bad: { ok: false, reason: "invalid_params" } });
+      // 合法参数：本装置无 host → host_unavailable（证明未被门禁误拦，且确实透传到 host 命令）
+      const ok = (await routes.invoke(method, { threadId: "t1" })) as { ok: boolean; reason?: string };
+      expect({ method, ok }).toEqual({ method, ok: { ok: false, reason: "host_unavailable" } });
+    }
+  });
+
+  test("未注册方法 → unknown_method（白名单按 ApiSchemas 单一驱动）", async () => {
+    const work = mkdtempSync(join(tmpdir(), "pai-sec-unknown-"));
+    const { routes } = makeRoutes(work);
+    const out = (await routes.invoke("session/nope" as never, {})) as { ok: boolean; reason?: string };
+    expect(out.ok).toBe(false);
+    expect(out.reason).toContain("unknown_method");
   });
 });

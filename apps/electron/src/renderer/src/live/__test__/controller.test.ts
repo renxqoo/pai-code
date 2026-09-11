@@ -186,13 +186,21 @@ test('症状回归「轮结算后历史全没了（对话收起来）」：窗�
   let listener: ((events: readonly unknown[]) => void) | undefined;
   const client: BridgeClient = {
     available: true,
-    invoke: (method: string) => {
+    invoke: (method: string, params?: unknown) => {
       if (method === 'app/bootstrap') {
         return Promise.resolve({ ok: true, data: { sessions: [], saved: [], models: [], providers: [] } } as never);
       }
+      if (method === 'session/inflight') {
+        // 轮首边界 = 读口事实（turns/T35：agent_start 时刻的 leaf 条目 id = 上轮末条目）
+        return Promise.resolve({
+          ok: true,
+          data: { turnStartEntryId: 'a1', message: null, toolOutputs: [], bash: null },
+        } as never);
+      }
       if (method === 'session/entries') {
-        // 轮末窗口拉取：since=轮首游标（u1/a1 之后的本轮转写）
-        return Promise.resolve({ ok: true, data: { items: window_, cursor: 'a2' } } as never);
+        // 轮末窗口拉取：since=轮首边界（a1 之后的本轮转写）；无 since = 全量
+        const since = (params as { since?: string } | undefined)?.since;
+        return Promise.resolve({ ok: true, data: since === undefined ? { items: [...(hist as unknown[]), ...(window_ as unknown[])], cursor: 'a2' } : { items: window_, cursor: 'a2' } } as never);
       }
       if (method === 'session/stats') {
         return Promise.resolve({ ok: true, data: { contextUsage: null, tokensTotal: 0 } } as never);
@@ -218,8 +226,10 @@ test('症状回归「轮结算后历史全没了（对话收起来）」：窗�
   });
   // 既有历史（冷启动水化形态）
   store.getState().hydrate(threadId, { kind: 'hydrate/initial', items: hist, cursor: 'a1' });
-  // 本轮：开轮（轮首游标=a1）→ 用户回显（entry id=u2）→ 结算
+  // 本轮：开轮（轮首边界来自读口 = a1）→ 用户回显（entry id=u2）→ 结算
   emit({ type: 'turnStarted', threadId, at: 5 });
+  // 读口是异步的（invoke → 微任务）；stubTimers 下不得用 setTimeout 冲刷
+  for (let tick = 0; tick < 10; tick += 1) await Promise.resolve();
   emit({ type: 'userMessage', threadId, message: { id: 'u2', text: '新问', origin: 'user' } });
   emit({ type: 'turnSettled', threadId, usage: null });
   timers.fire();

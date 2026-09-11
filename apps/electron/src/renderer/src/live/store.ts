@@ -2,6 +2,8 @@ import { createStore } from 'zustand/vanilla';
 
 import type {
   AgentDefinition,
+  PendingDialogView,
+  SubagentSnapshotView,
   CommandView,
   SessionStatsView,
   SkillView,
@@ -14,9 +16,11 @@ import type {
   SessionView,
   UiEvent,
 } from '@paiapp/contracts';
-import type { ThreadModel } from '@/thread/thread-model';
+import type { SubagentModel, ThreadModel } from '@/thread/thread-model';
 
-import { foldDeath, foldHydrate, foldStopIntent, foldThreadEvent } from './fold-events';
+import { strListField } from '@paiapp/adapter';
+import { foldDeath, foldStopIntent, foldThreadEvent } from './fold-events';
+import { foldHydrate } from './fold-hydrate';
 import { initialThreadState, type HydrateAction, type LiveThreadState } from './live-thread-state';
 
 /**
@@ -71,6 +75,11 @@ export interface LiveStoreState {
 export interface LiveStoreActions {
   applyEvent(event: UiEvent, now: number): void;
   hydrate(threadId: string, action: HydrateAction): void;
+  /** 子代理快照合入（T35 M2b 收敛读口）：按 subagentId 合并（快照为权威态），本地缺的补建、本地有而快照无的保留。 */
+  hydrateSubagents(threadId: string, snapshot: readonly SubagentSnapshotView[], now: number): void;
+  /** 待答弹窗合入（T35 M2b 收敛读口）：按 requestId 合并（快照权威），**只增不删**——
+   * 快照读取与应用之间存在在途窗口，凭快照删除会复活刚结算的弹窗；删除只走 dialogSettled。 */
+  hydrateDialogs(snapshot: readonly PendingDialogView[]): void;
   /** fork 换轨后旧线程运行面终态化（streaming/queue 镜像不再有事件驱动收敛）。 */
   parkThread(threadId: string): void;
   stopIntent(threadId: string): void;
@@ -177,6 +186,41 @@ export function createLiveStore() {
               return { threads: { ...state.threads, [threadId]: foldThreadEvent(threadOf(state, threadId), event, now) } };
             }
           }
+        });
+      },
+      hydrateSubagents(threadId, snapshot, now) {
+        if (snapshot.length === 0) return;
+        set((state) => {
+          const agents = [...(state.threads[threadId]?.agents ?? [])];
+          for (const entry of snapshot) {
+            const index = agents.findIndex((agent) => agent.id === entry.subagentId);
+            const base: SubagentModel =
+              index === -1
+                ? { id: entry.subagentId, name: entry.agent, agentType: entry.agent, model: '', effort: '', tokens: null, toolCount: 0, status: 'working', startedAt: Math.max(0, now - entry.elapsedMs), endedAt: null, summary: '', tools: [] }
+                : (agents[index] as SubagentModel);
+            const merged: SubagentModel = {
+              ...base,
+              name: entry.agent.length > 0 ? entry.agent : base.name,
+              agentType: entry.agent.length > 0 ? entry.agent : base.agentType,
+              status: toSubagentStatus(entry.status),
+              endedAt: entry.status === 'running' || entry.status === 'queued' ? null : base.endedAt ?? now,
+              summary: entry.output.length > 0 ? entry.output : base.summary,
+            };
+            if (index === -1) agents.push(merged);
+            else agents[index] = merged;
+          }
+          return { threads: { ...state.threads, [threadId]: { ...threadOf(state, threadId), agents } } };
+        });
+      },
+      hydrateDialogs(snapshot) {
+        if (snapshot.length === 0) return;
+        set((state) => {
+          let dialogs = state.dialogs;
+          for (const entry of snapshot) {
+            const mapped = toPendingDialogFromView(entry);
+            dialogs = [...dialogs.filter((dialog) => dialog.requestId !== mapped.requestId), mapped];
+          }
+          return { dialogs };
         });
       },
       hydrate(threadId, action) {
@@ -293,6 +337,31 @@ function toPendingDialog(event: DialogViewSource): PendingDialog {
 }
 
 type DialogViewSource = Extract<UiEvent, { type: 'dialogRequest' }>;
+
+/** 子代理快照状态 → 面板状态（registry 词表 → 视图词表「working/done」）。 */
+function toSubagentStatus(status: SubagentSnapshotView['status']): SubagentModel['status'] {
+  return status === 'running' || status === 'queued' ? 'working' : 'done';
+}
+
+/** 待答弹窗视图 → store 形状（与 dialogRequest 事件同一套字段收窄）。 */
+function toPendingDialogFromView(entry: PendingDialogView): PendingDialog {
+  const payload = entry.payload;
+  const str = (value: unknown): string | undefined => (typeof value === 'string' ? value : undefined);
+  // 与实时帧同一套收窄（strListField）：对象形态 {label,value} 的选项重建后不得消失
+  const options = strListField(payload['options']);
+  return {
+    requestId: entry.requestId,
+    threadId: entry.threadId,
+    method: entry.method,
+    title: str(payload['title']),
+    message: str(payload['message']),
+    options,
+    placeholder: str(payload['placeholder']),
+    prefill: str(payload['prefill']),
+    subagentId: str(payload['subagentId']),
+    agent: str(payload['agent']),
+  };
+}
 
 function omitKey<T>(source: Readonly<Record<string, T>>, key: string): Record<string, T> {
   const out: Record<string, T> = {};

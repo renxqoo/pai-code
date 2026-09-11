@@ -95,6 +95,9 @@ export function mapEntries(entries: unknown): { items: HistoryItem[]; cursor: st
         kind: 'assistant',
         id,
         at,
+        // 消息自身时间戳 = 事件流侧的消息身份（messageIdOf 同源）：转写/在途快照/
+        // 增量流三处共用这一 key，块身份据此统一。缺省 0 → 块身份退回条目 id。
+        messageTs: num(message.timestamp, 0),
         text: assistantText(message.content),
         thinking: assistantThinking(message.content),
         toolCalls: toolCallViews,

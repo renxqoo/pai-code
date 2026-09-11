@@ -77,6 +77,7 @@ describe('mapEntries（转写真相源）', () => {
       {
         kind: 'assistant',
         id: 'e2',
+        messageTs: 2,
         at: 1767225600000,
         text: '跑起来了',
         thinking: '先跑',
@@ -85,7 +86,7 @@ describe('mapEntries（转写真相源）', () => {
         stopReason: null,
         errorMessage: null,
       },
-      { kind: 'assistant', id: 'e4', at: 1767225600000, text: '全绿', thinking: '', toolCalls: [], usage: { input: 30, output: 2 }, stopReason: null, errorMessage: null },
+      { kind: 'assistant', id: 'e4', messageTs: 4, at: 1767225600000, text: '全绿', thinking: '', toolCalls: [], usage: { input: 30, output: 2 }, stopReason: null, errorMessage: null },
     ]);
   });
 
@@ -201,16 +202,30 @@ describe('diffFromPatch', () => {
 
 describe('response-views', () => {
 
-  test('threadStateView：model.id 收窄 + 缺省降级', () => {
-    expect(threadStateView({ model: { provider: 'glm', id: 'glm-5.3' }, thinkingLevel: 'high', isStreaming: true, isCompacting: false, sessionName: 'n', messageCount: 7 })).toEqual({
+  test('threadStateView：model.id 收窄 + 缺省降级 + v0.14 queue 面', () => {
+    expect(
+      threadStateView({
+        model: { provider: 'glm', id: 'glm-5.3' },
+        thinkingLevel: 'high',
+        isStreaming: true,
+        isCompacting: false,
+        sessionName: 'n',
+        messageCount: 7,
+        queue: { steering: ['插一句'], followUp: ['接着问', 3] },
+      }),
+    ).toEqual({
       model: { provider: 'glm', modelId: 'glm-5.3' },
       thinkingLevel: 'high',
       isStreaming: true,
       isCompacting: false,
       sessionName: 'n',
       messageCount: 7,
+      queue: { steering: ['插一句'], followUp: ['接着问'] },
     });
     expect(threadStateView({}).model).toBeNull();
+    // 缺 queue / 垃圾形状 → 两个空数组（无队列后端即此形态）
+    expect(threadStateView({}).queue).toEqual({ steering: [], followUp: [] });
+    expect(threadStateView({ queue: { steering: 'x', followUp: null } }).queue).toEqual({ steering: [], followUp: [] });
   });
 
   test('savedSessions：Date/字符串时间戳都收窄；缺 path 跳过', () => {

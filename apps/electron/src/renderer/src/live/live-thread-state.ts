@@ -1,4 +1,4 @@
-import type { HistoryItem } from '@paiapp/contracts';
+import type { HistoryItem, InflightToolView, InflightView } from '@paiapp/contracts';
 import type { ThreadItem, SubagentModel } from '@/thread/thread-model';
 
 /**
@@ -19,6 +19,12 @@ export type LiveThreadState = {
   seenIds: ReadonlySet<string>;
   /** 进行中/待对账的 live 轮次 id（null = 无）。 */
   liveTurnId: string | null;
+  /** 本轮持久前缀边界（读口 `get_inflight.turnStartEntryId`：agent_start 时刻的
+   * leaf 条目 id）。settle 窗口重建与尾 span 归属共用这一权威事实；读口不可用时
+   * 为 null（settle 退化为全量拉取）。结算即清（留旧边界会吞掉上一轮）。 */
+  turnStartEntryId: string | null;
+  /** 最近一次读口回报的在途工具输出（权威序 ①：转写说已完成、这里说仍在跑 → running）。 */
+  inflightToolOutputs: readonly InflightToolView[];
   /** 当前流式消息 id（message_start..message_end 期间）。 */
   liveMessageId: string | null;
   /** 工具调用到达时刻（durationMs 客户端观测值）。 */
@@ -38,6 +44,8 @@ export type LiveThreadState = {
   hydrateFailed: boolean;
   /** 是否已成功水化过（空会话 cursor 为 null，不能以 cursor 判定）。 */
   hydrated: boolean;
+  /** 已结算轮次计数（收敛读口的代际守卫：读在途期间发生过结算 → 该在途快照已过期）。 */
+  turnsSettled: number;
   /** 直执行 bash 在途（`!` 命令；横幅呈现，停止键转中止）。 */
   bashRunning: boolean;
   /** 直执行 bash 的流式输出尾部（bashOutput 增量，封顶 2000 字符）。 */
@@ -50,6 +58,8 @@ export const initialThreadState: LiveThreadState = {
   cursor: null,
   seenIds: new Set<string>(),
   liveTurnId: null,
+  turnStartEntryId: null,
+  inflightToolOutputs: [],
   liveMessageId: null,
   callStarts: {},
   queue: { steering: [], followUp: [] },
@@ -61,12 +71,15 @@ export const initialThreadState: LiveThreadState = {
   parked: false,
   hydrateFailed: false,
   hydrated: false,
+  turnsSettled: 0,
   bashRunning: false,
   bashTail: '',
 };
 
 /** 对账动作（非 UiEvent 的内部输入，controller 编排水化时派发）。 */
 export type HydrateAction =
+  /** 在途读口收敛（T35 M2b）：`session/inflight` 视图合入折叠态（幂等）。 */
+  | { kind: 'hydrate/inflight'; view: InflightView; at: number }
   | { kind: 'hydrate/initial'; items: readonly HistoryItem[]; cursor: string | null }
   | { kind: 'hydrate/reconcile'; items: readonly HistoryItem[]; cursor: string | null; dropLiveTurn: boolean }
   /** 全量重建（settle 对账）：条目真相整体替换 items，继承停止语义。 */

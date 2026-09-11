@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { PermissionRulesSchema } from './permissions';
 import { RuntimeSnapshotViewSchema } from './runtime';
 import { ProviderModelSchema, ThinkingFormatSchema } from './settings';
+import { InflightViewSchema, PendingDialogViewSchema, SubagentSnapshotViewSchema } from './inflight-views';
 import { DiffFileViewSchema, SessionViewSchema, SubagentSpawnViewSchema } from './ui-events';
 import { IdleRecycleMinutesSchema } from './settings';
 
@@ -40,6 +41,10 @@ export const HistoryItemSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('assistant'),
     id: z.string(),
+    /** 消息自身的时间戳（ms）= 事件流的消息身份（message_start/update/end 的 messageId）。
+     * 与条目 id 不同源：它是「同一条消息」在转写/在途快照/增量流三处的共用 key。
+     * 0 = 该条目缺 message.timestamp（legacy 降级：块身份退回条目 id）。 */
+    messageTs: z.number(),
     text: z.string(),
     thinking: z.string(),
     at: z.number(),
@@ -81,9 +86,10 @@ export const ThreadStateViewSchema = z.object({
   isCompacting: z.boolean(),
   sessionName: z.string().nullable(),
   messageCount: z.number().int(),
+  /** 排队中的 steer/follow-up 文本（重载后唯一的读口；无队列后端为两个空数组）。 */
+  queue: z.object({ steering: z.array(z.string()), followUp: z.array(z.string()) }),
 });
 export type ThreadStateView = z.infer<typeof ThreadStateViewSchema>;
-
 export const SessionStatsViewSchema = z.object({
   userMessages: z.number().int(),
   assistantMessages: z.number().int(),
@@ -289,6 +295,18 @@ export const ApiSchemas = {
   'session/state': {
     params: threadOnly,
     result: ThreadStateViewSchema,
+  },
+  'session/inflight': {
+    params: threadOnly,
+    result: InflightViewSchema,
+  },
+  'session/subagents': {
+    params: threadOnly,
+    result: z.object({ subagents: z.array(SubagentSnapshotViewSchema) }),
+  },
+  'session/pendingDialogs': {
+    params: threadOnly,
+    result: z.object({ dialogs: z.array(PendingDialogViewSchema) }),
   },
   'session/stats': {
     params: threadOnly,

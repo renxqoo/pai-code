@@ -35,7 +35,7 @@ describe('hydrateItems · 分组语义', () => {
     expect(turn.turn.blocks.map((block) => block.kind)).toEqual(['thinking', 'text', 'text', 'text', 'tools', 'diff']);
     // 第二段 text 块 id 带序号后缀（同 id 防撞）
     const texts = turn.turn.blocks.filter((block) => block.kind === 'text');
-    expect(texts.map((block) => (block.kind === 'text' ? block.id : ''))).toEqual(['text-a1', 'text-a2-1', 'text-a3-2']);
+    expect(texts.map((block) => (block.kind === 'text' ? block.id : ''))).toEqual(['text-a1', 'text-a2', 'text-a3']);
     const diff = turn.turn.blocks.find((block) => block.kind === 'diff');
     expect(diff).toMatchObject({ diff: { changedFiles: 1, additions: 3, deletions: 0 } });
   });

@@ -1,13 +1,21 @@
 import type {
   CommandView,
   HostInfoView,
+  InflightMessageView,
+  InflightView,
   ModelInfoView,
+  PendingDialogView,
   SavedSessionView,
   SessionStatsView,
   SessionView,
+  SubagentSnapshotView,
   ThreadStateView,
   WorkerRowView,
 } from '@paiapp/contracts';
+
+import { assistantText, assistantThinking, assistantToolCalls } from './content';
+import { previewArgs } from './args-preview';
+import { subagentsField } from './subagent-spawns';
 
 /**
  * 协议响应 data → 渲染层视图（收窄与降级：垃圾输入回落空形态，不抛）。
@@ -51,7 +59,115 @@ export function threadStateView(data: unknown): ThreadStateView {
     isCompacting: d.isCompacting === true,
     sessionName: optStr(d.sessionName) ?? null,
     messageCount: num(d.messageCount, 0),
+    queue: queueView(d.queue),
   };
+}
+
+/** 排队面（v0.14）：垃圾形状回落两个空数组（无队列后端即此形态）。 */
+function queueView(value: unknown): { steering: string[]; followUp: string[] } {
+  const q = recordOf(value);
+  return { steering: stringList(q.steering), followUp: stringList(q.followUp) };
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+/**
+ * get_inflight → 渲染层视图（v0.14 收敛读口）。在途消息用与转写条目同一套
+ * content 提取器正规化（同一消息、同一块身份 messageTs）；垃圾输入回落空形态。
+ */
+export function inflightView(data: unknown): InflightView {
+  const d = recordOf(data);
+  return {
+    turnStartEntryId: optStr(d.turnStartEntryId) ?? null,
+    turnStartedAt: typeof d.turnStartedAt === 'number' && Number.isFinite(d.turnStartedAt) ? d.turnStartedAt : null,
+    message: inflightMessageView(d.message),
+    toolOutputs: Array.isArray(d.toolOutputs)
+      ? d.toolOutputs.map(toolOutputView).filter((item): item is NonNullable<typeof item> => item !== null)
+      : [],
+    bash: bashView(d.bash),
+  };
+}
+
+function inflightMessageView(value: unknown): InflightMessageView | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const message = recordOf(value);
+  const messageTs = num(message.timestamp, 0);
+  if (messageTs <= 0) return null;
+  const toolCalls = assistantToolCalls(message.content).map((call) => ({
+    id: call.id,
+    name: call.name,
+    argsPreview: previewArgs(call.args),
+    ...subagentsField(call.name, call.args),
+  }));
+  return { messageTs, text: assistantText(message.content), thinking: assistantThinking(message.content), toolCalls };
+}
+
+function toolOutputView(value: unknown): { callId: string; output: string; truncated: boolean; startedAt: number } | null {
+  const entry = recordOf(value);
+  const callId = str(entry.callId);
+  if (callId.length === 0) return null;
+  return {
+    callId,
+    output: str(entry.output),
+    truncated: entry.truncated === true,
+    startedAt: num(entry.startedAt, 0),
+  };
+}
+
+function bashView(value: unknown): { command: string; output: string; truncated: boolean; startedAt: number } | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const bash = recordOf(value);
+  return {
+    command: str(bash.command),
+    output: str(bash.output),
+    truncated: bash.truncated === true,
+    startedAt: num(bash.startedAt, 0),
+  };
+}
+
+/** get_subagents → 视图（垃圾条目丢弃；空列表即空形态）。 */
+export function subagentSnapshotView(data: unknown): SubagentSnapshotView[] {
+  const list = recordOf(data)['subagents'];
+  if (!Array.isArray(list)) return [];
+  const out: SubagentSnapshotView[] = [];
+  for (const item of list) {
+    const entry = recordOf(item);
+    const subagentId = str(entry.subagentId);
+    if (subagentId.length === 0) continue;
+    const status = str(entry.status);
+    out.push({
+      subagentId,
+      agent: str(entry.agent),
+      task: str(entry.task),
+      status: status === 'queued' || status === 'running' || status === 'completed' || status === 'failed' || status === 'stopped' ? status : 'running',
+      elapsedMs: num(entry.elapsedMs, 0),
+      output: str(entry.output),
+      truncated: entry.truncated === true,
+    });
+  }
+  return out;
+}
+
+/** get_pending_dialogs → 视图（与 ui_request 帧同字段，弹窗正规化可复用）。 */
+export function pendingDialogsView(data: unknown): PendingDialogView[] {
+  const list = recordOf(data)['dialogs'];
+  if (!Array.isArray(list)) return [];
+  const out: PendingDialogView[] = [];
+  for (const item of list) {
+    const entry = recordOf(item);
+    const requestId = str(entry.requestId);
+    const method = str(entry.method);
+    if (requestId.length === 0 || method.length === 0) continue;
+    out.push({
+      requestId,
+      threadId: str(entry.threadId),
+      method,
+      payload: recordOf(entry.payload),
+    });
+  }
+  return out;
 }
 
 export function savedSessions(data: unknown): SavedSessionView[] {

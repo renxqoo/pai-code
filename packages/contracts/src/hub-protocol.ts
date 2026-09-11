@@ -192,6 +192,21 @@ export interface GetEntriesCmd {
   limit?: number;
 }
 
+export interface GetInflightCmd {
+  type: 'get_inflight';
+  threadId: string;
+}
+
+export interface GetSubagentsCmd {
+  type: 'get_subagents';
+  threadId: string;
+}
+
+export interface GetPendingDialogsCmd {
+  type: 'get_pending_dialogs';
+  threadId: string;
+}
+
 export interface GetTreeCmd {
   type: 'get_tree';
   threadId: string;
@@ -317,6 +332,9 @@ export type HubCommand =
   | (AuthSetApiKeyCmd & { id?: string })
   | (AuthRemoveKeyCmd & { id?: string })
   | (GetEntriesCmd & { id?: string })
+  | (GetInflightCmd & { id?: string })
+  | (GetSubagentsCmd & { id?: string })
+  | (GetPendingDialogsCmd & { id?: string })
   | (GetTreeCmd & { id?: string })
   | (SetSessionNameCmd & { id?: string })
   | (GetSessionStatsCmd & { id?: string })
@@ -367,6 +385,9 @@ export const HUB_COMMAND_TYPES = [
   'auth/set_api_key',
   'auth/remove_key',
   'get_entries',
+  'get_inflight',
+  'get_subagents',
+  'get_pending_dialogs',
   'get_tree',
   'set_session_name',
   'get_session_stats',

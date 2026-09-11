@@ -23,8 +23,13 @@ function sameCall(a: ToolDeltaEvent, b: ToolDeltaEvent): boolean {
   return a.threadId === b.threadId && a.callId === b.callId;
 }
 
-function concatToolOutput(event: ToolDeltaEvent, extra: string): ToolDeltaEvent {
-  return { ...event, output: event.output + extra };
+/**
+ * 工具在途输出是**累积快照**（SDK 的 tool update 回调发 `output.snapshot()`，单条即含全部
+ * 已产出内容）——批内折叠取最新一条即可。拼接会把同一段输出重复叠加（症状回归用例：
+ * 「流式工具输出重复累积」）。
+ */
+function latestToolOutput(_event: ToolDeltaEvent, latest: ToolDeltaEvent): ToolDeltaEvent {
+  return latest;
 }
 
 export function coalesceEvents(events: readonly UiEvent[]): readonly UiEvent[] {
@@ -59,7 +64,7 @@ export function coalesceEvents(events: readonly UiEvent[]): readonly UiEvent[] {
     if (event.type === 'toolUpdated') {
       flushDelta();
       if (heldTool !== null && sameCall(heldTool, event)) {
-        heldTool = concatToolOutput(heldTool, event.output);
+        heldTool = latestToolOutput(heldTool, event);
         continue;
       }
       flushTool();

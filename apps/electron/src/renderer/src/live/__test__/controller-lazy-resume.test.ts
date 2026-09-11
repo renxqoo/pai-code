@@ -312,6 +312,36 @@ describe('重载冷启动水化（事件流不重放历史）', () => {
     expect(store.getState().threads['t1']?.hydrateFailed).toBe(false);
   });
 
+  test('症状回归「刷新后在途轮只剩最新输出」：重载水化把本轮已落盘前缀留在视图内', async () => {
+    const sessions = [sessionView('t1', 'live', '/w/s/t1.jsonl')];
+    const items = [
+      { kind: 'user', id: 'u1', text: '看一下天气', origin: 'user', images: [], at: 1_000 } as never,
+      { kind: 'assistant', id: 'a1', text: '前半', thinking: '', toolCalls: [], usage: null, stopReason: null, errorMessage: null, at: 1_001 } as never,
+    ];
+    const client = makeClient((method) => {
+      if (method === 'app/bootstrap') return bootstrapOf(sessions);
+      if (method === 'session/entries') return { ok: true, data: { items, cursor: 'a1' } };
+      return { ok: true, data: null };
+    });
+    const store = bootStore(sessions);
+    store.getState().setActiveThread('t1');
+    const controller = createLiveController(client, store);
+    await controller.start();
+
+    // 重载后事件流续上：重载前的增量随旧渲染层消亡，视图里只剩重载后的增量
+    client.emitToController({ type: 'messageStarted', threadId: 't1', messageId: 'm2', at: 2 });
+    client.emitToController({ type: 'textDelta', threadId: 't1', messageId: 'm2', delta: '后半' });
+    await controller.ensureHydrated('t1');
+    await waitMs(0);
+
+    const thread = store.getState().threads['t1'];
+    const texts = (thread?.items ?? []).flatMap((item) =>
+      item.kind === 'turn' ? item.turn.blocks.map((block) => (block.kind === 'text' ? block.text : '')) : [],
+    );
+    expect(texts.join('\n')).toContain('前半');
+    expect(texts.join('\n')).toContain('后半');
+  });
+
   test('live 会话水化不走纳管（零 register 零 resume——表项已在 hub）', async () => {
     const sessions = [sessionView('t1', 'live', '/w/s/t1.jsonl')];
     const client = makeClient((method) => {

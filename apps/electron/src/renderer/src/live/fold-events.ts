@@ -1,10 +1,11 @@
 import type { UiEvent } from '@paiapp/contracts';
-import type { ThreadItem, ToolCallModel, TurnBlock, TurnModel } from '@/thread/thread-model';
+import type { ThreadItem, ToolCallModel, TurnBlock } from '@/thread/thread-model';
 
 import { onSubagentEvent } from './fold-subagents';
-import { hydrateItems, hydrateNewItems, mergeDiffFile } from './hydrate-items';
-import { capSeenIds, initialThreadState, noteCallStart, omitCallStart, type HydrateAction, type LiveThreadState } from './live-thread-state';
-import { clip, findTurn, updateTurn } from './turn-ops';
+import { mergeDiffFile } from './hydrate-items';
+import { capSeenIds, noteCallStart, omitCallStart, type LiveThreadState } from './live-thread-state';
+import { beginLiveTurn, claimAnonymousBlocks, clip, ensureLiveTurn, findTurn, insertBeforeLiveTurn, updateTurn } from './turn-ops';
+
 
 /**
  * 事件折叠状态机（纯函数）：UiEvent + 对账动作 → 视图状态。
@@ -18,7 +19,6 @@ import { clip, findTurn, updateTurn } from './turn-ops';
  */
 
 const MAX_LIVE_CHARS = 4 * 1024 * 1024;
-const LIVE_TURN_PREFIX = 'live-turn-';
 
 export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: number): LiveThreadState {
   switch (event.type) {
@@ -73,12 +73,16 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
       }));
     }
     case 'toolUpdated':
-      return mapLiveCall(state, event.callId, (call) => ({ ...call, output: clip(call.output + event.output) }));
+      // 累积快照（非增量）：整体替换，拼接会把已产出的输出重复叠加
+      return mapLiveCall(state, event.callId, (call) => ({ ...call, output: clip(event.output) }));
     case 'toolEnded':
       return onToolEnded(state, event.callId, event.output, event.isError, event.diff, now);
     case 'messageFinal':
       return onMessageFinal(state, event);
     case 'turnSettled': {
+      // 结算代际（在途读口的代际守卫）：结算后到达的在途快照不得再点亮该轮。
+      // 同时清轮边界：留旧边界会让下一轮的尾 span 归属吞掉上一轮的内容。
+      state = { ...state, turnsSettled: state.turnsSettled + 1, turnStartEntryId: null };
       // 用户停止 = abort：杀掉该对话全部子代理（前台+后台，无通知，api.md U2）；自然结束不动（后台任务跨轮）
       const agents =
         state.stopping && state.agents.some((agent) => agent.status === 'working')
@@ -144,91 +148,6 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
   }
 }
 
-export function foldHydrate(state: LiveThreadState, action: HydrateAction): LiveThreadState {
-  switch (action.kind) {
-    case 'hydrate/initial': {
-      const items = hydrateItems(action.items);
-      return { ...initialThreadState, items, cursor: action.cursor, seenIds: capSeenIds(new Set(action.items.map((item) => item.id))), hydrated: true };
-    }
-    case 'hydrate/reconcile': {
-      const derived = hydrateNewItems(action.items);
-      // 拆除 live 轮的两个前提：载荷确实覆盖该轮（窗口带回条目——空窗口意味着
-      // 转写未到位，销毁现场就是丢内容）且线程非流式（在途轮的内容不在任何载荷
-      // 里，权威替换只属于已结算的轮；流式中直执行等路径靠 liveTurnPresent
-      // 降级为不拆轮 reconcile，这里是最后防线）
-      const drop = action.dropLiveTurn && state.liveTurnId !== null && !state.streaming && action.items.length > 0;
-      const liveTurn = drop ? null : state.liveTurnId;
-      // 在途轮归属（不拆轮的对账遇 live 轮时）：末位用户消息之后的转写条目与
-      // live 轮是同一轮的两种成熟度（重载回落场景：前半已落盘、后半走事件流），
-      // 同轮双渲染即「共工作/已工作」折叠分裂——尾 span 一律归 live 轮独占：
-      // 不插入、不记 seen（settle 权威重建统一收口）；已落库的持久前缀轮（早于
-      // live 轮创建的同类对账插入，按条目派生 id 精确匹配）随行移除
-      const inFlightOwned = !drop && state.liveTurnId !== null;
-      let lastMessageIndex = -1;
-      for (let index = 0; index < derived.length; index += 1) {
-        if ((derived[index]?.item.kind ?? null) === 'message') lastMessageIndex = index;
-      }
-      const skippedTurnIds = new Set<string>();
-      const fresh: Array<{ item: ThreadItem; entryIds: readonly string[] }> = [];
-      derived.forEach((entry, index) => {
-        if (inFlightOwned && (lastMessageIndex < 0 || index > lastMessageIndex)) {
-          if (entry.item.kind === 'turn') skippedTurnIds.add(entry.item.turn.id);
-          return;
-        }
-        if (entry.entryIds.some((id) => !state.seenIds.has(id))) fresh.push(entry);
-      });
-      let items = state.items;
-      if (skippedTurnIds.size > 0) {
-        items = items.filter((item) => !(item.kind === 'turn' && item.turn.id !== state.liveTurnId && skippedTurnIds.has(item.turn.id)));
-      }
-      const wasStopped = drop
-        ? items.some((item) => item.kind === 'turn' && item.turn.id === state.liveTurnId && item.turn.status === 'stopped')
-        : false;
-      for (const { item } of fresh) {
-        items = insertBeforeLiveTurn(items, item, liveTurn);
-      }
-      if (drop) {
-        items = items.filter((item) => !(item.kind === 'turn' && item.turn.id === state.liveTurnId));
-      }
-      // 权威替换继承用户停止语义：settle 前被停止的轮次保持 stopped 终态
-      // （仅随拆除发生——空窗口时末轮是无关历史轮，不得误标）
-      if (wasStopped) {
-        for (let index = items.length - 1; index >= 0; index -= 1) {
-          const item = items[index];
-          if (item?.kind === 'turn') {
-            items = [...items.slice(0, index), { kind: 'turn', turn: { ...item.turn, status: 'stopped' } }, ...items.slice(index + 1)];
-            break;
-          }
-        }
-      }
-      const seen = capSeenIds(new Set([...state.seenIds, ...fresh.flatMap((entry) => [...entry.entryIds])]));
-      // reconcile 也置 hydrated：重载冷启动走 reconcile 保流式现场时，后续
-      // ensureHydrated 的守卫同样要看到「历史已装载」
-      return { ...state, items, cursor: action.cursor ?? state.cursor, seenIds: seen, liveTurnId: liveTurn, hydrated: true, hydrateFailed: false };
-    }
-    case 'hydrate/rebuild': {
-      const items = [...hydrateItems(action.items)];
-      // 继承用户停止语义：live 轮在 settle 前被停止时，末轮标 stopped
-      const wasStopped =
-        state.liveTurnId !== null && state.items.some((item) => item.kind === 'turn' && item.turn.id === state.liveTurnId && item.turn.status === 'stopped');
-      if (wasStopped) {
-        for (let index = items.length - 1; index >= 0; index -= 1) {
-          const item = items[index];
-          if (item?.kind === 'turn') {
-            items[index] = { kind: 'turn', turn: { ...item.turn, status: 'stopped' } };
-            break;
-          }
-        }
-      }
-      return { ...state, items, cursor: action.cursor, seenIds: capSeenIds(new Set(action.items.map((item) => item.id))), liveTurnId: null, liveMessageId: null, hydrateFailed: false };
-    }
-    case 'hydrate/failed':
-      return { ...state, hydrateFailed: true };
-    default:
-      return state;
-  }
-}
-
 /** 用户停止意图（Esc/停止按钮）：settle 时标 stopped。无运行中轮次时忽略（迟到点击不污染下一轮）。 */
 export function foldStopIntent(state: LiveThreadState): LiveThreadState {
   const turn = findTurn(state, state.liveTurnId);
@@ -265,34 +184,7 @@ export function foldDeath(state: LiveThreadState, now: number, frozenStatus: 'co
 }
 
 function onTurnStarted(state: LiveThreadState, at: number): LiveThreadState {
-  // 遗留 running 轮（错过 settle）先冻结为 completed；已终结的装饰轮退场
-  // （其权威内容由对账提供，残留会与后续插入的权威轮双显）
-  let items = state.items;
-  if (state.liveTurnId !== null) {
-    items = items.map((item) =>
-      item.kind === 'turn' && item.turn.id === state.liveTurnId && item.turn.status === 'running'
-        ? { kind: 'turn', turn: { ...item.turn, status: 'completed', endedAt: at } }
-        : item,
-    );
-  }
-  items = items.filter((item) => !(item.kind === 'turn' && item.turn.id.startsWith(LIVE_TURN_PREFIX) && item.turn.status !== 'running'));
-  const turn: TurnModel = {
-    id: `${LIVE_TURN_PREFIX}${at}-${items.length}`,
-    status: 'running',
-    startedAt: at,
-    endedAt: null,
-    blocks: [],
-    streamingThinkingBlockId: null,
-  };
-  return {
-    ...state,
-    items: [...items, { kind: 'turn', turn }],
-    liveTurnId: turn.id,
-    liveMessageId: null,
-    streaming: true,
-    retrying: null,
-    crashed: false,
-  };
+  return { ...beginLiveTurn(state, at), streaming: true, retrying: null, crashed: false };
 }
 
 function onToolEnded(
@@ -356,7 +248,9 @@ function onMessageFinal(
   const turn = findTurn(state, state.liveTurnId);
   if (turn === null) return state;
   return updateTurn(state, turn.id, (current) => {
-    let blocks = current.blocks.map((block) => {
+    // 权威身份到达即认领匿名块（重载落在消息流式中：增量空 id 折出的中转块），
+    // 下方替换/补块才能寻址到它；不认领则同一条消息永久渲染成两个体
+    let blocks = claimAnonymousBlocks(current.blocks, event.message.id).map((block) => {
       if (block.kind === 'text' && block.id === `text-${event.message.id}`) {
         return { ...block, text: clip(event.message.text) };
       }
@@ -418,11 +312,6 @@ function appendDelta(state: LiveThreadState, messageId: string, kind: 'text' | '
   });
 }
 
-function ensureLiveTurn(state: LiveThreadState, now: number): LiveThreadState {
-  if (state.liveTurnId !== null && findTurn(state, state.liveTurnId) !== null) return state;
-  return onTurnStarted({ ...state, streaming: true }, now);
-}
-
 /** 清 live 轮的思考流式态（新消息开始等让位点）；无 live 轮原样返回。 */
 function clearThinkingStream(state: LiveThreadState): LiveThreadState {
   const turn = findTurn(state, state.liveTurnId);
@@ -466,16 +355,4 @@ function insertBlock(blocks: TurnBlock[], block: TurnBlock): void {
   const tail = blocks.findIndex((existing) => existing.kind === 'diff');
   const at = tail === -1 ? blocks.length : tail;
   blocks.splice(at, 0, block);
-}
-
-function insertBeforeLiveTurn(items: readonly ThreadItem[], item: ThreadItem, liveTurnId: string | null): ThreadItem[] {
-  if (liveTurnId === null) return [...items, item];
-  // live 轮恒在尾部附近：从尾向前找，避免长会话每次插入从头扫
-  for (let index = items.length - 1; index >= 0; index -= 1) {
-    const existing = items[index];
-    if (existing?.kind === 'turn' && existing.turn.id === liveTurnId) {
-      return [...items.slice(0, index), item, ...items.slice(index)];
-    }
-  }
-  return [...items, item];
 }

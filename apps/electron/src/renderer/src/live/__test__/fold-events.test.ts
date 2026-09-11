@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { foldDeath, foldHydrate, foldStopIntent, foldThreadEvent } from '../fold-events';
+import { foldDeath, foldStopIntent, foldThreadEvent } from '../fold-events';
+import { foldHydrate } from '../fold-hydrate';
 import { initialThreadState } from '../live-thread-state';
 import type { HistoryItem, UiEvent } from '@paiapp/contracts';
 import type { ThreadItem } from '@/thread/thread-model';

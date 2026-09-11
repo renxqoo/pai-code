@@ -148,18 +148,32 @@ function failureOf(assistants: readonly HistoryItem[]): Extract<TurnBlock, { kin
   return null;
 }
 
+/**
+ * 块身份 = 消息身份（T35）：assistant 条目的 `messageTs` 与事件流侧 messageId 同源
+ * （`String(message.timestamp)`，后者本就充当 live 侧的消息身份——delta/messageFinal/
+ * 工具补齐都按它寻址），因此「同一条消息」在转写/在途快照/增量流三处恒为同一块 id，
+ * 合并天然幂等、双渲染不可能。
+ *
+ * **不得再加组内序号后缀**：live 侧不知道自己是组内第几条，一旦转写侧带后缀，同一消息
+ * 在两侧就永不命中同一 key（同轮双渲染）。同毫秒碰撞不表示两条不同消息——消息时间戳
+ * 作为消息身份是既有前提（live 折叠全程依赖它）。
+ * `messageTs === 0`（legacy 条目缺 message.timestamp）退回条目 id（两侧都会退化，可接受）。
+ */
+function blockKeyOf(item: Extract<HistoryItem, { kind: 'assistant' }>): string {
+  return item.messageTs > 0 ? String(item.messageTs) : item.id;
+}
+
 function buildTurnBlocks(assistants: readonly HistoryItem[]): readonly TurnBlock[] {
   const blocks: TurnBlock[] = [];
   const diffFiles: Array<{ path: string; additions: number; deletions: number }> = [];
-  let turnIndex = 0;
   for (const item of assistants) {
     if (item.kind !== 'assistant') continue;
-    const suffix = turnIndex === 0 ? '' : `-${turnIndex}`;
+    const key = blockKeyOf(item);
     if (item.thinking.length > 0) {
-      blocks.push({ kind: 'thinking', id: `think-${item.id}${suffix}`, text: clip(item.thinking) });
+      blocks.push({ kind: 'thinking', id: `think-${key}`, text: clip(item.thinking) });
     }
     if (item.text.length > 0) {
-      blocks.push({ kind: 'text', id: `text-${item.id}${suffix}`, text: clip(item.text) });
+      blocks.push({ kind: 'text', id: `text-${key}`, text: clip(item.text) });
     }
     if (item.toolCalls.length > 0) {
       const calls: ToolCallModel[] = item.toolCalls.map((call) => ({
@@ -172,22 +186,22 @@ function buildTurnBlocks(assistants: readonly HistoryItem[]): readonly TurnBlock
         durationMs: null,
         status: call.isError ? 'failed' : 'ok',
       }));
-      blocks.push({ kind: 'tools', id: `tools-${item.id}${suffix}`, calls });
+      blocks.push({ kind: 'tools', id: `tools-${key}`, calls });
       for (const call of item.toolCalls) {
         for (const file of call.diff ?? []) {
           mergeDiffFile(diffFiles, file.path, file.additions, file.deletions);
         }
       }
     }
-    turnIndex += 1;
   }
   if (diffFiles.length > 0) {
     const changedFiles = diffFiles.length;
     const additions = diffFiles.reduce((sum, file) => sum + file.additions, 0);
     const deletions = diffFiles.reduce((sum, file) => sum + file.deletions, 0);
+    const first = assistants[0];
     blocks.push({
       kind: 'diff',
-      id: `diff-${assistants[0]?.id ?? 'x'}`,
+      id: `diff-${first?.kind === 'assistant' ? blockKeyOf(first) : 'x'}`,
       diff: { changedFiles, additions, deletions, files: diffFiles },
     });
   }

@@ -57,12 +57,12 @@ describe('coalesceEvents', () => {
 describe('coalesceEvents · toolUpdated 批内折叠（T28 R11：chatty 工具输出与打字机同型）', () => {
   const tool = (callId: string, output: string) => ({ type: 'toolUpdated' as const, threadId: 't1', callId, output });
 
-  test('同 callId 相邻 toolUpdated 拼接为一条；不同 callId 不合并', () => {
+  test('症状回归「流式工具输出重复累积」：同 callId 相邻 toolUpdated 取最新快照为一条；不同 callId 不合并', () => {
     const events = [
       { type: 'textDelta' as const, threadId: 't1', messageId: 'm1', delta: 'a' },
       tool('c1', 'line1\n'),
-      tool('c1', 'line2\n'),
-      tool('c1', 'line3\n'),
+      tool('c1', 'line1\nline2\n'),
+      tool('c1', 'line1\nline2\nline3\n'),
       tool('c2', 'other'),
     ];
     const out = coalesceEvents(events);

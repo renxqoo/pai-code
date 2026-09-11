@@ -40,14 +40,15 @@ describe('词表封闭（双向）', () => {
     );
   });
 
-  test('hub 命令词表 == 43（v0.5 + v0.6-v0.9 补齐 + v0.12 thread/register + v0.13 观测三命令）', () => {
-    expect(HUB_COMMAND_TYPES.length).toBe(43);
+  test('hub 命令词表 == 46（v0.5 + v0.6-v0.9 补齐 + v0.12 thread/register + v0.13 观测三命令 + v0.14 收敛三命令）', () => {
+    expect(HUB_COMMAND_TYPES.length).toBe(46);
     expect([...HUB_COMMAND_TYPES].sort(byStr)).toEqual(
       [
         'thread/start', 'thread/resume', 'thread/register', 'thread/stop', 'thread/retire', 'thread/set_keepalive', 'thread/list', 'thread/list_saved',
         'set_model_override', 'get_host_info', 'set_idle_retire_ms', 'get_sandbox_state',
         'prompt', 'steer', 'follow_up', 'abort', 'clear_queue', 'compact',
         'get_state', 'get_messages', 'get_entries', 'get_tree', 'get_session_stats', 'set_session_name', 'get_commands', 'get_fork_messages',
+        'get_inflight', 'get_subagents', 'get_pending_dialogs',
         'fork', 'clone', 'navigate_tree',
         'get_models', 'set_model', 'set_thinking_level', 'get_thinking_levels',
         'auth/list', 'auth/set_api_key', 'auth/remove_key',
@@ -140,6 +141,7 @@ describe('SessionView / HistoryItem schema', () => {
       {
         kind: 'assistant',
         id: 'm2',
+        messageTs: 2,
         at: 2,
         text: 'hello',
         thinking: '',
@@ -154,7 +156,7 @@ describe('SessionView / HistoryItem schema', () => {
   });
 
   test('HistoryItem assistant 异常终态：stopReason 仅收窄词表、error 可带原始信息', () => {
-    const base = { kind: 'assistant', id: 'm2', at: 2, text: '', thinking: '', toolCalls: [], usage: null } as const;
+    const base = { kind: 'assistant', id: 'm2', messageTs: 2, at: 2, text: '', thinking: '', toolCalls: [], usage: null } as const;
     expect(HistoryItemSchema.parse({ ...base, stopReason: 'error', errorMessage: '401 invalid api key' })).toMatchObject({ stopReason: 'error', errorMessage: '401 invalid api key' });
     expect(HistoryItemSchema.parse({ ...base, stopReason: 'aborted', errorMessage: null })).toMatchObject({ stopReason: 'aborted' });
     expect(() => HistoryItemSchema.parse({ ...base, stopReason: 'stop', errorMessage: null })).toThrow();

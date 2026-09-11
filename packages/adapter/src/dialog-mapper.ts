@@ -26,8 +26,9 @@ function strField(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
-/** select 的 options 形态宽松（string 或 {label,value}），统一窄化为 label 列表。 */
-function strListField(value: unknown): string[] | undefined {
+/** select 的 options 形态宽松（string 或 {label,value}），统一窄化为 label 列表。
+ * 导出供重建路径复用（实时帧与重载快照必须同一套收窄，否则对象形态选项在重建后消失）。 */
+export function strListField(value: unknown): string[] | undefined {
   if (!Array.isArray(value) || value.length === 0) return undefined;
   const labels: string[] = [];
   for (const item of value) {

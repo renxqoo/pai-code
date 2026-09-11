@@ -14,7 +14,11 @@ export {
   previewCommands,
   hostInfoView,
   threadListRows,
+  inflightView,
+  subagentSnapshotView,
+  pendingDialogsView,
   type SessionViewInput,
 } from './response-views';
 export { isFileMutatingTool, diffFromPatch, diffFromWriteArgs } from './diff-extract';
+export { strListField } from './dialog-mapper';
 export { flattenUserText, assistantText, assistantThinking } from './content';

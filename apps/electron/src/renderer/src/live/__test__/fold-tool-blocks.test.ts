@@ -24,6 +24,16 @@ function liveTurn(state: { items: readonly ThreadItem[] }): ThreadItem {
   return item;
 }
 
+test('症状回归「流式工具输出重复累积」：toolUpdated 是累积快照，整体替换而非拼接', () => {
+  let s = foldThreadEvent(initialThreadState, ev({ type: 'turnStarted', threadId: T, at: tick(1) }), tick(1));
+  s = foldThreadEvent(s, ev({ type: 'toolCallAdded', threadId: T, messageId: 'm1', at: tick(2), call: { id: 'c1', name: 'bash', argsPreview: 'bun test', subagents: [] } }), tick(2));
+  s = foldThreadEvent(s, ev({ type: 'toolUpdated', threadId: T, callId: 'c1', output: 'line1\n' }), tick(3));
+  s = foldThreadEvent(s, ev({ type: 'toolUpdated', threadId: T, callId: 'c1', output: 'line1\nline2\n' }), tick(4));
+  const turn = s.items.find((item) => item.kind === 'turn');
+  const calls = turn?.kind === 'turn' ? turn.turn.blocks.flatMap((block) => (block.kind === 'tools' ? block.calls : [])) : [];
+  expect(calls[0]?.output).toBe('line1\nline2\n');
+});
+
 describe('foldEvents · 工具块按消息归块', () => {
   /** 工具循环事件序列：消息 a（思考→工具→diff）→ 消息 b（思考→正文→工具），block 序即到达序 */
   function toolLoopEvents(): UiEvent[] {

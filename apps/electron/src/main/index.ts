@@ -188,6 +188,8 @@ void app.whenReady().then(async () => {
       settings,
       keyStore,
       monitor: monitorRef,
+      // 单一全序：invoke 结算先冲事件批，再让结果回渲染层（T35 §13）
+      onCommandSettled: () => flushEvents(),
       onPolicySyncFailed: (minutes, reason) => {
         loggingToMonitor.log(`set_idle_retire_failed:${minutes}:${reason}`);
       },

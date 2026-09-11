@@ -25,6 +25,9 @@ export type PaiCommandType =
   | 'clear_queue'
   | 'get_state'
   | 'get_entries'
+  | 'get_inflight'
+  | 'get_subagents'
+  | 'get_pending_dialogs'
   | 'get_models'
   | 'set_model'
   | 'set_thinking_level'
@@ -58,6 +61,9 @@ export const PAI_COMMAND_TYPES = [
   'clear_queue',
   'get_state',
   'get_entries',
+  'get_inflight',
+  'get_subagents',
+  'get_pending_dialogs',
   'get_models',
   'set_model',
   'set_thinking_level',
