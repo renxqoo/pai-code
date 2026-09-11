@@ -138,6 +138,11 @@ function ThreadStage(): React.JSX.Element {
     else if (id === 'agents') ui.openAgentsPane();
     else if (id === 'openFile') openFilePicker();
   }, []);
+  /** ui 动作直调包装：引用恒定——ThreadHeader/MessageList/HostDownBanner 是 memo 边界，
+   * 内联箭头会随舞台每次重渲击穿（流式批推期每 50ms 一次）。 */
+  const onTogglePanel = React.useCallback(() => uiStore.getState().togglePanelFromHeader(), []);
+  const onOpenSettings = React.useCallback(() => uiStore.getState().openSettings(), []);
+  const onOpenDiff = React.useCallback(() => uiStore.getState().openDiffPane(), []);
 
   return (
     <>
@@ -156,13 +161,13 @@ function ThreadStage(): React.JSX.Element {
         onViewAction={onViewAction}
         onRenameTitle={onRenameTitle}
         onStatusJump={scrollToBottom}
-        onTogglePanel={() => uiStore.getState().togglePanelFromHeader()}
+        onTogglePanel={onTogglePanel}
         onSessionAction={onSessionAction}
         onToggleMaximize={toggleMaximize}
       />
       {hostDown ? (
         <div className="shrink-0 px-[40px]">
-          <HostDownBanner onOpenSettings={() => uiStore.getState().openSettings()} />
+          <HostDownBanner onOpenSettings={onOpenSettings} />
         </div>
       ) : null}
       <div ref={scrollRef} onScroll={onScroll} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden  px-[40px]">
@@ -175,7 +180,7 @@ function ThreadStage(): React.JSX.Element {
           emptyHint={thread.hydrateFailed ? copy.flow.hydrateFailedHint : copy.thread.emptyHint}
           onRetryHydrate={thread.hydrateFailed ? workspaceActions.retryHydration : undefined}
           retryLabel={copy.thread.retryHydration}
-          onOpenDiff={() => uiStore.getState().openDiffPane()}
+          onOpenDiff={onOpenDiff}
           onEditUserMessage={editUserMessage}
           onForkUserMessage={forkUserMessage}
         />

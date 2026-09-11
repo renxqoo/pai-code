@@ -216,7 +216,14 @@ describe('工作区根订阅面终态审计（B-batch ③ 的静态面）', () =
     for (const forbidden of ['s.threads', 's.sessions', 's.stats', 's.saved', 's.models']) {
       expect(source.includes(forbidden)).toBe(false);
     }
-    // 运行时行为由 B-batch ①②（舞台级）与各区域回归承担；③的探针方案因 settings
-    // 装配的 ThemeProvider 依赖在测试环境不可达，以终态清单的静态审计替代（T34 §1.1）。
+    // 运行时行为由 B-batch ①②（舞台级）与各区域回归承担；settings 装配的挂载
+    // 回归在 settings/__test__/use-settings-screen.test.tsx（ThemeProvider 实挂）。
+  });
+
+  test('症状：内联回调击穿舞台 memo 边界——thread-stage 不含渲染体内联箭头 props', async () => {
+    const source = await Bun.file(`${import.meta.dir}/../thread-stage.tsx`).text();
+    // ThreadHeader/MessageList/HostDownBanner 均为 memo 边界：渲染体内联箭头每次
+    // 换引用，流式批推期（50ms 一帧）逐帧击穿；舞台文件的回调一律 useCallback 恒定引用
+    expect(source.includes('={() =>')).toBe(false);
   });
 });

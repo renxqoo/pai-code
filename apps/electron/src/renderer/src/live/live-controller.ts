@@ -188,6 +188,10 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       lazy.invalidate();
       return;
     }
+    if (event.type === 'sessionRemoved') {
+      // 线程移除后轮次永不结算：轮首游标条目随行回收（不等 settle 配对删除）
+      turnStartCursors.delete(event.threadId);
+    }
     if (event.type === 'dialogRequest' && event.method !== 'notify' && event.method !== 'setStatus') {
       // 宿主侧 5 分钟超时默认拒绝后无回执帧：客户端同步兜底收起；同 id 重投先清
       // 旧 timer（孤儿定时器会按首个请求的时点提前取消重投后的弹窗）

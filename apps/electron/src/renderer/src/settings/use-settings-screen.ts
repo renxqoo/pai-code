@@ -121,10 +121,13 @@ export function useSettingsScreen({ open, onClose, initialSection }: UseSettings
   const [localeSetting, setLocaleSettingState] = React.useState<LocaleSetting>(getLocaleSetting());
   const { theme, setTheme } = useTheme();
   const actions = workspaceActions;
-  // 直订阅（T34 M3）：设置页全部为低频字段；saved 经共享视图映射（title 兜底单一真相）
+  // 直订阅（T34 M3）：设置页全部为低频字段（sessions/stats 随 sessionUpdated 元数据
+  // 快照变更，非消息流频度）；savedSessionEntries 派生不进 selector（每次返回新数组
+  // 会让 getSnapshot 永不稳定——裸订阅 + useMemo 映射，同 use-new-task-screen 范式）
   const sessionById = useStore(liveStore, (s) => s.sessions);
   const statsById = useStore(liveStore, (s) => s.stats);
-  const saved = useStore(liveStore, (s) => savedSessionEntries(s.saved));
+  const savedRaw = useStore(liveStore, (s) => s.saved);
+  const saved = React.useMemo(() => savedSessionEntries(savedRaw), [savedRaw]);
   const providers = useStore(liveStore, (s) => s.providers);
   const models = useStore(liveStore, (s) => s.models);
   const preferences = useStore(liveStore, (s) => s.preferences);
@@ -133,10 +136,10 @@ export function useSettingsScreen({ open, onClose, initialSection }: UseSettings
   const agentDefinitions = useStore(liveStore, (s) => s.agentDefinitions);
   const skills = useStore(liveStore, (s) => s.skills);
   const modelOptions = React.useMemo(() => models.map((model) => `${model.provider}/${model.modelId}`), [models]);
-  const hostPhase = useStore(liveStore, (s) => s.hostPhase);
-  const runtimeAttention = React.useMemo(
-    () => hostPhase !== 'ready' || Object.values(sessionById).some((session) => session.state === 'dead'),
-    [hostPhase, sessionById],
+  // 原始值 selector（布尔）：宿主相位或死会话存在性翻转才重渲，与 sessions 表引用解耦
+  const runtimeAttention = useStore(
+    liveStore,
+    (s) => s.hostPhase !== 'ready' || Object.values(s.sessions).some((session) => session.state === 'dead'),
   );
   // 每次打开回到首分区（重进分区会重触发按开即读）
   const runtimePanel = useRuntimePanel(
@@ -167,7 +170,9 @@ export function useSettingsScreen({ open, onClose, initialSection }: UseSettings
   const pinned = React.useMemo(() => pinnedSetOf(preferences.pinnedSessions), [preferences.pinnedSessions]);
   const projects = React.useMemo(() => savedProjectsOf(saved), [saved]);
 
-  return React.useMemo<SettingsScreenProps>(() => ({
+  // 不做整体 memo：SettingsScreen 非 memo 边界，props 恒定性不参与渲染门控；
+  // 手工维护依赖表曾漏数据面九类字段（providers/规则/目录/装配面板全部冻结陈旧）
+  return {
     open,
     onClose,
     section,
@@ -252,7 +257,6 @@ export function useSettingsScreen({ open, onClose, initialSection }: UseSettings
         onClose();
       },
     },
-    runtimeAttention:
-      runtimeAttention,
-  }), [open, onClose, section, onSelectSection, localeSetting, theme, setTheme, runtimeAttention, pinned, projects, actions]);
+    runtimeAttention,
+  };
 }

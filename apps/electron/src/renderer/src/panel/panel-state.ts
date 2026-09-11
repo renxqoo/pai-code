@@ -77,7 +77,8 @@ export function panelTabLabel(tab: PanelTab, labels: PanelTabLabels): string {
   return tab.kind === 'diff' ? labels.diff : labels.agents;
 }
 
-export type PanelArchive = Record<string, PanelState>;
+/** 会话级面板档案（模块单例持有；Map 形态支持会话消亡时的键回收）。 */
+export type PanelArchive = Map<string, PanelState>;
 
 /**
  * 切会话的面板存档/恢复裁决（纯函数，供单测钉住导航不清面板的交互）：
@@ -90,7 +91,7 @@ export function panelSwitchOutcome(
   nextThread: string,
   currentPanel: PanelState,
 ): PanelState | null {
-  archive[currentThread] = currentPanel;
+  archive.set(currentThread, currentPanel);
   if (currentThread === nextThread) return null;
-  return archive[nextThread] ?? EMPTY_PANEL;
+  return archive.get(nextThread) ?? EMPTY_PANEL;
 }

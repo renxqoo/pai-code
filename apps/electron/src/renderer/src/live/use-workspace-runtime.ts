@@ -4,19 +4,21 @@ import { useStore } from 'zustand';
 import { effortLevelsForModel } from '@/composer/composer-selection';
 import { submitQueuedDraft } from '@/composer/queued-submit';
 import { connectQueuedDraftFlush } from '@/live/queued-flush';
-import { panelSwitchOutcome, type PanelState } from '@/panel/panel-state';
+import { panelSwitchOutcome, type PanelArchive } from '@/panel/panel-state';
+import { connectSessionUiPrune } from '@/live/ui-state-prune';
 import { bridgeClient, controller, store } from '@/live/workspace-runtime';
 import { uiStore } from '@/ui/ui-store';
 
 /**
  * 工作区运行挂载（T34 M3，useLiveWorkspace 退役后的单一挂载点）：
  * controller 生命周期、切会话 effect（水化/会话规则/思考档/命令目录）、
- * 暂存轮末冲刷连接、面板组态会话级存档/恢复。无返回值——数据订阅全部
- * 归各区域/装配面自取；本 hook 在工作区守卫的早退分支之前无条件调用。
+ * 暂存轮末冲刷连接、面板组态会话级存档/恢复、会话消亡时的 UI 态回收。
+ * 无返回值——数据订阅全部归各区域/装配面自取；本 hook 在工作区守卫的
+ * 早退分支之前无条件调用。
  */
 
 /** 会话级面板组态档案（模块级，与草稿同档不落盘；当前态在 ui store）。 */
-const panelArchive: Record<string, PanelState> = {};
+const panelArchive: PanelArchive = new Map();
 
 export function useWorkspaceRuntime(): void {
   const activeThreadId = useStore(store, (s) => s.activeThreadId) ?? '';
@@ -35,6 +37,9 @@ export function useWorkspaceRuntime(): void {
   // 暂存排队消息的轮末冲刷（连接器单一真相 live/queued-flush；投递实现在 composer/queued-submit）
   React.useEffect(() => connectQueuedDraftFlush(store, submitQueuedDraft), [submitQueuedDraft]);
 
+  // 会话消亡修剪：死线程的草稿槽/面板档案回收（连接器单一真相 live/ui-state-prune）
+  React.useEffect(() => connectSessionUiPrune(store, uiStore, panelArchive), []);
+
   React.useEffect(() => {
     // 切会话（或最后一个会话被移除）先清会话级派生态：sessionRules/commands/
     // effortLevels 由 store.setActiveThread 同步清空（防渲染帧残留一帧），
@@ -48,7 +53,10 @@ export function useWorkspaceRuntime(): void {
     void controller.ensureHydrated(activeThreadId);
     void controller.readSessionRules(activeThreadId);
     if (activeSessionState !== 'live') {
-      store.setState({ effortLevels: effortLevelsForModel(store.getState().models, activeSessionModel ?? '') });
+      // parked worker 已死：斜杠命令目录是 worker 级查询，随翻转清空（唤醒后由
+      // live 路径重拉）——旧 effect 头部无条件 setCommands([]) 的同构语义；
+      // 思考档按模型能力本地推导
+      store.setState({ commands: [], effortLevels: effortLevelsForModel(store.getState().models, activeSessionModel ?? '') });
       return;
     }
     // 思考档位随会话拉取（模型能力差异；响应回来时会话已切换则丢弃）
