@@ -151,14 +151,36 @@ export function foldHydrate(state: LiveThreadState, action: HydrateAction): Live
       return { ...initialThreadState, items, cursor: action.cursor, seenIds: capSeenIds(new Set(action.items.map((item) => item.id))), hydrated: true };
     }
     case 'hydrate/reconcile': {
-      const fresh = hydrateNewItems(action.items).filter(({ entryIds }) => entryIds.some((id) => !state.seenIds.has(id)));
+      const derived = hydrateNewItems(action.items);
       // 拆除 live 轮的两个前提：载荷确实覆盖该轮（窗口带回条目——空窗口意味着
       // 转写未到位，销毁现场就是丢内容）且线程非流式（在途轮的内容不在任何载荷
       // 里，权威替换只属于已结算的轮；流式中直执行等路径靠 liveTurnPresent
       // 降级为不拆轮 reconcile，这里是最后防线）
       const drop = action.dropLiveTurn && state.liveTurnId !== null && !state.streaming && action.items.length > 0;
       const liveTurn = drop ? null : state.liveTurnId;
+      // 在途轮归属（不拆轮的对账遇 live 轮时）：末位用户消息之后的转写条目与
+      // live 轮是同一轮的两种成熟度（重载回落场景：前半已落盘、后半走事件流），
+      // 同轮双渲染即「共工作/已工作」折叠分裂——尾 span 一律归 live 轮独占：
+      // 不插入、不记 seen（settle 权威重建统一收口）；已落库的持久前缀轮（早于
+      // live 轮创建的同类对账插入，按条目派生 id 精确匹配）随行移除
+      const inFlightOwned = !drop && state.liveTurnId !== null;
+      let lastMessageIndex = -1;
+      for (let index = 0; index < derived.length; index += 1) {
+        if ((derived[index]?.item.kind ?? null) === 'message') lastMessageIndex = index;
+      }
+      const skippedTurnIds = new Set<string>();
+      const fresh: Array<{ item: ThreadItem; entryIds: readonly string[] }> = [];
+      derived.forEach((entry, index) => {
+        if (inFlightOwned && (lastMessageIndex < 0 || index > lastMessageIndex)) {
+          if (entry.item.kind === 'turn') skippedTurnIds.add(entry.item.turn.id);
+          return;
+        }
+        if (entry.entryIds.some((id) => !state.seenIds.has(id))) fresh.push(entry);
+      });
       let items = state.items;
+      if (skippedTurnIds.size > 0) {
+        items = items.filter((item) => !(item.kind === 'turn' && item.turn.id !== state.liveTurnId && skippedTurnIds.has(item.turn.id)));
+      }
       const wasStopped = drop
         ? items.some((item) => item.kind === 'turn' && item.turn.id === state.liveTurnId && item.turn.status === 'stopped')
         : false;
@@ -179,7 +201,7 @@ export function foldHydrate(state: LiveThreadState, action: HydrateAction): Live
           }
         }
       }
-      const seen = capSeenIds(new Set([...state.seenIds, ...action.items.map((item) => item.id)]));
+      const seen = capSeenIds(new Set([...state.seenIds, ...fresh.flatMap((entry) => [...entry.entryIds])]));
       // reconcile 也置 hydrated：重载冷启动走 reconcile 保流式现场时，后续
       // ensureHydrated 的守卫同样要看到「历史已装载」
       return { ...state, items, cursor: action.cursor ?? state.cursor, seenIds: seen, liveTurnId: liveTurn, hydrated: true, hydrateFailed: false };

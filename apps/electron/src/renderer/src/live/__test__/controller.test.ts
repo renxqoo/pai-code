@@ -396,3 +396,78 @@ test('症状回归「重载后切回流式中的会话，正在生成的内容�
   expect(liveTurn).toBeDefined();
   controller.dispose();
 });
+
+test('症状回归「重载落在轮次进行中：同一轮折叠分裂成两个（共工作/已工作）」：拉补先落、事件后到时补挂重定基收回双渲染', async () => {
+  const store = createLiveStore();
+  const threadId = 't1';
+  let listener: ((events: readonly unknown[]) => void) | undefined;
+  const persisted = [
+    { kind: 'user', id: 'u1', text: '看一下今天天气，还有未来5天的', origin: 'user', images: [], at: 1 },
+    { kind: 'assistant', id: 'a1', text: '在途前半（已落盘）', thinking: '', toolCalls: [], usage: null, stopReason: null, errorMessage: null, at: 2 },
+  ];
+  const client: BridgeClient = {
+    available: true,
+    invoke: (method: string, params?: unknown) => {
+      if (method === 'app/bootstrap') {
+        return Promise.resolve({ ok: true, data: { sessions: [], saved: [], models: [], providers: [] } } as never);
+      }
+      // t2 的重定基拉取走拒绝路径（桥瞬断形态）：补挂的 .catch 不得外抛
+      if (method === 'session/entries' && (params as { threadId?: string } | undefined)?.threadId === 't2') {
+        return Promise.reject(new Error('bridge_down')) as never;
+      }
+      if (method === 'session/entries') return Promise.resolve({ ok: true, data: { items: persisted, cursor: 'a1' } } as never);
+      return Promise.resolve({ ok: true, data: null } as never);
+    },
+    subscribe: (onBatch: (events: readonly unknown[]) => void) => {
+      listener = onBatch;
+      return () => {
+        listener = undefined;
+      };
+    },
+  };
+  const controller = createLiveController(client, store);
+  await controller.start();
+  const emit = (event: unknown): void => listener?.([event]);
+  store.setState({
+    sessions: {
+      [threadId]: { threadId, cwd: '/w', sessionPath: '/w/s/t1.jsonl', title: 't', state: 'live', streaming: false, model: null, thinkingLevel: null, lastActivityAt: 1 },
+    },
+    activeThreadId: threadId,
+    threads: { [threadId]: undefined },
+  });
+
+  // 重载回落序：冷启动拉补先落（在途轮的持久前缀成为独立折叠轮）
+  await controller.ensureHydrated(threadId);
+  await new Promise((resolve) => {
+    setTimeout(resolve, 10);
+  });
+  expect(store.getState().threads[threadId]?.items.filter((item) => item.kind === 'turn')).toHaveLength(1);
+
+  // 事件流随后到达（错过 turnStarted）：live 轮折出 → 补挂重定基收回双渲染
+  emit({ type: 'messageStarted', threadId, messageId: 'm1', at: 3 });
+  emit({ type: 'textDelta', threadId, messageId: 'm1', delta: '在途后半' });
+  await new Promise((resolve) => {
+    setTimeout(resolve, 10);
+  });
+
+  const after = store.getState().threads[threadId];
+  const turns = after?.items.filter((item) => item.kind === 'turn') ?? [];
+  expect(turns).toHaveLength(1); // 同一轮单一渲染体：live 轮独占
+  expect(turns[0]?.kind === 'turn' && turns[0].turn.id === after?.liveTurnId).toBe(true);
+  expect(after?.streaming).toBe(true);
+
+  // 拒绝路径：另一线程的补挂重定基遇桥瞬断不外抛、不动现场
+  store.setState({
+    threads: {
+      ...store.getState().threads,
+      t2: { ...(store.getState().threads[threadId] as object), liveTurnId: null, items: turns.slice() } as never,
+    },
+  });
+  emit({ type: 'messageStarted', threadId: 't2', messageId: 'm9', at: 9 });
+  await new Promise((resolve) => {
+    setTimeout(resolve, 10);
+  });
+  // 拒绝不外抛（.catch 兜住）；live 轮照常折出，分裂留待 settle 权威重建收口
+  expect(store.getState().threads.t2?.liveTurnId ?? null).not.toBeNull();
+  controller.dispose();
+});

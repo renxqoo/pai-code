@@ -207,6 +207,16 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       turnStartCursors.delete(event.threadId);
       dialogTimers.dropThread(event.threadId);
     }
+    if (
+      (event.type === 'messageStarted' || event.type === 'textDelta') &&
+      state.threads[event.threadId]?.liveTurnId == null &&
+      (state.threads[event.threadId]?.items.length ?? 0) > 0
+    ) {
+      // 错过 turnStarted 的在途轮（重载回落）：live 轮刚由本事件折出，而冷启动
+      // 拉补已把该轮的持久前缀插入成独立折叠轮（同轮双渲染）——补挂一次重定基
+      // 对账收回，settle 的权威重建统一收口
+      void rebuildFromTranscript(event.threadId, null, { liveTurnPresent: () => true }).catch(() => undefined);
+    }
     if (event.type === 'turnStarted') {
       // 轮首游标：本轮开始前的持久游标（settle 窗口重建的 since 下界）
       turnStartCursors.set(event.threadId, state.threads[event.threadId]?.cursor ?? null);
