@@ -201,3 +201,4 @@ function ThreadHeader({
 
 const ThreadHeaderMemo = React.memo(ThreadHeader);
 export { ThreadHeaderMemo as ThreadHeader };
+export type { ThreadHeaderProps };
