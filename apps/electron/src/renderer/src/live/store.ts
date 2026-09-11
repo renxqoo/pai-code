@@ -125,6 +125,8 @@ export function createLiveStore() {
               const sessions = omitKey(state.sessions, event.threadId);
               const threads = omitKey(state.threads, event.threadId);
               const stats = omitKey(state.stats, event.threadId);
+              // 线程已移除，挂起对话框永无应答对象：随行收走（与 sessionDied/host 同口径）
+              const dialogs = state.dialogs.filter((dialog) => dialog.threadId !== event.threadId);
               let activeThreadId = state.activeThreadId;
               if (activeThreadId === event.threadId) {
                 // 换 id 整行替换（resume/fork）时优先回落到同会话文件的新 id，避免闪跳到无关会话
@@ -134,7 +136,7 @@ export function createLiveStore() {
                     : undefined;
                 activeThreadId = successor?.threadId ?? firstSessionId(sessions);
               }
-              return { sessions, threads, stats, ...activeThreadFlip(state, activeThreadId) };
+              return { sessions, threads, stats, dialogs, ...activeThreadFlip(state, activeThreadId) };
             }
             case 'sessionDied': {
               const thread = threadOf(state, event.threadId);

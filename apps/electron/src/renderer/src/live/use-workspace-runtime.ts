@@ -74,11 +74,15 @@ export function useWorkspaceRuntime(): void {
     // 推导需要以新值重跑；live 路径的档位拉取幂等，重跑无害
   }, [activeThreadId, activeSessionState, activeSessionModel]);
 
-  // 面板组态会话级存档/恢复：panel 变化即存档、切会话恢复（原 usePanelTabs 同构迁出）
+  // 面板组态会话级存档/恢复：panel 变化即存档、切会话恢复（原 usePanelTabs 同构迁出）；
+  // 旧线程已消亡（sessionRemoved 修剪刚回收死键）时跳过存档写入，防 effect 回写复活
   const panel = useStore(uiStore, (s) => s.panel);
   const panelThreadRef = React.useRef(activeThreadId);
   React.useEffect(() => {
-    const restore = panelSwitchOutcome(panelArchive, panelThreadRef.current, activeThreadId, panel);
+    const prev = panelThreadRef.current;
+    const restore = panelSwitchOutcome(panelArchive, prev, activeThreadId, panel, {
+      canArchive: prev.length === 0 || prev in store.getState().sessions,
+    });
     if (restore === null) return;
     panelThreadRef.current = activeThreadId;
     uiStore.setState({ panel: restore });

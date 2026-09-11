@@ -27,3 +27,10 @@ describe('panelSwitchOutcome', () => {
     expect(archive.get('t2')).toEqual(filePanel);
   });
 });
+
+test('canArchive=false（旧线程已消亡）：跳过存档写入防死键复活，恢复值照常返回', () => {
+  const archive: PanelArchive = new Map();
+  const panel = openPanel(EMPTY_PANEL, singletonTab('diff'));
+  expect(panelSwitchOutcome(archive, 't-dead', 't1', panel, { canArchive: false })).toEqual(EMPTY_PANEL);
+  expect(archive.has('t-dead')).toBe(false);
+});
