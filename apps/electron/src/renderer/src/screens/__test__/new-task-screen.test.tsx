@@ -26,7 +26,8 @@ function renderScreen(overrides: Partial<Parameters<typeof NewTaskScreen>[0]> = 
       noModelsLabel={copy.composer.noModels}
       globalPermissionMode="ask"
       onSearchFiles={() => Promise.resolve(null)}
-      onListBranches={() => Promise.resolve({ ok: true, data: { isRepo: true, current: 'main', branches: ['main'] } })}
+      onListBranches={() => Promise.resolve({ ok: true, data: { isRepo: true, current: 'main', branches: ['main'], dirtyFiles: 0 } })}
+      onListGraph={() => Promise.resolve({ ok: true, data: { isRepo: true, commits: [], truncated: false } })}
       onCheckoutBranch={() => Promise.resolve({ ok: true, data: { branch: 'main' } })}
       onPickDirectory={() => Promise.resolve(null)}
       onCreate={() => Promise.resolve(true)}

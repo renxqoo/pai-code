@@ -21,14 +21,22 @@ import { PromptCard } from '@/composer/prompt-card';
 import { PromptContextBar } from '@/composer/prompt-context-bar';
 import { PromptInputArea } from '@/composer/prompt-input-area';
 import { QueuedMessageCard } from '@/composer/queued-message-card';
+import { BranchPanel } from '@/composer/branch-panel';
 import { branchSegmentOf } from '@/composer/branch-segment';
+import { branchSwitchLocked } from '@/composer/branch-switch-lock';
+import { CreateBranchDialog } from '@/composer/create-branch-dialog';
 import { useGitBranches } from '@/hooks/use-git-branches';
+import { useGitGraph } from '@/hooks/use-git-graph';
+import { GitGraphDialog } from '@/git-graph/git-graph-dialog';
 import { summarizeAgents } from '@/thread/panel-summary';
 import { store as liveStore, workspaceActions } from '@/live/workspace-runtime';
 import { uiStore } from '@/ui/ui-store';
 
 /** 排队列表的空态恒定引用（按键取快照；后台线程的排队变化不进本区域订阅面）。 */
 const EMPTY_QUEUED: readonly { id: number; text: string }[] = [];
+
+/** 本区域互斥浮层：分支面板 → 创建分支弹窗 / 图谱弹窗（同一时刻至多一个）。 */
+type ComposerDialog = 'branch' | 'create-branch' | 'graph' | null;
 
 /**
  * 线程页输入卡区域（T33 M2 / T34 M2，0 props）：live/ui store 与 queuedDrafts 自订阅 →
@@ -71,12 +79,71 @@ function ComposerRegion(): React.JSX.Element {
   );
 
   const activeCwd = activeSession?.cwd ?? '';
-  /** 分支视图拉取居留本区域；失效代次 = 新建任务页 checkout 成功（ui store branchRevision）。 */
+  /** 分支视图拉取居留本区域；失效代次 = 本页或新建任务页 checkout 成功（ui store branchRevision）。 */
   const gitBranches = useGitBranches(activeCwd, workspaceActions.listGitBranches, branchRevision);
   const branch = React.useMemo(
     () => branchSegmentOf(gitBranches.view, gitBranches.loading, gitBranches.failed),
     [gitBranches.view, gitBranches.loading, gitBranches.failed],
   );
+  /** 分支切换锁（T36 引用 T23 裁决）：工作目录上任一线程在跑即只读，防切基线拆台运行中 agent。 */
+  const branchLocked = useStore(liveStore, (s) => branchSwitchLocked(s.sessions, s.threads, activeCwd));
+
+  const [dialog, setDialog] = React.useState<ComposerDialog>(null);
+  const [checkingOut, setCheckingOut] = React.useState(false);
+  const [branchError, setBranchError] = React.useState<string | null>(null);
+  /** 同步闸：连按 Enter/双击时 state 闭包仍为旧值，异步在途必须用 ref 拦 */
+  const busyRef = React.useRef(false);
+  /** 图谱只在弹窗打开时拉取（无轮询）；branchRevision 让 checkout 成功后重开即新谱 */
+  const graph = useGitGraph(activeCwd, workspaceActions.listGitGraph, branchRevision, dialog === 'graph');
+
+  /** 切分支：失败走通知条；成功 bump 失效代次（本区域分支段与图谱随之重拉） */
+  const switchBranch = (branchName: string): void => {
+    if (busyRef.current || branchLocked) return;
+    busyRef.current = true;
+    setCheckingOut(true);
+    setDialog(null);
+    void workspaceActions.checkoutGitBranch(activeCwd, branchName, false).then(
+      (outcome) => {
+        busyRef.current = false;
+        setCheckingOut(false);
+        if (!outcome.ok) {
+          liveStore.getState().pushNotice(copy.branch.failed(outcome.reason));
+          return;
+        }
+        uiStore.getState().bumpBranchRevision();
+      },
+      () => {
+        busyRef.current = false;
+        setCheckingOut(false);
+      },
+    );
+  };
+
+  /** 创建并检出：失败在弹窗内联呈现（不关弹窗，便于改名重试） */
+  const createBranch = (branchName: string): void => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setCheckingOut(true);
+    setBranchError(null);
+    void workspaceActions.checkoutGitBranch(activeCwd, branchName, true).then(
+      (outcome) => {
+        busyRef.current = false;
+        setCheckingOut(false);
+        if (!outcome.ok) {
+          setBranchError(copy.branch.failed(outcome.reason));
+          return;
+        }
+        setDialog(null);
+        uiStore.getState().bumpBranchRevision();
+      },
+      () => {
+        busyRef.current = false;
+        setCheckingOut(false);
+      },
+    );
+  };
+
+  const branchPanelAvailable = gitBranches.view?.isRepo === true && !branchLocked;
 
   const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   React.useEffect(() => {
@@ -90,7 +157,33 @@ function ComposerRegion(): React.JSX.Element {
     <div className={`${CONVERSATION_COLUMN_CLASS} pointer-events-auto`}>
       <PromptContextBar
         project={activeCwd.length === 0 ? null : { label: baseNameOf(activeCwd) || activeCwd, title: activeCwd, ariaLabel: copy.composer.projectSegment }}
-        branch={{ ...branch, ariaLabel: copy.composer.branchSegment }}
+        branch={{
+          ...branch,
+          ariaLabel: copy.composer.branchSegment,
+          // 非仓库/加载中/运行中锁定不给面板入口（列表为空或切基线会拆台运行中 agent）
+          ...(branchPanelAvailable
+            ? {
+                panel: {
+                  open: dialog === 'branch',
+                  onOpenChange: (open: boolean) => setDialog(open ? 'branch' : null),
+                  content: (
+                    <BranchPanel
+                      view={gitBranches.view}
+                      loading={gitBranches.loading}
+                      failed={gitBranches.failed}
+                      busy={checkingOut}
+                      onSelect={switchBranch}
+                      onCreate={() => {
+                        setBranchError(null);
+                        setDialog('create-branch');
+                      }}
+                      onOpenGraph={() => setDialog('graph')}
+                    />
+                  ),
+                },
+              }
+            : {}),
+        }}
       />
       <PromptCard
         className="relative z-[1] -mt-[10px]"
@@ -157,6 +250,21 @@ function ComposerRegion(): React.JSX.Element {
             usage={{ contextUsed: selection.contextUsed, stats: activeStats, label: copy.composer.contextUsage }}
           />
         )}
+      />
+      <CreateBranchDialog
+        open={dialog === 'create-branch'}
+        onOpenChange={(open) => setDialog(open ? 'create-branch' : null)}
+        busy={checkingOut}
+        error={branchError}
+        onSubmit={createBranch}
+      />
+      <GitGraphDialog
+        open={dialog === 'graph'}
+        onOpenChange={(open) => setDialog(open ? 'graph' : null)}
+        view={graph.view}
+        loading={graph.loading}
+        failed={graph.failed}
+        onRefresh={graph.refresh}
       />
     </div>
   );

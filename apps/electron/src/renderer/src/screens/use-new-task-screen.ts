@@ -116,6 +116,7 @@ export function useNewTaskScreen(enterCwd: string): NewTaskScreenProps {
     globalPermissionMode: permissionRules === null ? null : permissionRules.mode,
     onSearchFiles: workspaceActions.searchFilesIn,
     onListBranches: workspaceActions.listGitBranches,
+    onListGraph: workspaceActions.listGitGraph,
     onCheckoutBranch: checkoutBranch,
     onPickDirectory: workspaceActions.pickDirectory,
     onCreate: create,

@@ -192,6 +192,64 @@ describe('ComposerRegion 交互', () => {
   });
 });
 
+describe('ComposerRegion 分支面板接线（T36）', () => {
+  async function flushAsync(): Promise<void> {
+    await React.act(async () => {
+      for (let i = 0; i < 6; i += 1) await Promise.resolve();
+    });
+  }
+
+  function branchTrigger(view: ReturnType<typeof render>): HTMLButtonElement | undefined {
+    return [...view.container.querySelectorAll('button')].find((b) => b.getAttribute('aria-label') === copy.composer.branchSegment);
+  }
+
+  test('空闲会话 + 仓库目录：分支段升级为锚定面板触发器（aria-expanded）；图谱钩子未开弹窗不预拉', async () => {
+    seedLive({});
+    jest.spyOn(workspaceActions, 'listGitBranches').mockResolvedValue({
+      ok: true,
+      data: { isRepo: true, current: 'main', branches: ['dev', 'main'], dirtyFiles: 2 },
+    });
+    const listGraph = jest.spyOn(workspaceActions, 'listGitGraph').mockResolvedValue({
+      ok: true,
+      data: { isRepo: true, commits: [], truncated: false },
+    });
+    const view = render(<ComposerRegion onOpenAgents={() => undefined} />);
+    await flushAsync();
+    const trigger = branchTrigger(view);
+    expect(trigger).toBeDefined();
+    expect(trigger?.getAttribute('aria-expanded')).toBe('false');
+    expect(listGraph).not.toHaveBeenCalled();
+    view.unmount();
+  });
+
+  test('运行中线程（streaming）：工作目录被分支切换锁锁定，分支段退回只读（无触发器）', async () => {
+    seedLive({ threads: { t1: { streaming: true } } });
+    jest.spyOn(workspaceActions, 'listGitBranches').mockResolvedValue({
+      ok: true,
+      data: { isRepo: true, current: 'main', branches: ['dev', 'main'], dirtyFiles: 0 },
+    });
+    const view = render(<ComposerRegion onOpenAgents={() => undefined} />);
+    await flushAsync();
+    expect(branchTrigger(view)).toBeUndefined();
+    // 只读段仍展示分支名（span 而非按钮）
+    expect(view.container.textContent).toContain('main');
+    view.unmount();
+  });
+
+  test('非仓库目录：分支段弱化且无面板入口', async () => {
+    seedLive({});
+    jest.spyOn(workspaceActions, 'listGitBranches').mockResolvedValue({
+      ok: true,
+      data: { isRepo: false, current: null, branches: [], dirtyFiles: 0 },
+    });
+    const view = render(<ComposerRegion onOpenAgents={() => undefined} />);
+    await flushAsync();
+    expect(branchTrigger(view)).toBeUndefined();
+    expect(view.container.textContent).toContain(copy.composer.notARepo);
+    view.unmount();
+  });
+});
+
 type RegionProbeHostProps = {
   /** 渲染探针（缺省不渲染——宿主零渲染对照用例不需要）。 */
   probe?: React.FC

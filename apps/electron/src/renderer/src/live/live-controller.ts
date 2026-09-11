@@ -10,7 +10,7 @@ import { createEntryHydration, createReadonlyHydration } from './entry-hydration
 import { createDialogTimers } from './dialog-timers';
 import { createLazyResume } from './lazy-resume';
 import { createReadPorts } from './read-ports';
-import { checkoutGitBranch, listGitBranches, searchFiles } from './git-actions';
+import { checkoutGitBranch, listGitBranches, listGitGraph, searchFiles } from './git-actions';
 import { nextSessionRulesForMode } from './permission-mode';
 import type { CreateSessionInput, CreateSessionOutcome, LiveController } from './live-controller-types';
 import type { LiveStore } from './store';
@@ -530,6 +530,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     },
     searchFiles: (cwd: string, query: string) => searchFiles(client, cwd, query),
     listGitBranches: (cwd: string) => listGitBranches(client, cwd),
+    listGitGraph: (cwd: string) => listGitGraph(client, cwd),
     checkoutGitBranch: (cwd: string, branch: string, create: boolean) => checkoutGitBranch(client, cwd, branch, create),
     async upsertProvider(input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; thinkingFormat?: ThinkingFormat; apiKey?: string }): Promise<boolean> {
       const outcome = await client.invoke('provider/upsert', input);

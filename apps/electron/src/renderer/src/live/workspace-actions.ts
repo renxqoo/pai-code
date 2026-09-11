@@ -78,6 +78,8 @@ export type WorkspaceActions = {
   readonly searchFilesIn: (cwd: string, query: string) => Promise<string[] | null>;
   /** 本地 git 分支列表（非仓库为空形态；失败 {ok:false}）。 */
   readonly listGitBranches: (cwd: string) => Promise<ApiOutcome<'git/branches'>>;
+  /** 本地 git 图谱（分支面板「Git 图谱」入口数据源）。 */
+  readonly listGitGraph: (cwd: string) => Promise<ApiOutcome<'git/graph'>>;
   /** 切换/创建并检出分支（失败原因交调用方转文案：切换走通知条，创建走弹窗内联）。 */
   readonly checkoutGitBranch: (cwd: string, branch: string, create: boolean) => Promise<ApiOutcome<'git/checkout'>>;
   readonly runBash: (command: string) => Promise<string | null>;
@@ -396,6 +398,7 @@ export function createWorkspaceActions(): WorkspaceActions {
     },
     searchFilesIn: (cwd, query) => controller.searchFiles(cwd, query),
     listGitBranches: (cwd) => controller.listGitBranches(cwd),
+    listGitGraph: (cwd) => controller.listGitGraph(cwd),
     checkoutGitBranch: (cwd, branch, create) => controller.checkoutGitBranch(cwd, branch, create),
     runBash: async (command) => {
       const reason = await controller.runBash(activeThreadOf(), command);

@@ -2,8 +2,8 @@ import * as React from 'react';
 
 import { thinkingLevelLabel, thinkingLevelOfLabel, type ApiOutcome, type CommandView, type PermissionRules } from '@paiapp/contracts';
 
-import { BranchPickerDialog } from '@/composer/branch-picker-dialog';
 import { branchSegmentOf } from '@/composer/branch-segment';
+import { BranchPanel } from '@/composer/branch-panel';
 import { ComposerActionsRow } from '@/composer/composer-actions-row';
 import { CreateBranchDialog } from '@/composer/create-branch-dialog';
 import { PromptCard, type ComposerAttachment } from '@/composer/prompt-card';
@@ -11,15 +11,17 @@ import { PromptContextBar } from '@/composer/prompt-context-bar';
 import { PromptInputArea } from '@/composer/prompt-input-area';
 import { QuickTaskChips } from '@/composer/quick-task-chips';
 import { WorkspacePickerDialog } from '@/composer/workspace-picker-dialog';
+import { GitGraphDialog } from '@/git-graph/git-graph-dialog';
 import { useGitBranches } from '@/hooks/use-git-branches';
+import { useGitGraph } from '@/hooks/use-git-graph';
 import { greetingKeyOf } from '@/lib/greeting';
 import { baseNameOf } from '@/lib/project-dirs';
 import { greetingTexts, quickTaskItems } from '@/screens/new-task-view-model';
 import { CONVERSATION_COLUMN_CLASS } from '@/thread/conversation-column';
 import { copy } from '@/strings';
 
-/** 本页互斥的浮层：同一时刻至多一个（选择弹窗 → 创建分支弹窗顺次切换）。 */
-type NewTaskDialog = 'workspace' | 'branch' | 'create-branch' | null;
+/** 本页互斥的浮层：同一时刻至多一个（目录弹窗 / 分支面板 → 创建分支 / 图谱弹窗顺次切换）。 */
+type NewTaskDialog = 'workspace' | 'branch' | 'create-branch' | 'graph' | null;
 
 /** 新建任务提交面（渲染层内部形状，图片载荷转换由接线层负责）。 */
 export type NewTaskStart = {
@@ -56,6 +58,7 @@ type NewTaskScreenProps = {
   globalPermissionMode: PermissionRules['mode'] | null
   onSearchFiles: (cwd: string, query: string) => Promise<string[] | null>
   onListBranches: (cwd: string) => Promise<ApiOutcome<'git/branches'>>
+  onListGraph: (cwd: string) => Promise<ApiOutcome<'git/graph'>>
   onCheckoutBranch: (cwd: string, branch: string, create: boolean) => Promise<ApiOutcome<'git/checkout'>>
   onPickDirectory: (defaultPath: string | null) => Promise<string | null>
   /** 创建会话并投递首条消息；resolve true = 已建会话（本页关闭） */
@@ -86,6 +89,7 @@ function NewTaskScreen({
   globalPermissionMode,
   onSearchFiles,
   onListBranches,
+  onListGraph,
   onCheckoutBranch,
   onPickDirectory,
   onCreate,
@@ -113,6 +117,8 @@ function NewTaskScreen({
   const [greetingKey] = React.useState(() => greetingKeyOf(new Date().getHours()));
   const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const branches = useGitBranches(cwd, onListBranches);
+  /** 图谱只在弹窗打开时拉取（无轮询） */
+  const graph = useGitGraph(cwd, onListGraph, 0, dialog === 'graph');
   const texts = greetingTexts(greetingKey);
   const segment = branchSegmentOf(branches.view, branches.loading, branches.failed);
   const effectiveModel = model ?? defaultModelFor(cwd);
@@ -158,7 +164,7 @@ function NewTaskScreen({
         busyRef.current = false;
         setCheckingOut(false);
         if (!outcome.ok) {
-          onNotify(copy.newTask.branchFailed(outcome.reason));
+          onNotify(copy.branch.failed(outcome.reason));
           return;
         }
         branches.refresh();
@@ -181,7 +187,7 @@ function NewTaskScreen({
         busyRef.current = false;
         setCheckingOut(false);
         if (!outcome.ok) {
-          setBranchError(copy.newTask.branchFailed(outcome.reason));
+          setBranchError(copy.branch.failed(outcome.reason));
           return;
         }
         setDialog(null);
@@ -250,8 +256,29 @@ function NewTaskScreen({
                 : {
                     ...segment,
                     ariaLabel: copy.composer.branchSegment,
-                    // 非仓库/加载中不给切换入口（列表为空，点了也无内容）
-                    onSelect: branches.view?.isRepo === true ? () => setDialog('branch') : undefined,
+                    // 非仓库/加载中不给面板入口（列表为空，点了也无内容）
+                    ...(branches.view?.isRepo === true
+                      ? {
+                          panel: {
+                            open: dialog === 'branch',
+                            onOpenChange: (open: boolean) => setDialog(open ? 'branch' : null),
+                            content: (
+                              <BranchPanel
+                                view={branches.view}
+                                loading={branches.loading}
+                                failed={branches.failed}
+                                busy={checkingOut}
+                                onSelect={switchBranch}
+                                onCreate={() => {
+                                  setBranchError(null);
+                                  setDialog('create-branch');
+                                }}
+                                onOpenGraph={() => setDialog('graph')}
+                              />
+                            ),
+                          },
+                        }
+                      : {}),
                   }
             }
           />
@@ -320,18 +347,13 @@ function NewTaskScreen({
         onOpenFolder={openFolder}
         picking={picking}
       />
-      <BranchPickerDialog
-        open={dialog === 'branch'}
-        onOpenChange={(open) => setDialog(open ? 'branch' : null)}
-        view={branches.view}
-        loading={branches.loading}
-        failed={branches.failed}
-        onSelect={switchBranch}
-        onCreate={() => {
-          setBranchError(null);
-          setDialog('create-branch');
-        }}
-        busy={checkingOut}
+      <GitGraphDialog
+        open={dialog === 'graph'}
+        onOpenChange={(open) => setDialog(open ? 'graph' : null)}
+        view={graph.view}
+        loading={graph.loading}
+        failed={graph.failed}
+        onRefresh={graph.refresh}
       />
       <CreateBranchDialog
         open={dialog === 'create-branch'}

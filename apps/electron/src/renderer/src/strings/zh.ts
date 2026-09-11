@@ -265,25 +265,6 @@ export const zh: typeof en = {
     openFolder: '打开文件夹…',
     trustedLabel: '信任此项目',
     trustedHint: '受信会话会加载项目扩展与项目级 agent。只对你拥有并审阅过的仓库开启。',
-    branchPickerTitle: '切换分支',
-    branchSearch: '搜索分支',
-    branchEmpty: '没有匹配的分支',
-    createBranch: '创建并检出…',
-    createBranchTitle: (from: string): string => `从 ${from} 创建并检出`,
-    createBranchField: '新分支名称',
-    createBranchSubmit: '创建并检出',
-    branchLoading: '正在读取分支…',
-    branchUnavailable: '分支列表读取失败，请重试。',
-    branchFailed: (reason: string): string => {
-      if (reason === 'branch_exists') return '同名分支已存在，换一个名称。';
-      if (reason === 'invalid_branch') return '分支名不合法，请换个名称。';
-      if (reason === 'dirty_worktree') return '工作区有未提交改动，先提交或暂存后再切换分支。';
-      if (reason === 'unknown_branch') return '目标分支不存在，请刷新后重试。';
-      if (reason === 'not_a_repo') return '该目录不是 git 仓库。';
-      if (reason === 'git_unavailable') return '系统未找到 git 命令，无法操作分支。';
-      if (reason === 'cwd_not_found') return '工作目录不存在，可能已被移动或删除。';
-      return `分支操作失败（${reason}）。`;
-    },
     pickFailed: '目录选择器打开失败，请重试。',
     createFailed: (reason: string): string => {
       if (reason === 'host_unavailable') return 'agent 宿主未就绪（正在启动或重启），请稍后重试。';

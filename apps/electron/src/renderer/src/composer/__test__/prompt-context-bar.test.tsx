@@ -55,4 +55,20 @@ describe('PromptContextBar', () => {
     expect(html).toContain('aria-label="当前分支"');
     expect(html).not.toContain('aria-label="工作目录"');
   });
+
+  test('panel 插槽：分支段升级为锚定面板触发器（aria-expanded 由锚定底座注入），关态不渲染面板内容', () => {
+    const html = renderToStaticMarkup(
+      <PromptContextBar
+        project={PROJECT}
+        branch={{
+          label: 'main',
+          ariaLabel: '当前分支',
+          panel: { open: false, onOpenChange: () => undefined, content: <p>面板内容</p> },
+        }}
+      />,
+    );
+    expect(html.match(/<button/g)?.length).toBe(1);
+    expect(html).toContain('aria-expanded');
+    expect(html).not.toContain('面板内容');
+  });
 });

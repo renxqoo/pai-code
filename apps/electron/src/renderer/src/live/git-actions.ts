@@ -20,6 +20,12 @@ export async function listGitBranches(client: BridgeClient, cwd: string): Promis
   return client.invoke('git/branches', { cwd });
 }
 
+/** 本地 git 图谱（非仓库为空形态；失败 {ok:false} 由调用方转文案）。 */
+export async function listGitGraph(client: BridgeClient, cwd: string): Promise<ApiOutcome<'git/graph'>> {
+  if (cwd.length === 0) return { ok: false, reason: 'cwd_not_allowed' };
+  return client.invoke('git/graph', { cwd });
+}
+
 /** 切换 / 创建并检出分支（失败原因透传，由调用方转文案）。 */
 export async function checkoutGitBranch(
   client: BridgeClient,

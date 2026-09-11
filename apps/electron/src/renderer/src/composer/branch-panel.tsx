@@ -20,6 +20,13 @@ type BranchPanelProps = {
   onOpenGraph: () => void
 };
 
+/** 搜索过滤（大小写不敏感、按序保留；空词全量）——纯函数供表驱动测试。 */
+export function filterBranches(branches: readonly string[], query: string): string[] {
+  const keyword = query.trim().toLowerCase();
+  if (keyword === '') return [...branches];
+  return branches.filter((name) => name.toLowerCase().includes(keyword));
+}
+
 /** 分支行：图标 + 加粗分支名；当前分支恒亮 + 尾部勾选 + 未提交更改小字。 */
 const ROW_CLASS_NAME =
   'flex w-full cursor-pointer items-start gap-2.5 rounded-xl px-3 py-2.5 text-left outline-none select-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50';
@@ -35,11 +42,10 @@ const ACTION_CLASS_NAME =
  */
 function BranchPanel({ view, loading, failed, busy, onSelect, onCreate, onOpenGraph }: BranchPanelProps) {
   const [query, setQuery] = React.useState('');
-  const keyword = query.trim().toLowerCase();
   const branches = view?.branches ?? [];
   const current = view?.current ?? null;
   const dirtyFiles = view?.dirtyFiles ?? 0;
-  const filtered = keyword === '' ? branches : branches.filter((name) => name.toLowerCase().includes(keyword));
+  const filtered = filterBranches(branches, query);
   const emptyLabel = loading ? copy.branch.loading : failed ? copy.branch.unavailable : copy.branch.empty;
   return (
     <>

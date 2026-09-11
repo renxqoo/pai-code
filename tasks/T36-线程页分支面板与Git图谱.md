@@ -91,3 +91,5 @@
 ## 4. 实施记录
 
 - M1（2026-09-12）：契约（`dirtyFiles` + `git/graph`）+ 主进程数据面（list 脏计数、`git-graph` 读口、路由接线与 checkout 后缓存失效）+ strings 双语 key + 本文档落档。
+- M2（2026-09-12）：3 个并行 UI agent 看图自主选型交付三件 UI（AnchoredPanel 底座 / BranchPanel 内容件 / 图谱弹窗组件族 / 新建分支弹窗重做），主会话验收后入库。
+- M3（2026-09-12）：渲染层接线——`listGitGraph` 动作链（git-actions → live-controller → workspace-actions）、`useGitGraph`（enabled 门 + 失效重拉 + 序号守卫）、线程页装配（branch-switch-lock 运行中锁定 + 面板/创建/图谱编排 + 通知条失败面）、新建任务页面板化、单轨化（删 `BranchPickerDialog`、旧 `newTask.branch*` key 清除）。测试：泳道布局表驱动、refs pill、日期格式、面板/锁/钩子/上下文条/两页装配集成。
