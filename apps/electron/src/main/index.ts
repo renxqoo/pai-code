@@ -1,4 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, Notification, shell } from 'electron';
+
+import { registerIpcWindowActions } from './window-actions-ipc';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 
@@ -296,10 +298,7 @@ void app.whenReady().then(async () => {
       },
       close: () => win.close(),
     };
-    for (const [action, handler] of Object.entries(windowActions)) {
-      ipcMain.removeAllListeners(`pai:window-${action}`);
-      ipcMain.handle(`pai:window-${action}`, handler);
-    }
+    registerIpcWindowActions(ipcMain, windowActions);
     // 外链出口：仅放行 http(s)，其余协议一律拒绝（渲染层解析已过滤，这里纵深防御）
     ipcMain.removeHandler('pai:window-open-external');
     ipcMain.handle('pai:window-open-external', (_event, url) => {
