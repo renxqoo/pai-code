@@ -40,7 +40,19 @@ export function createEntryHydration(input: {
       store.getState().hydrate(threadId, { kind: 'hydrate/failed' });
       return;
     }
-    store.getState().hydrate(threadId, { kind: 'hydrate/rebuild', items: outcome.data.items, cursor: outcome.data.cursor });
+    // 折叠语义必须与载荷口径一致：全量拉取（since 空）→ 整表 rebuild；
+    // 轮内窗口（since=轮首游标，只含本轮条目）→ reconcile+dropLiveTurn——保历史
+    // 前缀、以权威转写替换本轮 span。窗口喂给整表 rebuild 会把历史全部塌缩成本轮。
+    if (since === null) {
+      store.getState().hydrate(threadId, { kind: 'hydrate/rebuild', items: outcome.data.items, cursor: outcome.data.cursor });
+      return;
+    }
+    store.getState().hydrate(threadId, {
+      kind: 'hydrate/reconcile',
+      items: outcome.data.items,
+      cursor: outcome.data.cursor,
+      dropLiveTurn: true,
+    });
   };
 
   const hydrateFull = async (threadId: string): Promise<void> => {

@@ -170,3 +170,72 @@ test('T29 运行状态方法族：快照/诊断日志/回收/常驻/档位/导�
   await controller.runtime.exportDiagnostics();
   expect(client.invokes).toContain('app/exportDiagnostics');
 });
+
+test('症状回归「轮结算后历史全没了（对话收起来）」：窗口重建保前缀、权威替换本轮 span', async () => {
+  const timers = stubTimers();
+  const store = createLiveStore();
+  const threadId = 't1';
+  const hist = [
+    { kind: 'user', id: 'u1', text: '旧问', origin: 'user', images: [], at: 1 },
+    { kind: 'assistant', id: 'a1', text: '旧答', thinking: '', toolCalls: [], usage: null, stopReason: null, errorMessage: null, at: 2 },
+  ] as never;
+  const window_ = [
+    { kind: 'user', id: 'u2', text: '新问', origin: 'user', images: [], at: 3 },
+    { kind: 'assistant', id: 'a2', text: '新答', thinking: '', toolCalls: [], usage: null, stopReason: null, errorMessage: null, at: 4 },
+  ] as never;
+  let listener: ((events: readonly unknown[]) => void) | undefined;
+  const client: BridgeClient = {
+    available: true,
+    invoke: (method: string) => {
+      if (method === 'app/bootstrap') {
+        return Promise.resolve({ ok: true, data: { sessions: [], saved: [], models: [], providers: [] } } as never);
+      }
+      if (method === 'session/entries') {
+        // 轮末窗口拉取：since=轮首游标（u1/a1 之后的本轮转写）
+        return Promise.resolve({ ok: true, data: { items: window_, cursor: 'a2' } } as never);
+      }
+      if (method === 'session/stats') {
+        return Promise.resolve({ ok: true, data: { contextUsage: null, tokensTotal: 0 } } as never);
+      }
+      return Promise.resolve({ ok: true, data: null } as never);
+    },
+    subscribe: (onBatch: (events: readonly unknown[]) => void) => {
+      listener = onBatch;
+      return () => {
+        listener = undefined;
+      };
+    },
+  };
+  const controller = createLiveController(client, store);
+  await controller.start();
+  const emit = (event: unknown): void => listener?.([event]);
+  store.setState({
+    sessions: {
+      [threadId]: { threadId, cwd: '/w', sessionPath: '/w/s/t1.jsonl', title: 't', state: 'live', streaming: false, model: null, thinkingLevel: null, lastActivityAt: 1 },
+    },
+    threads: { [threadId]: undefined },
+    activeThreadId: threadId,
+  });
+  // 既有历史（冷启动水化形态）
+  store.getState().hydrate(threadId, { kind: 'hydrate/initial', items: hist, cursor: 'a1' });
+  // 本轮：开轮（轮首游标=a1）→ 用户回显（entry id=u2）→ 结算
+  emit({ type: 'turnStarted', threadId, at: 5 });
+  emit({ type: 'userMessage', threadId, message: { id: 'u2', text: '新问', origin: 'user' } });
+  emit({ type: 'turnSettled', threadId, usage: null });
+  timers.fire();
+  await new Promise((resolve) => {
+    setTimeout(resolve, 10);
+  });
+
+  const texts = (store.getState().threads[threadId]?.items ?? []).map((item) =>
+    item.kind === 'message'
+      ? item.message.text
+      : item.turn.blocks.map((block) => (block.kind === 'text' ? block.text : '')).join(''),
+  );
+  // 历史保住（u1 问 + a1 轮），本轮以权威窗口呈现（新答），live 句柄清空
+  expect(texts.some((text) => text.includes('旧问'))).toBe(true);
+  expect(texts.some((text) => text.includes('旧答'))).toBe(true);
+  expect(texts.some((text) => text.includes('新答'))).toBe(true);
+  expect(store.getState().threads[threadId]?.liveTurnId ?? null).toBeNull();
+  controller.dispose();
+});
