@@ -3,6 +3,7 @@ import type { ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
 import type { FileRead } from './file-read';
 import { searchProjectFiles } from './file-search';
 import type { GitBranches } from './git-branches';
+import type { GitGraph } from './git-graph';
 import type { OpenLocation } from './open-location';
 
 /**
@@ -17,6 +18,7 @@ export type LocalRoutesDeps = {
   isKnownCwd: (cwd: string) => boolean;
   audit: (message: string) => void;
   git: GitBranches;
+  graph: GitGraph;
   openLocation: OpenLocation;
   fileRead: FileRead;
 };
@@ -30,6 +32,7 @@ export function createLocalRoutes(deps: LocalRoutesDeps) {
     'shell/open': Handler<'shell/open'>;
     'git/branches': Handler<'git/branches'>;
     'git/checkout': Handler<'git/checkout'>;
+    'git/graph': Handler<'git/graph'>;
   } = {
     'file/search': (params) => {
       // 目录门禁：只允许扫描本应用已知会话目录（活跃会话 + 注册表），缩小枚举面（见 T23 挂账）
@@ -49,11 +52,18 @@ export function createLocalRoutes(deps: LocalRoutesDeps) {
       if (!deps.isKnownCwd(params.cwd)) return fail('cwd_not_allowed');
       return deps.git.list(params.cwd);
     },
-    'git/checkout': (params) => {
+    'git/checkout': async (params) => {
       // 工作树是独占资源：门禁与串行都在主进程侧（渲染层只做按钮 busy 态）
       if (!deps.isKnownCwd(params.cwd)) return fail('cwd_not_allowed');
       deps.audit(`git_checkout:${params.cwd}:${params.branch}:${params.create ? 'create' : 'switch'}`);
-      return deps.git.checkout(params.cwd, params.branch, params.create);
+      const outcome = await deps.git.checkout(params.cwd, params.branch, params.create);
+      // HEAD 已改写：丢弃图谱在途快照，紧随的图谱请求不再复用切换前数据
+      if (outcome.ok) deps.graph.invalidate(params.cwd);
+      return outcome;
+    },
+    'git/graph': (params) => {
+      if (!deps.isKnownCwd(params.cwd)) return fail('cwd_not_allowed');
+      return deps.graph.list(params.cwd);
     },
   };
 

@@ -206,15 +206,43 @@ export const BootstrapViewSchema = z.object({
 });
 export type BootstrapView = z.infer<typeof BootstrapViewSchema>;
 
-/** 本地 git 分支视图（新建任务页分支选择）：非 git 目录 isRepo=false + 空列表（降级不报错）。 */
+/** 本地 git 分支视图（两页分支面板共用）：非 git 目录 isRepo=false + 空列表（降级不报错）。 */
 export const GitBranchesViewSchema = z
   .object({
     isRepo: z.boolean(),
     current: z.string().nullable(),
     branches: z.array(z.string()),
+    /** 未提交更改的已跟踪文件数（与切换守卫同口径，不含未跟踪文件）。 */
+    dirtyFiles: z.number().int().min(0),
   })
   .strict();
 export type GitBranchesView = z.infer<typeof GitBranchesViewSchema>;
+
+/** git 图谱单条提交：parents 供渲染层计算泳道几何；refs 只含本地分支装饰（「HEAD -> main」形态原样透传，拆 pill 归渲染层）。 */
+export const GitGraphCommitSchema = z
+  .object({
+    hash: z.string().min(1),
+    shortHash: z.string().min(1),
+    subject: z.string(),
+    author: z.string(),
+    /** 提交时间（epoch 秒）。 */
+    timestamp: z.number().int().min(0),
+    parents: z.array(z.string().min(1)),
+    refs: z.array(z.string().min(1)),
+    isHead: z.boolean(),
+  })
+  .strict();
+export type GitGraphCommit = z.infer<typeof GitGraphCommitSchema>;
+
+/** 本地 git 图谱视图：truncated = 提交数超展示上限被截断；空仓库 commits 为空数组。 */
+export const GitGraphViewSchema = z
+  .object({
+    isRepo: z.boolean(),
+    commits: z.array(GitGraphCommitSchema),
+    truncated: z.boolean(),
+  })
+  .strict();
+export type GitGraphView = z.infer<typeof GitGraphViewSchema>;
 
 // ---------------------------------------------------------------------------
 // 运行状态面（T29：监控页快照与其组成视图）
@@ -428,6 +456,11 @@ export const ApiSchemas = {
   'git/checkout': {
     params: z.object({ cwd: z.string().min(1), branch: z.string().min(1), create: z.boolean().default(false) }).strict(),
     result: z.object({ branch: z.string() }).strict(),
+  },
+  /** 本地 git 图谱（分支面板入口）：topo 序提交 + parents + 本地分支装饰；超上限截断并置 truncated。 */
+  'git/graph': {
+    params: z.object({ cwd: z.string().min(1) }).strict(),
+    result: GitGraphViewSchema,
   },
   /** 用户级技能目录（含启用态；启停真相 = agentDir/settings.json 的 skills overrides）。 */
   'skills/list': {

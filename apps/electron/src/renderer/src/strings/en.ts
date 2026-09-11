@@ -300,6 +300,48 @@ export const en = {
       return `Could not start the conversation (${reason}). Try again.`;
     },
   },
+  branch: {
+    /** 分支面板（两页共用）：可访问名 + 列表分组标题。 */
+    panelTitle: 'Branches',
+    search: 'Search branches',
+    empty: 'No matching branches',
+    loading: 'Loading branches…',
+    unavailable: 'Could not load branches. Try again.',
+    dirtyFiles: (count: number): string => `Uncommitted changes: ${count} ${count === 1 ? 'file' : 'files'}`,
+    createBranch: 'Create and checkout new branch…',
+    openGraph: 'Git graph',
+    failed: (reason: string): string => {
+      if (reason === 'branch_exists') return 'A branch with that name already exists. Pick another name.';
+      if (reason === 'invalid_branch') return 'That branch name is not valid. Pick another name.';
+      if (reason === 'dirty_worktree') return 'The working tree has uncommitted changes. Commit or stash them before switching branches.';
+      if (reason === 'unknown_branch') return 'That branch no longer exists. Refresh and try again.';
+      if (reason === 'not_a_repo') return 'That folder is not a git repository.';
+      if (reason === 'git_unavailable') return 'git was not found on this system, so branches cannot be changed.';
+      if (reason === 'cwd_not_found') return 'That working directory no longer exists.';
+      return `Branch operation failed (${reason}).`;
+    },
+    createTitle: 'Create and checkout new branch',
+    createSubtitle: 'Create a new local branch from the current HEAD and switch to it as soon as it is created.',
+    createFieldLabel: 'Branch name',
+    createFieldPlaceholder: 'e.g. feature/git-branch-switcher',
+    createHelper: 'Only creating from the current HEAD is supported.',
+    createSubmit: 'Create and switch',
+  },
+  gitGraph: {
+    title: 'Git graph',
+    colGraph: 'Graph',
+    colDescription: 'Description',
+    colDate: 'Date',
+    colAuthor: 'Author',
+    colCommit: 'Commit',
+    refresh: 'Refresh',
+    close: 'Close',
+    loading: 'Loading commits…',
+    unavailable: 'Could not load the git graph. Try again.',
+    empty: 'This repository has no commits yet.',
+    truncated: (count: number): string => `Showing the most recent ${count} commits`,
+    headLabel: 'HEAD',
+  },
   notices: {
     dismiss: 'Dismiss',
   },

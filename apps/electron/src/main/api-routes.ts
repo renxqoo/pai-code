@@ -15,6 +15,7 @@ import {
 } from '@paiapp/adapter';
 import { createFileRead, type FileRead } from './file-read';
 import { createGitBranches, type GitBranches } from './git-branches';
+import { createGitGraph, type GitGraph } from './git-graph';
 import { createOpenLocation, type OpenLocation } from './open-location';
 import { createLocalRoutes } from './api-routes-local';
 import { createSettingsRoutes } from './api-routes-settings';
@@ -68,6 +69,8 @@ export interface ApiRouteDeps {
   pickDirectory: (defaultPath: string | null) => Promise<string | null>;
   /** 本地 git 分支能力（装配层可注入执行器替身；缺省走真实 git）。 */
   git?: GitBranches;
+  /** 本地 git 图谱读口（同上，可注入替身）。 */
+  graph?: GitGraph;
   /** 运行状态监控器（T29 app/runtime 快照源）。 */
   monitor: RuntimeMonitor;
   /** 档位 hub 同步失败落档钩子（监督日志 → 监控时间线）。 */
@@ -180,6 +183,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
   };
 
   const git = deps.git ?? createGitBranches();
+  const graph = deps.graph ?? createGitGraph();
   const openLocation = deps.openLocation ?? createOpenLocation();
   const fileRead = deps.fileRead ?? createFileRead();
 
@@ -207,7 +211,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     }
   };
 
-  const localRoutes = createLocalRoutes({ isKnownCwd, audit: deps.audit, git, openLocation, fileRead });
+  const localRoutes = createLocalRoutes({ isKnownCwd, audit: deps.audit, git, graph, openLocation, fileRead });
   const settings = createSettingsRoutes({
     settings: deps.settings,
     keyStore: deps.keyStore,

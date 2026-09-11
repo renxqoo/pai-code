@@ -4,7 +4,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { classifyGitExecError, createGitBranches, isValidBranchName, mapGitFailure, parseBranchList, type GitExec, type GitExecResult } from '../git-branches';
+import { classifyGitExecError, createGitBranches, isValidBranchName, mapGitFailure, parseBranchList, parseDirtyCount, type GitExec, type GitExecResult } from '../git-branches';
 
 /**
  * 本地 git 分支能力（T23）：纯函数分类 + fake 执行器驱动的行为
@@ -28,6 +28,17 @@ describe('parseBranchList', () => {
 
   test('非法分支名不呈现（`-f`/`--detach` 这类 ref 可被 for-each-ref 列出，点选会变成 git 选项）', () => {
     expect(parseBranchList('-f\n--detach\nmain\nrefs/x\n')).toEqual(['main', 'refs/x']);
+  });
+});
+
+describe('parseDirtyCount', () => {
+  test.each([
+    ['空输出', '', 0],
+    ['仅空白行', '\n \n', 0],
+    ['单文件改动', 'M a.ts\n', 1],
+    ['多文件改动', 'M a.ts\n M b.ts\nD c.ts\n', 3],
+  ])('%s → %d', (_name: string, stdout: string, expected: number) => {
+    expect(parseDirtyCount(stdout)).toBe(expected);
   });
 });
 
@@ -94,19 +105,33 @@ describe('list', () => {
     const { exec } = makeExec([{ match: 'rev-parse --git-dir', result: fail('fatal: not a git repository') }]);
     expect(await createGitBranches(exec).list('/w/plain')).toEqual({
       ok: true,
-      data: { isRepo: false, current: null, branches: [] },
+      data: { isRepo: false, current: null, branches: [], dirtyFiles: 0 },
     });
   });
 
-  test('仓库返回当前分支与升序分支列表', async () => {
+  test('仓库返回当前分支、升序分支列表与未提交文件数', async () => {
     const { exec } = makeExec([
       { match: 'rev-parse --git-dir', result: ok('.git') },
       { match: 'for-each-ref', result: ok('main\nfeature/x\nmain\n') },
       { match: 'symbolic-ref', result: ok('feature/x\n') },
+      { match: 'status --porcelain', result: ok('M a.ts\n M b.ts\n') },
     ]);
     expect(await createGitBranches(exec).list('/w/repo')).toEqual({
       ok: true,
-      data: { isRepo: true, current: 'feature/x', branches: ['feature/x', 'main'] },
+      data: { isRepo: true, current: 'feature/x', branches: ['feature/x', 'main'], dirtyFiles: 2 },
+    });
+  });
+
+  test('干净工作区 → dirtyFiles 为 0', async () => {
+    const { exec } = makeExec([
+      { match: 'rev-parse --git-dir', result: ok('.git') },
+      { match: 'for-each-ref', result: ok('main\n') },
+      { match: 'symbolic-ref', result: ok('main\n') },
+      { match: 'status --porcelain', result: ok('') },
+    ]);
+    expect(await createGitBranches(exec).list('/w/repo')).toEqual({
+      ok: true,
+      data: { isRepo: true, current: 'main', branches: ['main'], dirtyFiles: 0 },
     });
   });
 
@@ -115,9 +140,10 @@ describe('list', () => {
       { match: 'rev-parse --git-dir', result: ok('.git') },
       { match: 'for-each-ref', result: ok('main\n') },
       { match: 'symbolic-ref', result: fail('', 1) },
+      { match: 'status --porcelain', result: ok('') },
     ]);
     const outcome = await createGitBranches(exec).list('/w/repo');
-    expect(outcome).toEqual({ ok: true, data: { isRepo: true, current: null, branches: ['main'] } });
+    expect(outcome).toEqual({ ok: true, data: { isRepo: true, current: null, branches: ['main'], dirtyFiles: 0 } });
   });
 
   test('git 缺失（启动失败）→ git_unavailable；超时/输出超限各有独立 reason', async () => {

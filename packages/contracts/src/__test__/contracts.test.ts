@@ -307,6 +307,9 @@ describe('API schema：每方法合法/非法样本', () => {
     ['git/checkout 空 branch', 'git/checkout', { cwd: '/w', branch: '' }],
     ['git/checkout 非法 create 类型', 'git/checkout', { cwd: '/w', branch: 'main', create: 'yes' }],
     ['git/checkout 未知键', 'git/checkout', { cwd: '/w', branch: 'main', extra: 1 }],
+    ['git/graph 缺 cwd', 'git/graph', {}],
+    ['git/graph 空 cwd', 'git/graph', { cwd: '' }],
+    ['git/graph 未知键', 'git/graph', { cwd: '/w', extra: 1 }],
   ])('拒绝：%s', (_name: string, method: string, bad: unknown) => {
     expect(() => ApiSchemas[method as keyof typeof ApiSchemas].params.parse(bad)).toThrow();
   });
@@ -324,17 +327,20 @@ describe('dialog/pickDirectory 契约（新会话目录选择）', () => {
   });
 });
 
-describe('git 分支契约（新建任务页项目/分支选择）', () => {
+describe('git 分支契约（两页分支面板共用）', () => {
   test('git/branches 参数与空形态结果', () => {
     expect(ApiSchemas['git/branches'].params.parse({ cwd: '/w/proj' })).toEqual({ cwd: '/w/proj' });
-    const empty = ApiSchemas['git/branches'].result.parse({ isRepo: false, current: null, branches: [] });
-    expect(empty).toEqual({ isRepo: false, current: null, branches: [] });
-    expect(ApiSchemas['git/branches'].result.parse({ isRepo: true, current: 'main', branches: ['dev', 'main'] })).toEqual({
+    const empty = ApiSchemas['git/branches'].result.parse({ isRepo: false, current: null, branches: [], dirtyFiles: 0 });
+    expect(empty).toEqual({ isRepo: false, current: null, branches: [], dirtyFiles: 0 });
+    expect(ApiSchemas['git/branches'].result.parse({ isRepo: true, current: 'main', branches: ['dev', 'main'], dirtyFiles: 3 })).toEqual({
       isRepo: true,
       current: 'main',
       branches: ['dev', 'main'],
+      dirtyFiles: 3,
     });
     expect(() => ApiSchemas['git/branches'].result.parse({ isRepo: true, current: null })).toThrow();
+    expect(() => ApiSchemas['git/branches'].result.parse({ isRepo: true, current: 'main', branches: [], dirtyFiles: -1 })).toThrow();
+    expect(() => ApiSchemas['git/branches'].result.parse({ isRepo: true, current: 'main', branches: [], dirtyFiles: 1.5 })).toThrow();
   });
 
   test('git/checkout create 缺省为 false，结果只含 branch', () => {
@@ -350,6 +356,32 @@ describe('git 分支契约（新建任务页项目/分支选择）', () => {
     });
     expect(ApiSchemas['git/checkout'].result.parse({ branch: 'feat/x' })).toEqual({ branch: 'feat/x' });
     expect(() => ApiSchemas['git/checkout'].result.parse({ branch: 'feat/x', cwd: '/w' })).toThrow();
+  });
+
+  test('git/graph 结果 strict：单条提交词表封闭，缺字段/多字段拒绝', () => {
+    expect(ApiSchemas['git/graph'].params.parse({ cwd: '/w/proj' })).toEqual({ cwd: '/w/proj' });
+    const commit = {
+      hash: 'a'.repeat(40),
+      shortHash: 'aaaaaaa',
+      subject: 'feat: x',
+      author: 'pai',
+      timestamp: 1_760_000_000,
+      parents: ['b'.repeat(40)],
+      refs: ['HEAD -> main', 'main'],
+      isHead: true,
+    };
+    const view = ApiSchemas['git/graph'].result.parse({ isRepo: true, commits: [commit], truncated: false });
+    expect(view).toEqual({ isRepo: true, commits: [commit], truncated: false });
+    expect(ApiSchemas['git/graph'].result.parse({ isRepo: true, commits: [], truncated: false })).toEqual({
+      isRepo: true,
+      commits: [],
+      truncated: false,
+    });
+    expect(() => ApiSchemas['git/graph'].result.parse({ isRepo: true, commits: [commit] })).toThrow();
+    expect(() => ApiSchemas['git/graph'].result.parse({ isRepo: true, commits: [{ ...commit, extra: 1 }], truncated: false })).toThrow();
+    const { isHead, ...withoutIsHead } = commit;
+    expect(isHead).toBe(true);
+    expect(() => ApiSchemas['git/graph'].result.parse({ isRepo: true, commits: [withoutIsHead], truncated: false })).toThrow();
   });
 });
 

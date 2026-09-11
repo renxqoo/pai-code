@@ -292,6 +292,48 @@ export const zh: typeof en = {
       return `无法开始会话（${reason}），请重试。`;
     },
   },
+  branch: {
+    /** 分支面板（两页共用）：可访问名 + 列表分组标题。 */
+    panelTitle: '分支',
+    search: '搜索分支',
+    empty: '没有匹配的分支',
+    loading: '正在读取分支…',
+    unavailable: '分支列表读取失败，请重试。',
+    dirtyFiles: (count: number): string => `未提交的更改：${count} 个文件`,
+    createBranch: '创建并检出新分支…',
+    openGraph: 'Git 图谱',
+    failed: (reason: string): string => {
+      if (reason === 'branch_exists') return '同名分支已存在，换一个名称。';
+      if (reason === 'invalid_branch') return '分支名不合法，请换个名称。';
+      if (reason === 'dirty_worktree') return '工作区有未提交改动，先提交或暂存后再切换分支。';
+      if (reason === 'unknown_branch') return '目标分支不存在，请刷新后重试。';
+      if (reason === 'not_a_repo') return '该目录不是 git 仓库。';
+      if (reason === 'git_unavailable') return '系统未找到 git 命令，无法操作分支。';
+      if (reason === 'cwd_not_found') return '工作目录不存在，可能已被移动或删除。';
+      return `分支操作失败（${reason}）。`;
+    },
+    createTitle: '创建并检出新分支',
+    createSubtitle: '基于当前 HEAD 创建一个新的本地分支，并在创建成功后立即切换过去。',
+    createFieldLabel: '分支名',
+    createFieldPlaceholder: '例如 feature/git-branch-switcher',
+    createHelper: '首版只支持基于当前 HEAD 创建并切换。',
+    createSubmit: '创建并切换',
+  },
+  gitGraph: {
+    title: 'Git 图谱',
+    colGraph: '图',
+    colDescription: '描述',
+    colDate: '日期',
+    colAuthor: '作者',
+    colCommit: '提交',
+    refresh: '刷新',
+    close: '关闭',
+    loading: '提交加载中…',
+    unavailable: '图谱加载失败，请重试。',
+    empty: '这个仓库还没有提交。',
+    truncated: (count: number): string => `仅显示最近 ${count} 条提交`,
+    headLabel: 'HEAD',
+  },
   notices: {
     dismiss: '关闭',
   },

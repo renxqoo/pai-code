@@ -47,8 +47,8 @@ export function classifyGitExecError(error: { code?: unknown; killed?: unknown; 
   return 'spawn_failed';
 }
 
-/** 默认执行器：execFile（无 shell）+ 超时 + 输出上限 + 仓库可执行面隔离。 */
-const runGit: GitExec = (args, cwd) =>
+/** 默认执行器：execFile（无 shell）+ 超时 + 输出上限 + 仓库可执行面隔离。git 读口族共用。 */
+export const runGit: GitExec = (args, cwd) =>
   new Promise((resolve) => {
     execFile(
       'git',
@@ -107,6 +107,11 @@ export function parseBranchList(stdout: string): string[] {
   return [...names].sort((a, b) => a.localeCompare(b));
 }
 
+/** `status --porcelain --untracked-files=no` 输出 → 未提交更改文件数（口径与切换守卫一致：展示的数字就是会阻止切换的数字）。 */
+export function parseDirtyCount(stdout: string): number {
+  return stdout.split('\n').filter((line) => line.trim().length > 0).length;
+}
+
 /** git 报错 → 契约 reason（未识别一律 git_failed:<摘要>，不吞错）。 */
 export function mapGitFailure(stderr: string): string {
   const text = stderr.toLowerCase();
@@ -122,8 +127,8 @@ export function mapGitFailure(stderr: string): string {
   return summary.length > 0 ? `git_failed:${summary}` : 'git_failed:unknown';
 }
 
-/** 执行结果 → 失败 reason：进程级异常优先于 stderr 分类（超时不是「git 不在 PATH」）。 */
-function failureReason(result: GitExecResult): string {
+/** 执行结果 → 失败 reason：进程级异常优先于 stderr 分类（超时不是「git 不在 PATH」）。git 读口族共用。 */
+export function failureReason(result: GitExecResult): string {
   if (result.error === 'timeout') return 'git_failed:timeout';
   if (result.error === 'output_too_large') return 'git_failed:output_too_large';
   if (result.error === 'cwd_missing') return 'cwd_not_found';
@@ -146,7 +151,7 @@ export function createGitBranches(run: GitExec = runGit): GitBranches {
     if (probe.error !== null) return { ok: false, reason: failureReason(probe) };
     if (probe.code !== 0) {
       // 非仓库是正常形态（新建任务页允许选任意目录）：降级为空列表，其余报错照实透传
-      if (mapGitFailure(probe.stderr) === 'not_a_repo') return okBranches({ isRepo: false, current: null, branches: [] });
+      if (mapGitFailure(probe.stderr) === 'not_a_repo') return okBranches({ isRepo: false, current: null, branches: [], dirtyFiles: 0 });
       return { ok: false, reason: mapGitFailure(probe.stderr) };
     }
     const refs = await run(['for-each-ref', '--format=%(refname:short)', 'refs/heads'], cwd);
@@ -155,10 +160,14 @@ export function createGitBranches(run: GitExec = runGit): GitBranches {
     const head = await run(['symbolic-ref', '--short', '-q', 'HEAD'], cwd);
     if (head.error !== null) return { ok: false, reason: failureReason(head) };
     const current = head.code === 0 ? head.stdout.trim() : '';
+    const status = await run(['status', '--porcelain', '--untracked-files=no'], cwd);
+    if (status.error !== null) return { ok: false, reason: failureReason(status) };
+    if (status.code !== 0) return { ok: false, reason: mapGitFailure(status.stderr) };
     return okBranches({
       isRepo: true,
       current: current.length > 0 ? current : null,
       branches: parseBranchList(refs.stdout),
+      dirtyFiles: parseDirtyCount(status.stdout),
     });
   };
 
