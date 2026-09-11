@@ -6,6 +6,7 @@ import type { BridgeClient } from './client-invoke';
 import { createRuntimeController, type RuntimeController } from './runtime-controller';
 import { coalesceEvents } from './coalesce-events';
 import { createEntryHydration, createReadonlyHydration } from './entry-hydration';
+import { createDialogTimers } from './dialog-timers';
 import { createLazyResume } from './lazy-resume';
 import { checkoutGitBranch, listGitBranches, searchFiles } from './git-actions';
 import { nextSessionRulesForMode } from './permission-mode';
@@ -20,7 +21,6 @@ import type { LiveStore } from './store';
  */
 
 const RECONCILE_SETTLE_DELAY_MS = 120;
-const DIALOG_AUTO_DISMISS_MS = 5 * 60 * 1_000;
 
 /** 新会话入参（渲染层动作面形状）：思考档与权限模式在 thread/start 成功后后置应用。 */
 export type CreateSessionInput = {
@@ -150,8 +150,8 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     isDisposed: () => disposed,
   });
 
-  /** 对话框兜底定时器登记：结算/dispose 时清理，避免滞留句柄。 */
-  const dialogTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  /** 对话框兜底定时器（属主线程随行回收；单一真相 live/dialog-timers） */
+  const dialogTimers = createDialogTimers();
   /** 轮首游标（turnStarted 记录、settle 窗口重建消费；每线程至多一条，settle 即清）。 */
   const turnStartCursors = new Map<string, string | null>();
 
@@ -172,11 +172,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
 
   /** 对话框本地结算：ui_response 只有 ack 无事件回执，宿主侧超时/未知 id 均静默——弹窗关闭由客户端自治。 */
   const settleDialog = (requestId: string): void => {
-    const timer = dialogTimers.get(requestId);
-    if (timer !== undefined) {
-      clearTimeout(timer);
-      dialogTimers.delete(requestId);
-    }
+    dialogTimers.settle(requestId);
     store.getState().applyEvent({ type: 'dialogSettled', requestId }, Date.now());
   };
 
@@ -184,39 +180,32 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     const state = store.getState();
     state.applyEvent(event, now());
     if (event.type === 'host' && (event.phase === 'restarting' || event.phase === 'failed')) {
-      // host 进程消亡：乐观登记的「已恢复」随 worker 全灭失效（对账会重发 parked 视图）
+      // host 进程消亡：乐观登记的「已恢复」随 worker 全灭失效（对账会重发 parked 视图）；
+      // 挂起弹窗兜底 timer 与轮首游标全部随进程消亡回收（与 dispose 同口径）
       lazy.invalidate();
+      dialogTimers.clearAll();
+      turnStartCursors.clear();
       return;
     }
     if (event.type === 'sessionRemoved') {
-      // 线程移除后轮次永不结算：轮首游标条目随行回收（不等 settle 配对删除）
+      // 线程移除后轮次永不结算：轮首游标与该线程挂起弹窗的兜底 timer 随行回收
       turnStartCursors.delete(event.threadId);
+      dialogTimers.dropThread(event.threadId);
     }
     if (event.type === 'dialogRequest' && event.method !== 'notify' && event.method !== 'setStatus') {
-      // 宿主侧 5 分钟超时默认拒绝后无回执帧：客户端同步兜底收起；同 id 重投先清
-      // 旧 timer（孤儿定时器会按首个请求的时点提前取消重投后的弹窗）
-      const stale = dialogTimers.get(event.requestId);
-      if (stale !== undefined) clearTimeout(stale);
-      dialogTimers.set(
-        event.requestId,
-        setTimeout(() => {
-          dialogTimers.delete(event.requestId);
-          const stillPending = store.getState().dialogs.some((dialog) => dialog.requestId === event.requestId);
-          if (stillPending) void controller.cancelDialog(event.requestId);
-        }, DIALOG_AUTO_DISMISS_MS),
-      );
+      // 宿主侧 5 分钟超时默认拒绝后无回执帧：客户端同步兜底收起（超时回调复查
+      // stillPending，已结算则 no-op）
+      dialogTimers.arm(event.requestId, event.threadId, () => {
+        const stillPending = store.getState().dialogs.some((dialog) => dialog.requestId === event.requestId);
+        if (stillPending) void controller.cancelDialog(event.requestId);
+      });
       return;
     }
-    if (event.type === 'sessionDied' || (event.type === 'host' && (event.phase === 'restarting' || event.phase === 'failed'))) {
-      // 线程/宿主消亡：挂起弹窗的兜底 timer 一并收走（弹窗已折叠，timer 只会发
-      // 出注定无回执的 cancel）；host 消亡清全部（与 dispose 同口径）
-      for (const [requestId, timer] of dialogTimers) {
-        const owner = store.getState().dialogs.find((dialog) => dialog.requestId === requestId);
-        if (event.type === 'host' || owner?.threadId === event.threadId) {
-          clearTimeout(timer);
-          dialogTimers.delete(requestId);
-        }
-      }
+    if (event.type === 'sessionDied') {
+      // 线程消亡：该线程的挂起弹窗已被 store 折叠收走，兜底 timer 随行回收；
+      // 轮次同样永不结算，游标随行回收
+      turnStartCursors.delete(event.threadId);
+      dialogTimers.dropThread(event.threadId);
     }
     if (event.type === 'turnStarted') {
       // 轮首游标：本轮开始前的持久游标（settle 窗口重建的 since 下界）
@@ -227,7 +216,8 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       // 等条目落盘的短延迟后【轮内窗口重建】：since = 轮首游标，以完整转写替换
       // 本轮 span（根治配对丢失的语义不变，长会话不再每轮 O(全部条目) 全量拉取；
       // 游标失效由主进程兜底全量重拉）。代际守卫：窗口内若新一轮已开始（followUp
-      // 自动续轮），本次重建让位给下一轮的 settle。
+      // 自动续轮），本次重建让位给下一轮的 settle——invoke 在途的翻代由
+      // staleGuard 二次复检兜住。
       const settledTurnId = state.threads[event.threadId]?.liveTurnId ?? null;
       const turnStartCursor = turnStartCursors.get(event.threadId) ?? null;
       turnStartCursors.delete(event.threadId);
@@ -235,7 +225,12 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
         if (disposed) return;
         const current = store.getState().threads[event.threadId];
         if (current !== undefined && current.liveTurnId !== settledTurnId) return;
-        void rebuildFromTranscript(event.threadId, turnStartCursor).catch(() => undefined);
+        void rebuildFromTranscript(event.threadId, turnStartCursor, {
+          staleGuard: () => {
+            const latest = store.getState().threads[event.threadId];
+            return latest !== undefined && latest.liveTurnId !== null && latest.liveTurnId !== settledTurnId;
+          },
+        }).catch(() => undefined);
         void controller.refreshStats(event.threadId);
       }, RECONCILE_SETTLE_DELAY_MS);
     }
@@ -275,8 +270,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     },
     dispose(): void {
       disposed = true;
-      for (const timer of dialogTimers.values()) clearTimeout(timer);
-      dialogTimers.clear();
+      dialogTimers.clearAll();
       unsubscribe?.();
       unsubscribe = null;
     },
@@ -538,7 +532,11 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
         // 消息流尾部永久 loading 且 1Hz 走表定时器永不停
         const outcome = await client.invoke('session/bash', { threadId, command: text });
         store.getState().bashSettled(threadId);
-        await rebuildFromTranscript(threadId, cursorBefore).catch(() => undefined);
+        // bash 与模型轮并发（流式中直执行）时在途内容未落盘：重建一律降级为
+        // 不拆轮的 reconcile，权威替换留给轮结算
+        await rebuildFromTranscript(threadId, cursorBefore, {
+          liveTurnPresent: () => store.getState().threads[threadId]?.streaming === true,
+        }).catch(() => undefined);
         return outcome.ok ? null : outcome.reason;
       } catch {
         store.getState().bashSettled(threadId);

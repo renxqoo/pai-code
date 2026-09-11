@@ -152,19 +152,24 @@ export function foldHydrate(state: LiveThreadState, action: HydrateAction): Live
     }
     case 'hydrate/reconcile': {
       const fresh = hydrateNewItems(action.items).filter(({ entryIds }) => entryIds.some((id) => !state.seenIds.has(id)));
-      const liveTurn = action.dropLiveTurn ? null : state.liveTurnId;
+      // 拆除 live 轮的两个前提：载荷确实覆盖该轮（窗口带回条目——空窗口意味着
+      // 转写未到位，销毁现场就是丢内容）且线程非流式（在途轮的内容不在任何载荷
+      // 里，权威替换只属于已结算的轮；流式中直执行等路径靠 liveTurnPresent
+      // 降级为不拆轮 reconcile，这里是最后防线）
+      const drop = action.dropLiveTurn && state.liveTurnId !== null && !state.streaming && action.items.length > 0;
+      const liveTurn = drop ? null : state.liveTurnId;
       let items = state.items;
-      const wasStopped =
-        action.dropLiveTurn && state.liveTurnId !== null
-          ? items.some((item) => item.kind === 'turn' && item.turn.id === state.liveTurnId && item.turn.status === 'stopped')
-          : false;
+      const wasStopped = drop
+        ? items.some((item) => item.kind === 'turn' && item.turn.id === state.liveTurnId && item.turn.status === 'stopped')
+        : false;
       for (const { item } of fresh) {
         items = insertBeforeLiveTurn(items, item, liveTurn);
       }
-      if (action.dropLiveTurn && state.liveTurnId !== null) {
+      if (drop) {
         items = items.filter((item) => !(item.kind === 'turn' && item.turn.id === state.liveTurnId));
       }
       // 权威替换继承用户停止语义：settle 前被停止的轮次保持 stopped 终态
+      // （仅随拆除发生——空窗口时末轮是无关历史轮，不得误标）
       if (wasStopped) {
         for (let index = items.length - 1; index >= 0; index -= 1) {
           const item = items[index];
@@ -175,7 +180,9 @@ export function foldHydrate(state: LiveThreadState, action: HydrateAction): Live
         }
       }
       const seen = capSeenIds(new Set([...state.seenIds, ...action.items.map((item) => item.id)]));
-      return { ...state, items, cursor: action.cursor ?? state.cursor, seenIds: seen, liveTurnId: liveTurn, hydrateFailed: false };
+      // reconcile 也置 hydrated：重载冷启动走 reconcile 保流式现场时，后续
+      // ensureHydrated 的守卫同样要看到「历史已装载」
+      return { ...state, items, cursor: action.cursor ?? state.cursor, seenIds: seen, liveTurnId: liveTurn, hydrated: true, hydrateFailed: false };
     }
     case 'hydrate/rebuild': {
       const items = [...hydrateItems(action.items)];

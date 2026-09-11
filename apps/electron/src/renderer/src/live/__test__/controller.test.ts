@@ -239,3 +239,160 @@ test('症状回归「轮结算后历史全没了（对话收起来）」：窗�
   expect(store.getState().threads[threadId]?.liveTurnId ?? null).toBeNull();
   controller.dispose();
 });
+
+test('症状回归「流式中 ! 直执行：正在生成的回复瞬间消失」：bash 重建对在途轮降级为不拆轮 reconcile', async () => {
+  const store = createLiveStore();
+  const threadId = 't1';
+  let listener: ((events: readonly unknown[]) => void) | undefined;
+  const client: BridgeClient = {
+    available: true,
+    invoke: (method: string) => {
+      if (method === 'app/bootstrap') {
+        return Promise.resolve({ ok: true, data: { sessions: [], saved: [], models: [], providers: [] } } as never);
+      }
+      // bash 应答时转写窗口为空（hub 把 bash 条目延迟登记到轮 settle 前）
+      if (method === 'session/entries') return Promise.resolve({ ok: true, data: { items: [], cursor: null } } as never);
+      return Promise.resolve({ ok: true, data: null } as never);
+    },
+    subscribe: (onBatch: (events: readonly unknown[]) => void) => {
+      listener = onBatch;
+      return () => {
+        listener = undefined;
+      };
+    },
+  };
+  const controller = createLiveController(client, store);
+  await controller.start();
+  const emit = (event: unknown): void => listener?.([event]);
+  store.setState({
+    sessions: {
+      [threadId]: { threadId, cwd: '/w', sessionPath: '/w/s/t1.jsonl', title: 't', state: 'live', streaming: false, model: null, thinkingLevel: null, lastActivityAt: 1 },
+    },
+    activeThreadId: threadId,
+    threads: { [threadId]: undefined },
+  });
+  // 在途轮：已流出一段未落盘增量
+  emit({ type: 'turnStarted', threadId, at: 1 });
+  emit({ type: 'messageStarted', threadId, messageId: 'm1', at: 2 });
+  emit({ type: 'textDelta', threadId, messageId: 'm1', delta: '在途前半' });
+
+  const reason = await controller.runBash(threadId, '! git status');
+  expect(reason).toBeNull();
+  await new Promise((resolve) => {
+    setTimeout(resolve, 10);
+  });
+  const after = store.getState().threads[threadId];
+  expect(after?.streaming).toBe(true);
+  expect(after?.liveTurnId ?? null).not.toBeNull();
+  const liveTurn = after?.items.find((item) => item.kind === 'turn' && item.turn.id === after?.liveTurnId);
+  expect(liveTurn).toBeDefined();
+  controller.dispose();
+});
+
+test('症状回归「followUp 续轮开头一段流式内容消失」：settle 重建 await 在途翻代由 staleGuard 弃用迟到载荷', async () => {
+  const timers = stubTimers();
+  const store = createLiveStore();
+  const threadId = 't1';
+  let listener: ((events: readonly unknown[]) => void) | undefined;
+  let releaseEntries: ((outcome: { ok: true; data: { items: unknown[]; cursor: string | null } }) => void) | undefined;
+  const gate = new Promise<{ ok: true; data: { items: unknown[]; cursor: string | null } }>((resolve) => {
+    releaseEntries = resolve;
+  });
+  const client: BridgeClient = {
+    available: true,
+    invoke: (method: string) => {
+      if (method === 'app/bootstrap') {
+        return Promise.resolve({ ok: true, data: { sessions: [], saved: [], models: [], providers: [] } } as never);
+      }
+      if (method === 'session/entries') return gate as never;
+      if (method === 'session/stats') return Promise.resolve({ ok: true, data: { contextUsage: null, tokensTotal: 0 } } as never);
+      return Promise.resolve({ ok: true, data: null } as never);
+    },
+    subscribe: (onBatch: (events: readonly unknown[]) => void) => {
+      listener = onBatch;
+      return () => {
+        listener = undefined;
+      };
+    },
+  };
+  const controller = createLiveController(client, store);
+  await controller.start();
+  const emit = (event: unknown): void => listener?.([event]);
+  store.setState({
+    sessions: {
+      [threadId]: { threadId, cwd: '/w', sessionPath: '/w/s/t1.jsonl', title: 't', state: 'live', streaming: false, model: null, thinkingLevel: null, lastActivityAt: 1 },
+    },
+    activeThreadId: threadId,
+    threads: { [threadId]: undefined },
+  });
+  emit({ type: 'turnStarted', threadId, at: 1 });
+  emit({ type: 'messageStarted', threadId, messageId: 'm1', at: 2 });
+  emit({ type: 'turnSettled', threadId, usage: null });
+  timers.fire(); // settle 的 120ms 定时器触发 → entries invoke 挂起（gate）
+  // invoke 在途时 followUp 自动续轮开始并流出一段内容
+  emit({ type: 'turnStarted', threadId, at: 5 });
+  emit({ type: 'messageStarted', threadId, messageId: 'm2', at: 6 });
+  emit({ type: 'textDelta', threadId, messageId: 'm2', delta: '续轮在途' });
+  // 旧轮的窗口应答迟到：staleGuard 必须弃用（不得拆掉新轮）
+  releaseEntries?.({ ok: true, data: { items: [{ kind: 'user', id: 'u1', text: '问', origin: 'user', images: [], at: 1 }], cursor: 'u1' } });
+  await new Promise((resolve) => {
+    setTimeout(resolve, 10);
+  });
+  const after = store.getState().threads[threadId];
+  expect(after?.liveTurnId ?? null).not.toBeNull();
+  const liveTurn = after?.items.find((item) => item.kind === 'turn' && item.turn.id === after?.liveTurnId);
+  expect(liveTurn).toBeDefined();
+  controller.dispose();
+});
+
+test('症状回归「重载后切回流式中的会话，正在生成的内容消失一段」：live 冷启动拉补走 reconcile 保在途增量', async () => {
+  const store = createLiveStore();
+  const threadId = 't1';
+  let listener: ((events: readonly unknown[]) => void) | undefined;
+  const persisted = [{ kind: 'user', id: 'u1', text: '旧问', origin: 'user', images: [], at: 1 }];
+  const client: BridgeClient = {
+    available: true,
+    invoke: (method: string) => {
+      if (method === 'app/bootstrap') {
+        return Promise.resolve({ ok: true, data: { sessions: [], saved: [], models: [], providers: [] } } as never);
+      }
+      // 全量拉补只含已落盘前缀（在途消息未 message_end 不在转写）
+      if (method === 'session/entries') return Promise.resolve({ ok: true, data: { items: persisted, cursor: 'u1' } } as never);
+      return Promise.resolve({ ok: true, data: null } as never);
+    },
+    subscribe: (onBatch: (events: readonly unknown[]) => void) => {
+      listener = onBatch;
+      return () => {
+        listener = undefined;
+      };
+    },
+  };
+  const controller = createLiveController(client, store);
+  await controller.start();
+  const emit = (event: unknown): void => listener?.([event]);
+  // 重载后：事件流先到，折出在途轮与已流出增量
+  store.setState({
+    sessions: {
+      [threadId]: { threadId, cwd: '/w', sessionPath: '/w/s/t1.jsonl', title: 't', state: 'live', streaming: false, model: null, thinkingLevel: null, lastActivityAt: 1 },
+    },
+    activeThreadId: threadId,
+    threads: { [threadId]: undefined },
+  });
+  emit({ type: 'turnStarted', threadId, at: 1 });
+  emit({ type: 'messageStarted', threadId, messageId: 'm1', at: 2 });
+  emit({ type: 'textDelta', threadId, messageId: 'm1', delta: '在途前半' });
+
+  await controller.ensureHydrated(threadId);
+  await new Promise((resolve) => {
+    setTimeout(resolve, 10);
+  });
+  const after = store.getState().threads[threadId];
+  // 在途轮保留（liveTurnId/streaming 不被整表重置抹掉），历史前缀补齐，hydrated 置位
+  expect(after?.streaming).toBe(true);
+  expect(after?.liveTurnId ?? null).not.toBeNull();
+  expect(after?.hydrated).toBe(true);
+  expect(after?.items.some((item) => item.kind === 'message' && item.message.text.includes('旧问'))).toBe(true);
+  const liveTurn = after?.items.find((item) => item.kind === 'turn' && item.turn.id === after?.liveTurnId);
+  expect(liveTurn).toBeDefined();
+  controller.dispose();
+});

@@ -32,18 +32,29 @@ export function createEntryHydration(input: {
     }
   };
 
-  const rebuildFromTranscript = async (threadId: string, since: string | null = null): Promise<void> => {
+  /**
+   * 转写重建：since 空 = 全量整表 rebuild；轮内窗口（since=轮首游标）=
+   * reconcile+dropLiveTurn（保历史前缀、权威替换本轮 span）。
+   * opts.liveTurnPresent：轮仍在流式（直执行 bash 与模型轮并发等）——在途
+   * 内容未落盘、不进任何载荷，整表/拆轮都会吞掉已流出增量，一律降级为
+   * 不拆轮的 reconcile；opts.staleGuard：await 期间代际已翻（续轮在流式）
+   * 则弃用迟到载荷。
+   */
+  const rebuildFromTranscript = async (
+    threadId: string,
+    since: string | null = null,
+    opts: { liveTurnPresent?: () => boolean; staleGuard?: () => boolean } = {},
+  ): Promise<void> => {
     const outcome = await client.invoke('session/entries', { threadId, since: since ?? undefined });
 
     if (isDisposed()) return;
+    if (opts.staleGuard?.()) return;
     if (!outcome.ok) {
       store.getState().hydrate(threadId, { kind: 'hydrate/failed' });
       return;
     }
-    // 折叠语义必须与载荷口径一致：全量拉取（since 空）→ 整表 rebuild；
-    // 轮内窗口（since=轮首游标，只含本轮条目）→ reconcile+dropLiveTurn——保历史
-    // 前缀、以权威转写替换本轮 span。窗口喂给整表 rebuild 会把历史全部塌缩成本轮。
-    if (since === null) {
+    const preserveLive = opts.liveTurnPresent?.() ?? false;
+    if (since === null && !preserveLive) {
       store.getState().hydrate(threadId, { kind: 'hydrate/rebuild', items: outcome.data.items, cursor: outcome.data.cursor });
       return;
     }
@@ -51,7 +62,7 @@ export function createEntryHydration(input: {
       kind: 'hydrate/reconcile',
       items: outcome.data.items,
       cursor: outcome.data.cursor,
-      dropLiveTurn: true,
+      dropLiveTurn: !preserveLive,
     });
   };
 
@@ -84,25 +95,32 @@ export function createReadonlyHydration(input: {
   const { client, store, resumeByPath, activate, isDisposed } = input;
   const hydrating = new Map<string, Promise<void>>();
 
-  /** 条目拉取：视图落在原 threadId（换轨后拉取目标为 resume 响应 id）。 */
-  const pull = async (threadId: string, targetId: string): Promise<void> => {
+  /** 条目拉取：视图落在原 threadId（换轨后拉取目标为 resume 响应 id）。
+   * mode=reconcile 用于 live 会话冷启动——整表 initial 会重置 thread 状态，
+   * 抹掉重载后已折叠的流式增量；reconcile 只把未见过的前缀插到 live 轮之前。 */
+  const pull = async (threadId: string, targetId: string, mode: 'initial' | 'reconcile' = 'initial'): Promise<void> => {
     const outcome = await client.invoke('session/entries', { threadId: targetId });
     if (isDisposed()) return;
     if (!outcome.ok) {
       store.getState().hydrate(threadId, { kind: 'hydrate/failed' });
       return;
     }
-    store.getState().hydrate(threadId, { kind: 'hydrate/initial', items: outcome.data.items, cursor: outcome.data.cursor });
+    if (mode === 'initial') {
+      store.getState().hydrate(threadId, { kind: 'hydrate/initial', items: outcome.data.items, cursor: outcome.data.cursor });
+      return;
+    }
+    store.getState().hydrate(threadId, { kind: 'hydrate/reconcile', items: outcome.data.items, cursor: outcome.data.cursor, dropLiveTurn: false });
   };
 
   const run = async (threadId: string): Promise<void> => {
     const session = store.getState().sessions[threadId];
     if (session?.sessionPath == null) return;
     // live/dead 会话的冷启动水化（渲染层重载后 store 全新）：事件流只推增量、
-    // 不重放历史，条目只能全量拉补；拉取后增量事件按既有 reconcile 语义续上。
+    // 不重放历史，条目只能全量拉补。live 会话可能正处于流式（重载前事件流已
+    // 折出在途轮）——走 reconcile 保住在途现场；parked 无现场走 initial。
     // 不走纳管（表项已在 hub）；重复调用由 hydrated 标志去重
     if (session.state !== 'parked') {
-      await pull(threadId, threadId);
+      await pull(threadId, threadId, session.state === 'live' ? 'reconcile' : 'initial');
       return;
     }
     const registered = await client.invoke('session/register', { sessionPath: session.sessionPath });

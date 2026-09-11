@@ -463,3 +463,54 @@ describe('foldEvents · 思考激活态（块粒度）', () => {
     expect(liveTurn(s)?.kind === 'turn' && liveTurn(s).turn.streamingThinkingBlockId).toBeNull();
   });
 });
+
+describe('foldHydrate · reconcile 拆轮防线（窗口重建语义）', () => {
+  function liveTurnState(): ReturnType<typeof foldThreadEvent> {
+    let s = foldHydrate(initialThreadState, {
+      kind: 'hydrate/initial',
+      items: [history({ kind: 'user', id: 'u1', text: '问' }), history({ kind: 'assistant', id: 'a1', text: '答', at: tick(1) })],
+      cursor: 'a1',
+    });
+    s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(10) }), tick(10));
+    s = foldThreadEvent(s, ev({ type: 'messageStarted', threadId: 't', messageId: 'm1', at: tick(11) }), tick(11));
+    s = foldThreadEvent(s, ev({ type: 'textDelta', threadId: 't', messageId: 'm1', delta: '在途' }), tick(12));
+    return s;
+  }
+
+  test('症状回归「空窗口吞掉刚结算轮」：载荷为空不得拆除当轮现场（转写未到位）', () => {
+    let s = liveTurnState();
+    s = foldStopIntent(s);
+    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', usage: null }), tick(20));
+    const turnsBefore = s.items.filter((item) => item.kind === 'turn');
+    s = foldHydrate(s, { kind: 'hydrate/reconcile', items: [], cursor: null, dropLiveTurn: true });
+    const turns = s.items.filter((item) => item.kind === 'turn');
+    expect(turns).toHaveLength(turnsBefore.length);
+    // wasStopped 继承只随拆除发生：上一条历史轮保持 completed，不被误标
+    expect((turns[0]?.kind === 'turn' ? turns[0].turn.status : null)).toBe('completed');
+  });
+
+  test('症状回归「流式中窗口重建拆掉在途轮」：streaming 中一律不拆（最后防线）', () => {
+    let s = liveTurnState();
+    expect(s.streaming).toBe(true);
+    s = foldHydrate(s, {
+      kind: 'hydrate/reconcile',
+      items: [history({ kind: 'user', id: 'u2', text: '新' }), history({ kind: 'assistant', id: 'a2', text: '权', at: tick(15) })],
+      cursor: 'a2',
+      dropLiveTurn: true,
+    });
+    const turnIds = s.items.filter((item) => item.kind === 'turn').map((item) => (item.kind === 'turn' ? item.turn.id : ''));
+    // 在途 live 轮保留，权威条目插到它之前
+    expect(turnIds[turnIds.length - 1]).toBe(s.liveTurnId);
+    expect(turnIds).toContain('turn-a2');
+    expect(s.liveTurnId).not.toBeNull();
+  });
+
+  test('reconcile 置 hydrated：重载冷启动走 reconcile 保流式时守卫同样生效', () => {
+    const s = foldHydrate(initialThreadState, {
+      kind: 'hydrate/reconcile',
+      items: [history({ kind: 'user', id: 'u1', text: '问' })],
+      cursor: 'u1',
+    });
+    expect(s.hydrated).toBe(true);
+  });
+});
