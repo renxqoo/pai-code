@@ -7,6 +7,7 @@ import { ThreadStage } from '@/screens/thread-stage';
 import { initialThreadState, type LiveThreadState } from '@/live/live-thread-state';
 import { store as liveStore, workspaceActions } from '@/live/workspace-runtime';
 import { uiStore } from '@/ui/ui-store';
+import { openFileTab as openFileTabForTest } from '@/panel/panel-controller';
 import { render, renderProbe } from '@/testing/render';
 import { copy } from '@/strings';
 import type { SessionView } from '@paiapp/contracts';
@@ -108,6 +109,26 @@ describe('PanelLayer 面板开合', () => {
     expect(view.container.textContent).toContain(copy.panel.tabAgents);
     view.unmount();
   });
+
+  test('文件 tab：openFileTab 后 FilePane 在位（读取走 panel-controller 通道）', () => {
+    seedThread('t1');
+    const view = render(<PanelLayer />);
+    React.act(() => {
+      openFileTabForTest('src/a.ts');
+    });
+    expect(view.container.textContent).toContain('src/a.ts');
+    view.unmount();
+  });
+
+  test('Diff 面板：openDiffPane 后 DiffPanel 分支可达（无 diff 数据时空态）', () => {
+    seedThread('t1');
+    const view = render(<PanelLayer />);
+    React.act(() => {
+      uiStore.getState().openDiffPane();
+    });
+    expect(view.container.textContent).toContain(copy.panel.tabDiff);
+    view.unmount();
+  });
 });
 
 describe('ThreadBanner 自订阅', () => {
@@ -194,5 +215,16 @@ describe('重渲边界回归（B-batch）', () => {
     });
     expect(stageCommits).toBe(0); // §1.3 预算：无关线程事件不进舞台订阅面
     view.unmount();
+  });
+});
+
+describe('工作区根订阅面终态审计（B-batch ③ 的静态面）', () => {
+  test('workspace-main 源码不含热路径订阅选择器（threads/sessions/stats/threads 派生）——批推帧零重渲的结构性保证', async () => {
+    const source = await Bun.file(`${import.meta.dir}/../workspace-main.tsx`).text();
+    for (const forbidden of ['s.threads', 's.sessions', 's.stats', 's.saved', 's.models']) {
+      expect(source.includes(forbidden)).toBe(false);
+    }
+    // 运行时行为由 B-batch ①②（舞台级）与各区域回归承担；③的探针方案因 settings
+    // 装配的 ThemeProvider 依赖在测试环境不可达，以终态清单的静态审计替代（T34 §1.1）。
   });
 });

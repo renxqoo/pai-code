@@ -1,9 +1,14 @@
-import { copy } from '@/strings';
-import type { LiveWorkspaceView } from '@/live/use-live-workspace';
+import * as React from 'react';
+import { useStore } from 'zustand';
 
-/** 启动守卫：桥不可用 / bootstrap 失败给出明确指引，绝不停留在白屏。 */
-function BootstrapState({ workspace }: { workspace: LiveWorkspaceView }): React.JSX.Element {
-  const failed = !workspace.bridgeAvailable || workspace.bootstrapError !== null;
+import { copy } from '@/strings';
+import { bridgeClient, store } from '@/live/workspace-runtime';
+
+/** 启动守卫（T34 M3 自订阅，0 props）：桥不可用 / bootstrap 失败给出明确指引，绝不停留在白屏。 */
+function BootstrapState(): React.JSX.Element {
+  const bootstrapError = useStore(store, (s) => s.bootstrapError);
+  const hostPhase = useStore(store, (s) => s.hostPhase);
+  const failed = !bridgeClient.available || bootstrapError !== null;
   return (
     <div className="flex h-screen items-center justify-center bg-background text-foreground">
       <div className="flex max-w-[420px] flex-col items-center gap-[10px] px-[24px] text-center">
@@ -11,9 +16,9 @@ function BootstrapState({ workspace }: { workspace: LiveWorkspaceView }): React.
           {failed ? copy.bootstrap.failedTitle : copy.bootstrap.loadingTitle}
         </p>
         <p className="text-[12.5px] leading-[20px] text-muted-foreground">
-          {workspace.bridgeAvailable ? copy.bootstrap.loadingHint : copy.bootstrap.bridgeHint}
+          {bridgeClient.available ? copy.bootstrap.loadingHint : copy.bootstrap.bridgeHint}
         </p>
-        {workspace.hostPhase === 'failed' ? (
+        {hostPhase === 'failed' ? (
           <p className="text-[12.5px] leading-[20px] text-amber-600">{copy.bootstrap.hostFailed}</p>
         ) : null}
       </div>

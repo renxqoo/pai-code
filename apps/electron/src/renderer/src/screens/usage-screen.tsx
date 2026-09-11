@@ -1,3 +1,4 @@
+import { useUsageEntries } from '@/hooks/use-usage-panel';
 import { copy } from '@/strings';
 import { formatTokenCount } from '@/thread/format-count-unit';
 
@@ -9,11 +10,6 @@ type UsageEntry = {
   tokensTotal: number
   cost: number
   messageCount: number
-}
-
-type UsageScreenProps = {
-  entries: ReadonlyArray<UsageEntry>
-  onClose: () => void
 }
 
 type ProjectGroup = {
@@ -49,7 +45,8 @@ function entryMetrics(entry: UsageEntry): ReadonlyArray<string> {
 }
 
 /** Usage 全屏页（I2）：汇总卡 + 按项目分组 + Top 会话；数据仅覆盖本次运行的活跃会话。 */
-function UsageScreen({ entries, onClose }: UsageScreenProps) {
+function UsageScreen({ onClose }: { onClose: () => void }) {
+  const entries = useUsageEntries(true);
   const groups = groupByProject(entries);
   const topSessions = [...entries].sort((a, b) => b.tokensTotal - a.tokensTotal).slice(0, 5);
   const summaryCards: ReadonlyArray<{ label: string; value: string }> = [

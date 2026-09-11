@@ -1,5 +1,5 @@
 import type { ModelInfoView, SessionStatsView, SessionView } from '@paiapp/contracts';
-import { thinkingLevelLabel } from '@paiapp/contracts';
+import { supportedThinkingLevels, thinkingLevelLabel } from '@paiapp/contracts';
 
 /**
  * 输入卡模型/思考档选择数据面（T33：自 use-live-workspace 的 buildComposer
@@ -14,6 +14,16 @@ export type ComposerSelection = {
   effortOptions: readonly string[];
   contextUsed: number;
 };
+
+/**
+ * 模型 key（provider/modelId）→ 可用思考档协议值：按模型能力本地推导
+ * （无线程/未唤醒时的唯一数据源；live 态以 hub 档位命令为准；展示名映射统一由
+ * composerSelectionOf 做——state 语义单一）。新任务页 effortOptionsFor 同源。
+ */
+export function effortLevelsForModel(models: readonly ModelInfoView[], modelKey: string): string[] {
+  const model = models.find((entry) => `${entry.provider}/${entry.modelId}` === modelKey);
+  return [...supportedThinkingLevels(model)];
+}
 
 export function composerSelectionOf(
   models: readonly ModelInfoView[],

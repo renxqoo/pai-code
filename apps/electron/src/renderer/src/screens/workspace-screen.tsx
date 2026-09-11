@@ -1,42 +1,56 @@
+import * as React from 'react';
+import { useStore } from 'zustand';
+
 import { BootstrapState } from './bootstrap-state';
 import { NoticeStrip } from '@/notices/notice-strip';
 import { OnboardingScreen } from '@/onboarding/onboarding-screen';
-import { useLiveWorkspace } from '@/live/use-live-workspace';
+import { useWorkspaceRuntime } from '@/live/use-workspace-runtime';
+import { bridgeClient, store, workspaceActions } from '@/live/workspace-runtime';
 import { WorkspaceMain } from './workspace-main';
 
 /**
- * 工作区守卫：桥不可用/bootstrap 未决时呈现启动态；首次运行（onboarded=false）
- * 呈现引导向导；就绪后交棒主组件。本组件只调用一个 hook，早退不破坏 hooks 规则。
+ * 工作区守卫（T34 M3：useLiveWorkspace 退役——runtime 挂载 + 直订阅）：
+ * 桥不可用/bootstrap 未决时呈现启动态；首次运行（onboarded=false）呈现引导向导；
+ * 就绪后交棒主组件。runtime hook 在早退分支之前无条件调用（hooks 规则与
+ * controller 生命周期都不因守卫早退断链）。
  */
 function WorkspaceScreen(): React.JSX.Element {
-  const workspace = useLiveWorkspace();
-  if (!workspace.ready || workspace.bootstrapError !== null || !workspace.bridgeAvailable) {
-    return <BootstrapState workspace={workspace} />;
+  useWorkspaceRuntime();
+  const bootstrapLoaded = useStore(store, (s) => s.bootstrapLoaded);
+  const bootstrapError = useStore(store, (s) => s.bootstrapError);
+  const onboarded = useStore(store, (s) => s.preferences.onboarded);
+  const providers = useStore(store, (s) => s.providers);
+  const models = useStore(store, (s) => s.models);
+  const notices = useStore(store, (s) => s.notices);
+
+  if (!bootstrapLoaded || bootstrapError !== null || !bridgeClient.available) {
+    return <BootstrapState />;
   }
-  if (!workspace.preferences.onboarded) {
+  if (!onboarded) {
+    const modelOptions = models.map((model) => `${model.provider}/${model.modelId}`);
     return (
       <>
         <OnboardingScreen
-          providers={workspace.providers}
-          modelOptions={workspace.composer.modelOptions}
-          onUpsertProvider={workspace.actions.upsertProvider}
-          onSelectDefaultModel={workspace.actions.setDefaultModel}
-          onRefreshModels={workspace.actions.refreshModels}
+          providers={providers}
+          modelOptions={modelOptions}
+          onUpsertProvider={workspaceActions.upsertProvider}
+          onSelectDefaultModel={workspaceActions.setDefaultModel}
+          onRefreshModels={workspaceActions.refreshModels}
           onFinish={(cwd) => {
-            workspace.actions.completeOnboarding();
+            workspaceActions.completeOnboarding();
             const directory = cwd.trim();
-            if (directory.length > 0 && workspace.composer.modelOptions.length > 0) {
-              void workspace.actions.createSession({ cwd: directory });
+            if (directory.length > 0 && modelOptions.length > 0) {
+              void workspaceActions.createSession({ cwd: directory });
             }
           }}
-          onSkip={workspace.actions.completeOnboarding}
+          onSkip={workspaceActions.completeOnboarding}
         />
         {/* 引导屏同样承接失败通知（完成/首会话/偏好写失败） */}
-        <NoticeStrip notices={workspace.notices} onDismiss={workspace.actions.dismissNotice} />
+        <NoticeStrip notices={notices} onDismiss={workspaceActions.dismissNotice} />
       </>
     );
   }
-  return <WorkspaceMain workspace={workspace} />;
+  return <WorkspaceMain />;
 }
 
 export { WorkspaceScreen };
