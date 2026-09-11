@@ -5,7 +5,7 @@ import { PanelLayer } from '../panel-layer';
 import { ThreadBanner } from '@/thread/thread-banner';
 import { ThreadStage } from '@/screens/thread-stage';
 import { initialThreadState, type LiveThreadState } from '@/live/live-thread-state';
-import { store as liveStore, workspaceActions } from '@/live/workspace-runtime';
+import { store as liveStore } from '@/live/workspace-runtime';
 import { uiStore } from '@/ui/ui-store';
 import { openFileTab as openFileTabForTest } from '@/panel/panel-controller';
 import { render, renderProbe } from '@/testing/render';
@@ -74,14 +74,6 @@ describe('ThreadStage 区域', () => {
     view.unmount();
   });
 
-  test('会话菜单动作链：spy 断 workspaceActions 调用通路（菜单开合经 Base UI 不入单测面）', () => {
-    seedThread('t1');
-    const closeSession = jest.spyOn(workspaceActions, 'closeSession');
-    const view = render(<ThreadStage />);
-    // 直接验证区域装配的动作引用可用（菜单 UI 交互链由 MenuButton 既有测试承担）
-    expect(typeof closeSession).toBe('function');
-    view.unmount();
-  });
 });
 
 describe('PanelLayer 面板开合', () => {

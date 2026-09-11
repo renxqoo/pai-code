@@ -1,10 +1,10 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, jest, test } from 'bun:test';
 import * as React from 'react';
 
 import { useWorkspaceRuntime } from '../use-workspace-runtime';
 import { singletonTab } from '@/panel/panel-state';
 import { initialThreadState } from '@/live/live-thread-state';
-import { store as liveStore } from '@/live/workspace-runtime';
+import { controller, store as liveStore } from '@/live/workspace-runtime';
 import { uiStore } from '@/ui/ui-store';
 import { render } from '@/testing/render';
 import type { ModelInfoView, SessionView } from '@paiapp/contracts';
@@ -46,10 +46,13 @@ beforeEach(() => {
 afterEach(() => {
   uiStore.getState().reset();
   liveStore.getState().reset();
+  jest.restoreAllMocks();
 });
 
 describe('useWorkspaceRuntime 切会话 effect', () => {
-  test('parked 会话激活：思考档按模型能力本地推导写入 store', () => {
+  test('激活链：ensureHydrated/readSessionRules 随切会话派发（冷启动水化不断链）+ parked 档位本地推导', () => {
+    const hydrate = jest.spyOn(controller, 'ensureHydrated');
+    const readRules = jest.spyOn(controller, 'readSessionRules');
     liveStore.setState({ models: models() });
     const view = render(<RuntimeHarness />);
     liveStore.setState({
@@ -59,6 +62,8 @@ describe('useWorkspaceRuntime 切会话 effect', () => {
     });
     view.rerender(<RuntimeHarness />);
     expect(liveStore.getState().effortLevels.length).toBeGreaterThan(1); // reasoning 模型多档（词表在 contracts）
+    expect(hydrate).toHaveBeenCalledWith('t1');
+    expect(readRules).toHaveBeenCalledWith('t1');
     view.unmount();
   });
 
