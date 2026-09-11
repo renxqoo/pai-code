@@ -85,7 +85,14 @@ export function createReadonlyHydration(input: {
 
   const run = async (threadId: string): Promise<void> => {
     const session = store.getState().sessions[threadId];
-    if (session?.state !== 'parked' || session.sessionPath === null) return;
+    if (session?.sessionPath == null) return;
+    // live/dead 会话的冷启动水化（渲染层重载后 store 全新）：事件流只推增量、
+    // 不重放历史，条目只能全量拉补；拉取后增量事件按既有 reconcile 语义续上。
+    // 不走纳管（表项已在 hub）；重复调用由 hydrated 标志去重
+    if (session.state !== 'parked') {
+      await pull(threadId, threadId);
+      return;
+    }
     const registered = await client.invoke('session/register', { sessionPath: session.sessionPath });
     if (isDisposed()) return;
     if (!registered.ok && /not readable|thread_id_mismatch/.test(registered.reason)) {
