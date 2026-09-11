@@ -18,12 +18,10 @@ export type ComposerSelection = {
 export function composerSelectionOf(
   models: readonly ModelInfoView[],
   stats: Readonly<Record<string, SessionStatsView>>,
-  sessions: Readonly<Record<string, SessionView>>,
+  session: SessionView | undefined,
   effortLevels: readonly string[],
-  threadId: string,
 ): ComposerSelection {
   const modelOptions = models.map((model) => `${model.provider}/${model.modelId}`);
-  const session = sessions[threadId];
   const currentModel = session?.model ?? modelOptions[0] ?? '';
   const levelLabels = effortLevels.map((level) => thinkingLevelLabel(level));
   const currentLabel = session?.thinkingLevel !== undefined && session?.thinkingLevel !== null ? thinkingLevelLabel(session.thinkingLevel) : undefined;

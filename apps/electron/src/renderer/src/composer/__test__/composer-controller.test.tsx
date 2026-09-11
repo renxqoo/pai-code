@@ -32,12 +32,12 @@ function seedThread(threadId: string, thread: Partial<LiveThreadState> = {}): vo
   });
 }
 
-/** 挂一个真实 textarea 进 DOM 并注册（聚焦断言用）。 */
-function mountTextarea(): { unmount: () => void } {
+/** 挂一个真实 textarea 进 DOM 并注册（聚焦断言用；返回元素句柄做同一性断言）。 */
+function mountTextarea(): { el: HTMLTextAreaElement; unmount: () => void } {
   const view = render(<textarea aria-label="t" />);
   const el = view.container.querySelector('textarea') as HTMLTextAreaElement;
   registerComposerTextarea(el);
-  return { unmount: () => { unregisterComposerTextarea(el); view.unmount(); } };
+  return { el, unmount: () => { unregisterComposerTextarea(el); view.unmount(); } };
 }
 
 beforeEach(() => {
@@ -82,8 +82,7 @@ describe('composer-controller', () => {
     const first = mountTextarea();
     const second = mountTextarea();
     setDraftAndFocus('x');
-    const areas = [...document.querySelectorAll('textarea')];
-    expect(areas.indexOf(document.activeElement as HTMLTextAreaElement)).toBe(1); // 聚焦落在后注册元素
+    expect(document.activeElement).toBe(second.el); // 同一性断言：聚焦落在后注册元素
     second.unmount();
     first.unmount();
     setDraftAndFocus('y'); // 通道无元素：不抛错，草稿替换照常

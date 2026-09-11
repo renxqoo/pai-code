@@ -2,7 +2,7 @@ import type { ComposerAttachment } from '@/composer/prompt-card';
 import { imagePayloadOf } from '@/composer/read-image-file';
 import { queuedDrafts } from '@/composer/queued-drafts';
 import { store as liveStore, workspaceActions } from '@/live/workspace-runtime';
-import { isImmediateSubmit, submitDraftText } from '@/screens/submit-draft';
+import { isImmediateSubmit, submitDraftText } from '@/composer/submit-draft';
 import { uiStore } from '@/ui/ui-store';
 
 /**

@@ -9,7 +9,7 @@ import type { ThreadModel } from '@/thread/thread-model';
 import { collectThreadDiff } from '@/diff-panel/collect-thread-diff';
 import { summarizeAgents } from '@/thread/panel-summary';
 import { composerSelectionOf, type ComposerSelection } from '@/composer/composer-selection';
-import { imagePayloadOf } from '@/composer/read-image-file';
+import { submitQueuedDraft } from '@/composer/queued-submit';
 import { queuedDrafts, type QueuedDraft, type QueuedDraftSubmit } from '@/composer/queued-drafts';
 import { connectQueuedDraftFlush } from './queued-flush';
 
@@ -159,17 +159,8 @@ export function useLiveWorkspace(): LiveWorkspaceView {
   );
 
   // 暂存排队消息的轮末冲刷（连接器单一真相 live/queued-flush：结算冲刷/
-  // 路径宿主保留/重开改绑）。submit 引用恒定（actions 稳定）。
-  const submitQueuedDraft = React.useCallback<QueuedDraftSubmit>(
-    (threadId, draft, mode) =>
-      actions.submitThreadDraft(
-        threadId,
-        draft.text,
-        draft.images.length === 0 ? undefined : draft.images.map((image) => imagePayloadOf(image.payload)),
-        mode,
-      ),
-    [actions],
-  );
+  // 路径宿主保留/重开改绑）。投递实现单一真相在 composer/queued-submit
+  //（与输入卡立即改向同源）。
   React.useEffect(() => connectQueuedDraftFlush(store, submitQueuedDraft), [submitQueuedDraft]);
   const queuedDraftsByThread = React.useSyncExternalStore(subscribeQueuedDrafts, queuedDrafts.snapshot);
 
@@ -227,8 +218,8 @@ export function useLiveWorkspace(): LiveWorkspaceView {
   const queueItems = queue ?? EMPTY_QUEUE;
 
   const composer = React.useMemo(
-    () => composerSelectionOf(models, stats, sessionViews, effortLevels, activeThreadId),
-    [models, stats, sessionViews, effortLevels, activeThreadId],
+    () => composerSelectionOf(models, stats, activeSession, effortLevels),
+    [models, stats, activeSession, effortLevels],
   );
 
   return {
