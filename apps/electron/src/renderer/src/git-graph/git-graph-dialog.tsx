@@ -41,6 +41,9 @@ function resolveBodyState(view: GitGraphView | null, loading: boolean, failed: b
 function GitGraphDialog({ open, onOpenChange, view, loading, failed, onRefresh }: GitGraphDialogProps) {
   const body = resolveBodyState(view, loading, failed);
   const layouts = body.kind === 'ready' ? buildGraphLayouts(body.commits) : [];
+  /** 泳道间距须全表统一（逐行各异会错断跨行连边）：取全表最大泳道数定档。 */
+  const laneCount =
+    layouts.length === 0 ? 1 : Math.max(...layouts.map((layout) => laneCountOf(layout)));
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -77,7 +80,7 @@ function GitGraphDialog({ open, onOpenChange, view, loading, failed, onRefresh }
                     key={commit.hash}
                     commit={commit}
                     layout={layout}
-                    laneCount={laneCountOf(layout)}
+                    laneCount={laneCount}
                     isLast={index === body.commits.length - 1}
                   />
                 );

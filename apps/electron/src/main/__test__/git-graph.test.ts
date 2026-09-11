@@ -40,6 +40,11 @@ describe('parseGraphLog', () => {
     expect(commits[1]?.parents).toEqual(['c4']);
   });
 
+  test('负值时间戳（GIT_*_DATE 可造 1970 前时间）退化为 0，不产出违反契约的数据', () => {
+    const commits = parseGraphLog(record('a7', 'a7f9c2a', 'pai', '-123', 's', '', ''));
+    expect(commits[0]?.timestamp).toBe(0);
+  });
+
   test('detached HEAD：%D 输出「HEAD, main」拆为两个 token，isHead 仍真', () => {
     const commits = parseGraphLog(record('a7', 'a7f9c2a', 'pai', '1', 'x', 'HEAD, main', ''));
     expect(commits[0]?.refs).toEqual(['HEAD', 'main']);
@@ -71,18 +76,24 @@ describe('parseGraphLog', () => {
 describe('createGitGraph', () => {
   const head = record('a7', 'a7f9c2a', 'pai', '1789157310', 'c1', 'HEAD -> main', '');
 
-  test('非仓库 → 空形态；空仓库（log 报无提交）→ 空列表', async () => {
+  test('非仓库 → 空形态；空仓库（HEAD 无可解析，stderr 为本地化文案也能判定）→ 空列表', async () => {
     const plain = createGitGraph((args) => Promise.resolve(args[0] === 'rev-parse' ? fail('fatal: not a git repository') : ok('')));
     expect(await plain.list('/w/plain')).toEqual({ ok: true, data: { isRepo: false, commits: [], truncated: false } });
 
-    const empty = createGitGraph((args) =>
-      Promise.resolve(
-        args[0] === 'rev-parse'
-          ? ok('.git')
-          : fail("fatal: your current branch 'main' does not have any commits yet"),
-      ),
-    );
+    const empty = createGitGraph((args) => {
+      if (args[0] === 'log') return fail('fatal：当前分支还没有任何提交（非英文 locale 文案）');
+      if (args.includes('--verify')) return fail('', 1);
+      return ok('.git');
+    });
     expect(await empty.list('/w/repo')).toEqual({ ok: true, data: { isRepo: true, commits: [], truncated: false } });
+
+    // log 失败但 HEAD 存在（非空仓库的真实故障）：照实透传，不误判成空仓库
+    const broken = createGitGraph((args) => {
+      if (args[0] === 'log') return fail('fatal: bad object HEAD');
+      if (args.includes('--verify')) return ok('a7f9c2a');
+      return ok('.git');
+    });
+    expect(await broken.list('/w/repo')).toEqual({ ok: false, reason: 'git_failed:fatal: bad object HEAD' });
   });
 
   test('正常仓库解析 + 上限 500 截断（多取 1 条判 truncated）', async () => {
@@ -102,6 +113,19 @@ describe('createGitGraph', () => {
     );
     const single = await exact.list('/w/repo');
     expect(single).toEqual({ ok: true, data: { isRepo: true, commits: [parseGraphLog(head)[0]], truncated: false } });
+  });
+
+  test('截断判定按原始记录数：501 条中混入畸形记录被 parse 跳过后，截断提示不丢失', async () => {
+    const rows = Array.from({ length: 500 }, (_, i) => record(`h${i}`, `s${i}`, 'a', '1', `c${i}`, '', i === 0 ? '' : `h${i - 1}`));
+    const withGarbage = [...rows.slice(0, 500), 'malformed-record'].join(RECORD);
+    const git = createGitGraph((args) =>
+      Promise.resolve(args[0] === 'rev-parse' ? ok('.git') : args[0] === 'log' ? ok(withGarbage) : ok('')),
+    );
+    const outcome = await git.list('/w/repo');
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.data.commits.length).toBe(500);
+    expect(outcome.data.truncated).toBe(true);
   });
 
   test('进程级异常与探测失败 reason 透传', async () => {

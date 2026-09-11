@@ -21,6 +21,8 @@ const CELL_WIDTH = 85;
 /** 首泳道圆心距列左缘的距离，与泳道间距同值（设计稿比例）。 */
 const LANE_ORIGIN_X = 16;
 const LANE_SPACING = 16;
+/** 泳道间距压缩下限：并行分支多于 4 条时逐级压密以不出图列。 */
+const LANE_SPACING_MIN = 6;
 const NODE_RADIUS = 4;
 /** HEAD 节点的外圈（双圆环形态）。 */
 const HEAD_RING_RADIUS = 7.5;
@@ -28,8 +30,18 @@ const EDGE_WIDTH = 2.5;
 /** 连边进入/离开节点段长；其余行程是竖线与圆角 S 曲线。 */
 const CURVE_MARGIN = 5;
 
-function laneX(lane: number): number {
-  return LANE_ORIGIN_X + lane * LANE_SPACING;
+/**
+ * 泳道间距：按全图谱最大泳道数统一取值（逐行各异会错断跨行连边的续接），
+ * 压密到图列宽度内容纳，保证多分支历史不压到描述列。
+ */
+function laneSpacingOf(laneCount: number): number {
+  const lastX = CELL_WIDTH - LANE_ORIGIN_X;
+  const fit = laneCount > 1 ? lastX / (laneCount - 1) : LANE_SPACING;
+  return Math.max(LANE_SPACING_MIN, Math.min(LANE_SPACING, fit));
+}
+
+function laneX(lane: number, spacing: number): number {
+  return LANE_ORIGIN_X + lane * spacing;
 }
 
 /** 连边路径：同泳道竖线；跨泳道为两段竖线夹一条端点切线竖直的圆角 S 曲线。 */
@@ -49,18 +61,13 @@ function edgePath(fromX: number, toX: number, top: number, bottom: number): stri
 function GitGraphLaneCell({ commit, layout, laneCount, isLast, className }: GitGraphLaneCellProps) {
   const nodeY = ROW_HEIGHT / 2;
   const height = isLast ? ROW_HEIGHT : ROW_HEIGHT * 1.5;
-  const maxLane = Math.max(
-    layout.lane,
-    laneCount - 1,
-    ...layout.edges.map((edge) => Math.max(edge.fromLane, edge.toLane)),
-  );
-  const width = Math.max(CELL_WIDTH, LANE_ORIGIN_X + maxLane * LANE_SPACING + LANE_ORIGIN_X);
+  const spacing = laneSpacingOf(laneCount);
   const nodeColor = laneColor(layout.lane);
   return (
     <svg
-      width={width}
+      width={CELL_WIDTH}
       height={height}
-      viewBox={`0 0 ${width} ${height}`}
+      viewBox={`0 0 ${CELL_WIDTH} ${height}`}
       aria-hidden
       className={cn('pointer-events-none block', className)}
     >
@@ -69,7 +76,7 @@ function GitGraphLaneCell({ commit, layout, laneCount, isLast, className }: GitG
         return (
           <path
             key={`${edge.fromLane}-${edge.toLane}-${index}`}
-            d={edgePath(laneX(edge.fromLane), laneX(edge.toLane), nodeY, height)}
+            d={edgePath(laneX(edge.fromLane, spacing), laneX(edge.toLane, spacing), nodeY, height)}
             fill="none"
             strokeWidth={EDGE_WIDTH}
             className={color.stroke}
@@ -78,7 +85,7 @@ function GitGraphLaneCell({ commit, layout, laneCount, isLast, className }: GitG
       })}
       {commit.isHead && (
         <circle
-          cx={laneX(layout.lane)}
+          cx={laneX(layout.lane, spacing)}
           cy={nodeY}
           r={HEAD_RING_RADIUS}
           fill="none"
@@ -88,7 +95,7 @@ function GitGraphLaneCell({ commit, layout, laneCount, isLast, className }: GitG
       )}
       {/* 节点描边取面板底色，隔开连边与节点形成留白圈 */}
       <circle
-        cx={laneX(layout.lane)}
+        cx={laneX(layout.lane, spacing)}
         cy={nodeY}
         r={NODE_RADIUS}
         strokeWidth={2}

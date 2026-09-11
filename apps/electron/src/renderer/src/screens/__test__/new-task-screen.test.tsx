@@ -1,10 +1,14 @@
 import { describe, expect, test } from 'bun:test';
+import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import type { CommandView } from '@paiapp/contracts';
 
+import { initialThreadState } from '@/live/live-thread-state';
+import { store as liveStore } from '@/live/workspace-runtime';
 import { greetingKeyOf } from '@/lib/greeting';
 import { greetingTexts } from '@/screens/new-task-view-model';
+import { render } from '@/testing/render';
 import { copy } from '@/strings';
 
 import { NewTaskScreen } from '../new-task-screen';
@@ -93,5 +97,73 @@ describe('NewTaskScreen', () => {
     expect(withCatalog).toContain(copy.composer.send);
     const emptyCatalog = renderScreen({ commands: [] });
     expect(emptyCatalog).toContain(copy.newTask.placeholder);
+  });
+});
+
+describe('NewTaskScreen 分支切换锁（T36：与线程页同一把，目录上线程在跑即只读）', () => {
+  const REPO_VIEW = { isRepo: true, current: 'main', branches: ['dev', 'main'], dirtyFiles: 0 } as const;
+
+  /** 客户端渲染装置：页面订阅 live store（锁判定）与分支视图（面板入口）。 */
+  function screenProps(overrides: Partial<Parameters<typeof NewTaskScreen>[0]> = {}) {
+    return {
+      knownDirs: ['/w/app'],
+      commands: [] as readonly CommandView[],
+      defaultCwd: '/w/app',
+      trustedDefault: false,
+      defaultModelFor: () => 'glm/glm-4.7',
+      modelOptions: ['glm/glm-4.7'],
+      effortOptionsFor: () => [] as readonly string[],
+      noModelsLabel: copy.composer.noModels,
+      globalPermissionMode: 'ask' as const,
+      onSearchFiles: () => Promise.resolve(null),
+      onListBranches: () => Promise.resolve({ ok: true as const, data: REPO_VIEW }),
+      onListGraph: () => Promise.resolve({ ok: true as const, data: { isRepo: true, commits: [], truncated: false } }),
+      onCheckoutBranch: () => Promise.resolve({ ok: true as const, data: { branch: 'dev' } }),
+      onPickDirectory: () => Promise.resolve(null),
+      onCreate: () => Promise.resolve(true),
+      onClose: () => undefined,
+      onNotify: () => undefined,
+      onDialogOpenChange: () => undefined,
+      ...overrides,
+    };
+  }
+
+  function seedRunning(running: boolean): void {
+    liveStore.setState({
+      sessions: {
+        't-run': {
+          threadId: 't-run',
+          cwd: '/w/app',
+          sessionPath: '/w/app/s/t-run.jsonl',
+          title: '运行中会话',
+          state: 'live',
+          streaming: false,
+          model: 'glm/glm-4.7',
+          thinkingLevel: null,
+          lastActivityAt: Date.now(),
+        },
+      },
+      activeThreadId: null,
+      threads: { 't-run': { ...initialThreadState, streaming: running } },
+    });
+  }
+
+  test('所选目录上线程在跑：分支段退回只读（无面板触发器）；空闲恢复触发器', async () => {
+    seedRunning(true);
+    const locked = render(<NewTaskScreen {...screenProps()} />);
+    await React.act(async () => {
+      for (let i = 0; i < 6; i += 1) await Promise.resolve();
+    });
+    expect([...locked.container.querySelectorAll('button')].some((b) => b.getAttribute('aria-label') === copy.composer.branchSegment)).toBe(false);
+    locked.unmount();
+
+    seedRunning(false);
+    const idle = render(<NewTaskScreen {...screenProps()} />);
+    await React.act(async () => {
+      for (let i = 0; i < 6; i += 1) await Promise.resolve();
+    });
+    expect([...idle.container.querySelectorAll('button')].some((b) => b.getAttribute('aria-label') === copy.composer.branchSegment)).toBe(true);
+    idle.unmount();
+    liveStore.getState().reset();
   });
 });

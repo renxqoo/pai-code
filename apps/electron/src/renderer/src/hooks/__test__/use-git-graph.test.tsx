@@ -142,4 +142,25 @@ describe('useGitGraph', () => {
     expect(h.handle()?.view).toEqual(VIEW);
     h.unmount();
   });
+
+  test('revision 递增（checkout 成功的失效信号）→ 回到 loading 并重拉', async () => {
+    const calls: string[] = [];
+    const list: ListFn = (cwd) => {
+      calls.push(cwd);
+      return Promise.resolve({ ok: true, data: { isRepo: true, commits: [], truncated: false } });
+    };
+    const h = harness(list);
+    h.mount({ cwd: '/w/repo', revision: 1, enabled: true });
+    await flush();
+    expect(h.handle()?.view).not.toBeNull();
+    expect(h.handle()?.loading).toBe(false);
+
+    h.mount({ cwd: '/w/repo', revision: 2, enabled: true });
+    expect(h.handle()?.loading).toBe(true); // 失效期间回到 loading，不展示旧图谱
+    expect(h.handle()?.view).toBeNull();
+    await flush();
+    expect(calls).toEqual(['/w/repo', '/w/repo']);
+    expect(h.handle()?.view).not.toBeNull();
+    h.unmount();
+  });
 });

@@ -31,6 +31,11 @@ const GRAPH_LOG_ARGS: readonly string[] = [
   '--pretty=format:%H%x00%h%x00%an%x00%at%x00%s%x00%D%x00%P%x1e',
 ];
 
+/** `git log --pretty` 输出 → 原始记录条数（截断判定用：畸形记录被 parse 跳过不影响「还有更多」的探测）。 */
+export function countGraphRecords(stdout: string): number {
+  return stdout.split(RECORD_SEP).filter((record) => record.trim().length > 0).length;
+}
+
 /** `git log --pretty` 输出 → 提交行；字段数不符的畸形记录跳过（垃圾输入降级不崩溃）。 */
 export function parseGraphLog(stdout: string): GitGraphCommit[] {
   const commits: GitGraphCommit[] = [];
@@ -42,7 +47,7 @@ export function parseGraphLog(stdout: string): GitGraphCommit[] {
     const [hash, shortHash] = fields;
     if (hash === undefined || hash.length === 0 || shortHash === undefined || shortHash.length === 0) continue;
     const author = fields[2] ?? '';
-    const timestamp = fields[3] ?? '0';
+    const timestamp = Number.parseInt(fields[3] ?? '0', 10);
     const subject = fields[4] ?? '';
     const decorations = fields[5] ?? '';
     const parents = fields[6] ?? '';
@@ -55,7 +60,8 @@ export function parseGraphLog(stdout: string): GitGraphCommit[] {
       shortHash,
       subject,
       author,
-      timestamp: Number.parseInt(timestamp, 10) || 0,
+      // 负值/垃圾（GIT_*_DATE 可造 1970 前时间）退化为 0，不产出违反契约 timestamp≥0 的数据
+      timestamp: Number.isFinite(timestamp) && timestamp > 0 ? timestamp : 0,
       parents: parents.split(' ').filter((parent) => parent.length > 0),
       refs,
       isHead: refs.some((token) => token === 'HEAD' || token.startsWith('HEAD ->')),
@@ -83,14 +89,17 @@ export function createGitGraph(run: GitExec = runGit): GitGraph {
     const log = await run(GRAPH_LOG_ARGS, cwd);
     if (log.error !== null) return { ok: false, reason: failureReason(log) };
     if (log.code !== 0) {
-      // 空仓库（刚 init 未提交）是正常形态：空列表而非报错
-      if (log.stderr.toLowerCase().includes('does not have any commits yet')) {
-        return okGraph({ isRepo: true, commits: [], truncated: false });
-      }
+      // 空仓库（刚 init 未提交）是正常形态：空列表而非报错。判定不用 stderr 文案
+      // （git 消息随用户 locale 本地化），用 rev-parse 验证 HEAD 是否存在——空仓库
+      // 无 HEAD 可解析，非空仓库 log 失败则照实透传
+      const head = await run(['rev-parse', '-q', '--verify', 'HEAD'], cwd);
+      if (head.error !== null) return { ok: false, reason: failureReason(head) };
+      if (head.code !== 0) return okGraph({ isRepo: true, commits: [], truncated: false });
       return { ok: false, reason: mapGitFailure(log.stderr) };
     }
+    // 截断按原始记录数判定：parse 跳过畸形记录后条数变小，不能反过来丢失截断提示
+    const truncated = countGraphRecords(log.stdout) > GRAPH_COMMIT_LIMIT;
     const rows = parseGraphLog(log.stdout);
-    const truncated = rows.length > GRAPH_COMMIT_LIMIT;
     return okGraph({ isRepo: true, commits: truncated ? rows.slice(0, GRAPH_COMMIT_LIMIT) : rows, truncated });
   };
 

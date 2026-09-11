@@ -64,6 +64,10 @@ function BranchPanel({ view, loading, failed, busy, onSelect, onCreate, onOpenGr
       </div>
       <div className="max-h-[320px] overflow-y-auto p-3">
         <div className="px-2 pt-1.5 pb-2 text-[13px] leading-none text-muted-foreground">{copy.branch.panelTitle}</div>
+        {/* detached HEAD 无当前行可挂脏计数：置顶一行弱提示，保住「展示的数字就是会阻止切换的数字」 */}
+        {view?.current == null && dirtyFiles > 0 ? (
+          <div className="px-2 pb-2 text-xs leading-4 text-muted-foreground">{copy.branch.dirtyFiles(dirtyFiles)}</div>
+        ) : null}
         <div className="flex flex-col gap-0.5">
           {filtered.map((name) => {
             const isCurrent = name === current;

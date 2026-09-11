@@ -297,7 +297,7 @@ export const zh: typeof en = {
     createSubtitle: '基于当前 HEAD 创建一个新的本地分支，并在创建成功后立即切换过去。',
     createFieldLabel: '分支名',
     createFieldPlaceholder: '例如 feature/git-branch-switcher',
-    createHelper: '首版只支持基于当前 HEAD 创建并切换。',
+    createHelper: '仅支持基于当前 HEAD 创建并切换。',
     createSubmit: '创建并切换',
   },
   gitGraph: {

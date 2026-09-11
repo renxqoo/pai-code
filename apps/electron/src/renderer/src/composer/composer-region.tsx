@@ -96,6 +96,11 @@ function ComposerRegion(): React.JSX.Element {
   /** 图谱只在弹窗打开时拉取（无轮询）；branchRevision 让 checkout 成功后重开即新谱 */
   const graph = useGitGraph(activeCwd, workspaceActions.listGitGraph, branchRevision, dialog === 'graph');
 
+  /** 锁定期间已开的分支面板/创建弹窗就地收口（触发器会消失，但已开的模态弹窗不会自灭） */
+  React.useEffect(() => {
+    if (branchLocked && (dialog === 'branch' || dialog === 'create-branch')) setDialog(null);
+  }, [branchLocked, dialog]);
+
   /** 切分支：失败走通知条；成功 bump 失效代次（本区域分支段与图谱随之重拉） */
   const switchBranch = (branchName: string): void => {
     if (busyRef.current || branchLocked) return;
@@ -119,9 +124,9 @@ function ComposerRegion(): React.JSX.Element {
     );
   };
 
-  /** 创建并检出：失败在弹窗内联呈现（不关弹窗，便于改名重试） */
+  /** 创建并检出：失败在弹窗内联呈现（不关弹窗，便于改名重试）；与切换同一把锁（checkout -b 同样改写 HEAD 归属） */
   const createBranch = (branchName: string): void => {
-    if (busyRef.current) return;
+    if (busyRef.current || branchLocked) return;
     busyRef.current = true;
     setCheckingOut(true);
     setBranchError(null);

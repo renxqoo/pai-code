@@ -54,6 +54,14 @@ describe('BranchPanel', () => {
     page.unmount();
   });
 
+  test('detached HEAD（current=null）：脏计数升为分组标题下的置顶弱提示（当前行缺失但有数字可看）', () => {
+    const page = render(panel({ view: { isRepo: true, current: null, branches: ['dev', 'main'], dirtyFiles: 3 } }));
+    expect(page.container.textContent).toContain(copy.branch.dirtyFiles(3));
+    // 无当前行：没有任何行打勾
+    expect(page.container.querySelector('button[aria-current="true"]')).toBeNull();
+    page.unmount();
+  });
+
   test('搜索过滤（filterBranches 表驱动）：大小写不敏感、空词全量、无命中空列表', () => {
     const branches = ['Dev', 'feature/x', 'main', 'RELEASE-1'];
     expect(filterBranches(branches, '')).toEqual(branches);

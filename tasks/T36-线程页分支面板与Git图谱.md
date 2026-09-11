@@ -1,6 +1,6 @@
 # T36 线程页分支面板与 Git 图谱
 
-> 状态：定稿
+> 状态：已核销（M1–M4 落地；遗留挂账见 §7，均超出本任务契约面）
 > 级别：中（跨模块：contracts 新契约面 + 主进程 git 新读口 + 渲染层两页装配；无存量数据迁移）
 
 ## 0. 需求判定
@@ -79,17 +79,48 @@
 - api-routes 集成：`git/graph` cwd 门禁（`cwd_not_allowed` 且不触 git）+ fake 透传 + 真 git 隔离世界（造 merge 提交断言视图终态）；
 - 回归：开发中发现的每个 bug 一个用例，用例名注明症状。
 
-## 3. 验收清单
+## 3. 测试口径（先列再实现）
 
-- [ ] 外部契约：`dirtyFiles` 口径 = 切换守卫；`git/graph` strict 词表 + truncated 语义；reason 字典封闭
-- [ ] 边界：非仓库 / 空仓库 / detached HEAD / 脏树拒绝 / 选项形 ref 名 / 501 截断 / cwd 门禁
-- [ ] 并发预算：graph 单飞 + checkout 后缓存失效 / checkout 串行不变 / 无定时器
-- [ ] 不处理清单逐条落位（运行中只读、图谱只读、仅本地分支装饰）
-- [ ] 单轨：`BranchPickerDialog` 删除、旧 `newTask.branch*` key 删除、无双轨字段
-- [ ] 四门全绿 + 覆盖率 ≥ 90/85 只升不降 + 对抗审查问题清零 + 数字如实报告
+（§2.2 已列；M4 收口核销见 §6。）
 
 ## 4. 实施记录
 
 - M1（2026-09-12）：契约（`dirtyFiles` + `git/graph`）+ 主进程数据面（list 脏计数、`git-graph` 读口、路由接线与 checkout 后缓存失效）+ strings 双语 key + 本文档落档。
 - M2（2026-09-12）：3 个并行 UI agent 看图自主选型交付三件 UI（AnchoredPanel 底座 / BranchPanel 内容件 / 图谱弹窗组件族 / 新建分支弹窗重做），主会话验收后入库。
 - M3（2026-09-12）：渲染层接线——`listGitGraph` 动作链（git-actions → live-controller → workspace-actions）、`useGitGraph`（enabled 门 + 失效重拉 + 序号守卫）、线程页装配（branch-switch-lock 运行中锁定 + 面板/创建/图谱编排 + 通知条失败面）、新建任务页面板化、单轨化（删 `BranchPickerDialog`、旧 `newTask.branch*` key 清除）。测试：泳道布局表驱动、refs pill、日期格式、面板/锁/钩子/上下文条/两页装配集成。
+- M4（2026-09-12）：对抗审查（独立会话，12 条：3 中 / 9 低）→ 处置：修复 9、按宪法修正 1、挂账 2。
+
+## 5. 对抗审查记录（M4，独立会话）
+
+12 条问题逐条处置：
+
+| # | 问题 | 处置 |
+| --- | --- | --- |
+| 1（中） | createBranch 漏锁 + 锁定时创建弹窗不自灭 | 修复：createBranch 补 branchLocked 闸 + 锁定生效时 branch/create-branch 两浮层就地收口（effect） |
+| 2（中） | 新建任务页无锁（可从这页拆台运行中 agent） | 修复：接入同一把 branchSwitchLocked（面板入口 + switch/create 闸 + 浮层收口）+ 集成测试 |
+| 3（中） | ≥6 泳道时 SVG 宽度溢出 85px 图列压到描述列 | 修复：泳道间距全表统一按最大泳道数压密（16→最低 6px），SVG 恒 85px 不出列 |
+| 4（低） | 截断判定在 parse 之后，畸形记录跳过会丢 truncated | 修复：按原始记录数判定（countGraphRecords）+ 回归用例 |
+| 5（低） | 负值时间戳（GIT_*_DATE 可造）违反自家契约 ≥0 | 修复：显式负值/垃圾退化为 0 + 用例 |
+| 6（低） | 空仓库判定依赖英文 stderr（locale 本地化文案 miss） | 修复：改 `rev-parse -q --verify HEAD` 判定（locale 无关）+ 本地化文案用例 |
+| 7（低） | status 输出 >1MB（≈2 万+脏文件）使 list 整体失败且无降级 | 挂账：>1MB porcelain 属病态仓库；降级需契约语义裁决（「未知但肯定脏」无法用 int≥0 表达）；既有 checkout 守卫同场景同样失败（T23 行为非回归）。挂账见 §7 |
+| 8（低） | detached HEAD 时脏计数无行可挂（数字不可见） | 修复：分组标题下置顶弱提示 + 用例 |
+| 9（低） | refs 测试假绿（单 token「HEAD, main」不拆）+ 分支名含 `->` 被错拆 | 修复：按「 -> 」（带空格，refname 禁空格故安全）分隔 + 双 token 夹具 + `a->b` 用例 |
+| 10（低） | use-git-graph 的 revision 失效重拉漏测 | 修复：补用例（递增 → loading + 重拉） |
+| 11（低） | zh 辅助文案「首版…」违反 UI 禁版本叙事宪法 | 修正：改「仅支持基于当前 HEAD 创建并切换。」（设计图原文与仓库宪法冲突，宪法优先；en 本就无版本字样） |
+| 12（低） | 锁是渲染层闭包快照，IPC 在途的 TOCTOU 窗口真实存在 | 驳回（登记）：主进程无运行态知识（agent 运行态在 hub），强保证需 main→hub 运行态查询，超出 T36；锁的归属裁决（T23/T36）本就是渲染层尽力而为。挂账见 §7 |
+
+已排查未发现问题的面（审查者确认）：主进程单飞/失效时序、checkout 串行链、useGitGraph enabled/序号/settled 自洽、泳道算法对 topo 假设破坏时的降级、strings 无残留引用、checkoutBranch bump 失效链。
+
+## 6. 验收清单
+
+- [x] 外部契约：dirtyFiles 口径 = 切换守卫；git/graph strict 词表 + truncated 按原始记录数；reason 字典封闭
+- [x] 边界：非仓库 / 空仓库（locale 无关判定）/ detached HEAD（脏计数置顶提示）/ 脏树拒绝 / 选项形 ref 拦截 / 501 截断 / cwd 门禁 / 负值时间戳退化
+- [x] 并发预算：graph 单飞 + checkout 后缓存失效 / checkout 串行不变 / 渲染层无定时器 / list 4 次 execFile
+- [x] 不处理清单落位：运行中只读（两页同锁）/ 图谱只读 / 仅本地分支装饰 / 线程页工作区段维持只读
+- [x] 单轨：BranchPickerDialog 删除、旧 newTask.branch* key 删除、from prop 退役、无双轨字段
+- [x] 四门全绿（lint 0-0 / typecheck / build / test 1620 全过）+ 对抗审查 12 条清零（9 修 1 正 2 挂账）+ 数字如实报告
+
+## 7. 遗留挂账
+
+- **status 输出超限（审查 #7）**：`git/branches` list 在 porcelain 输出 >1MB（≈2 万+未提交已跟踪文件）时整体失败且重试恒败。根治需「未知但肯定脏」的契约语义（如 dirtyFiles 可空 + 超限哨兵值），属契约变更，另立任务裁决。
+- **锁的 TOCTOU（审查 #12）**：锁为渲染层快照，点击到 IPC 落地的窗口内目录起跑不会被拦。强保证需主进程向 hub 查询工作目录运行态后再放行 checkout，属跨进程面扩展，另立任务。

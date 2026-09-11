@@ -1,9 +1,11 @@
 import * as React from 'react';
+import { useStore } from 'zustand';
 
 import { thinkingLevelLabel, thinkingLevelOfLabel, type ApiOutcome, type CommandView, type PermissionRules } from '@paiapp/contracts';
 
 import { branchSegmentOf } from '@/composer/branch-segment';
 import { BranchPanel } from '@/composer/branch-panel';
+import { branchSwitchLocked } from '@/composer/branch-switch-lock';
 import { ComposerActionsRow } from '@/composer/composer-actions-row';
 import { CreateBranchDialog } from '@/composer/create-branch-dialog';
 import { PromptCard, type ComposerAttachment } from '@/composer/prompt-card';
@@ -12,6 +14,7 @@ import { PromptInputArea } from '@/composer/prompt-input-area';
 import { QuickTaskChips } from '@/composer/quick-task-chips';
 import { WorkspacePickerDialog } from '@/composer/workspace-picker-dialog';
 import { GitGraphDialog } from '@/git-graph/git-graph-dialog';
+import { store as liveStore } from '@/live/workspace-runtime';
 import { useGitBranches } from '@/hooks/use-git-branches';
 import { useGitGraph } from '@/hooks/use-git-graph';
 import { greetingKeyOf } from '@/lib/greeting';
@@ -119,6 +122,14 @@ function NewTaskScreen({
   const branches = useGitBranches(cwd, onListBranches);
   /** 图谱只在弹窗打开时拉取（无轮询） */
   const graph = useGitGraph(cwd, onListGraph, 0, dialog === 'graph');
+  /** 分支切换锁（与线程页同一把，T36 引用 T23 裁决）：所选目录上任一线程在跑即锁定——
+   * 新建任务页可选中运行中会话的目录，不放锁就能从这页拆台运行中的 agent。 */
+  const branchLocked = useStore(liveStore, (s) => branchSwitchLocked(s.sessions, s.threads, cwd));
+
+  /** 锁定期间已开的分支面板/创建弹窗就地收口（触发器会消失，但已开的模态弹窗不会自灭） */
+  React.useEffect(() => {
+    if (branchLocked && (dialog === 'branch' || dialog === 'create-branch')) setDialog(null);
+  }, [branchLocked, dialog]);
   const texts = greetingTexts(greetingKey);
   const segment = branchSegmentOf(branches.view, branches.loading, branches.failed);
   const effectiveModel = model ?? defaultModelFor(cwd);
@@ -155,7 +166,7 @@ function NewTaskScreen({
 
   /** 切分支：失败走通知条，成功后刷新分支视图（当前分支与列表） */
   const switchBranch = (branch: string): void => {
-    if (busyRef.current) return;
+    if (busyRef.current || branchLocked) return;
     busyRef.current = true;
     setCheckingOut(true);
     setDialog(null);
@@ -176,9 +187,9 @@ function NewTaskScreen({
     );
   };
 
-  /** 创建并检出：失败在弹窗内联呈现（不关弹窗，便于改名重试） */
+  /** 创建并检出：失败在弹窗内联呈现（不关弹窗，便于改名重试）；与切换同一把锁（checkout -b 同样改写 HEAD 归属） */
   const createBranch = (branch: string): void => {
-    if (busyRef.current) return;
+    if (busyRef.current || branchLocked) return;
     busyRef.current = true;
     setCheckingOut(true);
     setBranchError(null);
@@ -256,8 +267,8 @@ function NewTaskScreen({
                 : {
                     ...segment,
                     ariaLabel: copy.composer.branchSegment,
-                    // 非仓库/加载中不给面板入口（列表为空，点了也无内容）
-                    ...(branches.view?.isRepo === true
+                    // 非仓库/加载中/目录上有线程在跑不给面板入口（列表为空或切基线拆台运行中 agent）
+                    ...(branches.view?.isRepo === true && !branchLocked
                       ? {
                           panel: {
                             open: dialog === 'branch',

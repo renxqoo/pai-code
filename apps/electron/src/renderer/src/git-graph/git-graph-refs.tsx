@@ -11,10 +11,10 @@ type GitGraphRefsProps = {
 
 const HEAD_TOKEN = 'HEAD';
 
-/** refs 装饰 pill 组：HEAD 橙色 pill、普通分支灰色 pill；「HEAD -> main」按箭头拆开。 */
+/** refs 装饰 pill 组：HEAD 橙色 pill、普通分支灰色 pill；「HEAD -> main」按「 -> 」拆开（refname 禁空格，带空格的分隔串不可能出现在分支名内）。 */
 function GitGraphRefs({ refs, className }: GitGraphRefsProps) {
   const tokens = refs
-    .flatMap((ref) => ref.split('->'))
+    .flatMap((ref) => ref.split(' -> '))
     .map((token) => token.trim())
     .filter((token) => token.length > 0);
   if (tokens.length === 0) return null;
