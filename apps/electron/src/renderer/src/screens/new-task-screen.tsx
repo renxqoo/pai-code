@@ -130,6 +130,11 @@ function NewTaskScreen({
   React.useEffect(() => {
     if (branchLocked && (dialog === 'branch' || dialog === 'create-branch')) setDialog(null);
   }, [branchLocked, dialog]);
+
+  /** 面板打开即重拉：脏计数随工作区实时变化，缓存快照会过期（cwd 不变不会自动重拉） */
+  React.useEffect(() => {
+    if (dialog === 'branch') branches.refresh();
+  }, [dialog, branches.refresh]);
   const texts = greetingTexts(greetingKey);
   const segment = branchSegmentOf(branches.view, branches.loading, branches.failed);
   const effectiveModel = model ?? defaultModelFor(cwd);

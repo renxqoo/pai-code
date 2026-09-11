@@ -166,4 +166,29 @@ describe('NewTaskScreen 分支切换锁（T36：与线程页同一把，目录�
     idle.unmount();
     liveStore.getState().reset();
   });
+
+  test('症状回归：面板打开即重拉分支视图——脏计数随工作区实时变化，缓存快照会过期', async () => {
+    seedRunning(false);
+    let calls = 0;
+    const props = screenProps({
+      onListBranches: () => {
+        calls += 1;
+        return Promise.resolve({ ok: true as const, data: REPO_VIEW });
+      },
+    });
+    const view = render(<NewTaskScreen {...props} />);
+    await React.act(async () => {
+      for (let i = 0; i < 6; i += 1) await Promise.resolve();
+    });
+    expect(calls).toBe(1); // cwd 就绪首拉
+    React.act(() => {
+      [...view.container.querySelectorAll('button')].find((b) => b.getAttribute('aria-label') === copy.composer.branchSegment)?.click();
+    });
+    await React.act(async () => {
+      for (let i = 0; i < 6; i += 1) await Promise.resolve();
+    });
+    expect(calls).toBe(2); // 打开面板刷新脏计数
+    view.unmount();
+    liveStore.getState().reset();
+  });
 });

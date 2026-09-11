@@ -101,6 +101,11 @@ function ComposerRegion(): React.JSX.Element {
     if (branchLocked && (dialog === 'branch' || dialog === 'create-branch')) setDialog(null);
   }, [branchLocked, dialog]);
 
+  /** 面板打开即重拉：脏计数随工作区实时变化，缓存快照会过期（cwd 不变不会自动重拉） */
+  React.useEffect(() => {
+    if (dialog === 'branch') gitBranches.refresh();
+  }, [dialog, gitBranches.refresh]);
+
   /** 切分支：失败走通知条；成功 bump 失效代次（本区域分支段与图谱随之重拉） */
   const switchBranch = (branchName: string): void => {
     if (busyRef.current || branchLocked) return;

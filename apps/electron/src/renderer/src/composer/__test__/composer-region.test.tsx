@@ -222,6 +222,23 @@ describe('ComposerRegion 分支面板接线（T36）', () => {
     view.unmount();
   });
 
+  test('症状回归：面板打开即重拉分支视图——脏计数随工作区实时变化，缓存快照会过期', async () => {
+    seedLive({});
+    const listBranches = jest.spyOn(workspaceActions, 'listGitBranches').mockResolvedValue({
+      ok: true,
+      data: { isRepo: true, current: 'main', branches: ['dev', 'main'], dirtyFiles: 0 },
+    });
+    const view = render(<ComposerRegion onOpenAgents={() => undefined} />);
+    await flushAsync();
+    expect(listBranches).toHaveBeenCalledTimes(1); // cwd 就绪首拉
+    React.act(() => {
+      branchTrigger(view)?.click();
+    });
+    await flushAsync();
+    expect(listBranches).toHaveBeenCalledTimes(2); // 打开面板刷新脏计数
+    view.unmount();
+  });
+
   test('运行中线程（streaming）：工作目录被分支切换锁锁定，分支段退回只读（无触发器）', async () => {
     seedLive({ threads: { t1: { streaming: true } } });
     jest.spyOn(workspaceActions, 'listGitBranches').mockResolvedValue({
