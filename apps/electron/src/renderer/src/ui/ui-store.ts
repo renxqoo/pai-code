@@ -2,6 +2,16 @@ import { createStore } from 'zustand/vanilla';
 
 import type { QueuedDraftImages } from '@/composer/queued-drafts';
 import type { ProjectFileNode } from '@/sidebar/build-file-tree';
+import {
+  closeAllPanels,
+  closePanelTab,
+  focusPanelTab,
+  openPanel,
+  singletonTab,
+  togglePanel,
+  EMPTY_PANEL,
+  type PanelState,
+} from '@/panel/panel-state';
 import { expandGroup, toggleGroupFold, type GroupFold } from '@/sidebar/group-collapse';
 import type { SidebarView } from '@/sidebar/sidebar-view';
 import type { SettingsSectionId } from '@/settings/settings-sections';
@@ -58,6 +68,13 @@ export type UiState = {
   composerRestore: { token: number; images: QueuedDraftImages } | null;
   /** 分支视图失效代次（新建任务页 checkout 成功递增，输入卡上下文条分支段重拉）。 */
   branchRevision: number;
+  /** 面板系统当前多标签态（会话级存档在 panel-controller 的模块档案，非当前态）。 */
+  panel: PanelState;
+  /** 「打开文件…」选择弹窗开合与清单（拉取在 panel-controller，含代次守卫）。 */
+  filePickerOpen: boolean;
+  filePickerItems: readonly string[];
+  /** 输入浮层实测高度（避让消费：舞台底部 padding 与回底浮标；偏移在动作内加成）。 */
+  composerInset: number;
   projectFiles: ProjectFilesState;
 };
 
@@ -89,6 +106,19 @@ export type UiActions = {
   /** 首条消息未投出时回填到新会话草稿槽（新建任务页退出后仍可重发）。 */
   restoreDraft: (threadId: string, text: string) => void;
   setConfirmStop: (open: boolean) => void;
+  /** 面板动作（panel-state 纯函数的 store 包装；openFileTab 在 panel-controller——需活跃 cwd）。 */
+  togglePanelFromHeader: () => void;
+  openDiffPane: () => void;
+  openAgentsPane: () => void;
+  toggleDiffPane: () => void;
+  toggleAgentsPane: () => void;
+  closePanel: () => void;
+  closePanelTabById: (id: string) => void;
+  focusPanelTabById: (id: string) => void;
+  setFilePickerOpen: (open: boolean) => void;
+  setFilePickerItems: (items: readonly string[]) => void;
+  /** 输入浮层高度写入：接收原始测量值，消费侧避让偏移（+24）在此统一加成。 */
+  setComposerInset: (rawHeight: number) => void;
   /** 图片回填信号（token 自增；images 可为空数组——仍产生一次信号，消费端并入零项）。 */
   setComposerRestore: (images: QueuedDraftImages) => void;
   bumpBranchRevision: () => void;
@@ -121,6 +151,10 @@ function initialUiState(): UiState {
     confirmStop: false,
     composerRestore: null,
     branchRevision: 0,
+    panel: EMPTY_PANEL,
+    filePickerOpen: false,
+    filePickerItems: [],
+    composerInset: 184,
     projectFiles: { target: null, tree: [], loading: false },
   };
 }
@@ -161,6 +195,18 @@ export function createUiStore() {
       set((state) => ({ composerDraft: '', drafts: omitDraft(state.drafts, threadId) })),
     restoreDraft: (threadId, text) => set((state) => ({ drafts: { ...state.drafts, [threadId]: text } })),
     setConfirmStop: (open) => set({ confirmStop: open }),
+    togglePanelFromHeader: () =>
+      set((state) => (state.panel.tabs.length > 0 ? { panel: closeAllPanels() } : { panel: openPanel(state.panel, singletonTab('diff')) })),
+    openDiffPane: () => set((state) => ({ panel: openPanel(state.panel, singletonTab('diff')) })),
+    openAgentsPane: () => set((state) => ({ panel: openPanel(state.panel, singletonTab('agents')) })),
+    toggleDiffPane: () => set((state) => ({ panel: togglePanel(state.panel, 'diff') })),
+    toggleAgentsPane: () => set((state) => ({ panel: togglePanel(state.panel, 'agents') })),
+    closePanel: () => set({ panel: closeAllPanels() }),
+    closePanelTabById: (id) => set((state) => ({ panel: closePanelTab(state.panel, id) })),
+    focusPanelTabById: (id) => set((state) => ({ panel: focusPanelTab(state.panel, id) })),
+    setFilePickerOpen: (open) => set({ filePickerOpen: open }),
+    setFilePickerItems: (items) => set({ filePickerItems: items }),
+    setComposerInset: (rawHeight) => set({ composerInset: Math.round(rawHeight) + 24 }),
     setComposerRestore: (images) =>
       set((state) => ({ composerRestore: { token: (state.composerRestore?.token ?? 0) + 1, images } })),
     bumpBranchRevision: () => set((state) => ({ branchRevision: state.branchRevision + 1 })),

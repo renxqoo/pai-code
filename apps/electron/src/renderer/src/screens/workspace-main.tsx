@@ -43,6 +43,12 @@ const {
   setConfirmStop,
 } = uiStore.getState();
 
+/** 输入浮层高度通道（T34 U3）：测量回调模块级恒定引用写 ui store（+24 偏移在动作内），
+ * 高度变化只重渲舞台订阅处——WorkspaceMain 仅读值喂 props（M2 起舞台自订，此订阅移除）。 */
+const publishComposerInset = (height: number): void => {
+  uiStore.getState().setComposerInset(height);
+};
+
 function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.JSX.Element {
   const sidebarCollapsed = useStore(uiStore, (s) => s.sidebarCollapsed);
   /** 项目文件面板（T18）：开合门控读（target null = 关闭，侧栏内容区照旧） */
@@ -54,13 +60,10 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const settingsEntry = useStore(uiStore, (s) => s.settingsEntry);
   /** 停止确认条开合（H2：不可恢复的停止先确认；Esc 链同源，真相在 ui store） */
   const confirmStop = useStore(uiStore, (s) => s.confirmStop);
+  const bottomInset = useStore(uiStore, (s) => s.composerInset);
+  const composerLayerRef = useObservedHeight<HTMLDivElement>(publishComposerInset);
   /** Usage 总览页（I2；侧栏 footer 入口） */
   const usagePanel = useUsagePanel(workspace.sessions, workspace.statsById, workspace.actions.refreshAllStats);
-  /** 输入浮层实际高度：消息流底部避让（贴底内容完整可见，上翻内容滑入浮层后面）。 */
-  const [bottomInset, setBottomInset] = React.useState(160);
-  const composerLayerRef = useObservedHeight<HTMLDivElement>((height) => {
-    setBottomInset(Math.round(height) + 24);
-  });
   const { sessions, activeThreadId } = workspace;
 
   const usageOpen = usagePanel.usageOpen;
@@ -76,8 +79,8 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   /** 新建任务页：生命周期与渲染属性装配（退出出口集中在该 hook 的 close） */
   const newTask = useNewTaskPage({ workspace, onOpenSettings: openSettings, onDraftRestore: restoreDraft });
   const openNewTask = React.useCallback(() => newTask.enter(''), [newTask.enter]);
-  /** 面板系统（多标签 + 会话记忆 + 文件查看 + 打开文件弹窗）单一装配面。 */
-  const panels = usePanelTabs(activeThreadId, workspace.activeCwd, workspace.actions.searchFilesIn);
+  /** 面板系统（多标签 + 会话记忆 + 文件查看 + 打开文件弹窗）单一装配面（T34 M1：内部已换源 store+controller）。 */
+  const panels = usePanelTabs(activeThreadId);
   const { panel, panelOpen, togglePanelFromHeader, openAgents, openDiff, toggleAgentsPane, toggleDiffPane, closePanel, openFilePicker } = panels;
 
   /** 命令面板（⌘P）装配：开关/条目/派发（hub 对话框模态期间不唤起）。 */
@@ -173,14 +176,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
               onCancel={() => setConfirmStop(false)}
             />
           ) : null}
-          <ThreadBanner
-            crashed={workspace.crashed}
-            compacting={workspace.compacting}
-            retrying={workspace.retrying}
-            queueCount={workspace.queueCount}
-            bashRunning={workspace.bashRunning}
-            bashTail={workspace.bashTail}
-          />
+          <ThreadBanner />
           <ComposerRegion onOpenAgents={openAgents} />
             </div>
           </>
