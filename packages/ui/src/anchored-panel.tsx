@@ -12,7 +12,7 @@ type AnchoredPanelProps = {
   children: ReactNode
   /** 面板可访问名（sr-only 标题） */
   label: string
-  /** 面板宽度（px）；默认面向底部栏宽面板场景 */
+  /** 面板宽度（px）；默认常规下拉面板宽度（用户裁决：初版 540 偏宽，比弹窗还宽不协调） */
   width?: number
   /** 弹出侧；默认 top —— 触发器贴屏幕底边时面板从触发器上缘向上弹出 */
   side?: 'top' | 'bottom'
@@ -33,7 +33,7 @@ const popupClassName =
  * 关 = 卸载（Portal，keepMounted 默认关）：面板内容本地态（如搜索词）随开合重置。
  * 窗口失焦（切走应用）同步收起，避免回到应用后面板仍悬挂遮挡（与 MenuButton 同一约束）。
  */
-function AnchoredPanel({ open, onOpenChange, trigger, children, label, width = 540, side = 'top', align = 'start', sideOffset = 8 }: AnchoredPanelProps) {
+function AnchoredPanel({ open, onOpenChange, trigger, children, label, width = 360, side = 'top', align = 'start', sideOffset = 8 }: AnchoredPanelProps) {
   useEffect(() => {
     if (!open) return;
     const close = (): void => onOpenChange(false);
