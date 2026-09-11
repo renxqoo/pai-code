@@ -43,7 +43,9 @@ export function useNewTaskPage(input: {
   const key = useStore(uiStore, (s) => s.newTaskKey);
   const cwd = useStore(uiStore, (s) => s.newTaskCwd);
   const dialogOpen = useStore(uiStore, (s) => s.newTaskDialogOpen);
-  const [branchRevision, setBranchRevision] = React.useState(0);
+  /** 分支视图失效代次（checkout 成功递增；输入卡上下文条消费，真相在 ui store）。 */
+  const branchRevision = useStore(uiStore, (s) => s.branchRevision);
+
   /** 预会话命令目录（`/` 补全数据源）：每次打开重拉（技能启停/目录变化即时生效） */
   const [commands, setCommands] = React.useState<readonly CommandView[]>([]);
   const actions = workspace.actions;
@@ -81,7 +83,7 @@ export function useNewTaskPage(input: {
   const checkoutBranch = React.useCallback(
     async (target: string, branch: string, create: boolean) => {
       const outcome = await actions.checkoutGitBranch(target, branch, create);
-      if (outcome.ok) setBranchRevision((revision) => revision + 1);
+      if (outcome.ok) uiStore.getState().bumpBranchRevision();
       return outcome;
     },
     [actions],

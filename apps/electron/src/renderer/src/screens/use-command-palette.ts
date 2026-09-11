@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { insertIntoDraft } from '@/composer/composer-controller';
 import type { SettingsSectionId } from '@/settings/settings-sections';
 import type { SessionCardModel } from '@/sidebar/session-card-model';
 import type { LiveWorkspaceView } from '@/live/use-live-workspace';
@@ -32,14 +33,10 @@ type UseCommandPaletteArgs = {
   openUsage: () => void
   /** 会话跳转出口（退出新建任务页/设置页等覆盖层的同一导航链）。 */
   navigateSession: (threadId: string) => void
-  drafts: Readonly<Record<string, string>>
-  composerDraft: string
-  setDraft: (value: string) => void
-  composerTextRef: React.RefObject<HTMLTextAreaElement | null>
 }
 
 export function useCommandPalette(args: UseCommandPaletteArgs): CommandPaletteApi {
-  const { workspace, activeThreadId, sessions, openNewTask, openSettings, openSettingsAt, openUsage, navigateSession, drafts, composerDraft, setDraft, composerTextRef } = args;
+  const { workspace, activeThreadId, sessions, openNewTask, openSettings, openSettingsAt, openUsage, navigateSession } = args;
   // 取稳定方法而非 panels 对象整体（对象每渲染换引用会击穿本 hook 产物的 memo）
   const { openDiff: openDiffPane, openAgents: openAgentsPane, openFileTab } = args.panels;
 
@@ -81,15 +78,11 @@ export function useCommandPalette(args: UseCommandPaletteArgs): CommandPaletteAp
       else if (id.startsWith('session:')) navigateSession(id.slice('session:'.length));
       else if (id.startsWith('file:')) openFileTab(id.slice('file:'.length));
       else if (id.startsWith('command:')) {
-        // 斜杠命令填入 composer（词法/执行语义统一留在输入框侧）
-        const name = id.slice('command:'.length);
-        const current = drafts[activeThreadId] ?? composerDraft;
-        const prefix = current.trim().length === 0 ? '' : `${current.replace(/\s+$/, '')} `;
-        setDraft(`${prefix}/${name} `);
-        composerTextRef.current?.focus();
+        // 斜杠命令填入 composer（词法/执行语义统一留在输入框侧；通道=controller 追加+聚焦）
+        insertIntoDraft(`/${id.slice('command:'.length)} `);
       } else if (id.startsWith('settings:')) openSettingsAt(id.slice('settings:'.length) as SettingsSectionId);
     },
-    [activeThreadId, workspace.activeCwd, workspace.actions, openNewTask, openDiffPane, openAgentsPane, openFileTab, openSettings, openUsage, navigateSession, drafts, composerDraft, setDraft, composerTextRef, openSettingsAt],
+    [activeThreadId, workspace.activeCwd, workspace.actions, openNewTask, openDiffPane, openAgentsPane, openFileTab, openSettings, openUsage, navigateSession, openSettingsAt],
   );
 
   return { open, close, toggle, items, onSelect };

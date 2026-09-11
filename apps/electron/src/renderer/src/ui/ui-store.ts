@@ -1,5 +1,6 @@
 import { createStore } from 'zustand/vanilla';
 
+import type { QueuedDraftImages } from '@/composer/queued-drafts';
 import type { ProjectFileNode } from '@/sidebar/build-file-tree';
 import { expandGroup, toggleGroupFold, type GroupFold } from '@/sidebar/group-collapse';
 import type { SidebarView } from '@/sidebar/sidebar-view';
@@ -51,6 +52,12 @@ export type UiState = {
   composerDraft: string;
   /** 会话草稿（线程 id 寻址；切走再回来不丢，互不串扰）。 */
   drafts: Readonly<Record<string, string>>;
+  /** 停止二次确认条开合（存在在途子代理时停止不可恢复；Esc 链同源）。 */
+  confirmStop: boolean;
+  /** 输入卡图片回填一次性信号：token 递增即并入附件态（消费端 PromptCard）。 */
+  composerRestore: { token: number; images: QueuedDraftImages } | null;
+  /** 分支视图失效代次（新建任务页 checkout 成功递增，输入卡上下文条分支段重拉）。 */
+  branchRevision: number;
   projectFiles: ProjectFilesState;
 };
 
@@ -81,6 +88,10 @@ export type UiActions = {
   clearDraft: (threadId: string) => void;
   /** 首条消息未投出时回填到新会话草稿槽（新建任务页退出后仍可重发）。 */
   restoreDraft: (threadId: string, text: string) => void;
+  setConfirmStop: (open: boolean) => void;
+  /** 图片回填信号（token 自增；images 可为空数组——仍产生一次信号，消费端并入零项）。 */
+  setComposerRestore: (images: QueuedDraftImages) => void;
+  bumpBranchRevision: () => void;
   beginProjectFiles: (target: { name: string; path: string }) => void;
   completeProjectFiles: (tree: readonly ProjectFileNode[]) => void;
   closeProjectFiles: () => void;
@@ -107,6 +118,9 @@ function initialUiState(): UiState {
     newTaskDialogOpen: false,
     composerDraft: '',
     drafts: {},
+    confirmStop: false,
+    composerRestore: null,
+    branchRevision: 0,
     projectFiles: { target: null, tree: [], loading: false },
   };
 }
@@ -146,6 +160,10 @@ export function createUiStore() {
     clearDraft: (threadId) =>
       set((state) => ({ composerDraft: '', drafts: omitDraft(state.drafts, threadId) })),
     restoreDraft: (threadId, text) => set((state) => ({ drafts: { ...state.drafts, [threadId]: text } })),
+    setConfirmStop: (open) => set({ confirmStop: open }),
+    setComposerRestore: (images) =>
+      set((state) => ({ composerRestore: { token: (state.composerRestore?.token ?? 0) + 1, images } })),
+    bumpBranchRevision: () => set((state) => ({ branchRevision: state.branchRevision + 1 })),
     beginProjectFiles: (target) => set({ projectFiles: { target, tree: [], loading: true } }),
     completeProjectFiles: (tree) =>
       set((state) => ({ projectFiles: { ...state.projectFiles, tree, loading: false } })),

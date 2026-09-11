@@ -4,6 +4,14 @@ import { useStore } from 'zustand';
 import type { PermissionRules } from '@paiapp/contracts';
 
 import { Composer } from '@/composer/composer';
+import {
+  editQueuedDraft,
+  registerComposerTextarea,
+  unregisterComposerTextarea,
+} from '@/composer/composer-controller';
+import { stopOrAbort } from '@/composer/stop-or-abort';
+import { submitComposerDraft } from '@/composer/submit-composer-draft';
+import { editUserMessage, forkUserMessage } from '@/screens/workspace-fork';
 import { DialogLayer } from '@/dialogs/dialog-layer';
 import { NewTaskScreen } from '@/screens/new-task-screen';
 import { useNewTaskPage } from '@/screens/use-new-task-page';
@@ -16,11 +24,8 @@ import { useCmdHotkeys } from '@/hooks/cmd-hotkeys';
 import { NoticeStrip } from '@/notices/notice-strip';
 import { SettingsScreen } from '@/settings/settings-screen';
 import { Sidebar } from '@/sidebar/sidebar';
-import { isImmediateSubmit, submitDraftText } from '@/screens/submit-draft';
-import { imagePayloadOf } from '@/composer/read-image-file';
 import { queuedDrafts } from '@/composer/queued-drafts';
 import { branchSegmentOf } from '@/composer/branch-segment';
-import type { ComposerAttachment } from '@/composer/prompt-card';
 import { useGitBranches } from '@/hooks/use-git-branches';
 import { useUsagePanel } from '@/hooks/use-usage-panel';
 import { useSettingsScreen } from '@/settings/use-settings-screen';
@@ -33,7 +38,6 @@ import { PanelLayer } from '@/screens/panel-layer';
 import { usePanelTabs } from '@/screens/use-panel-tabs';
 import { CommandPalette } from '@/palette/command-palette';
 import { useCommandPalette } from '@/screens/use-command-palette';
-import { useForkMessage } from '@/screens/use-fork-message';
 import { ThreadStage } from '@/screens/thread-stage';
 import type { LiveWorkspaceView } from '@/live/use-live-workspace';
 import { uiStore } from '@/ui/ui-store';
@@ -51,8 +55,8 @@ const {
   closeSettings,
   toggleSidebarCollapsed,
   setDraft,
-  clearDraft,
   restoreDraft,
+  setConfirmStop,
 } = uiStore.getState();
 
 function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.JSX.Element {
@@ -67,8 +71,10 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   /** 命令面板跳设置分区：进入分区经一次性 entry（关闭即清，普通打开不受影响）。 */
   const settingsOpen = useStore(uiStore, (s) => s.settingsOpen);
   const settingsEntry = useStore(uiStore, (s) => s.settingsEntry);
-  /** 停止确认（H2：存在在途子代理时二次确认，不可恢复） */
-  const [confirmStop, setConfirmStop] = React.useState(false);
+  /** 停止确认条开合（H2：不可恢复的停止先确认；Esc 链同源，真相在 ui store） */
+  const confirmStop = useStore(uiStore, (s) => s.confirmStop);
+  /** 输入卡图片回填一次性信号（fork/排队编辑经 controller 写入；M1 经本订阅喂 props） */
+  const composerRestore = useStore(uiStore, (s) => s.composerRestore);
   /** Usage 总览页（I2；侧栏 footer 入口） */
   const usagePanel = useUsagePanel(workspace.sessions, workspace.statsById, workspace.actions.refreshAllStats);
   /** 输入浮层实际高度：消息流底部避让（贴底内容完整可见，上翻内容滑入浮层后面）。 */
@@ -76,7 +82,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const composerLayerRef = useObservedHeight<HTMLDivElement>((height) => {
     setBottomInset(Math.round(height) + 24);
   });
-  /** 编辑重发：回填草稿后聚焦输入框 */
+  /** 编辑重发：回填草稿后聚焦输入框（对象 ref——子件光标定位只认对象 ref） */
   const composerTextRef = React.useRef<HTMLTextAreaElement | null>(null);
   const { sessions, activeThreadId } = workspace;
 
@@ -99,6 +105,16 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   }, [settingsOpen]);
   /** 新建任务页：生命周期与渲染属性装配（退出出口集中在该 hook 的 close） */
   const newTask = useNewTaskPage({ workspace, onOpenSettings: openSettings, onDraftRestore: restoreDraft });
+  /** 跨区聚焦通道的 textarea 注册：以输入卡在场为 dep——新建任务页整页替换会卸载
+   * 输入卡，重挂后必须换绑新 textarea（固定 [] 会在往返后持有已 detach 的旧元素）。 */
+  const composerMounted = newTask.screen === null;
+  React.useEffect(() => {
+    if (!composerMounted) return;
+    const el = composerTextRef.current;
+    if (el === null) return;
+    registerComposerTextarea(el);
+    return () => unregisterComposerTextarea(el);
+  }, [composerMounted]);
   const openNewTask = React.useCallback(() => newTask.enter(''), [newTask.enter]);
   /** 当前会话目录的分支视图（只读展示）；revision = 新建任务页 checkout 成功的失效信号 */
   const gitBranches = useGitBranches(workspace.activeCwd, workspace.actions.listGitBranches, newTask.branchRevision);
@@ -111,49 +127,9 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const panels = usePanelTabs(activeThreadId, workspace.activeCwd, workspace.actions.searchFilesIn);
   const { panel, panelOpen, togglePanelFromHeader, openAgents, openDiff, toggleAgentsPane, toggleDiffPane, closePanel, openFilePicker } = panels;
 
-  /** 分叉重发与草稿回填装配（消息行编辑/重试与排队编辑共用）。 */
-  const forkMessage = useForkMessage({ actions: workspace.actions, restoreDraft, setDraft: setThreadDraft, composerTextRef });
-  const { forkUserMessage, editUserMessage, restore } = forkMessage;
-
   /** 立即改向/编辑/移除共用的暂存投递（单一真相在 useLiveWorkspace 装配面） */
   const submitQueuedDraft = workspace.submitQueuedDraft;
-  /** 活跃会话文件路径（暂存记录路径——重开换 id 时按路径改绑） */
-  const activeSessionPath = workspace.sessions.find((session) => session.id === activeThreadId)?.sessionPath ?? null;
 
-  // 提交语义（`! ` 直执行 / 生成中本地暂存 / 模型轮次）单一真相在 screens/submit-draft
-  // 与 composer/queued-drafts；composer 交出的附件在此按去向转换（暂存保留原名，直发转 ImagePayload）。
-  // 生成中判定读 store 真相（渲染帧快照可能落后一轮结算，落后会把该轮末消息错误暂存）
-  const submitDraft = React.useCallback(
-    (text: string, attachments: readonly ComposerAttachment[]): Promise<boolean> => {
-      const trimmed = text.trim();
-      // 生成中普通消息 = 本地暂存（默认轮后发送，轮自然结束冲刷）；直执行与行首
-      // 斜杠命令不走暂存（词法单一真相在 submit-draft 的 isImmediateSubmit）
-      if (workspace.isThreadStreaming(activeThreadId) && trimmed.length > 0 && !isImmediateSubmit(text)) {
-        queuedDrafts.stage(activeThreadId, activeSessionPath, trimmed, attachments.map(({ name, payload }) => ({ name, payload })));
-        clearDraft(activeThreadId);
-        return Promise.resolve(true);
-      }
-      return submitDraftText(
-        { actions: workspace.actions, clearDraft: () => clearDraft(activeThreadId) },
-        text,
-        attachments.map((item) => imagePayloadOf(item.payload)),
-        'auto',
-      );
-    },
-    [activeThreadId, activeSessionPath, workspace.actions, workspace.isThreadStreaming],
-  );
-
-  /** 编辑排队消息：取出暂存条目回填草稿与附件（token 信号驱动 composer 吸收图片） */
-  const editQueuedMessage = React.useCallback(
-    (id: number): void => {
-      const draft = queuedDrafts.take(activeThreadId, id);
-      if (draft === null) return;
-      setThreadDraft(draft.text);
-      forkMessage.takeQueuedImages(draft.images);
-      composerTextRef.current?.focus();
-    },
-    [activeThreadId, setThreadDraft],
-  );
   /** 立即改向：先移除卡片再以 steer 投递（失败自动回插，通知走 submitThreadDraft） */
   const sendNowQueuedMessage = React.useCallback(
     (id: number): void => {
@@ -179,18 +155,6 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     },
     [openDiff, openAgents, openFilePicker],
   );
-  /** 停止/中止：bash 在途→中止；有在途子代理→先确认；否则直接停止（与 Esc 链同语义） */
-  const stopOrAbort = React.useCallback(() => {
-    if (workspace.bashRunning) {
-      workspace.actions.abortBash();
-      return;
-    }
-    if (workspace.agentsActive && workspace.generating) {
-      setConfirmStop(true);
-      return;
-    }
-    workspace.actions.stopActiveTurn();
-  }, [workspace.bashRunning, workspace.agentsActive, workspace.generating, workspace.actions]);
   const selectPermissionMode = React.useCallback(
     (mode: PermissionRules['mode']) => {
       void workspace.actions.setSessionPermissionMode(mode);
@@ -212,10 +176,6 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     openSettingsAt,
     openUsage: usagePanel.openUsage,
     navigateSession: navigation.onSelectSession,
-    drafts,
-    composerDraft,
-    setDraft: setThreadDraft,
-    composerTextRef,
   });
   const { open: paletteOpen, close: closePalette, toggle: togglePalette, items: paletteItems, onSelect: onPaletteSelect } = commandPalette;
   /** 面板 props 引用恒定：CommandPalette 是 memo 边界，内联箭头/对象会被流式批推击穿并重置文件搜索去抖（T30 审查 高-2）。 */
@@ -250,12 +210,10 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     panelOpen: panel.activeId !== null,
     onPanelClose: closePanel,
     bashRunning: workspace.bashRunning,
-    confirmStop,
     generating: workspace.generating,
     agentsActive: workspace.agentsActive,
     abortBash: workspace.actions.abortBash,
     stopActiveTurn: workspace.actions.stopActiveTurn,
-    onConfirmStopChange: setConfirmStop,
   });
 
   return (
@@ -324,11 +282,11 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
             generating={workspace.generating}
             queuedMessages={workspace.queuedDrafts[activeThreadId] ?? EMPTY_QUEUED_MESSAGES}
             onSendNowQueued={sendNowQueuedMessage}
-            onEditQueued={editQueuedMessage}
+            onEditQueued={editQueuedDraft}
             onRemoveQueued={removeQueuedMessage}
-            restore={restore}
+            restore={composerRestore}
             onChange={setThreadDraft}
-            onSubmit={submitDraft}
+            onSubmit={submitComposerDraft}
             onStop={stopOrAbort}
             onOpenSettings={openSettings}
             onSelectModel={workspace.actions.selectModel}

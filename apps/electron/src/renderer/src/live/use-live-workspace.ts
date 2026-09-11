@@ -1,13 +1,14 @@
 import * as React from 'react';
 
 import type { AgentDefinition, CommandView, ModelInfoView, PermissionRules, PreferencesView, ProviderConfigView, SessionStatsView, SessionView, SkillView } from '@paiapp/contracts';
-import { supportedThinkingLevels, thinkingLevelLabel } from '@paiapp/contracts';
+import { supportedThinkingLevels } from '@paiapp/contracts';
 import { useStore } from 'zustand';
 
 import type { SessionCardModel } from '@/sidebar/session-card-model';
 import type { ThreadModel } from '@/thread/thread-model';
 import { collectThreadDiff } from '@/diff-panel/collect-thread-diff';
 import { summarizeAgents } from '@/thread/panel-summary';
+import { composerSelectionOf, type ComposerSelection } from '@/composer/composer-selection';
 import { imagePayloadOf } from '@/composer/read-image-file';
 import { queuedDrafts, type QueuedDraft, type QueuedDraftSubmit } from '@/composer/queued-drafts';
 import { connectQueuedDraftFlush } from './queued-flush';
@@ -23,14 +24,6 @@ import { threadModelOf, type LiveStoreState, type PendingDialog } from './store'
  * 动作全部经稳定 actions（workspace-actions），本 hook 不再生产闭包。
  * 生产装配唯一入口（demo 装配只服务组件测试夹具）。
  */
-
-export type ComposerSelection = {
-  model: string;
-  modelOptions: readonly string[];
-  effort: string;
-  effortOptions: readonly string[];
-  contextUsed: number;
-};
 
 export type LiveWorkspaceView = {
   ready: boolean;
@@ -90,7 +83,6 @@ export type LiveWorkspaceView = {
   permissionRules: PermissionRules | null;
   /** 会话级规则（null = 未加载；source=thread 表示存在 sidecar）。 */
   sessionRules: { rules: PermissionRules; source: 'thread' | 'global' } | null;
-  thinkingLevels: readonly string[];
   /** 指定模型的可用思考档（展示名序；新任务页无线程，按模型能力本地计算）。 */
   effortOptionsFor: (modelKey: string) => readonly string[];
   actions: WorkspaceActions;
@@ -102,7 +94,7 @@ const subscribeQueuedDrafts = (listener: () => void): (() => void) => queuedDraf
 
 /** 模型 key（provider/modelId）→ 可用思考档协议值：按模型能力本地推导
  * （无线程/未唤醒时的唯一数据源；live 态以 hub 档位命令为准。返回协议档位值，
- * 展示名映射统一由消费面 buildComposer 做——state 语义单一）。 */
+ * 展示名映射统一由消费面 composerSelectionOf 做——state 语义单一）。 */
 function effortLevelsForModel(models: readonly ModelInfoView[], modelKey: string): string[] {
   const model = models.find((entry) => `${entry.provider}/${entry.modelId}` === modelKey);
   return [...supportedThinkingLevels(model)];
@@ -110,8 +102,9 @@ function effortLevelsForModel(models: readonly ModelInfoView[], modelKey: string
 
 export function useLiveWorkspace(): LiveWorkspaceView {
   const [now, setNow] = React.useState(() => Date.now());
-  const [effortLevels, setEffortLevels] = React.useState<readonly string[]>([]);
-  const [commands, setCommands] = React.useState<readonly CommandView[]>([]);
+  /** 会话级派生（斜杠命令目录/思考档）在 live store：palette 与输入卡区域同源订阅 */
+  const commands = useStore(store, (s) => s.commands);
+  const effortLevels = useStore(store, (s) => s.effortLevels);
   const actions = workspaceActions;
 
   const hostPhase = useStore(store, (s) => s.hostPhase);
@@ -181,11 +174,9 @@ export function useLiveWorkspace(): LiveWorkspaceView {
   const queuedDraftsByThread = React.useSyncExternalStore(subscribeQueuedDrafts, queuedDrafts.snapshot);
 
   React.useEffect(() => {
-    // 切会话（或最后一个会话被移除）先清会话级派生态，避免上一会话残留到新会话
-    // （sessionRules 的清空在 store.setActiveThread 内同步完成，防渲染帧残留一帧；
-    // effortLevels 清空防上一会话档位在响应到达前串台展示）
-    setEffortLevels([]);
-    setCommands([]);
+    // 切会话（或最后一个会话被移除）先清会话级派生态：sessionRules/commands/
+    // effortLevels 由 store.setActiveThread 同步清空（防渲染帧残留一帧），
+    // agentDefinitions 仍在此处清（保持既有清理位置）
     store.setState({ agentDefinitions: [] });
     if (activeThreadId.length === 0) return;
     // parked 浏览态（T27）：历史经 host 直读水化（ensureHydrated 内先纳管表项——
@@ -195,18 +186,18 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     void controller.ensureHydrated(activeThreadId);
     void controller.readSessionRules(activeThreadId);
     if (activeSessionState !== 'live') {
-      setEffortLevels(effortLevelsForModel(store.getState().models, activeSessionModel ?? ''));
+      store.setState({ effortLevels: effortLevelsForModel(store.getState().models, activeSessionModel ?? '') });
       return;
     }
     // 思考档位随会话拉取（模型能力差异；响应回来时会话已切换则丢弃）
     void bridgeClient.invoke('session/thinkingLevels', { threadId: activeThreadId }).then((outcome) => {
       if (store.getState().activeThreadId !== activeThreadId) return;
-      if (outcome.ok) setEffortLevels(outcome.data.allowed);
+      if (outcome.ok) store.setState({ effortLevels: outcome.data.allowed });
     });
     // 斜杠命令目录随会话拉取（thread 级；同上判活；builtin 内置命令也由 hub 下发）
     void bridgeClient.invoke('command/list', { threadId: activeThreadId }).then((outcome) => {
       if (store.getState().activeThreadId !== activeThreadId) return;
-      if (outcome.ok) setCommands(outcome.data);
+      if (outcome.ok) store.setState({ commands: outcome.data });
     });
     void controller.refreshStats(activeThreadId);
     // activeSessionModel：parked 直读补齐 model 后（sessionUpdated 推送）本地档位
@@ -236,8 +227,8 @@ export function useLiveWorkspace(): LiveWorkspaceView {
   const queueItems = queue ?? EMPTY_QUEUE;
 
   const composer = React.useMemo(
-    () => buildComposer(models, stats, activeSession, threadState, effortLevels),
-    [models, stats, activeSession, threadState, effortLevels],
+    () => composerSelectionOf(models, stats, sessionViews, effortLevels, activeThreadId),
+    [models, stats, sessionViews, effortLevels, activeThreadId],
   );
 
   return {
@@ -291,31 +282,7 @@ export function useLiveWorkspace(): LiveWorkspaceView {
     preferences,
     permissionRules,
     sessionRules,
-    thinkingLevels: effortLevels,
     effortOptionsFor,
     actions,
-  };
-}
-
-function buildComposer(
-  models: LiveStoreState['models'],
-  stats: LiveStoreState['stats'],
-  session: SessionView | undefined,
-  thread: LiveStoreState['threads'][string] | undefined,
-  effortLevels: readonly string[],
-): ComposerSelection {
-  const modelOptions = models.map((model) => `${model.provider}/${model.modelId}`);
-  const currentModel = session?.model ?? modelOptions[0] ?? '';
-  // 思考档以模型能力列表为真相：拉取前/不支持时为空，composer 侧禁用并给原因（不臆造默认档）
-  const levelLabels = effortLevels.map((level) => thinkingLevelLabel(level));
-  const currentLabel = session?.thinkingLevel !== undefined && session?.thinkingLevel !== null ? thinkingLevelLabel(session.thinkingLevel) : undefined;
-  // 未知档位回落到第一个可选档；无可选档时留空（触发禁用态）
-  const effort = currentLabel ?? levelLabels[0] ?? '';
-  return {
-    model: currentModel,
-    modelOptions,
-    effort,
-    effortOptions: levelLabels,
-    contextUsed: stats[session?.threadId ?? '']?.contextUsage ?? 0,
   };
 }
