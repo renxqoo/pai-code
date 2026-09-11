@@ -1,9 +1,6 @@
 import { FolderOpen } from 'lucide-react';
 
-import { ToggleSwitch } from '@paiapp/ui';
-
-import { PickerDialog } from '@/components/picker-dialog';
-import { Button } from '@/components/ui/button';
+import { Button, PickerDialog, ToggleSwitch } from '@paiapp/ui';
 import { workspaceItems } from '@/screens/new-task-view-model';
 import { copy } from '@/strings';
 

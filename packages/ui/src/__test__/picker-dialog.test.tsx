@@ -1,12 +1,16 @@
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { copy } from '@/strings';
-
 import { PickerDialog } from '../picker-dialog';
 import { PickerDialogItems } from '../picker-dialog-items';
-import { Command } from '@/components/ui/command';
+import { Command } from '../command';
 import type { PickerDialogGroup } from '../picker-dialog-types';
+
+/** 文案 props 由调用方注入（组件零内置文案）——测试用内联字面量，locale 无关。 */
+const TITLE = '选择模型';
+const SEARCH_PLACEHOLDER = '搜索模型…';
+const EMPTY_LABEL = '没有匹配项';
+const NONE_LABEL = '不使用默认模型';
 
 const GROUPS: readonly PickerDialogGroup[] = [
   {
@@ -20,9 +24,9 @@ const GROUPS: readonly PickerDialogGroup[] = [
 ];
 
 const baseProps = {
-  title: copy.modelPicker.title,
-  searchPlaceholder: copy.modelPicker.searchPlaceholder,
-  emptyLabel: copy.modelPicker.empty,
+  title: TITLE,
+  searchPlaceholder: SEARCH_PLACEHOLDER,
+  emptyLabel: EMPTY_LABEL,
   groups: GROUPS,
   selectedId: null,
   onSelect: () => undefined,
@@ -32,7 +36,7 @@ const baseProps = {
 function renderItems(groups: readonly PickerDialogGroup[], selectedId: string | null): string {
   return renderToStaticMarkup(
     <Command>
-      <PickerDialogItems groups={groups} selectedId={selectedId} emptyLabel={copy.modelPicker.empty} onSelect={() => undefined} />
+      <PickerDialogItems groups={groups} selectedId={selectedId} emptyLabel={EMPTY_LABEL} onSelect={() => undefined} />
     </Command>,
   );
 }
@@ -47,7 +51,7 @@ describe('PickerDialog 关态', () => {
 describe('PickerDialog 开态（静态可渲染面）', () => {
   test('开态渲染可访问名：sr-only 标题（面板内容经 Portal，SSR 下不落静态 markup）', () => {
     const html = renderToStaticMarkup(<PickerDialog {...baseProps} open={true} onOpenChange={() => undefined} />);
-    expect(html).toContain(copy.modelPicker.title);
+    expect(html).toContain(TITLE);
   });
 
   test('列表渲染组标题与条目，序为组序；搜索占位不在列表面（属壳层）', () => {
@@ -58,7 +62,7 @@ describe('PickerDialog 开态（静态可渲染面）', () => {
     expect(html).toContain('claude');
     expect(html.indexOf('openai')).toBeLessThan(html.indexOf('gpt-4o'));
     expect(html.indexOf('gpt-4o-mini')).toBeLessThan(html.indexOf('anthropic'));
-    expect(html).not.toContain(copy.modelPicker.searchPlaceholder);
+    expect(html).not.toContain(SEARCH_PLACEHOLDER);
   });
 
   test('selectedId 命中唯一勾（自绘 Check size-3.5），未命中/为 null 时无勾', () => {
@@ -86,11 +90,11 @@ describe('PickerDialog 开态（静态可渲染面）', () => {
 
   test('sentinel 组与无标题模型组共存：保留 id 与真实模型 id 各归其位，勾落在命中项', () => {
     const groups: readonly PickerDialogGroup[] = [
-      { items: [{ id: '__none__', label: copy.settings.defaultModelNone }] },
+      { items: [{ id: '__none__', label: NONE_LABEL }] },
       { items: [{ id: 'bare-model', label: 'bare-model' }] },
     ];
     const html = renderItems(groups, 'bare-model');
-    expect(html).toContain(copy.settings.defaultModelNone);
+    expect(html).toContain(NONE_LABEL);
     expect(html).toContain('bare-model');
     expect(html.split('size-3.5')).toHaveLength(2);
   });
@@ -106,6 +110,6 @@ describe('PickerDialog 开态（静态可渲染面）', () => {
 
   test('groups 全空：渲染空态文案', () => {
     const html = renderItems([], null);
-    expect(html).toContain(copy.modelPicker.empty);
+    expect(html).toContain(EMPTY_LABEL);
   });
 });

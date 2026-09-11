@@ -4,3 +4,12 @@ export const menuPopupClassName =
 
 export const menuItemClassName =
   'flex min-h-7 cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1 text-[12.5px] leading-5 outline-none select-none data-[highlighted]:bg-accent data-[disabled]:pointer-events-none data-[disabled]:opacity-40';
+
+/** 选择器观感触发器（描边胶囊 + chevron 下挂箭头）：设置页字段下拉与弹窗选择触发共用；
+ * 满宽表单场景由调用方在 className 追加 w-full。 */
+export const selectTriggerClassName =
+  'flex h-9 cursor-pointer items-center justify-between gap-[8px] rounded-lg border border-border bg-background px-3 text-left text-[13px] text-foreground outline-none select-none hover:border-foreground/30 aria-expanded:border-foreground/30 focus-visible:ring-3 focus-visible:ring-ring/50 [&_svg]:shrink-0';
+
+/** 紧凑触发器（无边框、hover 浮起）：输入卡动作行的模型 / 思考档 / 权限模式下拉共用。 */
+export const menuTriggerClassName =
+  'flex cursor-pointer items-center gap-2 rounded-lg py-1 pr-1 pl-1.5 text-[12px] leading-none text-muted-foreground outline-none select-none hover:bg-accent hover:text-foreground aria-expanded:bg-accent aria-expanded:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 [&_svg]:shrink-0';

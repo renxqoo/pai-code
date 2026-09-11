@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useStore } from 'zustand';
 
-import { PickerDialog } from '@/components/picker-dialog';
+import { PickerDialog } from '@paiapp/ui';
 import { AgentPanel } from '@/agent-panel/agent-panel';
 import { DiffPanel } from '@/diff-panel/diff-panel';
 import { FilePane } from '@/panel/file-pane';

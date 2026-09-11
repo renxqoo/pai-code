@@ -2,6 +2,7 @@ import * as React from "react";
 
 import type { ProviderConfigView, ProviderModel, ThinkingFormat } from "@paiapp/contracts";
 import { ThinkingFormatSchema } from "@paiapp/contracts";
+import { ActionButton } from "@paiapp/ui";
 
 import { copy } from "@/strings";
 
@@ -210,22 +211,13 @@ function ProviderEditor({
             {copy.settings.providerSaved}
           </p>
         ) : null}
-        <button
-          type="submit"
-          disabled={saving}
-          className="h-9 cursor-pointer rounded-lg bg-foreground px-4 text-[13px] leading-none font-medium text-background outline-none select-none hover:opacity-90 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-60"
-        >
+        <ActionButton type="submit" disabled={saving}>
           {copy.settings.save}
-        </button>
+        </ActionButton>
         {onCancel !== undefined ? (
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={saving}
-            className="h-9 cursor-pointer rounded-lg px-3 text-[12.5px] leading-none text-muted-foreground outline-none select-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-60"
-          >
+          <ActionButton type="button" onClick={onCancel} disabled={saving} variant="quiet">
             {copy.settings.cancelEdit}
-          </button>
+          </ActionButton>
         ) : null}
       </div>
     </form>

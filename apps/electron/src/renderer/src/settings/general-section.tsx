@@ -1,6 +1,6 @@
 import type { IdleRecycleMinutes } from '@paiapp/contracts';
 import { IDLE_RECYCLE_MINUTE_OPTIONS } from '@paiapp/contracts';
-import { SegmentedControl, type SegmentedControlOption, ToggleSwitch } from '@paiapp/ui';
+import { ActionButton, SegmentedControl, type SegmentedControlOption, ToggleSwitch } from '@paiapp/ui';
 
 import type { Theme } from '@/components/theme-context';
 import type { LocaleSetting } from '@/strings';
@@ -69,13 +69,9 @@ function GeneralSection({ localeSetting, onLocaleSettingChange, theme, onThemeCh
         <div className="flex flex-col items-start gap-[8px] rounded-xl border border-dashed border-border px-[20px] py-[16px]">
           <p className="text-[13px] leading-[18px] font-medium text-foreground">{copy.settings.onboardingCardTitle}</p>
           <p className="text-[12px] leading-[17px] text-muted-foreground">{copy.settings.onboardingCardDesc}</p>
-          <button
-            type="button"
-            onClick={onRestartOnboarding}
-            className="mt-[6px] h-9 cursor-pointer rounded-lg bg-foreground px-4 text-[13px] leading-none font-medium text-background outline-none select-none hover:opacity-90 focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
+          <ActionButton type="button" onClick={onRestartOnboarding} className="mt-[6px]">
             {copy.settings.onboardingCardAction}
-          </button>
+          </ActionButton>
         </div>
       </div>
     </section>

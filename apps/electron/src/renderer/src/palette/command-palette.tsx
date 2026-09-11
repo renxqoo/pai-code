@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from '@/components/ui/command';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from '@paiapp/ui';
 
 import { usePaletteItems } from '@/screens/use-command-palette';
 import { fileItems, type PaletteGroupKind, type PaletteItem } from './palette-items';

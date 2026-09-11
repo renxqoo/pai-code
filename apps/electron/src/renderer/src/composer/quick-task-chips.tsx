@@ -1,6 +1,6 @@
 import type { QuickTask } from '@/screens/new-task-view-model';
 
-import { Button } from '@/components/ui/button';
+import { Button } from '@paiapp/ui';
 
 type QuickTaskChipsProps = {
   items: readonly QuickTask[]

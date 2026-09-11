@@ -3,10 +3,9 @@ import { ChevronDown } from 'lucide-react';
 
 import type { AgentDefinition } from '@paiapp/contracts';
 import { isValidAgentName } from '@paiapp/contracts';
-import { MenuButton, SegmentedControl, type SegmentedControlOption } from '@paiapp/ui';
+import { ActionButton, MenuButton, PickerDialog, SegmentedControl, selectTriggerClassName, type SegmentedControlOption } from '@paiapp/ui';
 
 import { cn } from '@/lib/utils';
-import { PickerDialog } from '@/components/picker-dialog';
 import { groupModelOptions } from '@/components/group-model-options';
 import { copy } from '@/strings';
 
@@ -29,9 +28,6 @@ type AgentDefinitionFormProps = {
 
 const fieldClassName =
   'w-full rounded-lg border border-border bg-background px-3 text-[13px] leading-[18px] text-foreground outline-none placeholder:text-muted-foreground focus:border-foreground/30 disabled:cursor-not-allowed disabled:opacity-60';
-
-const menuTriggerClassName =
-  'flex h-9 w-full cursor-pointer items-center justify-between gap-[8px] rounded-lg border border-border bg-background px-3 text-left text-[13px] text-foreground outline-none select-none hover:border-foreground/30 aria-expanded:border-foreground/30 focus-visible:ring-3 focus-visible:ring-ring/50 [&_svg]:shrink-0';
 
 /** 模型下拉「继承父级」项的保留 id（双下划线前缀避免与真实模型名撞车）。 */
 const MODEL_INHERIT_ID = '__inherit__';
@@ -205,7 +201,7 @@ function AgentDefinitionForm({ initial, previous, knownProjects, modelOptions, t
                 popupMinWidth={280}
                 items={projectOptions.map((option) => ({ kind: 'item' as const, id: option, label: option, selected: option === project }))}
                 onSelect={(value) => setProject(value)}
-                triggerClassName={menuTriggerClassName}
+                triggerClassName={`${selectTriggerClassName} w-full`}
                 trigger={
                   <>
                     <span className={cn('min-w-0 flex-1 truncate', project === null && 'text-muted-foreground')}>
@@ -239,7 +235,7 @@ function AgentDefinitionForm({ initial, previous, knownProjects, modelOptions, t
               aria-haspopup="dialog"
               aria-expanded={modelPickerOpen}
               onClick={() => setModelPickerOpen(true)}
-              className={menuTriggerClassName}
+              className={`${selectTriggerClassName} w-full`}
             >
               <span className="min-w-0 flex-1 truncate">{model ?? copy.settings.agentsModelInherit}</span>
               <ChevronDown className="size-3 shrink-0 text-muted-foreground/70" strokeWidth={2} />
@@ -315,21 +311,12 @@ function AgentDefinitionForm({ initial, previous, knownProjects, modelOptions, t
           {error !== null ? (
             <p className="mr-auto min-w-0 text-[12px] leading-[16px] text-destructive">{error}</p>
           ) : null}
-          <button
-            type="submit"
-            disabled={saving}
-            className="h-9 cursor-pointer rounded-lg bg-foreground px-4 text-[13px] leading-none font-medium text-background outline-none select-none hover:opacity-90 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-60"
-          >
+          <ActionButton type="submit" disabled={saving}>
             {copy.settings.agentsSave}
-          </button>
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={saving}
-            className="h-9 cursor-pointer rounded-lg px-3 text-[12.5px] leading-none text-muted-foreground outline-none select-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-60"
-          >
-            {copy.settings.agentsCancel}
-          </button>
+          </ActionButton>
+            <ActionButton type="button" onClick={onCancel} disabled={saving} variant="quiet">
+              {copy.settings.agentsCancel}
+            </ActionButton>
         </div>
       </form>
     </div>

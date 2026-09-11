@@ -3,7 +3,7 @@ import { ChevronDown } from "lucide-react";
 
 import type { ProviderConfigView } from "@paiapp/contracts";
 
-import { PickerDialog } from "@/components/picker-dialog";
+import { ActionButton, PickerDialog, selectTriggerClassName } from "@paiapp/ui";
 import { groupModelOptions } from "@/components/group-model-options";
 import { copy } from "@/strings";
 
@@ -28,10 +28,6 @@ type ProvidersSectionProps = {
 };
 
 type ProvidersView = { kind: "list" } | { kind: "create" } | { kind: "edit"; name: string };
-
-/** 默认模型弹窗触发器：select 观感（描边胶囊 + chevron）。 */
-const defaultModelTriggerClassName =
-  "flex h-9 cursor-pointer items-center justify-between gap-[8px] rounded-lg border border-border bg-background px-3 text-left text-[13px] text-foreground outline-none select-none hover:border-foreground/30 aria-expanded:border-foreground/30 focus-visible:ring-3 focus-visible:ring-ring/50 [&_svg]:shrink-0";
 
 /** 「不使用默认模型」项的保留 id（双下划线前缀避免与真实模型名撞车），归一为 null 提交。 */
 const DEFAULT_MODEL_NONE_ID = "__none__";
@@ -111,7 +107,7 @@ function ProvidersSection({
                 aria-haspopup="dialog"
                 aria-expanded={defaultPickerOpen}
                 onClick={() => setDefaultPickerOpen(true)}
-                className={defaultModelTriggerClassName}
+                className={selectTriggerClassName}
               >
                 <span className="min-w-0 max-w-[220px] truncate">{selectedDefault}</span>
                 <ChevronDown className="size-3 shrink-0 text-muted-foreground/70" strokeWidth={2} />
@@ -147,13 +143,9 @@ function ProvidersSection({
             placeholder={copy.settings.searchProviders}
             className="w-[240px]"
           />
-          <button
-            type="button"
-            onClick={() => setView({ kind: "create" })}
-            className="h-8 cursor-pointer rounded-lg bg-foreground px-3 text-[12.5px] leading-none font-medium text-background outline-none select-none hover:opacity-90 focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
+          <ActionButton type="button" onClick={() => setView({ kind: "create" })} size="sm">
             {copy.settings.addProvider}
-          </button>
+          </ActionButton>
         </div>
         {removeFailed ? (
           <p className="text-[12px] leading-[16px] text-destructive">

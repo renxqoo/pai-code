@@ -1,6 +1,6 @@
 import { Check } from 'lucide-react';
 
-import { CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
+import { CommandEmpty, CommandGroup, CommandItem } from './command';
 
 import type { PickerDialogGroup } from './picker-dialog-types';
 

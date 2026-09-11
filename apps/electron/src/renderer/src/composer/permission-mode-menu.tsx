@@ -5,7 +5,7 @@ import { MenuButton, type MenuItemDef } from '@paiapp/ui';
 
 import { copy } from '@/strings';
 
-import { menuTriggerClassName } from './menu-trigger-style';
+import { menuTriggerClassName } from '@paiapp/ui';
 
 type PermissionModeMenuProps = {
   /** 当前生效模式（sidecar 优先，否则全局）。 */

@@ -1,4 +1,4 @@
-import { Command, CommandDialog, CommandInput, CommandList } from '@/components/ui/command';
+import { Command, CommandDialog, CommandInput, CommandList } from './command';
 
 import { PickerDialogItems } from './picker-dialog-items';
 import type { PickerDialogGroup } from './picker-dialog-types';
