@@ -29,11 +29,11 @@ export function filterBranches(branches: readonly string[], query: string): stri
 
 /** 分支行：图标 + 加粗分支名；当前分支恒亮 + 尾部勾选 + 未提交更改小字。 */
 const ROW_CLASS_NAME =
-  'flex w-full cursor-pointer items-start gap-2.5 rounded-xl px-3 py-2.5 text-left outline-none select-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50';
+  'flex w-full cursor-pointer items-start gap-2 rounded-lg px-2.5 py-2 text-left outline-none select-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50';
 
 /** 底部动作行：图标 + 文案，悬停浮起，与分支行同一内距网格。 */
 const ACTION_CLASS_NAME =
-  'flex w-full cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-[13.5px] text-foreground outline-none select-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50';
+  'flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] text-foreground outline-none select-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50';
 
 /**
  * 分支面板内容件（锚定面板的纯内容）：搜索过滤 + 分支列表 + 底部动作区。
@@ -49,7 +49,7 @@ function BranchPanel({ view, loading, failed, busy, onSelect, onCreate, onOpenGr
   const emptyLabel = loading ? copy.branch.loading : failed ? copy.branch.unavailable : copy.branch.empty;
   return (
     <>
-      <div className="flex h-12 shrink-0 items-center gap-2.5 border-b border-border px-5">
+      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-3.5">
         <Search aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
         <input
           type="text"
@@ -59,14 +59,14 @@ function BranchPanel({ view, loading, failed, busy, onSelect, onCreate, onOpenGr
           aria-label={copy.branch.search}
           autoComplete="off"
           spellCheck={false}
-          className="h-full w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+          className="h-full w-full bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground"
         />
       </div>
-      <div className="max-h-[320px] overflow-y-auto p-3">
-        <div className="px-2 pt-1.5 pb-2 text-[13px] leading-none text-muted-foreground">{copy.branch.panelTitle}</div>
+      <div className="max-h-[264px] overflow-y-auto p-2">
+        <div className="px-2.5 pt-1 pb-1.5 text-xs leading-none text-muted-foreground">{copy.branch.panelTitle}</div>
         {/* detached HEAD 无当前行可挂脏计数：置顶一行弱提示，保住「展示的数字就是会阻止切换的数字」 */}
         {view?.current == null && dirtyFiles > 0 ? (
-          <div className="px-2 pb-2 text-xs leading-4 text-muted-foreground">{copy.branch.dirtyFiles(dirtyFiles)}</div>
+          <div className="px-2.5 pb-1.5 text-xs leading-4 text-muted-foreground">{copy.branch.dirtyFiles(dirtyFiles)}</div>
         ) : null}
         <div className="flex flex-col gap-0.5">
           {filtered.map((name) => {
@@ -94,11 +94,11 @@ function BranchPanel({ view, loading, failed, busy, onSelect, onCreate, onOpenGr
             );
           })}
           {filtered.length === 0 ? (
-            <div className="px-3 py-8 text-center text-[13px] text-muted-foreground">{emptyLabel}</div>
+            <div className="px-2.5 py-6 text-center text-xs text-muted-foreground">{emptyLabel}</div>
           ) : null}
         </div>
       </div>
-      <div className="flex shrink-0 flex-col gap-0.5 border-t border-border p-3">
+      <div className="flex shrink-0 flex-col gap-0.5 border-t border-border p-2">
         <button type="button" disabled={busy} onClick={onCreate} className={ACTION_CLASS_NAME}>
           <Plus aria-hidden="true" className="size-4 shrink-0" strokeWidth={1.75} />
           {copy.branch.createBranch}
