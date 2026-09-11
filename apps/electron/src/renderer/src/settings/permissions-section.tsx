@@ -2,7 +2,7 @@ import * as React from 'react';
 import { X } from 'lucide-react';
 
 import { clonePermissionRules, defaultPermissionRules, type PermissionRules } from '@paiapp/contracts';
-import { SegmentedControl } from '@paiapp/ui';
+import { ActionButton, SegmentedControl } from '@paiapp/ui';
 
 import { copy } from '@/strings';
 
@@ -211,13 +211,9 @@ function PermissionsSection({ rules, onSave, sessionRules, onLoadSession, onSave
         {showFollowGlobal ? (
           <div className="flex flex-col items-start gap-[8px] rounded-xl border border-dashed border-border px-[20px] py-[16px]">
             <p className="text-[12px] leading-[17px] text-muted-foreground">{copy.settings.permissionsFollowGlobal}</p>
-            <button
-              type="button"
-              onClick={createSidecar}
-              className="h-9 cursor-pointer rounded-lg bg-foreground px-4 text-[13px] leading-none font-medium text-background outline-none select-none hover:opacity-90 focus-visible:ring-3 focus-visible:ring-ring/50"
-            >
+            <ActionButton type="button" onClick={createSidecar}>
               {copy.settings.permissionsCreateSession}
-            </button>
+            </ActionButton>
           </div>
         ) : null}
         {showFollowGlobal ? null : (
@@ -259,14 +255,13 @@ function PermissionsSection({ rules, onSave, sessionRules, onLoadSession, onSave
               </SettingsCard>
             ))}
             <div className="flex items-center gap-[10px]">
-              <button
+              <ActionButton
                 type="button"
                 onClick={() => void submit()}
                 disabled={saving || (baseline !== null && rulesEqual(draft, baseline))}
-                className="h-9 cursor-pointer rounded-lg bg-foreground px-4 text-[13px] leading-none font-medium text-background outline-none select-none hover:opacity-90 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {copy.settings.permissionsSave}
-              </button>
+              </ActionButton>
               {scope === 'session' && hasSidecar ? (
                 <button
                   type="button"

@@ -2,6 +2,7 @@ import * as React from "react";
 import { Plus } from "lucide-react";
 
 import type { ProviderModel } from "@paiapp/contracts";
+import { ActionButton } from "@paiapp/ui";
 
 import { copy } from "@/strings";
 
@@ -99,14 +100,10 @@ function ProviderModelList({
         </div>
       )}
       <div>
-        <button
-          type="button"
-          onClick={() => setSession({ mode: "add", initial: null })}
-          className="flex h-9 cursor-pointer items-center gap-[6px] rounded-lg border border-border px-3 text-[12.5px] leading-none text-foreground outline-none select-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50"
-        >
+        <ActionButton type="button" onClick={() => setSession({ mode: "add", initial: null })} variant="outline">
           <Plus className="size-[14px]" strokeWidth={2} />
           {copy.settings.providerModelAdd}
-        </button>
+        </ActionButton>
       </div>
       {session === null ? null : (
         <ProviderModelDialog

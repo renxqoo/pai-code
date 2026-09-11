@@ -2,6 +2,7 @@ import { createStore } from 'zustand/vanilla';
 
 import type {
   AgentDefinition,
+  CommandView,
   SessionStatsView,
   SkillView,
   ApiData,
@@ -54,6 +55,10 @@ export interface LiveStoreState {
   agentDefinitions: readonly AgentDefinition[];
   /** 用户级技能目录（进技能分区时拉取；启停真相在 pi settings）。 */
   skills: readonly SkillView[];
+  /** 活跃会话的斜杠命令目录（`/` 补全数据源；拉取 effect 写入，切会话同步清空）。 */
+  commands: readonly CommandView[];
+  /** 活跃会话的思考档位（协议档位值；拉取 effect 写入，切会话同步清空）。 */
+  effortLevels: readonly string[];
   threads: Readonly<Record<string, LiveThreadState>>;
   /** 挂起对话框队列（入队序即呈现序；数组本身即真相，无伴生索引）。 */
   dialogs: readonly PendingDialog[];
@@ -120,6 +125,8 @@ export function createLiveStore() {
               const sessions = omitKey(state.sessions, event.threadId);
               const threads = omitKey(state.threads, event.threadId);
               const stats = omitKey(state.stats, event.threadId);
+              // 线程已移除，挂起对话框永无应答对象：随行收走（与 sessionDied/host 同口径）
+              const dialogs = state.dialogs.filter((dialog) => dialog.threadId !== event.threadId);
               let activeThreadId = state.activeThreadId;
               if (activeThreadId === event.threadId) {
                 // 换 id 整行替换（resume/fork）时优先回落到同会话文件的新 id，避免闪跳到无关会话
@@ -129,7 +136,7 @@ export function createLiveStore() {
                     : undefined;
                 activeThreadId = successor?.threadId ?? firstSessionId(sessions);
               }
-              return { sessions, threads, stats, activeThreadId };
+              return { sessions, threads, stats, dialogs, ...activeThreadFlip(state, activeThreadId) };
             }
             case 'sessionDied': {
               const thread = threadOf(state, event.threadId);
@@ -206,6 +213,8 @@ export function createLiveStore() {
           const activeThreadId =
             state.activeThreadId !== null && state.activeThreadId in sessions ? state.activeThreadId : firstSessionId(sessions);
           return {
+            // 活跃线程翻转（bootstrap 回落）同样清会话级视图，与 setActiveThread 同语义
+            ...activeThreadFlip(state, activeThreadId),
             bootstrapLoaded: true,
             bootstrapError: null,
             sessions,
@@ -226,9 +235,8 @@ export function createLiveStore() {
         set({ bootstrapLoaded: true, bootstrapError: reason });
       },
       setActiveThread(threadId) {
-        // sessionRules 是活跃会话的视图：切换即同步失效（防旧会话模式在操作栏残留一帧；新值由切会话 effect 重拉）。
-        // 同值重设不失效（effect 以 activeThreadId 为 deps，不会重拉）。
-        set((state) => (state.activeThreadId === threadId ? {} : { activeThreadId: threadId, sessionRules: null }));
+        // 同值重设不失效（effect 以 activeThreadId 为 deps，不会重拉）；翻转语义见 activeThreadFlip
+        set((state) => activeThreadFlip(state, threadId));
       },
       updateStats(threadId, stats) {
         set((state) => ({ stats: { ...state.stats, [threadId]: stats } }));
@@ -294,6 +302,18 @@ function omitKey<T>(source: Readonly<Record<string, T>>, key: string): Record<st
   return out;
 }
 
+/**
+ * 活跃线程翻转时的会话级视图失效补丁：sessionRules/commands/effortLevels 是活跃
+ * 会话的视图，翻转即同步清空（防旧会话的规则/补全目录在操作栏残留一帧；新值由
+ * 切会话 effect 重拉）。全部翻转路径（setActiveThread / sessionRemoved 继任者
+ * 回落 / bootstrap 回落）必须经此，禁止直写 activeThreadId 不带补丁。
+ */
+function activeThreadFlip(state: LiveStoreState, threadId: string | null) {
+  return state.activeThreadId === threadId
+    ? {}
+    : { activeThreadId: threadId, sessionRules: null, commands: [] as const, effortLevels: [] as const };
+}
+
 function firstSessionId(sessions: Readonly<Record<string, SessionView>>): string | null {
   const ids = Object.keys(sessions);
   return ids.length > 0 ? (ids[0] ?? null) : null;
@@ -310,6 +330,8 @@ function initialStoreState(): LiveStoreState {
     providers: [],
     agentDefinitions: [],
     skills: [],
+    commands: [],
+    effortLevels: [],
     preferences: { defaultModel: null, onboarded: false, projectModels: {}, pinnedSessions: [], trustedDefault: false, hiddenProjects: [], idleRecycleMinutes: 5, archivedSessions: [] },
     permissionRules: null,
     sessionRules: null,

@@ -11,6 +11,8 @@ export type SidebarViewModel = {
   pinned: readonly SessionCardModel[];
   timeList: readonly SessionCardModel[];
   projectGroups: ReturnType<typeof buildProjectGroups>;
+  /** 空态裁决：'filtered' = 查询非空但全空；'none' = 零会话；null = 有内容。 */
+  emptyState: 'filtered' | 'none' | null;
 };
 
 /**
@@ -31,5 +33,7 @@ export function buildSidebarViewModel(
     pinned: buildPinnedList(visible, pinnedPaths),
     timeList: buildTimeList(visible, pinnedPaths),
     projectGroups: buildProjectGroups(visible, pinnedPaths, expanded),
+    emptyState:
+      visible.length === 0 ? (query.trim().length > 0 ? 'filtered' : 'none') : null,
   };
 }

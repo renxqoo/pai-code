@@ -1,7 +1,6 @@
 /**
  * 渲染层视图模型：对话流与 Agent 面板的展示形状。
- * 会话真相在 hub；接 Client（T8）后由状态机把事件流折叠成这些形状，
- * demo 数据按同一形状提供，组件不感知数据来源。
+ * 会话真相在 hub；由状态机把事件流折叠成这些形状，组件不感知数据来源。
  */
 
 import type { SubagentSpawnView } from '@paiapp/contracts';

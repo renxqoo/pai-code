@@ -4,7 +4,9 @@ import type { AgentDefinition, IdleRecycleMinutes, PermissionRules, ProviderConf
 import { AGENT_TOOL_IDS } from '@paiapp/contracts';
 import type { Theme } from '@/components/theme-context';
 import { useTheme } from '@/components/use-theme';
-import type { LiveWorkspaceView } from '@/live/use-live-workspace';
+import { useStore } from 'zustand';
+import { store as liveStore, workspaceActions } from '@/live/workspace-runtime';
+import { savedSessionEntries } from '@/settings/saved-views';
 import { useRuntimePanel } from '@/hooks/use-runtime-panel';
 import type { WorkspaceActions } from '@/live/workspace-actions';
 import { changeLocaleSetting, getLocaleSetting, type LocaleSetting } from '@/strings';
@@ -103,7 +105,6 @@ export type SettingsScreenProps = {
 };
 
 export type UseSettingsScreenInput = {
-  workspace: LiveWorkspaceView;
   open: boolean;
   onClose: () => void;
   /** 打开时进入的分区（命令面板跳转；缺省回首分区）。 */
@@ -115,19 +116,50 @@ export type UseSettingsScreenInput = {
  * 语言/主题/重跑引导），workspace-main 只剩一行接线。语言切换经 changeLocaleSetting
  * 广播（app 根重挂载后本 hook 状态回到首分区，与既有行为一致）。
  */
-export function useSettingsScreen({ workspace, open, onClose, initialSection }: UseSettingsScreenInput): SettingsScreenProps {
+export function useSettingsScreen({ open, onClose, initialSection }: UseSettingsScreenInput): SettingsScreenProps {
   const [section, setSection] = React.useState<SettingsSectionId>(initialSection ?? SETTINGS_FIRST_SECTION);
   const [localeSetting, setLocaleSettingState] = React.useState<LocaleSetting>(getLocaleSetting());
   const { theme, setTheme } = useTheme();
-  const { actions } = workspace;
+  const actions = workspaceActions;
+  // 直订阅（T34 M3）：设置页全部为低频字段（sessions/stats 随 sessionUpdated 元数据
+  // 快照变更，非消息流频度）；savedSessionEntries 派生不进 selector（每次返回新数组
+  // 会让 getSnapshot 永不稳定——裸订阅 + useMemo 映射，同 use-new-task-screen 范式）
+  const sessionById = useStore(liveStore, (s) => s.sessions);
+  const statsById = useStore(liveStore, (s) => s.stats);
+  const savedRaw = useStore(liveStore, (s) => s.saved);
+  const saved = React.useMemo(() => savedSessionEntries(savedRaw), [savedRaw]);
+  const providers = useStore(liveStore, (s) => s.providers);
+  const models = useStore(liveStore, (s) => s.models);
+  const preferences = useStore(liveStore, (s) => s.preferences);
+  const permissionRules = useStore(liveStore, (s) => s.permissionRules);
+  const sessionRules = useStore(liveStore, (s) => s.sessionRules);
+  const agentDefinitions = useStore(liveStore, (s) => s.agentDefinitions);
+  const skills = useStore(liveStore, (s) => s.skills);
+  const modelOptions = React.useMemo(() => models.map((model) => `${model.provider}/${model.modelId}`), [models]);
+  // 原始值 selector（布尔）：宿主相位或死会话存在性翻转才重渲，与 sessions 表引用解耦
+  const runtimeAttention = useStore(
+    liveStore,
+    (s) => s.hostPhase !== 'ready' || Object.values(s.sessions).some((session) => session.state === 'dead'),
+  );
   // 每次打开回到首分区（重进分区会重触发按开即读）
   const runtimePanel = useRuntimePanel(
     actions,
-    { sessions: workspace.sessionById, statsById: workspace.statsById, queueCountOf: (threadId) => workspace.queueCountOf(threadId) },
+    {
+      sessions: sessionById,
+      statsById,
+      queueCountOf: (threadId) => {
+        const queue = liveStore.getState().threads[threadId]?.queue;
+        return queue === undefined ? 0 : queue.steering.length + queue.followUp.length;
+      },
+    },
     open && section === 'runtime',
   );
+  /** 分区进入只在开沿消费一次性 entry：entry 随后被调用方清除（prop 变 undefined），
+   * 不得把已打开的设置页拽回首分区。 */
+  const wasOpen = React.useRef(false);
   React.useEffect(() => {
-    if (open) setSection(initialSection ?? SETTINGS_FIRST_SECTION);
+    if (open && !wasOpen.current) setSection(initialSection ?? SETTINGS_FIRST_SECTION);
+    wasOpen.current = open;
   }, [open, initialSection]);
 
   const onSelectSection = React.useCallback((id: SettingsSectionId) => {
@@ -135,10 +167,12 @@ export function useSettingsScreen({ workspace, open, onClose, initialSection }: 
     setSection(id);
   }, [actions]);
 
-  const pinned = React.useMemo(() => pinnedSetOf(workspace.preferences.pinnedSessions), [workspace.preferences.pinnedSessions]);
-  const projects = React.useMemo(() => savedProjectsOf(workspace.saved), [workspace.saved]);
+  const pinned = React.useMemo(() => pinnedSetOf(preferences.pinnedSessions), [preferences.pinnedSessions]);
+  const projects = React.useMemo(() => savedProjectsOf(saved), [saved]);
 
-  return React.useMemo<SettingsScreenProps>(() => ({
+  // 不做整体 memo：SettingsScreen 非 memo 边界，props 恒定性不参与渲染门控；
+  // 手工维护依赖表曾漏数据面九类字段（providers/规则/目录/装配面板全部冻结陈旧）
+  return {
     open,
     onClose,
     section,
@@ -151,9 +185,9 @@ export function useSettingsScreen({ workspace, open, onClose, initialSection }: 
       },
       theme,
       onThemeChange: setTheme,
-      trustedDefault: workspace.preferences.trustedDefault,
+      trustedDefault: preferences.trustedDefault,
       onSaveTrustedDefault: (trustedDefault) => actions.saveGeneralPreferences({ trustedDefault }),
-      idleRecycleMinutes: workspace.preferences.idleRecycleMinutes,
+      idleRecycleMinutes: preferences.idleRecycleMinutes,
       onIdleRecycleChange: (minutes) => {
         void actions.setIdleRecycle(minutes);
       },
@@ -164,35 +198,35 @@ export function useSettingsScreen({ workspace, open, onClose, initialSection }: 
       },
     },
     providers: {
-      list: workspace.providers,
-      defaultModel: workspace.preferences.defaultModel,
-      modelOptions: workspace.composer.modelOptions,
+      list: providers,
+      defaultModel: preferences.defaultModel,
+      modelOptions,
       onUpsert: actions.upsertProvider,
       onRemove: actions.removeProvider,
       onSelectDefaultModel: actions.setDefaultModel,
       onTest: actions.testProvider,
     },
     permissions: {
-      rules: workspace.permissionRules,
+      rules: permissionRules,
       onSave: actions.writePermissionRules,
-      sessionRules: workspace.sessionRules,
+      sessionRules: sessionRules,
       onLoadSession: actions.readSessionRules,
       onSaveSession: actions.writeSessionRules,
     },
     agents: {
-      definitions: workspace.agentDefinitions,
+      definitions: agentDefinitions,
       knownProjects: projects,
-      modelOptions: workspace.composer.modelOptions,
+      modelOptions,
       toolIds: [...AGENT_TOOL_IDS],
       onRefresh: actions.refreshAgentDefinitions,
       onSave: (definition, previous) => actions.upsertAgentDefinition(definition, previous),
       onRemove: (key) => actions.removeAgentDefinition(key),
     },
-    skills: { list: workspace.skills, onToggle: actions.setSkillEnabled, onRefresh: actions.refreshSkills },
+    skills: { list: skills, onToggle: actions.setSkillEnabled, onRefresh: actions.refreshSkills },
     history: {
-      saved: workspace.saved,
+      saved: saved,
       pinned,
-      archived: new Set(workspace.preferences.archivedSessions),
+      archived: new Set(preferences.archivedSessions),
       projects,
       onTogglePin: actions.togglePinnedSession,
       onReveal: actions.revealSession,
@@ -223,7 +257,6 @@ export function useSettingsScreen({ workspace, open, onClose, initialSection }: 
         onClose();
       },
     },
-    runtimeAttention:
-      workspace.hostPhase !== 'ready' || Object.values(workspace.sessionById).some((session) => session.state === 'dead'),
-  }), [open, onClose, section, onSelectSection, localeSetting, theme, setTheme, workspace, pinned, projects, actions]);
+    runtimeAttention,
+  };
 }

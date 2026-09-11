@@ -1,17 +1,14 @@
 import * as React from 'react';
-import { CalendarClock, CirclePlus, LayoutGrid, Search } from 'lucide-react';
+import { CalendarClock, CirclePlus, Search } from 'lucide-react';
 
 import { copy } from '@/strings';
 import { MODIFIER_KEY_LABEL } from '@/lib/platform';
+import { uiStore } from '@/ui/ui-store';
 
-/** 尚未接线的快捷入口统一落到空实现，入口位保持稳定。 */
+/** 自动化入口刻意保留为占位（入口位稳定的用户裁决 U1），其余死入口已删除。 */
 function noop(): void {}
 
-type QuickActionsRowProps = {
-  onNewThread: () => void
-  /** 打开侧栏内联搜索（父级持有展开态）。 */
-  onOpenSearch: () => void
-}
+const { openNewTask, openSidebarSearch } = uiStore.getState();
 
 type QuickActionEntry = {
   key: string
@@ -21,33 +18,27 @@ type QuickActionEntry = {
   onSelect: () => void
 }
 
-/** 快捷操作区：新建任务/搜索/自动化/插件市场四行等高入口；自动化与插件市场为占位入口。 */
-function QuickActionsRow({ onNewThread, onOpenSearch }: QuickActionsRowProps) {
+/** 快捷操作区：新建任务/搜索/自动化三行等高入口；自订阅自派发（0 props）。 */
+function QuickActionsRow(): React.JSX.Element {
   const entries: readonly QuickActionEntry[] = [
     {
       key: 'new-task',
       label: copy.sidebar.newTask,
       hotkey: copy.sidebar.hotkeyNewTask(MODIFIER_KEY_LABEL),
       icon: <CirclePlus className="size-4 shrink-0 text-foreground/80" strokeWidth={1.75} />,
-      onSelect: onNewThread,
+      onSelect: () => openNewTask(''),
     },
     {
       key: 'search',
       label: copy.sidebar.search,
       hotkey: copy.sidebar.hotkeySearch(MODIFIER_KEY_LABEL),
       icon: <Search className="size-4 shrink-0 text-foreground/80" strokeWidth={1.75} />,
-      onSelect: onOpenSearch,
+      onSelect: openSidebarSearch,
     },
     {
       key: 'automation',
       label: copy.sidebar.automation,
       icon: <CalendarClock className="size-4 shrink-0 text-foreground/80" strokeWidth={1.75} />,
-      onSelect: noop,
-    },
-    {
-      key: 'plugin-market',
-      label: copy.sidebar.pluginMarket,
-      icon: <LayoutGrid className="size-4 shrink-0 text-foreground/80" strokeWidth={1.75} />,
       onSelect: noop,
     },
   ];

@@ -5,15 +5,12 @@ import type { PermissionRules, SessionStatsView } from '@paiapp/contracts';
 
 import { UsageDetails } from './usage-details';
 
-import { IconButton, MenuButton, UsageRing } from '@paiapp/ui';
-
-import { PickerDialog } from '@/components/picker-dialog';
+import { IconButton, MenuButton, menuTriggerClassName, PickerDialog, UsageRing } from '@paiapp/ui';
 import { groupModelOptions } from '@/components/group-model-options';
 import { copy } from '@/strings';
 
 import { PermissionModeMenu } from './permission-mode-menu';
 import { AgentStatusButton } from './agent-status-button';
-import { menuTriggerClassName } from './menu-trigger-style';
 
 /** 思考档控件组：有会话走 hub 线程真相，新任务页按所选模型本地计算，两者都渲染。 */
 type EffortControls = {

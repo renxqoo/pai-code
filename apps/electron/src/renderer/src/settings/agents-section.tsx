@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Bot, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 
 import type { AgentDefinition } from '@paiapp/contracts';
-import { IconButton } from '@paiapp/ui';
+import { ActionButton, IconButton } from '@paiapp/ui';
 
 import { cn } from '@/lib/utils';
 import { copy } from '@/strings';
@@ -128,14 +128,10 @@ function AgentsSection({ definitions, knownProjects, modelOptions, toolIds, onRe
           <IconButton label={copy.settings.refresh} onClick={onRefresh}>
             <RefreshCw strokeWidth={1.75} />
           </IconButton>
-          <button
-            type="button"
-            onClick={openCreate}
-            className="flex h-8 cursor-pointer items-center gap-[6px] rounded-lg bg-foreground px-3 text-[12.5px] leading-none font-medium text-background outline-none select-none hover:opacity-90 focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
+          <ActionButton type="button" onClick={openCreate} size="sm">
             <Plus className="size-[14px]" strokeWidth={2} />
             {copy.settings.agentsNew}
-          </button>
+          </ActionButton>
         </div>
         {removeFailed ? <p className="text-[12px] leading-[16px] text-destructive">{copy.settings.agentsRemoveFailed}</p> : null}
         {definitions.length === 0 ? (

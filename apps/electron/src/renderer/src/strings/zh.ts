@@ -7,7 +7,6 @@ export const zh: typeof en = {
   sidebar: {
     search: '搜索',
     newTask: '新建任务',
-    pluginMarket: '插件市场',
     hotkeyNewTask: (modifier: string): string => `${modifier}N`,
     hotkeySearch: (modifier: string): string => `${modifier}K`,
     viewGrouped: '分组',
@@ -20,7 +19,6 @@ export const zh: typeof en = {
     collapseSidebarHint: '收起侧栏',
     expandSidebarHint: '展开侧栏',
     settings: '设置',
-    workflows: '工作流',
     usage: '用量',
     automation: '自动化',
     runtimeAttention: '宿主或 worker 需要关注',

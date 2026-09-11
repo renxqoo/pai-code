@@ -77,20 +77,24 @@ export function panelTabLabel(tab: PanelTab, labels: PanelTabLabels): string {
   return tab.kind === 'diff' ? labels.diff : labels.agents;
 }
 
-export type PanelArchive = Record<string, PanelState>;
+/** 会话级面板档案（模块单例持有；Map 形态支持会话消亡时的键回收）。 */
+export type PanelArchive = Map<string, PanelState>;
 
 /**
  * 切会话的面板存档/恢复裁决（纯函数，供单测钉住导航不清面板的交互）：
  * 同线程 = 只存档返回 null（调用方不 setState）；切线程 = 存档旧组态并返回
  * 新线程的恢复值（无存档时空态）。导航链不得在切换前清面板——那会把存档覆盖成空。
+ * canArchive=false（旧线程已消亡——会话消亡修剪刚回收过死键）时跳过存档写入，
+ * 防止切会话 effect 把死键回写复活。
  */
 export function panelSwitchOutcome(
   archive: PanelArchive,
   currentThread: string,
   nextThread: string,
   currentPanel: PanelState,
+  opts: { canArchive?: boolean } = {},
 ): PanelState | null {
-  archive[currentThread] = currentPanel;
+  if (opts.canArchive !== false) archive.set(currentThread, currentPanel);
   if (currentThread === nextThread) return null;
-  return archive[nextThread] ?? EMPTY_PANEL;
+  return archive.get(nextThread) ?? EMPTY_PANEL;
 }

@@ -285,6 +285,54 @@ describe('写路径兜底（T16 遗产 + T27 收窄）', () => {
   });
 });
 
+describe('重载冷启动水化（事件流不重放历史）', () => {
+  test('症状回归「刷新页面当前会话变空态」：live 会话 ensureHydrated 同样全量拉取条目', async () => {
+    const sessions = [sessionView('t1', 'live', '/w/s/t1.jsonl')];
+    const items = [
+      { kind: 'user', id: 'u1', text: '问', origin: 'user', images: [], at: 1_000 } as never,
+      { kind: 'assistant', id: 'a1', text: '答', thinking: '', toolCalls: [], usage: null, stopReason: null, errorMessage: null, at: 1_001 } as never,
+    ];
+    const client = makeClient((method) => {
+      if (method === 'app/bootstrap') return bootstrapOf(sessions);
+      if (method === 'session/entries') return { ok: true, data: { items, cursor: 'c1' } };
+      return { ok: true, data: null };
+    });
+    const store = bootStore(sessions);
+    store.getState().setActiveThread('t1');
+    const controller = createLiveController(client, store);
+    await controller.start();
+    client.calls.length = 0;
+
+    // 渲染层重载后 store 全新（hydrated=false）：live 会话的历史只能拉取补齐
+    await controller.ensureHydrated('t1');
+    await waitMs(0);
+
+    expect(client.calls.some((call) => call.method === 'session/entries')).toBe(true);
+    expect((store.getState().threads['t1']?.items ?? []).length).toBeGreaterThan(0);
+    expect(store.getState().threads['t1']?.hydrateFailed).toBe(false);
+  });
+
+  test('live 会话水化不走纳管（零 register 零 resume——表项已在 hub）', async () => {
+    const sessions = [sessionView('t1', 'live', '/w/s/t1.jsonl')];
+    const client = makeClient((method) => {
+      if (method === 'app/bootstrap') return bootstrapOf(sessions);
+      if (method === 'session/entries') return { ok: true, data: { items: [], cursor: null } };
+      return { ok: true, data: null };
+    });
+    const store = bootStore(sessions);
+    store.getState().setActiveThread('t1');
+    const controller = createLiveController(client, store);
+    await controller.start();
+    client.calls.length = 0;
+
+    await controller.ensureHydrated('t1');
+    await waitMs(0);
+
+    expect(client.calls.some((call) => call.method === 'session/register')).toBe(false);
+    expect(resumeCalls(client)).toBe(0);
+  });
+});
+
 describe('History 打开与占位收敛', () => {
   test('同路径已 live → 直接激活零 resume（不撞 hub 双开守卫）', async () => {
     const client = makeClient(() => ({ ok: true, data: null }));

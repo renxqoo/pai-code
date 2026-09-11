@@ -1,4 +1,4 @@
-import type { PickerDialogGroup, PickerDialogItem } from './picker-dialog-types';
+import type { PickerDialogGroup, PickerDialogItem } from '@paiapp/ui';
 
 /**
  * 模型目录按 provider 前缀分桶：条目按首个 "/" 切分，前缀作组标题、去前缀的

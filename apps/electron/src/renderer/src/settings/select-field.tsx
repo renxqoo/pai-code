@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { ChevronDown } from 'lucide-react';
 
-import { MenuButton } from '@paiapp/ui';
+import { MenuButton, selectTriggerClassName } from '@paiapp/ui';
 
 import { FieldLabel } from './field-label';
 
@@ -17,9 +17,6 @@ type SelectFieldProps<T extends string = string> = {
   popupMinWidth?: number
 };
 
-const triggerClassName =
-  'flex h-9 w-full cursor-pointer items-center justify-between gap-[8px] rounded-lg border border-border bg-background px-3 text-left text-[13px] text-foreground outline-none select-none hover:border-foreground/30 aria-expanded:border-foreground/30 focus-visible:ring-3 focus-visible:ring-ring/50 [&_svg]:shrink-0';
-
 /** 通用单选字段：label + 下拉触发器（MenuButton）+ hint；值/选项由调用方归一。 */
 function SelectField<T extends string>({ label, value, options, onChange, hint, popupMinWidth }: SelectFieldProps<T>): React.JSX.Element {
   const selected = options.find((option) => option.id === value);
@@ -33,7 +30,7 @@ function SelectField<T extends string>({ label, value, options, onChange, hint, 
         items={options.map((option) => ({ kind: 'item' as const, id: option.id, label: option.label, selected: option.id === value }))}
         // 选中项来自本组件渲染的选项表，回调 id 必属 T
         onSelect={(id) => onChange(id as T)}
-        triggerClassName={triggerClassName}
+        triggerClassName={`${selectTriggerClassName} w-full`}
         trigger={
           <>
             <span className="min-w-0 flex-1 truncate">{selected?.label ?? value}</span>

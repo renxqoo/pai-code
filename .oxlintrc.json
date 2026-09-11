@@ -60,8 +60,9 @@
     },
     {
       // shadcn 注册表生成组件：上游即单文件多导出结构，保持原样便于随注册表更新；
-      // 本豁免只点名 ui/no-multi-component、只限生成目录，业务组件一文件一组件纪律不变
-      "files": ["apps/electron/src/renderer/src/components/ui/**"],
+      // 本豁免只点名 ui/no-multi-component、只限六个生成文件（原住 renderer components/ui，
+      // 下沉 packages/ui/src 根后豁免随迁），同包自研组件仍一文件一组件纪律不变
+      "files": ["packages/ui/src/{button,command,dialog,input,input-group,textarea}.tsx"],
       "rules": {
         "ui/no-multi-component": "off"
       }

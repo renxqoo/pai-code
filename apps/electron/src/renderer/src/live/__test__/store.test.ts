@@ -311,3 +311,19 @@ describe('sessionParked 收编折叠（T29：worker 回收后侧栏即时转 par
     expect(store.getState().sessions['t1']).toBe(first);
   });
 });
+
+test('症状回归「关闭会话后权限弹窗仍挂着可点」：sessionRemoved 随行收走该线程挂起对话框', () => {
+  const store = createLiveStore();
+  store.getState().bootstrap({
+    sessions: [{ threadId: 't1', cwd: '/w', sessionPath: null, title: 't', state: 'live', streaming: false, model: null, thinkingLevel: null, lastActivityAt: 1 }],
+    saved: [],
+    models: [],
+    providers: [],
+    preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] },
+    hostPhase: 'ready',
+  } as never);
+  store.getState().applyEvent({ type: 'dialogRequest', threadId: 't1', requestId: 'r1', method: 'confirm', message: 'm' }, 1);
+  expect(store.getState().dialogs).toHaveLength(1);
+  store.getState().applyEvent({ type: 'sessionRemoved', threadId: 't1' }, 2);
+  expect(store.getState().dialogs).toEqual([]);
+});

@@ -6,7 +6,6 @@ export const en = {
   sidebar: {
     search: 'Search',
     newTask: 'New task',
-    pluginMarket: 'Plugin market',
     hotkeyNewTask: (modifier: string): string => `${modifier}N`,
     hotkeySearch: (modifier: string): string => `${modifier}K`,
     viewGrouped: 'Grouped',
@@ -19,7 +18,6 @@ export const en = {
     collapseSidebarHint: 'Collapse sidebar',
     expandSidebarHint: 'Show sidebar',
     settings: 'Settings',
-    workflows: 'Workflows',
     usage: 'Usage',
     automation: 'Automation',
     runtimeAttention: 'Host or worker needs attention',

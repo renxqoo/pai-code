@@ -1,39 +1,45 @@
 import * as React from 'react';
+import { useStore } from 'zustand';
 
 import { escActionFor } from './esc-action';
+import { closeProjectFiles } from '@/sidebar/project-files';
 import type { WorkspaceActions } from '@/live/workspace-actions';
+import { summarizeAgents } from '@/thread/panel-summary';
+import { store as liveStore } from '@/live/workspace-runtime';
+import { uiStore } from '@/ui/ui-store';
+
+/** ui store 拥有的覆盖层开合（含停止确认条）在本 hook 内自订阅自派发（引用恒定的模块动作）；
+ * 其余裁决输入（hub 对话框/命令面板/右侧面板/线程运行面）仍由调用方喂。 */
+const { closeSidebarSearch, closeSettings, closeUsage, closeNewTask, setConfirmStop } = uiStore.getState();
 
 type UseEscDismissInput = {
+  /** 对话框总数（hub 对话框 + 新建任务页内浮层：浮层自行消费 Esc，不穿透关闭整页）。 */
   dialogCount: number;
   paletteOpen: boolean;
   onPaletteClose: () => void;
-  sidebarSearchOpen: boolean;
-  usageOpen: boolean;
-  projectFilesOpen: boolean;
-  newTaskOpen: boolean;
-  settingsOpen: boolean;
   /** 右侧面板容器有任一 tab（整组收起）。 */
   panelOpen: boolean;
-  bashRunning: boolean;
-  confirmStop: boolean;
-  generating: boolean;
-  agentsActive: boolean;
+  onPanelClose: () => void;
   abortBash: WorkspaceActions['abortBash'];
   stopActiveTurn: WorkspaceActions['stopActiveTurn'];
-  onSidebarSearchClose: () => void;
-    onUsageClose: () => void;
-  onProjectFilesClose: () => void;
-  onNewTaskClose: () => void;
-  onSettingsClose: () => void;
-  onPanelClose: () => void;
-  onConfirmStopChange: (open: boolean) => void;
 };
 
-/** Esc 键全局分发（语义裁决在 escActionFor 纯函数，本 hook 只做动作映射）。
+/** Esc 键全局分发（语义裁决在 escActionFor 注册表，本 hook 只做动作映射）。
  * 裁决输入与分发函数全量进依赖：actions 稳定化后本 effect 不再每渲染重挂，漏依赖即闭包陈旧。 */
 export function useEscDismiss(input: UseEscDismissInput): void {
-  const { dialogCount, paletteOpen, sidebarSearchOpen, usageOpen, projectFilesOpen, newTaskOpen, settingsOpen, panelOpen, bashRunning, confirmStop, generating, agentsActive } = input;
-  const { abortBash, stopActiveTurn, onPaletteClose, onSidebarSearchClose, onUsageClose, onProjectFilesClose, onNewTaskClose, onSettingsClose, onPanelClose, onConfirmStopChange } = input;
+  const { dialogCount, paletteOpen, panelOpen } = input;
+  const { abortBash, stopActiveTurn, onPaletteClose, onPanelClose } = input;
+  /** 运行面标量订阅（threads[tid] 布尔——批内不变即不重渲；Esc 输入不再依赖渲染帧 props） */
+  const bashRunning = useStore(liveStore, (s) => (s.activeThreadId === null ? false : s.threads[s.activeThreadId]?.bashRunning === true));
+  const generating = useStore(liveStore, (s) => (s.activeThreadId === null ? false : s.threads[s.activeThreadId]?.streaming === true));
+  const agentsActive = useStore(liveStore, (s) => (s.activeThreadId === null ? false : summarizeAgents(s.threads[s.activeThreadId]?.agents ?? []).workingCount > 0));
+  const confirmStop = useStore(uiStore, (s) => s.confirmStop);
+  /** 侧栏内嵌层只以可见性参与（侧栏收起时不可见的搜索/面板不吞 Esc）。 */
+  const sidebarSearchOpen = useStore(uiStore, (s) => s.sidebarSearchOpen && !s.sidebarCollapsed);
+  const projectFilesOpen = useStore(uiStore, (s) => s.projectFiles.target !== null && !s.sidebarCollapsed);
+  const usageOpen = useStore(uiStore, (s) => s.usageOpen);
+  const newTaskOpen = useStore(uiStore, (s) => s.newTaskOpen);
+  const settingsOpen = useStore(uiStore, (s) => s.settingsOpen);
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') return;
@@ -43,19 +49,19 @@ export function useEscDismiss(input: UseEscDismissInput): void {
           onPaletteClose();
           break;
         case 'close-sidebar-search':
-          onSidebarSearchClose();
+          closeSidebarSearch();
           break;
         case 'close-usage':
-          onUsageClose();
+          closeUsage();
           break;
         case 'close-project-files':
-          onProjectFilesClose();
+          closeProjectFiles();
           break;
         case 'close-new-task':
-          onNewTaskClose();
+          closeNewTask();
           break;
         case 'close-settings':
-          onSettingsClose();
+          closeSettings();
           break;
         case 'close-panel':
           onPanelClose();
@@ -64,11 +70,11 @@ export function useEscDismiss(input: UseEscDismissInput): void {
           abortBash();
           break;
         case 'execute-confirmed-stop':
-          onConfirmStopChange(false);
+          setConfirmStop(false);
           stopActiveTurn();
           break;
         case 'ask-confirm-stop':
-          onConfirmStopChange(true);
+          setConfirmStop(true);
           break;
         case 'stop-turn':
           stopActiveTurn();
@@ -79,5 +85,5 @@ export function useEscDismiss(input: UseEscDismissInput): void {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [dialogCount, paletteOpen, sidebarSearchOpen, usageOpen, projectFilesOpen, newTaskOpen, settingsOpen, panelOpen, bashRunning, confirmStop, generating, agentsActive, abortBash, stopActiveTurn, onPaletteClose, onSidebarSearchClose, onUsageClose, onProjectFilesClose, onNewTaskClose, onSettingsClose, onPanelClose, onConfirmStopChange]);
+  }, [dialogCount, paletteOpen, sidebarSearchOpen, usageOpen, projectFilesOpen, newTaskOpen, settingsOpen, panelOpen, bashRunning, confirmStop, generating, agentsActive, abortBash, stopActiveTurn, onPaletteClose, onPanelClose]);
 }

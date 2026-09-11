@@ -3,45 +3,36 @@ import { Archive, LoaderCircle, Pencil, Pin, PinOff, X } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { copy } from '@/strings';
+import { navigation } from '@/screens/workspace-navigation';
+import { workspaceActions } from '@/live/workspace-runtime';
 import { renameCommitValue } from '@/sidebar/rename-commit';
 import type { SessionCardModel } from '@/sidebar/session-card-model';
 
 type SessionRowProps = {
   session: SessionCardModel
-  /** 相对时间标签（外层按低频 tick 统一计算）。 */
+  /** 相对时间标签（列表区按低频 tick 统一计算）。 */
   age: string
   active: boolean
   /** 行首图钉标识：置顶区行置 true。 */
   pinned?: boolean
   /** 项目视图缩进：与会话所在项目文件夹行内容对齐。 */
   indent?: boolean
-  /** 选中会话（平铺回调：引用稳定，行级 memo 不被内联闭包击穿）。 */
-  onSelect: (sessionId: string) => void
-  /** 关闭（dispose）会话：hover 显示；文件保留，可从历史恢复。 */
-  onClose?: (sessionId: string) => void
-  /** 行内重命名：提交值 trim 后为空或与原标题相同视为取消。 */
-  onRename?: (sessionId: string, name: string) => void
-  /** 置顶切换：sessionPath 为 null（未落盘）的行不渲染钉子按钮。 */
-  onTogglePin?: (sessionPath: string) => void
-  /** 回收 worker（仅 live 且非流式的行出现）；会话保留，可随时唤醒。 */
-  onRetire?: (sessionId: string) => void
 }
 
 const actionButtonClass =
   'flex size-5 cursor-pointer items-center justify-center rounded-[5px] text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50';
 
-/** 会话行：行首状态位（置顶钉 / 流式活动指示）+ 标题 + 相对时间 + hover 动作（置顶/重命名/关闭）。 */
+/**
+ * 会话行：行首状态位（置顶钉 / 流式活动指示）+ 标题 + 相对时间 + hover 动作
+ * （置顶/重命名/回收/关闭）。行内动作直调 navigation/workspaceActions 单例
+ * （选会话 = 导航出口：先退出新建任务页）。
+ */
 function SessionRow({
   session,
   age,
   active,
   pinned = false,
   indent = false,
-  onSelect,
-  onClose,
-  onRename,
-  onTogglePin,
-  onRetire,
 }: SessionRowProps) {
   const [editing, setEditing] = React.useState(false);
   const [draft, setDraft] = React.useState('');
@@ -49,15 +40,14 @@ function SessionRow({
   const commitRename = () => {
     setEditing(false);
     const next = renameCommitValue(draft, session.title);
-    if (next !== null) onRename?.(session.id, next);
+    if (next !== null) void workspaceActions.renameSession(session.id, next);
   };
 
-  const canTogglePin = onTogglePin !== undefined && session.sessionPath !== null;
-  const canRename = onRename !== undefined;
-  const canClose = onClose !== undefined;
-  const canRetire = onRetire !== undefined && session.state === 'live' && !session.streaming;
+  const canTogglePin = session.sessionPath !== null;
+  /** 回收 worker：仅 live 且非流式（parked 已回收、流式中不可收）。 */
+  const canRetire = session.state === 'live' && !session.streaming;
   /** hover 动作与时间标签同格交叉淡切（不在流内增删，行高与标题截断点恒定）；编辑态只留输入框。 */
-  const showActions = (canTogglePin || canRename || canClose || canRetire) && !editing;
+  const showActions = !editing;
 
   return (
     <div
@@ -65,11 +55,11 @@ function SessionRow({
       data-active={active ? 'true' : 'false'}
       role="button"
       tabIndex={0}
-      onClick={() => onSelect(session.id)}
+      onClick={() => navigation.onSelectSession(session.id)}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
-          onSelect(session.id);
+          navigation.onSelectSession(session.id);
         }
       }}
       className={cn(
@@ -132,7 +122,7 @@ function SessionRow({
                   title={pinned ? copy.sidebar.unpinSession : copy.sidebar.pinSession}
                   onClick={(event) => {
                     event.stopPropagation();
-                    if (session.sessionPath !== null) onTogglePin?.(session.sessionPath);
+                    if (session.sessionPath !== null) workspaceActions.togglePinnedSession(session.sessionPath);
                   }}
                   className={actionButtonClass}
                 >
@@ -143,21 +133,19 @@ function SessionRow({
                   )}
                 </button>
               ) : null}
-              {canRename ? (
-                <button
-                  type="button"
-                  aria-label={copy.sidebar.renameSession}
-                  title={copy.sidebar.renameSession}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setDraft(session.title);
-                    setEditing(true);
-                  }}
-                  className={actionButtonClass}
-                >
-                  <Pencil className="size-3" strokeWidth={1.75} />
-                </button>
-              ) : null}
+              <button
+                type="button"
+                aria-label={copy.sidebar.renameSession}
+                title={copy.sidebar.renameSession}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setDraft(session.title);
+                  setEditing(true);
+                }}
+                className={actionButtonClass}
+              >
+                <Pencil className="size-3" strokeWidth={1.75} />
+              </button>
               {canRetire ? (
                 <button
                   type="button"
@@ -165,27 +153,25 @@ function SessionRow({
                   title={copy.sidebar.retireSession}
                   onClick={(event) => {
                     event.stopPropagation();
-                    onRetire?.(session.id);
+                    void workspaceActions.retireSession(session.id);
                   }}
                   className={actionButtonClass}
                 >
                   <Archive className="size-3" strokeWidth={1.75} />
                 </button>
               ) : null}
-              {canClose ? (
-                <button
-                  type="button"
-                  aria-label={copy.sidebar.closeSession}
-                  title={copy.sidebar.closeSession}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onClose?.(session.id);
-                  }}
-                  className={actionButtonClass}
-                >
-                  <X className="size-3" strokeWidth={1.75} />
-                </button>
-              ) : null}
+              <button
+                type="button"
+                aria-label={copy.sidebar.closeSession}
+                title={copy.sidebar.closeSession}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  workspaceActions.closeSession(session.id);
+                }}
+                className={actionButtonClass}
+              >
+                <X className="size-3" strokeWidth={1.75} />
+              </button>
             </span>
           ) : null}
         </span>

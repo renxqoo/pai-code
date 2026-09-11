@@ -7,7 +7,6 @@ function base(overrides: Partial<EscState> = {}): EscState {
     dialogCount: 0,
     paletteOpen: false,
     sidebarSearchOpen: false,
-    runtimeOpen: false,
     usageOpen: false,
     projectFilesOpen: false,
     newTaskOpen: false,

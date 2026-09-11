@@ -4,7 +4,7 @@ import type { ProviderModel } from "@paiapp/contracts";
 
 import { copy } from "@/strings";
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ActionButton, Dialog, DialogContent, DialogHeader, DialogTitle } from "@paiapp/ui";
 
 import {
   ProviderModelDialogFields,
@@ -133,14 +133,9 @@ function ProviderModelDialog({
           >
             {copy.settings.modelDialogCancel}
           </button>
-          <button
-            type="button"
-            onClick={confirm}
-            disabled={!canSave}
-            className="h-9 cursor-pointer rounded-lg bg-foreground px-4 text-[13px] leading-none font-medium text-background outline-none select-none hover:opacity-90 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-60"
-          >
+          <ActionButton type="button" onClick={confirm} disabled={!canSave}>
             {copy.settings.modelDialogSave}
-          </button>
+          </ActionButton>
         </div>
       </DialogContent>
     </Dialog>

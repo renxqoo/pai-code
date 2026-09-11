@@ -2,8 +2,7 @@ import { GitBranchPlus } from 'lucide-react';
 
 import type { GitBranchesView } from '@paiapp/contracts';
 
-import { PickerDialog } from '@/components/picker-dialog';
-import { Button } from '@/components/ui/button';
+import { Button, PickerDialog } from '@paiapp/ui';
 import { copy } from '@/strings';
 
 type BranchPickerDialogProps = {

@@ -9,7 +9,7 @@ import type { RuntimeWorkerRow } from '../runtime-entries';
 import type { RuntimeScreenActions } from '../runtime-content';
 import { RuntimeContent } from '../runtime-content';
 
-/** 运行状态整页冒烟（静态口径：SSR 不跑轮询 effect；交互与真机走查走 demo/E2E）。 */
+/** 运行状态整页冒烟（静态口径：SSR 不跑轮询 effect；交互与真机走查走 E2E）。 */
 
 const actions: RuntimeScreenActions = {
   stopThread: () => undefined,

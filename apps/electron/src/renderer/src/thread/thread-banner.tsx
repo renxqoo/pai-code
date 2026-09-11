@@ -1,23 +1,21 @@
+import * as React from 'react';
 import { AlertTriangle, Layers, RefreshCw, TerminalSquare } from 'lucide-react';
+import { useStore } from 'zustand';
 
 import { copy } from '@/strings';
+import { initialThreadState } from '@/live/live-thread-state';
+import { store as liveStore } from '@/live/workspace-runtime';
 import { BannerStrip } from './banner-strip';
 
-type ThreadBannerProps = {
-  crashed: boolean;
-  compacting: boolean;
-  retrying: { attempt: number; maxAttempts: number } | null;
-  queueCount: number;
-  /** 直执行 bash 在途与其流式输出尾部（截断展示一行）。 */
-  bashRunning: boolean;
-  bashTail: string;
-};
-
 /**
- * 会话状态横幅：worker 崩溃恢复提示 / 压缩中 / 直执行命令 / 自动重试 / 排队消息数。
+ * 会话状态横幅（T34 M1 自订阅，0 props）：worker 崩溃恢复提示 / 压缩中 / 直执行
+ * 命令 / 自动重试 / 排队消息数——全部来自 live store 活跃线程运行态。
  * 输入卡上方的轻量提示条，无状态时整行不占位。
  */
-function ThreadBanner({ crashed, compacting, retrying, queueCount, bashRunning, bashTail }: ThreadBannerProps) {
+function ThreadBanner(): React.JSX.Element | null {
+  const thread = useStore(liveStore, (s) => (s.activeThreadId === null ? undefined : s.threads[s.activeThreadId]));
+  const { crashed, compacting, retrying, queue, bashRunning, bashTail } = thread ?? initialThreadState;
+  const queueCount = queue.steering.length + queue.followUp.length;
   if (crashed) {
     return (
       <BannerStrip tone="warn" icon={<AlertTriangle className="size-[13px]" strokeWidth={1.75} />}>
@@ -57,4 +55,5 @@ function ThreadBanner({ crashed, compacting, retrying, queueCount, bashRunning, 
   return null;
 }
 
-export { ThreadBanner };
+const ThreadBannerMemo = React.memo(ThreadBanner);
+export { ThreadBannerMemo as ThreadBanner };

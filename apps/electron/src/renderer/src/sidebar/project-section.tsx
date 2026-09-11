@@ -1,36 +1,22 @@
 import * as React from 'react';
 import { Folder, ListTree } from 'lucide-react';
+import { useStore } from 'zustand';
 
 import { ChevronToggle, MenuButton, type MenuItemDef } from '@paiapp/ui';
 
 import { cn } from '@/lib/utils';
 import { copy } from '@/strings';
+import { workspaceActions } from '@/live/workspace-runtime';
+import { openProjectFiles } from '@/sidebar/project-files';
 import type { ProjectGroup } from '@/sidebar/build-project-groups';
 import { SessionRow } from '@/sidebar/session-row';
+import { uiStore } from '@/ui/ui-store';
 
 type ProjectSectionProps = {
   group: ProjectGroup
-  /** 该组是否处于折叠态（折叠集合由外层状态持有）。 */
-  collapsed: boolean
   ages: Readonly<Record<string, string>>
   activeSessionId: string
-  onToggleCollapse: (key: string) => void
-  /** 「显示更多」：解除该组的可见条数截断。 */
-  onExpand: (key: string) => void
-  onSelect: (sessionId: string) => void
-  onClose?: (sessionId: string) => void
-  onRename?: (sessionId: string, name: string) => void
-  /** 置顶切换（键为 sessionPath）；sessionPath 为 null 的行无置顶入口。 */
-  onTogglePin?: (sessionPath: string) => void
-  /** 回收 worker（仅 live 且非流式的行出现）。 */
-  onRetire?: (sessionId: string) => void
-  /** 项目行菜单：基于该项目新建任务（键为项目 cwd）。 */
-  onNewTaskInProject: (cwd: string) => void
-  /** 项目行菜单：移除项目（键为项目 cwd）。 */
-  onRemoveProject: (cwd: string) => void
-  /** 项目行菜单：打开项目文件面板（键为项目 cwd）。 */
-  onProjectFiles: (cwd: string) => void
-};
+}
 
 /** 项目行「更多」菜单：id 为稳定英文标识，映射在 onSelect；文案取自 strings。 */
 const projectMenuItems: readonly MenuItemDef[] = [
@@ -47,27 +33,14 @@ const moreTriggerClass =
 const moreTriggerRevealClass =
   'col-start-1 row-start-1 opacity-0 invisible transition-opacity duration-150 motion-reduce:transition-none group-hover/row:visible group-hover/row:opacity-100 group-focus-within/row:visible group-focus-within/row:opacity-100 group-has-data-[popup-open]/row:visible group-has-data-[popup-open]/row:opacity-100';
 
-/** 项目分组：文件夹行（折叠切换 + hover「更多」菜单）+ 缩进会话行 + 组末「显示更多」。 */
-function ProjectSection({
-  group,
-  collapsed,
-  ages,
-  activeSessionId,
-  onToggleCollapse,
-  onExpand,
-  onSelect,
-  onClose,
-  onRename,
-  onTogglePin,
-  onRetire,
-  onNewTaskInProject,
-  onRemoveProject,
-  onProjectFiles,
-}: ProjectSectionProps) {
+/** 项目分组：文件夹行（折叠切换 + hover「更多」菜单）+ 缩进会话行 + 组末「显示更多」。
+ * 折叠态/折叠动作与菜单动作自订阅自派发（数据 props 只承载组内容）。 */
+function ProjectSection({ group, ages, activeSessionId }: ProjectSectionProps) {
+  const collapsed = useStore(uiStore, (s) => s.sidebarGroupFold.collapsed.has(group.key));
   const selectMenuAction = (id: string): void => {
-    if (id === 'new-task') onNewTaskInProject(group.key);
-    else if (id === 'remove-project') onRemoveProject(group.key);
-    else if (id === 'view-files') onProjectFiles(group.key);
+    if (id === 'new-task') uiStore.getState().openNewTask(group.key);
+    else if (id === 'remove-project') workspaceActions.removeProject(group.key);
+    else if (id === 'view-files') openProjectFiles(group.key);
   };
   return (
     <section className="flex flex-col gap-[2px]">
@@ -77,7 +50,7 @@ function ProjectSection({
           type="button"
           aria-expanded={!collapsed}
           aria-label={`${copy.sidebar.collapseGroup} · ${group.projectName}`}
-          onClick={() => onToggleCollapse(group.key)}
+          onClick={() => uiStore.getState().toggleGroupFoldKey(group.key)}
           className="flex h-8 min-w-0 flex-1 cursor-pointer items-center gap-[7px] rounded-[8px] px-2 text-left outline-none"
         >
           <ChevronToggle open={!collapsed} variant="disclose" />
@@ -108,17 +81,12 @@ function ProjectSection({
               age={ages[session.id] ?? ''}
               active={session.id === activeSessionId}
               indent
-              onSelect={onSelect}
-              onClose={onClose}
-              onRename={onRename}
-              onTogglePin={onTogglePin}
-              onRetire={onRetire}
             />
           ))}
       {!collapsed && group.total > group.visible.length ? (
         <button
           type="button"
-          onClick={() => onExpand(group.key)}
+          onClick={() => uiStore.getState().expandGroupKey(group.key)}
           className="flex h-[26px] w-full cursor-pointer items-center rounded-[8px] pr-2 pl-6 text-left text-[11.5px] leading-none text-muted-foreground outline-none select-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           {copy.sidebar.showMore}

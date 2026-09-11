@@ -1,6 +1,7 @@
 import * as React from "react";
 
 import type { ProviderConfigView } from "@paiapp/contracts";
+import { ActionButton } from "@paiapp/ui";
 
 import { copy } from "@/strings";
 
@@ -64,14 +65,9 @@ function ProviderDetail({
           </h2>
           {provider !== null ? (
             <div className="flex shrink-0 flex-col items-end gap-[6px]">
-              <button
-                type="button"
-                onClick={() => void runTest()}
-                disabled={testing}
-                className="h-9 cursor-pointer rounded-lg border border-border px-3 text-[12.5px] leading-none text-foreground outline-none select-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60"
-              >
+              <ActionButton type="button" onClick={() => void runTest()} disabled={testing} variant="outline">
                 {testing ? copy.settings.testing : copy.settings.testConnection}
-              </button>
+              </ActionButton>
               {testResult !== null ? (
                 <p
                   className={`text-[11.5px] leading-[16px] ${testResult.ok ? "text-muted-foreground" : "text-destructive"}`}
