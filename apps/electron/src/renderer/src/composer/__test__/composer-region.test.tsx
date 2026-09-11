@@ -83,12 +83,19 @@ afterEach(() => {
 });
 
 describe('ComposerRegion 数据形态', () => {
-  test('受控回显：ui store 草稿驱动输入框值；草稿隔离按活跃线程', () => {
+  test('受控回显：草稿驱动输入框值；双线程草稿隔离互不串扰', () => {
     seedLive({});
-    uiStore.getState().setDraft('t1', '输入中的草稿');
+    uiStore.getState().setDraft('t1', 'T1 的草稿');
+    uiStore.getState().setDraft('t2', 'T2 的草稿');
     const view = render(<ComposerRegion onOpenAgents={() => undefined} />);
     const input = view.container.querySelector('textarea') as HTMLTextAreaElement;
-    expect(input.value).toBe('输入中的草稿');
+    expect(input.value).toBe('T1 的草稿');
+    liveStore.setState({ sessions: { t1: session('t1'), t2: session('t2') }, activeThreadId: 't2' });
+    view.rerender(<ComposerRegion onOpenAgents={() => undefined} />);
+    expect(input.value).toBe('T2 的草稿'); // 切线程各取各的槽
+    liveStore.setState({ activeThreadId: 't1' });
+    view.rerender(<ComposerRegion onOpenAgents={() => undefined} />);
+    expect(input.value).toBe('T1 的草稿'); // 切回不丢
     view.unmount();
   });
 
