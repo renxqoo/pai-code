@@ -3,7 +3,7 @@ import type { MenuItemDef } from '@paiapp/ui';
 /**
  * 顶栏两组菜单的词条装配（纯函数）：项目菜单 = 本机打开四动作；
  * 会话菜单 = 会话级操作（生成中隐藏受信重开——重开链需先停轮）。
- * id 词表封闭，消费方（thread-stage）按 id 派发动作。
+ * id 词表封闭，消费方（use-thread-header-assembly）按 id 派发动作。
  */
 
 export type ProjectMenuLabels = {
@@ -48,21 +48,5 @@ export function sessionMenuItems(labels: SessionMenuLabels, generating: boolean)
     ...reloadItems,
     { kind: 'separator' },
     { kind: 'item', id: 'close', label: labels.close },
-  ];
-}
-
-export type ViewMenuLabels = {
-  openFile: string;
-  diff: string;
-  agents: string;
-};
-
-/** 「+视图」菜单词条：文件选择弹窗 + 打开（并聚焦）单例面板 tab。 */
-export function viewMenuItems(labels: ViewMenuLabels): readonly MenuItemDef[] {
-  return [
-    { kind: 'item', id: 'openFile', label: labels.openFile },
-    { kind: 'separator' },
-    { kind: 'item', id: 'diff', label: labels.diff },
-    { kind: 'item', id: 'agents', label: labels.agents },
   ];
 }

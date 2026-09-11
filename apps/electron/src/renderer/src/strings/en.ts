@@ -45,7 +45,6 @@ export const en = {
   },
   thread: {
     toggleMaximize: 'Toggle maximize',
-    viewMenuAria: 'Open view',
     openDiff: 'Open Diff',
     turnFailedLabel: 'Request failed',
     turnAbortedLabel: 'Aborted',
@@ -114,9 +113,6 @@ export const en = {
       source: 'Source',
       modeAria: 'Switch display mode',
       truncated: 'File exceeds 2 MiB; showing the first 2 MiB.',
-      openPickerTitle: 'Open file',
-      openPickerSearch: 'Search project files',
-      openPickerEmpty: 'No files to show',
       errors: {
         not_found: 'File not found or deleted.',
         binary_file: 'Binary files cannot be previewed.',

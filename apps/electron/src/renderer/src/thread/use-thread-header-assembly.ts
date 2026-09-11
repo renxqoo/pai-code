@@ -3,10 +3,9 @@ import { useStore } from 'zustand';
 
 import { copy } from '@/strings';
 import { baseNameOf } from '@/lib/project-dirs';
-import { projectMenuItems, sessionMenuItems, viewMenuItems } from '@/thread/header-menus';
+import { projectMenuItems, sessionMenuItems } from '@/thread/header-menus';
 import { threadStatus } from '@/thread/thread-status';
 import type { ThreadHeaderProps } from '@/thread/thread-header';
-import { openFilePicker } from '@/panel/panel-controller';
 import { store as liveStore, workspaceActions } from '@/live/workspace-runtime';
 import { uiStore } from '@/ui/ui-store';
 
@@ -54,7 +53,6 @@ export function useThreadHeaderAssembly(input: ThreadHeaderAssemblyInput): Omit<
   const headerLabels = React.useMemo(
     () => ({
       toggleMaximize: copy.thread.toggleMaximize,
-      viewMenuAria: copy.thread.viewMenuAria,
       toggleSplitView: copy.thread.toggleSplitView,
       statusAria: copy.thread.statusAria,
       renameTitleAria: copy.thread.renameTitleAria,
@@ -63,10 +61,6 @@ export function useThreadHeaderAssembly(input: ThreadHeaderAssemblyInput): Omit<
       statusLabel: copy.thread.status[status],
     }),
     [status],
-  );
-  const viewMenu = React.useMemo(
-    () => viewMenuItems({ openFile: copy.panel.file.openPickerTitle, diff: copy.panel.tabDiff, agents: copy.panel.tabAgents }),
-    [],
   );
   const sessionMenu = React.useMemo(
     () =>
@@ -109,13 +103,6 @@ export function useThreadHeaderAssembly(input: ThreadHeaderAssemblyInput): Omit<
     },
     [activeThreadId],
   );
-  /** 「+视图」菜单：打开并聚焦对应面板 tab（toggle 语义只保留给快捷键）。 */
-  const onViewAction = React.useCallback((id: string) => {
-    const ui = uiStore.getState();
-    if (id === 'diff') ui.openDiffPane();
-    else if (id === 'agents') ui.openAgentsPane();
-    else if (id === 'openFile') openFilePicker();
-  }, []);
   /** ui 动作直调包装：引用恒定——ThreadHeader 是 memo 边界，内联箭头会随舞台每次
    * 重渲击穿（流式批推期每 50ms 一次）。 */
   const onTogglePanel = React.useCallback(() => uiStore.getState().togglePanelFromHeader(), []);
@@ -131,9 +118,7 @@ export function useThreadHeaderAssembly(input: ThreadHeaderAssemblyInput): Omit<
     labels: headerLabels,
     projectMenu,
     sessionMenu,
-    viewMenu,
     onProjectAction,
-    onViewAction,
     onRenameTitle,
     onTogglePanel,
     onSessionAction,

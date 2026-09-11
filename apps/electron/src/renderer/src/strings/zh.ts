@@ -46,7 +46,6 @@ export const zh: typeof en = {
   },
   thread: {
     toggleMaximize: '切换最大化',
-    viewMenuAria: '打开视图',
     openDiff: '打开 Diff',
     turnFailedLabel: '请求失败',
     turnAbortedLabel: '已中止',
@@ -115,9 +114,6 @@ export const zh: typeof en = {
       source: '源码',
       modeAria: '切换显示模式',
       truncated: '文件超过 2 MiB，已截断显示。',
-      openPickerTitle: '打开文件',
-      openPickerSearch: '搜索项目文件',
-      openPickerEmpty: '没有可展示的文件',
       errors: {
         not_found: '文件不存在或已被删除。',
         binary_file: '二进制文件不支持预览。',

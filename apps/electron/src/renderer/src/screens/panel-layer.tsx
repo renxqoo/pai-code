@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { useStore } from 'zustand';
 
-import { PickerDialog } from '@paiapp/ui';
 import { AgentPanel } from '@/agent-panel/agent-panel';
 import { DiffPanel } from '@/diff-panel/diff-panel';
 import { FilePane } from '@/panel/file-pane';
@@ -17,14 +16,13 @@ import { threadModelOf } from '@/live/store';
 import { uiStore } from '@/ui/ui-store';
 
 /**
- * 面板层（T34 M2 区域化，0 props + memo）：多标签 Dock（活跃 pane 内容）+
- * 「打开文件…」选择弹窗。面板开合/标签在 ui store；Agents/Diff 内容按活跃线程
- * 自订阅 live store（threadModelOf 引用缓存，无关线程事件不进订阅面）。
+ * 面板层（T34 M2 区域化，0 props + memo）：多标签 Dock（活跃 pane 内容）。
+ * 面板开合/标签在 ui store；Agents/Diff 内容按活跃线程自订阅 live store
+ * （threadModelOf 引用缓存，无关线程事件不进订阅面）。
+ * 文件 tab 的入口：命令面板 file: 条目与 Diff 列表点击（openFileTab）。
  */
 function PanelLayer(): React.JSX.Element | null {
   const panel = useStore(uiStore, (s) => s.panel);
-  const filePickerOpen = useStore(uiStore, (s) => s.filePickerOpen);
-  const filePickerItems = useStore(uiStore, (s) => s.filePickerItems);
   const activeThread = useStore(liveStore, (s) => threadModelOf(s, s.activeThreadId ?? ''));
 
   const activePanelTab = panel.tabs.find((tab) => tab.id === panel.activeId) ?? null;
@@ -39,38 +37,24 @@ function PanelLayer(): React.JSX.Element | null {
     [panel.tabs],
   );
 
-  return (
-    <>
-      {panel.tabs.length === 0 ? null : (
-        <PanelDock
-          tabs={dockTabs}
-          activeId={panel.activeId}
-          onSelect={(id) => uiStore.getState().focusPanelTabById(id)}
-          onCloseTab={(id) => uiStore.getState().closePanelTabById(id)}
-          onClose={() => uiStore.getState().closePanel()}
-          closeAria={copy.panel.close}
-          closeTabAria={copy.panel.closeTab}
-        >
-          {activePanelTab?.kind === 'agents' ? (
-            <AgentPanel agents={activeThread.agents} now={agentsNow} onSteer={workspaceActions.steerSubagent} />
-          ) : activePanelTab?.kind === 'diff' ? (
-            <DiffPanel diff={threadDiff} onOpenFile={openFileTab} />
-          ) : activePanelTab?.kind === 'file' && activePanelTab.cwd !== undefined && activePanelTab.path !== undefined ? (
-            <FilePane cwd={activePanelTab.cwd} path={activePanelTab.path} readProjectFile={readFile} />
-          ) : null}
-        </PanelDock>
-      )}
-      <PickerDialog
-        open={filePickerOpen}
-        onOpenChange={(open) => uiStore.getState().setFilePickerOpen(open)}
-        title={copy.panel.file.openPickerTitle}
-        searchPlaceholder={copy.panel.file.openPickerSearch}
-        emptyLabel={copy.panel.file.openPickerEmpty}
-        groups={[{ items: filePickerItems.map((path) => ({ id: path, label: path })) }]}
-        selectedId={null}
-        onSelect={openFileTab}
-      />
-    </>
+  return panel.tabs.length === 0 ? null : (
+    <PanelDock
+      tabs={dockTabs}
+      activeId={panel.activeId}
+      onSelect={(id) => uiStore.getState().focusPanelTabById(id)}
+      onCloseTab={(id) => uiStore.getState().closePanelTabById(id)}
+      onClose={() => uiStore.getState().closePanel()}
+      closeAria={copy.panel.close}
+      closeTabAria={copy.panel.closeTab}
+    >
+      {activePanelTab?.kind === 'agents' ? (
+        <AgentPanel agents={activeThread.agents} now={agentsNow} onSteer={workspaceActions.steerSubagent} />
+      ) : activePanelTab?.kind === 'diff' ? (
+        <DiffPanel diff={threadDiff} onOpenFile={openFileTab} />
+      ) : activePanelTab?.kind === 'file' && activePanelTab.cwd !== undefined && activePanelTab.path !== undefined ? (
+        <FilePane cwd={activePanelTab.cwd} path={activePanelTab.path} readProjectFile={readFile} />
+      ) : null}
+    </PanelDock>
   );
 }
 

@@ -2,13 +2,12 @@ import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { ThreadHeader } from '../thread-header';
-import { projectMenuItems, sessionMenuItems, viewMenuItems } from '../header-menus';
+import { projectMenuItems, sessionMenuItems } from '../header-menus';
 import type { ThreadStatusKind } from '../thread-status';
 
 const LABELS = {
   toggleMaximize: '切换最大化',
   toggleSplitView: '切换分栏',
-  viewMenuAria: '打开视图',
   statusAria: '会话状态',
   renameTitleAria: '重命名会话',
   projectMenuAria: '项目操作',
@@ -20,8 +19,6 @@ const PROJECT_MENU = projectMenuItems({
   openMenu: ['在访达中打开', '在终端中打开', '在编辑器中打开'],
   copyPath: '复制路径',
 });
-
-const VIEW_MENU = viewMenuItems({ openFile: '打开文件', diff: 'Diff', agents: '子代理' });
 
 const SESSION_MENU = sessionMenuItems(
   {
@@ -45,9 +42,7 @@ function render(overrides: Partial<Parameters<typeof ThreadHeader>[0]> = {}): st
       labels={LABELS}
       projectMenu={PROJECT_MENU}
       sessionMenu={SESSION_MENU}
-      viewMenu={VIEW_MENU}
       onProjectAction={() => undefined}
-      onViewAction={() => undefined}
       onRenameTitle={() => undefined}
       onStatusJump={() => undefined}
       onTogglePanel={() => undefined}
@@ -94,11 +89,11 @@ describe('ThreadHeader', () => {
     expect(html).not.toContain('会话状态');
   });
 
-  test('等待权限态带呼吸动画类；项目/会话/视图菜单 aria 就位', () => {
+  test('等待权限态带呼吸动画类；项目/会话菜单 aria 就位；「+视图」菜单已删（用户裁决——与面板开关/快捷键重复）', () => {
     const html = render({ status: 'permission', labels: { ...LABELS, statusLabel: '等待权限' } });
     expect(html).toContain('animate-pulse');
     expect(html).toContain('aria-label="项目操作"');
     expect(html).toContain('aria-label="会话操作"');
-    expect(html).toContain('aria-label="打开视图"');
+    expect(html).not.toContain('打开视图');
   });
 });

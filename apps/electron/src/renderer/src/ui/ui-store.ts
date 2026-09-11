@@ -70,9 +70,6 @@ export type UiState = {
   branchRevision: number;
   /** 面板系统当前多标签态（会话级存档在 panel-controller 的模块档案，非当前态）。 */
   panel: PanelState;
-  /** 「打开文件…」选择弹窗开合与清单（拉取在 panel-controller，含代次守卫）。 */
-  filePickerOpen: boolean;
-  filePickerItems: readonly string[];
   /** 输入浮层实测高度（避让消费：舞台底部 padding 与回底浮标；偏移在动作内加成）。 */
   composerInset: number;
   projectFiles: ProjectFilesState;
@@ -115,8 +112,6 @@ export type UiActions = {
   closePanel: () => void;
   closePanelTabById: (id: string) => void;
   focusPanelTabById: (id: string) => void;
-  setFilePickerOpen: (open: boolean) => void;
-  setFilePickerItems: (items: readonly string[]) => void;
   /** 输入浮层高度写入：接收原始测量值，消费侧避让偏移（+24）在此统一加成。 */
   setComposerInset: (rawHeight: number) => void;
   /** 图片回填信号（token 自增；images 可为空数组——仍产生一次信号，消费端并入零项）。 */
@@ -152,8 +147,6 @@ function initialUiState(): UiState {
     composerRestore: null,
     branchRevision: 0,
     panel: EMPTY_PANEL,
-    filePickerOpen: false,
-    filePickerItems: [],
     composerInset: 184,
     projectFiles: { target: null, tree: [], loading: false },
   };
@@ -204,8 +197,6 @@ export function createUiStore() {
     closePanel: () => set({ panel: closeAllPanels() }),
     closePanelTabById: (id) => set((state) => ({ panel: closePanelTab(state.panel, id) })),
     focusPanelTabById: (id) => set((state) => ({ panel: focusPanelTab(state.panel, id) })),
-    setFilePickerOpen: (open) => set({ filePickerOpen: open }),
-    setFilePickerItems: (items) => set({ filePickerItems: items }),
     setComposerInset: (rawHeight) => set({ composerInset: Math.round(rawHeight) + 24 }),
     setComposerRestore: (images) =>
       set((state) => ({ composerRestore: { token: (state.composerRestore?.token ?? 0) + 1, images } })),
