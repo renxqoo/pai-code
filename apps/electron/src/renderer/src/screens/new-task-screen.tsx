@@ -336,7 +336,6 @@ function NewTaskScreen({
       <CreateBranchDialog
         open={dialog === 'create-branch'}
         onOpenChange={(open) => setDialog(open ? 'create-branch' : null)}
-        from={branches.view?.current ?? 'HEAD'}
         busy={checkingOut}
         error={branchError}
         onSubmit={createBranch}

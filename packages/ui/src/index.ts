@@ -1,4 +1,5 @@
 export { ActionButton, actionButtonVariants, type ActionButtonProps } from './action-button';
+export { AnchoredPanel, type AnchoredPanelProps } from './anchored-panel';
 export { AreaTimeChart, type AreaTimeChartProps, type AreaTimeChartSeries } from './area-time-chart';
 export { AreaTimeChartTooltip, type AreaTimeChartTooltipProps } from './area-time-chart-tooltip';
 export { AutocompleteGroupList, canScrollMore, type AutocompleteGroup, type AutocompleteGroupItem, type AutocompleteGroupListProps } from './autocomplete-group-list';
