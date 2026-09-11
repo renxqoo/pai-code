@@ -156,7 +156,9 @@ describe('createGitGraph', () => {
     git.invalidate('/w/repo');
     const third = git.list('/w/repo');
     // first/second 共享一条在途 log；invalidate 后 third 自起一条新 log（probe 微任务结算后才入队）
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
     for (const release of gates.splice(0)) release();
     const results = await Promise.all([first, second, third]);
     expect(results[0]).toEqual(results[1]);
