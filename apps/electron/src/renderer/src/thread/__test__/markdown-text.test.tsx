@@ -6,8 +6,6 @@ import { MarkdownText } from '../markdown-text';
 /**
  * 渲染冒烟：经 react-dom/server 走完整 streamdown 管道（解析/净化/组件映射），
  * 验证对话正文常用 markdown 形态渲染不抛错且产出预期 DOM。
- * demo workspace（demo-workspace.ts 的 greeting 与 text-report 块）提供应用内人工核对路径，
- * 覆盖同一批形态：列表/行内代码/sh 围栏/表格/链接。
  */
 describe('MarkdownText 渲染冒烟', () => {
   test('表格、围栏代码、链接、行内标记混合渲染不抛错', () => {

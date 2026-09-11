@@ -8,8 +8,6 @@ import { fileItems, type PaletteGroupKind, type PaletteItem } from './palette-it
 type CommandPaletteProps = {
   open: boolean
   onClose: () => void
-  /** 静态组条目（动作/会话/命令/设置）。 */
-  items: readonly PaletteItem[]
   /** 文件组搜索（query ≥1 字符才触发；null = 失败/空目录按空组）。 */
   searchFiles: (query: string) => Promise<string[] | null>
   labels: {
@@ -29,7 +27,7 @@ const FILE_SEARCH_DEBOUNCE_MS = 300;
  * 结果列表向上生长。文件组按输入词去抖搜索（世代号丢弃晚到应答）；
  * 选中即回调并关闭；Esc/遮罩点击关闭（Esc 链由 esc-action 统一裁决）。
  */
-function CommandPalette({ open, onClose, searchFiles, labels, onSelect }: Omit<CommandPaletteProps, 'items'>) {
+function CommandPalette({ open, onClose, searchFiles, labels, onSelect }: CommandPaletteProps) {
   const items = usePaletteItems(open);
   const [query, setQuery] = React.useState('');
   const [filePaths, setFilePaths] = React.useState<readonly string[]>([]);

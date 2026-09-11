@@ -17,6 +17,14 @@ import type { NewTaskScreenProps, NewTaskStart } from './new-task-screen';
 /** 新建任务页已知目录快捷条上限（更多走系统文件夹选择）。 */
 const KNOWN_DIRS_LIMIT = 6;
 
+/** 开合动作（模块级恒定引用——页面内部 effect 依赖 props 回调，不稳定会循环 setState）。 */
+const openSettingsAction = (): void => {
+  uiStore.getState().openSettings();
+};
+const closeNewTaskAction = (): void => {
+  uiStore.getState().closeNewTask();
+};
+
 /**
  * 新建任务页装配（T34 M3：自 use-new-task-page 的 screen memo 同构迁出，
  * 订阅随整页挂卸——sessions/saved/models 不进工作区订阅面）。
@@ -57,15 +65,7 @@ export function useNewTaskScreen(enterCwd: string): NewTaskScreenProps {
     [sessionViews, saved],
   );
 
-  /** 动作引用恒定（页面内部 effect 依赖 props 回调——不稳定会循环 setState）。 */
-const openSettingsAction = (): void => {
-  uiStore.getState().openSettings();
-};
-const closeNewTaskAction = (): void => {
-  uiStore.getState().closeNewTask();
-};
-
-/** 宿主掉线（从未构建或 failed）：模型位文案不得伪装成「未配置模型」 */
+  /** 宿主掉线（从未构建或 failed）：模型位文案不得伪装成「未配置模型」 */
   const hostDown = hostPhase === null || hostPhase === 'failed';
   const modelOptions = React.useMemo(() => models.map((model) => `${model.provider}/${model.modelId}`), [models]);
   /** 模型 → 可用思考档展示名（新任务页无线程，按模型能力本地计算——effortLevelsForModel 单一真相） */
