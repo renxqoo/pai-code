@@ -1,10 +1,11 @@
 import * as React from 'react';
 
 import { insertIntoDraft } from '@/composer/composer-controller';
+import { uiStore } from '@/ui/ui-store';
 import type { SettingsSectionId } from '@/settings/settings-sections';
 import type { SessionCardModel } from '@/sidebar/session-card-model';
+import { openFileTab } from '@/panel/panel-controller';
 import type { LiveWorkspaceView } from '@/live/use-live-workspace';
-import type { PanelTabs } from '@/screens/use-panel-tabs';
 import { actionItems, commandItems, sessionItems, settingsItems, type PaletteItem } from '@/palette/palette-items';
 import { copy } from '@/strings';
 import { MODIFIER_KEY_LABEL } from '@/lib/platform';
@@ -27,7 +28,6 @@ type UseCommandPaletteArgs = {
   activeThreadId: string
   sessions: readonly SessionCardModel[]
   openNewTask: () => void
-  panels: PanelTabs
   openSettings: () => void
   openSettingsAt: (section: SettingsSectionId) => void
   openUsage: () => void
@@ -37,8 +37,6 @@ type UseCommandPaletteArgs = {
 
 export function useCommandPalette(args: UseCommandPaletteArgs): CommandPaletteApi {
   const { workspace, activeThreadId, sessions, openNewTask, openSettings, openSettingsAt, openUsage, navigateSession } = args;
-  // 取稳定方法而非 panels 对象整体（对象每渲染换引用会击穿本 hook 产物的 memo）
-  const { openDiff: openDiffPane, openAgents: openAgentsPane, openFileTab } = args.panels;
 
   const [open, setOpen] = React.useState(false);
   const close = React.useCallback(() => setOpen(false), []);
@@ -65,8 +63,8 @@ export function useCommandPalette(args: UseCommandPaletteArgs): CommandPaletteAp
   const onSelect = React.useCallback(
     (id: string) => {
       if (id === 'action:newTask') openNewTask();
-      else if (id === 'action:openDiff') openDiffPane();
-      else if (id === 'action:openAgents') openAgentsPane();
+      else if (id === 'action:openDiff') uiStore.getState().openDiffPane();
+      else if (id === 'action:openAgents') uiStore.getState().openAgentsPane();
       else if (id === 'action:openFinder') void workspace.actions.openInSystem(workspace.activeCwd, 'finder');
       else if (id === 'action:openTerminal') void workspace.actions.openInSystem(workspace.activeCwd, 'terminal');
       else if (id === 'action:openEditor') void workspace.actions.openInSystem(workspace.activeCwd, 'editor');
@@ -82,7 +80,7 @@ export function useCommandPalette(args: UseCommandPaletteArgs): CommandPaletteAp
         insertIntoDraft(`/${id.slice('command:'.length)} `);
       } else if (id.startsWith('settings:')) openSettingsAt(id.slice('settings:'.length) as SettingsSectionId);
     },
-    [activeThreadId, workspace.activeCwd, workspace.actions, openNewTask, openDiffPane, openAgentsPane, openFileTab, openSettings, openUsage, navigateSession, openSettingsAt],
+    [activeThreadId, workspace.activeCwd, workspace.actions, openNewTask, openSettings, openUsage, navigateSession, openSettingsAt],
   );
 
   return { open, close, toggle, items, onSelect };

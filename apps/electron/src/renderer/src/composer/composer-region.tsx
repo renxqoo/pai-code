@@ -30,19 +30,14 @@ import { uiStore } from '@/ui/ui-store';
 /** 排队列表的空态恒定引用（按键取快照；后台线程的排队变化不进本区域订阅面）。 */
 const EMPTY_QUEUED: readonly { id: number; text: string }[] = [];
 
-type ComposerRegionProps = {
-  /** 面板系统装配 prop：打开 Agents 侧栏面板（usePanelTabs 是 WorkspaceMain 装配实例，单例化挂账后续任务）。 */
-  onOpenAgents: () => void
-}
-
 /**
- * 线程页输入卡区域（T33 M2，0+1 props）：live/ui store 与 queuedDrafts 自订阅 →
+ * 线程页输入卡区域（T33 M2 / T34 M2，0 props）：live/ui store 与 queuedDrafts 自订阅 →
  * 组装双页共享的四个子件（子件 props 契约不动）；提交/停止编排走模块；
  * textarea 对象 ref + 本区域挂载 effect 注册 controller 跨区聚焦通道
  * （区域卸载即注销、重挂即换绑——无 stale 元素窗口）。敲键与流式批推的重渲
  * 半径收敛在本子树内（B-keystroke 回归钉住）。文案直读 copy（hostDown 三态）。
  */
-function ComposerRegion({ onOpenAgents }: ComposerRegionProps): React.JSX.Element {
+function ComposerRegion(): React.JSX.Element {
   const activeThreadId = useStore(liveStore, (s) => s.activeThreadId) ?? '';
   /** 条目级订阅（非整表）：后台线程的会话更新不进本区域订阅面（B-keystroke 预算） */
   const activeSession = useStore(liveStore, (s) => (s.activeThreadId === null ? undefined : s.sessions[s.activeThreadId]));
@@ -152,7 +147,7 @@ function ComposerRegion({ onOpenAgents }: ComposerRegionProps): React.JSX.Elemen
             permissionFollowsGlobal={permissionFollowsGlobal}
             onSelectPermissionMode={(mode) => void workspaceActions.setSessionPermissionMode(mode)}
             onFollowPermissionGlobal={() => void workspaceActions.writeSessionRules(null)}
-            agents={{ working: agentsWorking, onOpen: onOpenAgents }}
+            agents={{ working: agentsWorking, onOpen: () => uiStore.getState().openAgentsPane() }}
             effort={{
               value: selection.effort,
               options: selection.effortOptions,

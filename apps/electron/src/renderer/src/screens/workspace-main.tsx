@@ -2,7 +2,6 @@ import * as React from 'react';
 import { useStore } from 'zustand';
 
 import { ComposerRegion } from '@/composer/composer-region';
-import { editUserMessage, forkUserMessage } from '@/screens/workspace-fork';
 import { DialogLayer } from '@/dialogs/dialog-layer';
 import { NewTaskScreen } from '@/screens/new-task-screen';
 import { useNewTaskPage } from '@/screens/use-new-task-page';
@@ -23,7 +22,6 @@ import { useEscDismiss } from '@/screens/use-esc-dismiss';
 import { hotkeyGating } from '@/screens/hotkey-gating';
 import { ThreadBanner } from '@/thread/thread-banner';
 import { PanelLayer } from '@/screens/panel-layer';
-import { usePanelTabs } from '@/screens/use-panel-tabs';
 import { CommandPalette } from '@/palette/command-palette';
 import { useCommandPalette } from '@/screens/use-command-palette';
 import { ThreadStage } from '@/screens/thread-stage';
@@ -60,7 +58,6 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   const settingsEntry = useStore(uiStore, (s) => s.settingsEntry);
   /** 停止确认条开合（H2：不可恢复的停止先确认；Esc 链同源，真相在 ui store） */
   const confirmStop = useStore(uiStore, (s) => s.confirmStop);
-  const bottomInset = useStore(uiStore, (s) => s.composerInset);
   const composerLayerRef = useObservedHeight<HTMLDivElement>(publishComposerInset);
   /** Usage 总览页（I2；侧栏 footer 入口） */
   const usagePanel = useUsagePanel(workspace.sessions, workspace.statsById, workspace.actions.refreshAllStats);
@@ -79,9 +76,6 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
   /** 新建任务页：生命周期与渲染属性装配（退出出口集中在该 hook 的 close） */
   const newTask = useNewTaskPage({ workspace, onOpenSettings: openSettings, onDraftRestore: restoreDraft });
   const openNewTask = React.useCallback(() => newTask.enter(''), [newTask.enter]);
-  /** 面板系统（多标签 + 会话记忆 + 文件查看 + 打开文件弹窗）单一装配面（T34 M1：内部已换源 store+controller）。 */
-  const panels = usePanelTabs(activeThreadId);
-  const { panel, panelOpen, togglePanelFromHeader, openAgents, openDiff, toggleAgentsPane, toggleDiffPane, closePanel, openFilePicker } = panels;
 
   /** 命令面板（⌘P）装配：开关/条目/派发（hub 对话框模态期间不唤起）。 */
   const commandPalette = useCommandPalette({
@@ -89,7 +83,6 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     activeThreadId,
     sessions,
     openNewTask,
-    panels,
     openSettings,
     openSettingsAt,
     openUsage: usagePanel.openUsage,
@@ -115,21 +108,15 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     projectFilesOpen: projectFilesState.target !== null,
   });
   useCmdHotkeys(
-    { onNewThread: openNewTask, onSearch: openSidebarSearch, onToggleDiff: toggleDiffPane, onToggleAgents: toggleAgentsPane, onPalette: togglePalette },
+    {
+      onNewThread: openNewTask,
+      onSearch: openSidebarSearch,
+      onToggleDiff: () => uiStore.getState().toggleDiffPane(),
+      onToggleAgents: () => uiStore.getState().toggleAgentsPane(),
+      onPalette: togglePalette,
+    },
     hotkeysEnabled,
     paletteHotkeyEnabled,
-  );
-
-  /** Host down (never built or failed): persistent banner + model slot shows "host not connected" — must not masquerade as "no model configured". */
-  const hostDown = workspace.hostPhase === null || workspace.hostPhase === 'failed';
-  /** "+View" menu: opens and focuses the corresponding panel tab (toggle semantics is reserved for shortcuts only). */
-  const onViewAction = React.useCallback(
-    (id: string) => {
-      if (id === 'diff') openDiff();
-      else if (id === 'agents') openAgents();
-      else if (id === 'openFile') openFilePicker();
-    },
-    [openDiff, openAgents, openFilePicker],
   );
 
   useEscDismiss({
@@ -137,8 +124,8 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
     dialogCount: workspace.dialogs.length + (newTask.dialogOpen ? 1 : 0),
     paletteOpen,
     onPaletteClose: closePalette,
-    panelOpen: panel.activeId !== null,
-    onPanelClose: closePanel,
+    panelOpen: useStore(uiStore, (s) => s.panel.activeId !== null),
+    onPanelClose: () => uiStore.getState().closePanel(),
     bashRunning: workspace.bashRunning,
     generating: workspace.generating,
     agentsActive: workspace.agentsActive,
@@ -152,20 +139,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
       <div className="relative flex min-w-0 flex-1 flex-col">
         {newTask.screen === null ? (
           <>
-            <ThreadStage
-              workspace={workspace}
-              activeThreadId={activeThreadId}
-              sidebarCollapsed={sidebarCollapsed}
-              hostDown={hostDown}
-              bottomInset={bottomInset}
-              onOpenSettings={openSettings}
-              onOpenDiff={openDiff}
-              panelOpen={panelOpen}
-              onTogglePanel={togglePanelFromHeader}
-              onViewAction={onViewAction}
-              onEditUserMessage={editUserMessage}
-              onForkUserMessage={forkUserMessage}
-            />
+            <ThreadStage />
             <div ref={composerLayerRef} className="pointer-events-none absolute inset-x-0 bottom-0 z-10 px-[40px] pb-[18px]">
           {confirmStop ? (
             <StopConfirmBar
@@ -177,7 +151,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
             />
           ) : null}
           <ThreadBanner />
-          <ComposerRegion onOpenAgents={openAgents} />
+          <ComposerRegion />
             </div>
           </>
         ) : (
@@ -193,7 +167,7 @@ function WorkspaceMain({ workspace }: { workspace: LiveWorkspaceView }): React.J
         labels={paletteLabels}
         onSelect={onPaletteSelect}
       />
-      <PanelLayer panels={panels} workspace={workspace} />
+      <PanelLayer />
       <TitleBarLeft
         titleName={copy.appTitle.name}
         titleSuffix={copy.appTitle.suffix}
