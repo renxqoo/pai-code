@@ -336,6 +336,7 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
       return [...sessions.values()].sort((a, b) => b.lastActivityAt - a.lastActivityAt);
     },
     emitBuffered(): void {
+      // 重放逐条经 emit 直发渲染层（IPC 直发口径）；EVENT_BUFFER_LIMIT 即冷启动放大界限
       for (const event of eventBuffer.splice(0)) deps.emit(event);
     },
     markBootstrapped(): void {

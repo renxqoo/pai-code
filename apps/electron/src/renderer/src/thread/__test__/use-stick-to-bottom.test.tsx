@@ -134,7 +134,7 @@ describe('useStickToBottom', () => {
       });
       expect(scroller.getAttribute('data-at-bottom')).toBe('true');
 
-      // 批推到达（内容长高 + 渲染）：贴底 effect 重钉到当前底部
+      // 流式增量到达（内容长高 + 渲染）：贴底 effect 重钉到当前底部
       geo.grow(600);
       view.rerender(<Host />);
       expect(geo.scrollTop).toBe(1_600);

@@ -19,7 +19,7 @@ import { uiStore } from '@/ui/ui-store';
 
 /**
  * 会话舞台（T34 M2 区域化，0 props + memo）：live/ui store 自订阅——全宽菜单栏 +
- * 掉线横幅 + 页面滚动消息流 + 轮次锚点带 + 回底浮标。流式批推的重渲半径收敛在
+ * 掉线横幅 + 页面滚动消息流 + 轮次锚点带 + 回底浮标。流式增量的重渲半径收敛在
  * 本区域（B-batch 用例钉住）。菜单栏不随滚动，贴底跟随挂滚动容器。
  * 头部的视图模型与动作装配在 use-thread-header-assembly（与 ThreadHeader 同目录）。
  */
@@ -62,7 +62,7 @@ function ThreadStage(): React.JSX.Element {
     section.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start', inline: 'nearest' });
   }, []);
   /** ui 动作直调包装：引用恒定——MessageList/HostDownBanner 是 memo 边界，内联箭头
-   * 会随舞台每次重渲击穿（流式批推期每 50ms 一次）。 */
+   * 会随舞台每次重渲击穿（流式增量期逐事件重渲）。 */
   const onOpenSettings = React.useCallback(() => uiStore.getState().openSettings(), []);
   const onOpenDiff = React.useCallback(() => uiStore.getState().openDiffPane(), []);
 

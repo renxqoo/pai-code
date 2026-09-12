@@ -22,17 +22,17 @@ type ScriptedClient = BridgeClient & {
 
 function makeClient(script: (method: string, params: Record<string, unknown>) => Outcome | Promise<Outcome>): ScriptedClient {
   const calls: Array<{ method: string; params: unknown }> = [];
-  let listener: ((events: readonly unknown[]) => void) | undefined;
+  let listener: ((event: unknown) => void) | undefined;
   return {
     calls,
     available: true,
-    emitToController: (event: unknown) => listener?.([event]),
+    emitToController: (event: unknown) => listener?.(event),
     invoke: (method: string, params?: unknown) => {
       calls.push({ method, params: params ?? null });
       return Promise.resolve(script(method, (params ?? {}) as Record<string, unknown>)).then((outcome) => outcome as never);
     },
-    subscribe: (onBatch: (events: readonly unknown[]) => void) => {
-      listener = onBatch;
+    subscribe: (onEvent: (event: unknown) => void) => {
+      listener = onEvent;
       return () => {
         listener = undefined;
       };

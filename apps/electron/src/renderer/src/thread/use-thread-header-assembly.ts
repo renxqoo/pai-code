@@ -104,7 +104,7 @@ export function useThreadHeaderAssembly(input: ThreadHeaderAssemblyInput): Omit<
     [activeThreadId],
   );
   /** ui 动作直调包装：引用恒定——ThreadHeader 是 memo 边界，内联箭头会随舞台每次
-   * 重渲击穿（流式批推期每 50ms 一次）。 */
+   * 重渲击穿（流式增量期逐事件重渲）。 */
   const onTogglePanel = React.useCallback(() => uiStore.getState().togglePanelFromHeader(), []);
 
   const projectName = cwd.length === 0 ? '' : (baseNameOf(cwd) || cwd);

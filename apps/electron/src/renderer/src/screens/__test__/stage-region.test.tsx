@@ -13,7 +13,7 @@ import { copy } from '@/strings';
 import type { SessionView } from '@paiapp/contracts';
 
 /**
- * 舞台/面板/横幅区域回归（T34 M2）：自订阅面 + 流式批推重渲半径（B-batch
+ * 舞台/面板/横幅区域回归（T34 M2）：自订阅面 + 流式增量重渲半径（B-batch
  * 用例①②）。store 种子驱动（threads/sessions 引用形态与折叠层一致）。
  */
 
@@ -211,7 +211,7 @@ describe('重渲边界回归（B-batch）', () => {
 });
 
 describe('工作区根订阅面终态审计（B-batch ③ 的静态面）', () => {
-  test('workspace-main 源码不含热路径订阅选择器（threads/sessions/stats/threads 派生）——批推帧零重渲的结构性保证', async () => {
+  test('workspace-main 源码不含热路径订阅选择器（threads/sessions/stats/threads 派生）——逐事件帧零重渲的结构性保证', async () => {
     const source = await Bun.file(`${import.meta.dir}/../workspace-main.tsx`).text();
     for (const forbidden of ['s.threads', 's.sessions', 's.stats', 's.saved', 's.models']) {
       expect(source.includes(forbidden)).toBe(false);
@@ -223,7 +223,7 @@ describe('工作区根订阅面终态审计（B-batch ③ 的静态面）', () =
   test('症状：内联回调击穿舞台 memo 边界——thread-stage 不含渲染体内联箭头 props', async () => {
     const source = await Bun.file(`${import.meta.dir}/../thread-stage.tsx`).text();
     // ThreadHeader/MessageList/HostDownBanner 均为 memo 边界：渲染体内联箭头每次
-    // 换引用，流式批推期（50ms 一帧）逐帧击穿；舞台文件的回调一律 useCallback 恒定引用
+    // 换引用，流式增量期（逐事件一帧）逐帧击穿；舞台文件的回调一律 useCallback 恒定引用
     expect(source.includes('={() =>')).toBe(false);
   });
 });

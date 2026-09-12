@@ -42,7 +42,7 @@ type ComposerDialog = 'branch' | 'create-branch' | 'graph' | null;
  * 线程页输入卡区域（T33 M2 / T34 M2，0 props）：live/ui store 与 queuedDrafts 自订阅 →
  * 组装双页共享的四个子件（子件 props 契约不动）；提交/停止编排走模块；
  * textarea 对象 ref + 本区域挂载 effect 注册 controller 跨区聚焦通道
- * （区域卸载即注销、重挂即换绑——无 stale 元素窗口）。敲键与流式批推的重渲
+ * （区域卸载即注销、重挂即换绑——无 stale 元素窗口）。敲键与流式增量的重渲
  * 半径收敛在本子树内（B-keystroke 回归钉住）。文案直读 copy（hostDown 三态）。
  */
 function ComposerRegion(): React.JSX.Element {

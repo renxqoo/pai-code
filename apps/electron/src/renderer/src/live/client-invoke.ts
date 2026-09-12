@@ -3,12 +3,12 @@ import type { ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
 /**
  * preload 桥的 typed invoke：window.pai 存在时走 IPC，
  * 浏览器直开（无 preload）返回 unavailable —— 组件层据此降级为空形态。
- * subscribe 统一批形态（单事件包装为单元素数组）：消费方在批粒度折叠相邻 delta
- * （coalesceEvents），store 每批每块至多折叠一次。
+ * subscribe 逐事件回调（主进程到达即直发，无批形态）；壳层混入的非 UiEvent
+ * 消息由消费方按形状过滤。
  */
 export interface BridgeClient {
   invoke<M extends ApiMethod>(method: M, params: ApiParams<M>): Promise<ApiOutcome<M>>;
-  subscribe(onBatch: (events: readonly unknown[]) => void): () => void;
+  subscribe(onEvent: (event: unknown) => void): () => void;
   readonly available: boolean;
 }
 
@@ -27,13 +27,8 @@ export function createBridgeClient(bridge: PreloadBridgeShape | undefined): Brid
       if (bridge === undefined) return { ok: false, reason: 'bridge_unavailable' };
       return (await bridge.invoke(method, params)) as ApiOutcome<M>;
     },
-    subscribe(onBatch: (events: readonly unknown[]) => void): () => void {
-      return (
-        bridge?.subscribe((payload) => {
-          // 主进程 50ms 批推：数组与单事件双形态统一为批
-          onBatch(Array.isArray(payload) ? payload : [payload]);
-        }) ?? (() => undefined)
-      );
+    subscribe(onEvent: (event: unknown) => void): () => void {
+      return bridge?.subscribe(onEvent) ?? (() => undefined);
     },
   };
 }

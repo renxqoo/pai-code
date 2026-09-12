@@ -24,7 +24,7 @@
 | S5 | **多套状态容器并存**（硬信号） | 模块级可变对象 / 手搓 effect 同步 / useState / 真 store，≥3 种生命周期语义并存。手搓容器是差版 store：无订阅、无批处理、有补写窗口 | uiState 模块可变对象 + 8 个 useState + zustand store 三轨（B6） |
 | S6 | **一事多轨** | 同一事实有两条产出路径：文案（label props vs 直读 copy）、类型（双定义）、实例（同一工厂两处创建） | filterEmptyLabel props vs copy.sidebar 直读（B7）；createWorkspaceActions 双实例 |
 | S7 | **死物与腐烂** | noop 交互钮、描述已删功能的孤儿注释、测试夹具残留字段。测试目录在 typecheck 豁免面（tsconfig exclude `__test__`）时腐烂不可见 | 工作流/插件市场 noop 钮（B3）、onOpenRuntime 孤儿注释（B4）、三处夹具残留（B5/B8/B9） |
-| S8 | **重渲半径超标** | 高频更新源（tick、流式批推、轮询）挂在树的高处，重渲半径覆盖全树。判别：更新源的组件位置到真正消费 DOM 的距离 | ages 30s tick 在 WorkspaceMain，每 tick 全树重渲且必然击穿子 memo（B2） |
+| S8 | **重渲半径超标** | 高频更新源（tick、流式增量、轮询）挂在树的高处，重渲半径覆盖全树。判别：更新源的组件位置到真正消费 DOM 的距离 | ages 30s tick 在 WorkspaceMain，每 tick 全树重渲且必然击穿子 memo（B2） |
 
 ### 判定表
 

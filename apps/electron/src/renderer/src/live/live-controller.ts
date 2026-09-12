@@ -4,7 +4,6 @@ import { copy } from '@/strings';
 import { queuedDrafts } from '@/composer/queued-drafts';
 import type { BridgeClient } from './client-invoke';
 import { createRuntimeController } from './runtime-controller';
-import { coalesceEvents } from './coalesce-events';
 import { createBashEndProbe } from './bash-end-probe';
 import { createEntryHydration, createReadonlyHydration } from './entry-hydration';
 import { createDialogTimers } from './dialog-timers';
@@ -210,14 +209,11 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       // 可重入：StrictMode/HMR 的双挂载会先 dispose 再 start；复原 disposed、
       // 订阅以 unsubscribe 为准只建一次，bootstrap 每次刷新（幂等快照替换）。
       disposed = false;
-      unsubscribe ??= client.subscribe((batch) => {
-        const parsed: UiEvent[] = [];
-        for (const raw of batch) {
-          const event = parseEvent(raw);
-          if (event !== null) parsed.push(event);
-        }
-        // 批内相邻同类 delta 折叠后再逐条折叠进 store（批本身有序，不重排）
-        for (const event of coalesceEvents(parsed)) onEvent(event);
+      unsubscribe ??= client.subscribe((raw) => {
+        // 事件到达即逐条同步折叠进 store（无批缓冲：主进程直发，渲染层 zustand
+        // 订阅直出）；壳层混入的非 UiEvent 消息按形状静默丢弃
+        const event = parseEvent(raw);
+        if (event !== null) onEvent(event);
       });
       let outcome: Awaited<ReturnType<typeof client.invoke<'app/bootstrap'>>> | null = null;
       try {

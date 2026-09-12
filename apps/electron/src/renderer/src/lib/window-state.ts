@@ -9,7 +9,7 @@ export type WindowState = {
 
 export type WindowStateEvent = WindowState & { kind: 'window-state' };
 
-/** pai:event 通道同时承载批推数组与本事件的即时单发，这里只放行壳层状态事件。 */
+/** pai:event 通道还承载 UiEvent 逐事件直发，这里只放行壳层状态事件（其余形态降级为 false）。 */
 export function isWindowStateEvent(event: unknown): event is WindowStateEvent {
   return (
     typeof event === 'object' &&

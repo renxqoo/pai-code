@@ -77,11 +77,6 @@ export interface ApiRouteDeps {
   onPolicySyncFailed?: (minutes: number, reason: string) => void;
   /** 诊断包落盘（装配层注入：真实 fs + reveal；测试注入替身）。 */
   exportDiagnosticsBundle: () => string;
-  /** 单一全序钩子（T35 §13）：任一 invoke 结算后、结果回渲染层前同步调用——
-   * 装配层借此冲事件批。hub 同管道先发事件帧后发 response，而主进程事件走
-   * 50ms 批缓冲、response 直连 resolve：不冲批会让「快照类读口的结果」先于
-   * 其前序增量落地，渲染层 append-only 合并的前后缀前提被破坏（症状：正文重复）。 */
-  onCommandSettled?: () => void;
   /** 系统工具打开能力（访达/终端/编辑器；缺省走真实 execFile 探测）。 */
   openLocation?: OpenLocation;
   /** 项目文件只读面（代码查看器数据源；缺省走真实 fs）。 */
@@ -551,7 +546,6 @@ export function createApiRoutes(deps: ApiRouteDeps) {
         // 路由实现内未捕获的异常（磁盘错/装配面）统一收窄，不沿 IPC reject 到渲染层
         outcome = fail('internal_error');
       }
-      deps.onCommandSettled?.();
       return outcome;
     },
 

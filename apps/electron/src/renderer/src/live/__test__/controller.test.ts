@@ -25,11 +25,11 @@ function stubTimers(): { fire: () => void } {
 
 function makeClient(): BridgeClient & { invokes: string[]; emitToController: (event: unknown) => void } {
   const invokes: string[] = [];
-  let listener: ((events: readonly unknown[]) => void) | undefined;
+  let listener: ((event: unknown) => void) | undefined;
   return {
     invokes,
     available: true,
-    emitToController: (event: unknown) => listener?.([event]),
+    emitToController: (event: unknown) => listener?.(event),
     invoke: async (method: string) => {
       invokes.push(method);
       if (method === 'app/bootstrap') {
@@ -46,8 +46,8 @@ function makeClient(): BridgeClient & { invokes: string[]; emitToController: (ev
       }
       return { ok: true, data: null } as never;
     },
-    subscribe: (onBatch: (events: readonly unknown[]) => void) => {
-      listener = onBatch;
+    subscribe: (onEvent: (event: unknown) => void) => {
+      listener = onEvent;
       return () => {
         listener = undefined;
       };
@@ -183,7 +183,7 @@ test('症状回归「轮结算后历史全没了（对话收起来）」：窗�
     { kind: 'user', id: 'u2', text: '新问', origin: 'user', images: [], at: 3 },
     { kind: 'assistant', id: 'a2', text: '新答', thinking: '', toolCalls: [], usage: null, stopReason: null, errorMessage: null, at: 4 },
   ] as never;
-  let listener: ((events: readonly unknown[]) => void) | undefined;
+  let listener: ((event: unknown) => void) | undefined;
   const client: BridgeClient = {
     available: true,
     invoke: (method: string, params?: unknown) => {
@@ -207,8 +207,8 @@ test('症状回归「轮结算后历史全没了（对话收起来）」：窗�
       }
       return Promise.resolve({ ok: true, data: null } as never);
     },
-    subscribe: (onBatch: (events: readonly unknown[]) => void) => {
-      listener = onBatch;
+    subscribe: (onEvent: (event: unknown) => void) => {
+      listener = onEvent;
       return () => {
         listener = undefined;
       };
@@ -216,7 +216,7 @@ test('症状回归「轮结算后历史全没了（对话收起来）」：窗�
   };
   const controller = createLiveController(client, store);
   await controller.start();
-  const emit = (event: unknown): void => listener?.([event]);
+  const emit = (event: unknown): void => listener?.(event);
   store.setState({
     sessions: {
       [threadId]: { threadId, cwd: '/w', sessionPath: '/w/s/t1.jsonl', title: 't', state: 'live', streaming: false, model: null, thinkingLevel: null, lastActivityAt: 1 },
@@ -253,7 +253,7 @@ test('症状回归「轮结算后历史全没了（对话收起来）」：窗�
 test('症状回归「流式中 ! 直执行：正在生成的回复瞬间消失」：bash 重建对在途轮降级为不拆轮 reconcile', async () => {
   const store = createLiveStore();
   const threadId = 't1';
-  let listener: ((events: readonly unknown[]) => void) | undefined;
+  let listener: ((event: unknown) => void) | undefined;
   const client: BridgeClient = {
     available: true,
     invoke: (method: string) => {
@@ -264,8 +264,8 @@ test('症状回归「流式中 ! 直执行：正在生成的回复瞬间消失�
       if (method === 'session/entries') return Promise.resolve({ ok: true, data: { items: [], cursor: null } } as never);
       return Promise.resolve({ ok: true, data: null } as never);
     },
-    subscribe: (onBatch: (events: readonly unknown[]) => void) => {
-      listener = onBatch;
+    subscribe: (onEvent: (event: unknown) => void) => {
+      listener = onEvent;
       return () => {
         listener = undefined;
       };
@@ -273,7 +273,7 @@ test('症状回归「流式中 ! 直执行：正在生成的回复瞬间消失�
   };
   const controller = createLiveController(client, store);
   await controller.start();
-  const emit = (event: unknown): void => listener?.([event]);
+  const emit = (event: unknown): void => listener?.(event);
   store.setState({
     sessions: {
       [threadId]: { threadId, cwd: '/w', sessionPath: '/w/s/t1.jsonl', title: 't', state: 'live', streaming: false, model: null, thinkingLevel: null, lastActivityAt: 1 },
@@ -303,7 +303,7 @@ test('症状回归「followUp 续轮开头一段流式内容消失」：settle �
   const timers = stubTimers();
   const store = createLiveStore();
   const threadId = 't1';
-  let listener: ((events: readonly unknown[]) => void) | undefined;
+  let listener: ((event: unknown) => void) | undefined;
   let releaseEntries: ((outcome: { ok: true; data: { items: unknown[]; cursor: string | null } }) => void) | undefined;
   const gate = new Promise<{ ok: true; data: { items: unknown[]; cursor: string | null } }>((resolve) => {
     releaseEntries = resolve;
@@ -318,8 +318,8 @@ test('症状回归「followUp 续轮开头一段流式内容消失」：settle �
       if (method === 'session/stats') return Promise.resolve({ ok: true, data: { contextUsage: null, tokensTotal: 0 } } as never);
       return Promise.resolve({ ok: true, data: null } as never);
     },
-    subscribe: (onBatch: (events: readonly unknown[]) => void) => {
-      listener = onBatch;
+    subscribe: (onEvent: (event: unknown) => void) => {
+      listener = onEvent;
       return () => {
         listener = undefined;
       };
@@ -327,7 +327,7 @@ test('症状回归「followUp 续轮开头一段流式内容消失」：settle �
   };
   const controller = createLiveController(client, store);
   await controller.start();
-  const emit = (event: unknown): void => listener?.([event]);
+  const emit = (event: unknown): void => listener?.(event);
   store.setState({
     sessions: {
       [threadId]: { threadId, cwd: '/w', sessionPath: '/w/s/t1.jsonl', title: 't', state: 'live', streaming: false, model: null, thinkingLevel: null, lastActivityAt: 1 },
@@ -358,7 +358,7 @@ test('症状回归「followUp 续轮开头一段流式内容消失」：settle �
 test('症状回归「重载后切回流式中的会话，正在生成的内容消失一段」：live 冷启动拉补走 reconcile 保在途增量', async () => {
   const store = createLiveStore();
   const threadId = 't1';
-  let listener: ((events: readonly unknown[]) => void) | undefined;
+  let listener: ((event: unknown) => void) | undefined;
   const persisted = [{ kind: 'user', id: 'u1', text: '旧问', origin: 'user', images: [], at: 1 }];
   const client: BridgeClient = {
     available: true,
@@ -370,8 +370,8 @@ test('症状回归「重载后切回流式中的会话，正在生成的内容�
       if (method === 'session/entries') return Promise.resolve({ ok: true, data: { items: persisted, cursor: 'u1' } } as never);
       return Promise.resolve({ ok: true, data: null } as never);
     },
-    subscribe: (onBatch: (events: readonly unknown[]) => void) => {
-      listener = onBatch;
+    subscribe: (onEvent: (event: unknown) => void) => {
+      listener = onEvent;
       return () => {
         listener = undefined;
       };
@@ -379,7 +379,7 @@ test('症状回归「重载后切回流式中的会话，正在生成的内容�
   };
   const controller = createLiveController(client, store);
   await controller.start();
-  const emit = (event: unknown): void => listener?.([event]);
+  const emit = (event: unknown): void => listener?.(event);
   // 重载后：事件流先到，折出在途轮与已流出增量
   store.setState({
     sessions: {
@@ -410,7 +410,7 @@ test('症状回归「重载后切回流式中的会话，正在生成的内容�
 test('症状回归「重载落在轮次进行中：同一轮折叠分裂成两个（共工作/已工作）」：拉补先落、事件后到时补挂重定基收回双渲染', async () => {
   const store = createLiveStore();
   const threadId = 't1';
-  let listener: ((events: readonly unknown[]) => void) | undefined;
+  let listener: ((event: unknown) => void) | undefined;
   const persisted = [
     { kind: 'user', id: 'u1', text: '看一下今天天气，还有未来5天的', origin: 'user', images: [], at: 1 },
     { kind: 'assistant', id: 'a1', text: '在途前半（已落盘）', thinking: '', toolCalls: [], usage: null, stopReason: null, errorMessage: null, at: 2 },
@@ -428,8 +428,8 @@ test('症状回归「重载落在轮次进行中：同一轮折叠分裂成两�
       if (method === 'session/entries') return Promise.resolve({ ok: true, data: { items: persisted, cursor: 'a1' } } as never);
       return Promise.resolve({ ok: true, data: null } as never);
     },
-    subscribe: (onBatch: (events: readonly unknown[]) => void) => {
-      listener = onBatch;
+    subscribe: (onEvent: (event: unknown) => void) => {
+      listener = onEvent;
       return () => {
         listener = undefined;
       };
@@ -437,7 +437,7 @@ test('症状回归「重载落在轮次进行中：同一轮折叠分裂成两�
   };
   const controller = createLiveController(client, store);
   await controller.start();
-  const emit = (event: unknown): void => listener?.([event]);
+  const emit = (event: unknown): void => listener?.(event);
   store.setState({
     sessions: {
       [threadId]: { threadId, cwd: '/w', sessionPath: '/w/s/t1.jsonl', title: 't', state: 'live', streaming: false, model: null, thinkingLevel: null, lastActivityAt: 1 },

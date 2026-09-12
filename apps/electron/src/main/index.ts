@@ -76,49 +76,35 @@ void app.whenReady().then(async () => {
   };
 
   let mainWindow: BrowserWindow | null = null;
-  /** 事件批推缓冲：50ms 分桶（流式 delta 高频，逐条 IPC 直推会放大渲染层压力）。 */
-  let pendingEvents: unknown[] = [];
-  let flushTimer: ReturnType<typeof setTimeout> | null = null;
-  const flushEvents = (): void => {
-    flushTimer = null;
-    if (pendingEvents.length === 0) return;
-    const batch = pendingEvents;
-    pendingEvents = [];
-    // 失焦通知随批发定一次（通知只关心批内是否含触发类事件，逐事件判定是
-    // 高频 delta 期的无谓原生调用）
-    for (const raw of batch) {
-      if (notifyIfBlurred(raw as UiEvent)) break;
-    }
+  /** 事件直发渲染层：到达即逐条推 IPC，不缓冲不延迟。全序由帧到达序保证——hub
+   *  同管道先发事件帧后发 response，直发下事件恒先于 invoke 结果到达渲染层。 */
+  const emitToRenderer = (event: UiEvent): void => {
+    notifyIfBlurred(event);
     const target = mainWindow;
     if (target === null || target.isDestroyed()) return;
-    target.webContents.send('pai:event', batch);
-  };
-  const emitToRenderer = (event: UiEvent): void => {
-    pendingEvents.push(event);
-    if (pendingEvents.length >= 128) {
-      if (flushTimer !== null) clearTimeout(flushTimer);
-      flushEvents();
-      return;
-    }
-    flushTimer ??= setTimeout(flushEvents, 50);
+    target.webContents.send('pai:event', event);
   };
 
-  /** K1 系统通知：窗口失焦时的权限弹窗与 host 失败（任务通知走应用内通知条）。 */
+  /** K1 系统通知：窗口失焦时的权限弹窗与 host 失败（任务通知走应用内通知条）。
+   *  逐事件判定，类型预筛先行——高频 delta 期零原生调用，仅触发类事件才查焦点；
+   *  每个触发事件一条通知（多会话同窗 settle 各自一条，对应独立会话）。 */
   const notifyIfBlurred = (event: UiEvent): boolean => {
-    if (!Notification.isSupported()) return false;
-    const win = mainWindow;
-    if (win !== null && !win.isDestroyed() && win.isFocused()) return false;
+    let body: string;
     if (event.type === 'dialogRequest' && event.method !== 'notify' && event.method !== 'setStatus') {
-      new Notification({ title: 'pai', body: event.title ?? 'Action required' }).show();
+      body = event.title ?? 'Action required';
     } else if (event.type === 'host' && event.phase === 'failed') {
-      new Notification({ title: 'pai', body: 'Agent host failed to start.' }).show();
+      body = 'Agent host failed to start.';
     } else if (event.type === 'host' && event.phase === 'restarting') {
-      new Notification({ title: 'pai', body: 'Agent host is restarting.' }).show();
+      body = 'Agent host is restarting.';
     } else if (event.type === 'turnSettled') {
-      new Notification({ title: 'pai', body: 'Turn finished.' }).show();
+      body = 'Turn finished.';
     } else {
       return false;
     }
+    if (!Notification.isSupported()) return false;
+    const win = mainWindow;
+    if (win !== null && !win.isDestroyed() && win.isFocused()) return false;
+    new Notification({ title: 'pai', body }).show();
     return true;
   };
 
@@ -188,8 +174,6 @@ void app.whenReady().then(async () => {
       settings,
       keyStore,
       monitor: monitorRef,
-      // 单一全序：invoke 结算先冲事件批，再让结果回渲染层（T35 §13）
-      onCommandSettled: () => flushEvents(),
       onPolicySyncFailed: (minutes, reason) => {
         loggingToMonitor.log(`set_idle_retire_failed:${minutes}:${reason}`);
       },
@@ -316,7 +300,7 @@ void app.whenReady().then(async () => {
     }));
 
     // 壳层状态推送（最大化/全屏）：caption 图标切换与 macOS 全屏态标题块收窄共用；
-    // 经既有 pai:event 通道即时单发（不进批推）
+    // 经既有 pai:event 通道即时单发
     const publishWindowState = () => {
       if (win.isDestroyed()) return;
       win.webContents.send('pai:event', {
@@ -356,8 +340,6 @@ void app.whenReady().then(async () => {
     if (quitting) return;
     event.preventDefault();
     quitting = true;
-    if (flushTimer !== null) clearTimeout(flushTimer);
-    flushEvents();
     monitor?.stop();
     void runtime
       ?.stop()

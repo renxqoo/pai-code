@@ -22,7 +22,7 @@ const keyStore: ProviderKeyStore = {
   keyNames: [],
 };
 
-function makeRoutes(work: string, deps?: { onCommandSettled?: () => void }) {
+function makeRoutes(work: string) {
   const agentDir = join(work, "agent");
   mkdirSync(join(agentDir, "sessions"), { recursive: true });
   const settings = createFileSettings(join(work, "settings.json"), keyStore);
@@ -52,7 +52,6 @@ function makeRoutes(work: string, deps?: { onCommandSettled?: () => void }) {
     agentDefinitions: createAgentDefinitionsStore(agentDir),
     revealPath: () => undefined,
     pickDirectory: () => Promise.resolve(null),
-    ...(deps?.onCommandSettled !== undefined ? { onCommandSettled: deps.onCommandSettled } : {}),
   });
   return { routes, audits, agentDir };
 }
@@ -319,26 +318,6 @@ describe("api-routes agent 定义面（T20）", () => {
     expect(removed.ok).toBe(true);
     expect(audits).toContain("agent_upsert: user/search");
     expect(audits).toContain("agent_remove: user/search");
-  });
-});
-
-describe("api-routes 单一全序钩子（T35 §13 M4）", () => {
-  test("onCommandSettled 在 invoke 结算后、结果返回前同步调用（主进程借此冲事件批）", async () => {
-    const work = mkdtempSync(join(tmpdir(), "pai-sec-order-"));
-    const order: string[] = [];
-    const { routes } = makeRoutes(work, { onCommandSettled: () => order.push("settled") });
-    const outcome = (await routes.invoke("session/inflight", { threadId: "t1" })) as { ok: boolean };
-    order.push("returned");
-    expect(outcome.ok).toBe(false); // 本装置无 host：failure 路径同样要过钩子
-    expect(order).toEqual(["settled", "returned"]);
-  });
-
-  test("无效方法（unknown_method）不触发钩子（未到达命令层，无全序义务）", async () => {
-    const work = mkdtempSync(join(tmpdir(), "pai-sec-order2-"));
-    let settled = 0;
-    const { routes } = makeRoutes(work, { onCommandSettled: () => (settled += 1) });
-    await routes.invoke("session/nope" as never, {});
-    expect(settled).toBe(0);
   });
 });
 
