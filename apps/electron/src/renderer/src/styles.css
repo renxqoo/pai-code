@@ -276,6 +276,17 @@
 .chat-markdown > :last-child {
   margin-block-end: 0 !important;
 }
+/*
+ * 块冻结分裂形态（T37）：冻结块/实时尾区各自挂为独立 chunk 根（md-chunk），首尾
+ * 清零守卫需穿透一层才作用于真正的首/末块；chunk 根无 padding/border，子块纵向
+ * margin 穿透折叠，与容器/chunk 双级 space-y 一起保持与单实例形态一致的垂直节奏。
+ */
+.chat-markdown > .md-chunk:first-child > :first-child {
+  margin-block-start: 0 !important;
+}
+.chat-markdown > .md-chunk:last-child > :last-child {
+  margin-block-end: 0 !important;
+}
 .chat-markdown [data-streamdown='heading-1'] {
   margin-block: 30px 14px;
   font-size: 18.5px;

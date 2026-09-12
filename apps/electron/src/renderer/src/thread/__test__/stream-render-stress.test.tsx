@@ -120,3 +120,74 @@ test('逐事件 commit 的流式渲染突增：预算内完成、终态精确、
 
   handle.unmount();
 });
+
+/**
+ * 超长单消息流式（T37 块冻结渲染的收益面）：64KB markdown 按 512B 增量逐条到达，
+ * 每 delta 一次真实 commit。块冻结下稳态成本 O(尾块)——预算按基线数量级余量钉死；
+ * 回归形态（冻结失效退回每 delta 全文重渲）实测 >30ms/commit，必爆预算。
+ */
+const LONG_MESSAGE_TARGET_KB = 64;
+const LONG_CHUNK_BYTES = 512;
+/** 基线实测 ~570-740ms 全程（稳态 ~2.5-4ms/commit、纯缓存 0.08ms/delta）；预算
+ *  ≈ 3 倍余量拦粗级回归，「冻结失效」类回归由下面的块数断言钉死（预算单用拦不住）。 */
+const LONG_MESSAGE_BUDGET_MS = 2_500;
+/** 64KB 流结束后应冻结出百级块：冻结机制死亡的回归形态（CRLF/判据漂移）只剩 ≤1 块。 */
+const LONG_MESSAGE_MIN_CHUNKS = 100;
+
+function longMessageUnit(index: number): string {
+  const shapes = [
+    `### 章节 ${index}\n\n`,
+    '分析段落，含 **要点**、`标记` 与解释文字，模拟真实流式输出。\n\n',
+    '- 论据甲\n- 论据乙\n- 论据丙\n\n',
+    '```ts\n' + `export const case${index} = { id: ${index}, ok: true };`.repeat(6) + '\n```\n\n',
+  ];
+  return shapes[index % shapes.length] ?? '';
+}
+
+test('64KB 长消息逐 delta 流式：块冻结下预算内完成、终态完整', async () => {
+  const store = createLiveStore();
+  store.getState().setActiveThread(THREAD);
+  store.getState().hydrate(THREAD, { kind: 'hydrate/initial', items: [], cursor: null });
+
+  const handle = render(<StreamStage store={store} />);
+  const apply = (event: UiEvent): void => {
+    React.act(() => {
+      store.getState().applyEvent(event, Date.now());
+    });
+  };
+  apply({ type: 'turnStarted', threadId: THREAD, at: 1 });
+  apply({ type: 'messageStarted', threadId: THREAD, messageId: 'm-long', at: 1 });
+
+  const units: string[] = [];
+  const parts: string[] = [];
+  let lastCodeIndex = -1;
+  for (let index = 0; units.join('').length < LONG_MESSAGE_TARGET_KB * 1024; index += 1) {
+    units.push(longMessageUnit(index));
+    if (index % 4 === 3) lastCodeIndex = index;
+  }
+  const full = units.join('');
+  for (let offset = 0; offset < full.length; offset += LONG_CHUNK_BYTES) {
+    parts.push(full.slice(offset, offset + LONG_CHUNK_BYTES));
+  }
+
+  const started = performance.now();
+  for (const part of parts) {
+    apply({ type: 'textDelta', threadId: THREAD, messageId: 'm-long', delta: part });
+  }
+  await React.act(async () => {
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+  });
+  const elapsed = performance.now() - started;
+
+  // 终态完整：冻结头部（首单元章节）与实时尾部（最后一个代码单元）都在场
+  expect(handle.container.textContent).toContain('章节 0');
+  expect(lastCodeIndex).toBeGreaterThanOrEqual(0);
+  expect(handle.container.textContent).toContain(`case${lastCodeIndex}`);
+  // 冻结机制存活：流结束应有百级冻结块（死亡形态 = 单块/无 md-chunk）
+  expect(handle.container.querySelectorAll('.md-chunk').length).toBeGreaterThanOrEqual(LONG_MESSAGE_MIN_CHUNKS);
+  expect(elapsed).toBeLessThan(LONG_MESSAGE_BUDGET_MS);
+
+  handle.unmount();
+});
