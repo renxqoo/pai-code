@@ -1,8 +1,18 @@
+# 依赖与构建产物
 node_modules/
 out/
 dist/
 coverage/
-.DS_Store
-*.log
+release/
 resources/
-apps/electron/release/
+
+# 本地环境与编辑器
+.DS_Store
+.claude/
+.expo/
+.idea/
+.env
+.env.*
+
+# 日志
+*.log
