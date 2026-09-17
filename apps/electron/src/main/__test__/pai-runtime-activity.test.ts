@@ -70,7 +70,7 @@ function makeFixture() {
 }
 
 describe('会话活动时间语义（T5 §修复）', () => {
-  test('症状回归：turn 活动推进内存视图与注册表行（agent_start → agent_settled 同步落库）', async () => {
+  test('症状回归：turn 活动推进内存视图与注册表行（turnStarted → turnSettled 同步落库）', async () => {
     const { runtime, pushFrame } = makeFixture();
     await runtime.start();
     runtime.markBootstrapped();

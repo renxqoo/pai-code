@@ -83,7 +83,6 @@ export const zhSettings: typeof enSettings = {
     permissionsDefaultModeHint: '会话未显式选择时采用；修改不影响进行中的会话。',
     permissionsDefaultThinking: '默认思考档',
     permissionsDefaultThinkingHint: '新会话的 Off / Low / Medium / High；会话内设置优先。',
-    permissionsUnset: 'Hub 缺省',
     permModeOptions: {
       plan: '计划',
       default: '默认',

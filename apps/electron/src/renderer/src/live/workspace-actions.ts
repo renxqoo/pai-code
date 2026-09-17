@@ -376,7 +376,7 @@ export function createWorkspaceActions(): WorkspaceActions {
     },
     fetchCommandPreview: () => controller.fetchCommandPreview(),
     setSkillEnabled: async (name, enabled) => {
-      // 生效编排走 controller 排队链：写 pi settings + 串行重开全部 live 会话（信任态由注册表补全）
+      // 生效编排走 controller 排队链：写 hub settings（skills/setEnabled）+ 串行重开全部 live 会话（信任态由注册表补全）
       const outcome = await controller.applySkillToggle(name, enabled);
       if (!outcome.ok && outcome.reason !== 'skill_not_found') {
         pushNotice(copy.settings.skillToggleFailed);
@@ -460,8 +460,8 @@ export function createWorkspaceActions(): WorkspaceActions {
       }
       const outcome = await controller.forkSession(activeThreadOf(), seq);
       if (!outcome.ok) {
-        // 扩展拦截不是瞬时故障：重试无意义，文案与「请重试」区分
-        pushNotice(outcome.reason === 'fork_cancelled' ? copy.flow.forkCancelled : copy.flow.forkFailed);
+        // 流式中的 fork 被 hub 拒绝（thread is streaming）：停止前重试无意义，指引用户先停止
+        pushNotice(outcome.reason.includes('thread is streaming') ? copy.flow.forkStreaming : copy.flow.forkFailed);
         return null;
       }
       return outcome.threadId;

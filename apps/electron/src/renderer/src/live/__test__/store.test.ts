@@ -100,17 +100,13 @@ describe('live store（对话框/通知/bootstrap 合并）', () => {
     expect(store.getState().sessionPermissionMode).toBe(mode);
   });
 
-  test('host/sessionUpdated/sessionRenamed 会话表维护 + sessionDied 线程标记', () => {
+  test('host/sessionUpdated 会话表维护 + sessionDied 线程标记', () => {
     const store = createLiveStore();
     store.getState().bootstrap(bootstrapOf([session('t1')]));
     store.getState().applyEvent({ type: 'host', phase: 'restarting' }, 1);
     expect(store.getState().hostPhase).toBe('restarting');
     store.getState().applyEvent({ type: 'sessionUpdated', session: { ...session('t1'), streaming: true } }, 2);
     expect(store.getState().sessions['t1']?.streaming).toBe(true);
-    store.getState().applyEvent({ type: 'sessionRenamed', threadId: 't1', name: '新名' }, 3);
-    expect(store.getState().sessions['t1']?.title).toBe('新名');
-    // 未知线程的改名无操作
-    store.getState().applyEvent({ type: 'sessionRenamed', threadId: 'ghost', name: 'x' }, 4);
     store.getState().applyEvent({ type: 'sessionDied', threadId: 't1', reason: 'crash' }, 5);
     expect(store.getState().threads['t1']?.crashed).toBe(true);
     // 未知线程的对话流事件兜底建线程（不崩溃）
@@ -124,7 +120,7 @@ describe('live store（对话框/通知/bootstrap 合并）', () => {
     store.getState().applyEvent({ type: 'turnStarted', threadId: 't1', at: 2 }, 2);
     store.getState().applyEvent({ type: 'queueChanged', threadId: 't1', steering: [], followUp: ['等轮末'] }, 3);
     store.getState().applyEvent({ type: 'queueChanged', threadId: 't2', steering: ['插入'], followUp: [] }, 4);
-    // 宿主挂死重启：全部线程的运行面随进程消亡（不会有 settle/queue_update）
+    // 宿主挂死重启：全部线程的运行面随进程消亡（不会有 turnSettled/queueChanged）
     store.getState().applyEvent({ type: 'host', phase: 'restarting' }, 5);
     expect(store.getState().threads['t1']?.streaming).toBe(false);
     expect(store.getState().threads['t1']?.queue).toEqual({ steering: [], followUp: [] });

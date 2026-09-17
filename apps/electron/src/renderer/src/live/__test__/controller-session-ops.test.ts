@@ -3,8 +3,9 @@ import { expect, test } from 'bun:test';
 import { createLiveController } from '../live-controller';
 import { createLiveStore } from '../store';
 import type { BridgeClient } from '../client-invoke';
+import { copy } from '@/strings';
 
-/** 会话级操作（compact / rename）的命令透传与失败原因表驱动回归。 */
+/** 会话级操作（compact / rename / thinking）的命令透传与失败原因表驱动回归。 */
 
 type Outcome = { ok: true; data: unknown } | { ok: false; reason: string };
 
@@ -153,9 +154,32 @@ test('forkSession：命令形状（seq = WAL 行号）、新会话激活与旧�
   expect(store.getState().threads['t1']?.streaming).toBe(false);
 });
 
-test('forkSession 失败带原因不切会话（cancelled 拦截交上层文案区分）', async () => {
-  const client = makeClient({ 'session/fork': { ok: false, reason: 'fork_cancelled' } });
+test('selectThinking 成功：命令透传、无通知', async () => {
+  const client = makeClient({});
   const store = createLiveStore();
-  expect(await createLiveController(client, store).forkSession('t1', 9)).toEqual({ ok: false, reason: 'fork_cancelled' });
+  await createLiveController(client, store).selectThinking('t1', 'high');
+  expect(client.calls).toContainEqual({ method: 'session/setThinking', params: { threadId: 't1', level: 'high' } });
+  expect(store.getState().notices).toEqual([]);
+});
+
+test('selectThinking 词表外值：本地拒绝不发命令，thinkingInvalid 通知', async () => {
+  const client = makeClient({});
+  const store = createLiveStore();
+  await createLiveController(client, store).selectThinking('t1', 'ultra');
+  expect(client.calls.some((call) => call.method === 'session/setThinking')).toBe(false);
+  expect(store.getState().notices.map((notice) => notice.text)).toEqual([copy.flow.thinkingInvalid]);
+});
+
+test('症状回归「思考档被 hub 拒绝但 UI 无反馈」：失败 reason 进通知条（thinkingRejected）', async () => {
+  const client = makeClient({ 'session/setThinking': { ok: false, reason: 'level not supported by model' } });
+  const store = createLiveStore();
+  await createLiveController(client, store).selectThinking('t1', 'high');
+  expect(store.getState().notices.map((notice) => notice.text)).toEqual([copy.flow.thinkingRejected('level not supported by model')]);
+});
+
+test('forkSession 失败带原因不切会话（hub 拒绝原因交上层文案分派）', async () => {
+  const client = makeClient({ 'session/fork': { ok: false, reason: 'thread is streaming' } });
+  const store = createLiveStore();
+  expect(await createLiveController(client, store).forkSession('t1', 9)).toEqual({ ok: false, reason: 'thread is streaming' });
   expect(store.getState().activeThreadId).toBeNull();
 });

@@ -130,6 +130,8 @@ export const en = {
     steerFailed: (reason: string): string => `Steering failed (${reason}).`,
     /** 思考档词表外值（hub 静默忽略——渲染层先行拒绝提示） */
     thinkingInvalid: 'That thinking level is not available.',
+    /** 思考档写入被 hub 拒绝（reason 为 hub 错误文案） */
+    thinkingRejected: (reason: string): string => `Thinking level not applied: ${reason}.`,
     /** 子代理状态词（busy|idle|on-disk → 工作中/空闲/已归档） */
     subagentBusy: 'Working',
     subagentIdle: 'Idle',
@@ -182,7 +184,10 @@ export const en = {
     editRerun: 'Edit & rerun (fork)',
     retryFromHere: 'Retry from here',
     forkFailed: 'Forking the conversation failed. Try again.',
-    forkCancelled: 'The fork was cancelled by an extension; the conversation is unchanged.',
+    /** 流式中的 fork 被 hub 拒绝（thread is streaming）：先停止会话再分叉 */
+    forkStreaming: 'The conversation is still streaming. Stop it before forking.',
+    /** 回合结算失败（settled ok=false；reason 为 hub/worker 错误文案） */
+    turnFailed: (reason: string): string => (reason.length > 0 ? `The reply failed (${reason}).` : 'The reply failed.'),
     forkedImageName: (index: number): string => `Image ${index}`,
     resumeFailed: 'Resuming the conversation failed. Try again.',
     stopConfirmTitle: 'Stop everything?',
@@ -450,7 +455,7 @@ export const en = {
     loadingHint: 'Connecting to the coding agent host.',
     failedTitle: 'Cannot start',
     bridgeHint: 'The preload bridge is unavailable. Relaunch the app from the desktop entry.',
-    hostFailed: 'The agent host failed to start. Check Settings for provider configuration and the pai-cli path.',
+    hostFailed: 'The agent host failed to start. Check Settings for provider configuration and the host-hub path.',
   },
   host: {
     downBanner: 'The agent host is not connected — models and sessions are unavailable (configured providers are unaffected).',

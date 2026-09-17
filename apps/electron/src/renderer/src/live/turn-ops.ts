@@ -99,11 +99,11 @@ function isAnonymousBlock(block: TurnBlock): boolean {
 }
 
 /**
- * 认领匿名块：wire（event-strip）把 message_update 的 message/partial 剥掉，重载落在
- * 消息流式中时重订阅续上的增量全部空 id，而 liveMessageId 要等读口快照（或 messageFinal）
- * 才能确立——此前折出的匿名块必须在身份确立时归位到 `*-${messageKey}`。不认领则孤儿块
- * 永久滞留：同一条消息渲染成「中段片段 + 正常块」两个体，messageFinal 的权威替换也
- * 寻址不到匿名块。归位即合并（append-only / callId 并集），无匿名块时原引用返回（幂等）。
+ * 认领匿名块：空 id 增量折出的块无消息身份（`text-`/`think-`/`tools-` 无后缀），而
+ * liveMessageId 要等读口快照（或 messageFinal）才能确立——匿名块必须在身份确立时
+ * 归位到 `*-${messageKey}`。不认领则孤儿块永久滞留：同一条消息渲染成「中段片段 +
+ * 正常块」两个体，messageFinal 的权威替换也寻址不到匿名块。归位即合并（append-only /
+ * callId 并集），无匿名块时原引用返回（幂等）。
  */
 export function claimAnonymousBlocks(blocks: readonly TurnBlock[], messageKey: string): readonly TurnBlock[] {
   if (!blocks.some(isAnonymousBlock)) return blocks;

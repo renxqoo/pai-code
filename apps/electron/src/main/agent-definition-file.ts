@@ -3,11 +3,12 @@ import { join as joinPaths } from 'node:path';
 import type { AgentScope } from '@paiapp/contracts';
 
 /**
- * 子 agent 定义文件（markdown）编解码：frontmatter {name, description, tools?, model?}
- * + 正文 = systemPrompt（hub agent-definitions.ts 的文件契约）。
- * 写侧：只产出单行标量与 tools 块列表项，文件名主干恒等于 name（pattern 内）。
- * 读侧：hub 合法形态全兼容——无/单/双引号标量、标量尾注释、tools 逗号串 / 块列表 /
- * flow 数组（[a, b]）、BOM、栅栏行尾空格、name 为任意非空字符串（pattern 校验只在写路径）。
+ * 子 agent 定义文件（markdown）编解码。
+ * 写侧 = host-hub renderAgentTypeMd 同构（round-trip 由 hub 解析器保证）：
+ * frontmatter 无 name 字段（name ≡ 文件名主干）、description 无引号单行、
+ * model 单 token、tools 流数组 [a, b]；正文 = systemPrompt。
+ * 读侧比写侧宽容（无/单/双引号标量、尾注释、块列表/逗号串——手写文件仍可枚举），
+ * 但带引号 name/tools 块列表是 hub 解析器拒绝的形态——写侧恒不产出。
  */
 export type AgentDefinitionFile = {
   name: string;
@@ -17,21 +18,12 @@ export type AgentDefinitionFile = {
   model: string | null;
 };
 
-/** YAML 单引号标量：内部单引号翻倍；换行折叠为空格（description 序列化保单行）。 */
-function yamlScalar(value: string): string {
-  return `'${value.replace(/'/g, "''").replace(/\r?\n/g, ' ')}'`;
-}
-
-/** 序列化为 md 文本；tools/model 为 null 或空时整个字段不写（= hub 运行期继承语义）。 */
+/** 序列化为 md 文本（host-hub renderAgentTypeMd 同构：无引号标量 + tools 流数组）；
+ *  tools/model 为 null 或空时整个字段不写（= hub 运行期继承语义）。 */
 export function serializeAgentDefinition(def: AgentDefinitionFile): string {
-  const lines: string[] = ['---'];
-  lines.push(`name: ${yamlScalar(def.name)}`);
-  lines.push(`description: ${yamlScalar(def.description)}`);
-  if (def.tools !== null && def.tools.length > 0) {
-    lines.push('tools:');
-    for (const tool of def.tools) lines.push(`  - ${yamlScalar(tool)}`);
-  }
-  if (def.model !== null && def.model.length > 0) lines.push(`model: ${yamlScalar(def.model)}`);
+  const lines: string[] = ['---', `description: ${def.description}`];
+  if (def.model !== null && def.model.length > 0) lines.push(`model: ${def.model}`);
+  if (def.tools !== null && def.tools.length > 0) lines.push(`tools: [${def.tools.join(', ')}]`);
   lines.push('---', '', def.systemPrompt, '');
   return `${lines.join('\n')}`;
 }
@@ -105,10 +97,11 @@ function splitFrontmatter(text: string): [string, string] | null {
 }
 
 /**
- * 宽容解析：name/description 缺失或 name 为空 → null（与 hub「单文件跳过」同语义）；
- * tools 三形态（块列表 / 逗号串 / flow 数组）取首个非空；未知字段忽略。
+ * 宽容解析：hub 语义 name 可缺省（缺省 = 文件名主干——stem 由调用方传入）；
+ * description 缺失 → null（与 hub「单文件跳过」同语义）；tools 三形态
+ * （块列表 / 逗号串 / flow 数组）取首个非空；未知字段忽略。
  */
-export function parseAgentDefinition(text: string): AgentDefinitionFile | null {
+export function parseAgentDefinition(text: string, stemFallback?: string): AgentDefinitionFile | null {
   const parts = splitFrontmatter(text);
   if (parts === null) return null;
   const lines = parts[0].split(/\r?\n/);
@@ -149,7 +142,8 @@ export function parseAgentDefinition(text: string): AgentDefinitionFile | null {
       }
     }
   }
-  if (name === null || name.length === 0) return null;
+  const resolvedName = name !== null && name.length > 0 ? name : stemFallback !== undefined && stemFallback.length > 0 ? stemFallback : null;
+  if (resolvedName === null) return null;
   if (description === null) return null;
   let tools: string[] | null = null;
   if (toolsList !== null && toolsList.length > 0) tools = toolsList;
@@ -157,7 +151,7 @@ export function parseAgentDefinition(text: string): AgentDefinitionFile | null {
     tools = toolsInline.split(',').map((tool) => tool.trim()).filter((tool) => tool.length > 0);
   }
   return {
-    name,
+    name: resolvedName,
     description,
     systemPrompt: parts[1].replace(/^\r?\n/, ''),
     tools: tools !== null && tools.length > 0 ? tools : null,

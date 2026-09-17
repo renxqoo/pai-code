@@ -152,12 +152,6 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
           upsertSession(next);
           persistSession(next);
         }
-      } else if (event.type === 'sessionRenamed') {
-        const view = sessions.get(threadId);
-        if (view !== undefined && event.name !== null && event.name.length > 0) {
-          upsertSession({ ...view, title: event.name });
-          persistSession({ ...view, title: event.name });
-        }
       }
     }
   };
@@ -171,19 +165,52 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
     }
   };
 
+  const queueFetchPending = new Set<string>();
+
+  const emitQueueOf = (data: unknown, threadId: string): void => {
+    const queue = (data as { queue?: { steering?: unknown; followUp?: unknown } }).queue ?? {};
+    const steering = Array.isArray(queue.steering) ? queue.steering.filter((item): item is string => typeof item === 'string') : [];
+    const followUp = Array.isArray(queue.followUp) ? queue.followUp.filter((item): item is string => typeof item === 'string') : [];
+    emit({ type: 'queueChanged', threadId, steering, followUp });
+  };
+
+  const scheduleQueueFetch = (threadId: string, retry = false): void => {
+    if (queueFetchPending.has(threadId)) return; // 在拉取中：本拍信号并入下一次拉取的结果
+    queueFetchPending.add(threadId);
+    void host?.request({ type: 'get_state', threadId })
+      .then((outcome) => {
+        if (outcome.ok) {
+          emitQueueOf(outcome.data, threadId);
+          return;
+        }
+        if (!retry) {
+          queueFetchPending.delete(threadId);
+          scheduleQueueFetch(threadId, true);
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        queueFetchPending.delete(threadId);
+      });
+  };
+
+  /** hub 会话布局词法（<sessionsRoot>/<safeId>/transcript.jsonl）——旧 pai 布局判定用。 */
+  const isHubSessionLayout = (sessionPath: string): boolean => {
+    const prefix = `${sessionsRoot}/`;
+    if (!sessionPath.startsWith(prefix)) return false;
+    const rest = sessionPath.slice(prefix.length);
+    const segments = rest.split('/');
+    return segments.length === 2 && /^[A-Za-z0-9-]+$/.test(segments[0] ?? '') && segments[1] === 'transcript.jsonl';
+  };
+
   const dispatchFrame = (frame: Parameters<HostProcessDeps['onFrame']>[0]): void => {
     switch (frame.type) {
       case 'event': {
         if (frame.name === 'inbox/spliced') {
           // 队列结构信号：hub 只发 queue/op/ids（无文本），按迁移指引拉 get_state.queue
-          // 合成 queueChanged（文本快照与读命令同源）
-          void host?.request({ type: 'get_state', threadId: frame.threadId }).then((outcome) => {
-            if (!outcome.ok) return;
-            const queue = (outcome.data as { queue?: { steering?: unknown; followUp?: unknown } }).queue ?? {};
-            const steering = Array.isArray(queue.steering) ? queue.steering.filter((item): item is string => typeof item === 'string') : [];
-            const followUp = Array.isArray(queue.followUp) ? queue.followUp.filter((item): item is string => typeof item === 'string') : [];
-            emit({ type: 'queueChanged', threadId: frame.threadId, steering, followUp });
-          }).catch(() => undefined);
+          // 合成 queueChanged（文本快照与读命令同源）。合并去抖（N 连 splice 一拉）+
+          // 失败恰一次重试（瞬态 busy/超时不丢队列面——失败即悬挂到下一信号是缺陷）
+          scheduleQueueFetch(frame.threadId);
           return;
         }
         applyUiEvents(frame.threadId, eventMapper.mapEvent(frame));
@@ -246,6 +273,14 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
     for (const row of rows) {
       if (row.sessionPath === null) {
         // 从未有首条消息的空会话无会话文件，不可恢复
+        registry.remove(row.threadId);
+        sessions.delete(row.threadId);
+        emit({ type: 'sessionRemoved', threadId: row.threadId });
+        continue;
+      }
+      if (!isHubSessionLayout(row.sessionPath)) {
+        // 旧 pai 布局（<root>/<编码cwd>/<时间戳>_<id>.jsonl）与 hub 布局不同根词法：
+        // hub 恒无法打开（malformed layout），D11 裁决——对账即删行，不留永久僵尸占位
         registry.remove(row.threadId);
         sessions.delete(row.threadId);
         emit({ type: 'sessionRemoved', threadId: row.threadId });

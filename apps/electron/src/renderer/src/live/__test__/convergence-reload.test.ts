@@ -487,7 +487,7 @@ describe('对抗审查补强（T35 复审）', () => {
     expect(thread.liveTurnId).toBeNull();
   });
 
-  test('症状回归「轮在途但读口空在途面（message_end 与落盘之间的窗口）」：复拉一次 entries 兜底', async () => {
+  test('症状回归「轮在途但读口空在途面（消息定形与落盘之间的窗口）」：复拉一次 entries 兜底', async () => {
     const sessions = [sessionView('t1', 'live', '/w/s/t1.jsonl')];
     const persisted = { kind: 'assistant', id: 'seq-2', messageTs: 9, text: '刚落盘的一条', thinking: '', toolCalls: [], usage: null, stopReason: null, errorMessage: null, at: 2 };
     let entriesCalls = 0;

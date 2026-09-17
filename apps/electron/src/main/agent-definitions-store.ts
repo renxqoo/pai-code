@@ -23,7 +23,7 @@ export type AgentDefinitionsStore = {
   /** 枚举 user 目录 + 各已知项目的 .my-agent/agents（快照读；坏文件跳过，与 hub 同语义）。 */
   list: (projects: readonly string[]) => AgentDefinition[];
   /** 新建/编辑/改名/移动统一：校验 → 原子写新文件 → 删旧键位文件（删除失败不影响结果，audit 由路由层记录）。 */
-  upsert: (definition: AgentDefinition, previous: AgentDefinitionKey | null, projects: readonly string[]) => { ok: true } | { ok: false; reason: 'invalid_name' | 'invalid_description' | 'invalid_prompt' | 'invalid_project' | 'name_exists' | 'write_failed' };
+  upsert: (definition: AgentDefinition, previous: AgentDefinitionKey | null, projects: readonly string[]) => { ok: true } | { ok: false; reason: 'invalid_name' | 'invalid_description' | 'invalid_prompt' | 'invalid_model' | 'invalid_project' | 'name_exists' | 'write_failed' };
   remove: (key: AgentDefinitionKey, projects: readonly string[]) => { ok: true } | { ok: false; reason: 'invalid_name' | 'invalid_project' | 'not_found' | 'remove_failed' };
 };
 
@@ -33,13 +33,18 @@ export function createAgentDefinitionsStore(homeDir: string = homedir()): AgentD
   const userDir = `${home}/.my-agent/agents`;
   const projectDir = (project: string): string => `${project}/.my-agent/agents`;
 
-  const validate = (definition: AgentDefinition): { ok: true } | { ok: false; reason: 'invalid_name' | 'invalid_description' | 'invalid_prompt' } => {
+  /** 写前校验 = host-hub agents-create 校验表镜像（词法/单行/非字段形态/单 token）——
+   *  坏定义文件被 hub 解析器静默跳过，校验缺失 = 用户定义静默消失。 */
+  const validate = (definition: AgentDefinition): { ok: true } | { ok: false; reason: 'invalid_name' | 'invalid_description' | 'invalid_prompt' | 'invalid_model' } => {
     if (!isValidAgentName(definition.name)) return { ok: false, reason: 'invalid_name' };
     const description = definition.description.trim();
-    if (description.length === 0 || description.includes('\n') || description.length > AGENT_DESCRIPTION_MAX) {
+    if (description.length === 0 || description.includes('\n') || description.length > AGENT_DESCRIPTION_MAX || /^[a-z]+:/.test(description)) {
       return { ok: false, reason: 'invalid_description' };
     }
     if (definition.systemPrompt.trim().length === 0) return { ok: false, reason: 'invalid_prompt' };
+    if (definition.model !== null && definition.model.length > 0 && !/^[A-Za-z0-9._-]+$/.test(definition.model)) {
+      return { ok: false, reason: 'invalid_model' };
+    }
     return { ok: true };
   };
 
@@ -60,14 +65,15 @@ export function createAgentDefinitionsStore(homeDir: string = homedir()): AgentD
     for (const entry of entries) {
       // hub 语义：定义文件含符号链接（isFile 或 isSymbolicLink）
       if ((!entry.isFile() && !entry.isSymbolicLink()) || !entry.name.endsWith('.md')) continue;
-      if (fileNameStemOf(entry.name) === null) continue;
+      const stem = fileNameStemOf(entry.name);
+      if (stem === null) continue;
       let text: string;
       try {
         text = readFileSync(`${dir}/${entry.name}`, 'utf8');
       } catch {
         continue;
       }
-      const parsed = parseAgentDefinition(text);
+      const parsed = parseAgentDefinition(text, stem);
       if (parsed === null) continue;
       out.push({ ...parsed, scope, project });
     }
@@ -115,7 +121,9 @@ export function createAgentDefinitionsStore(homeDir: string = homedir()): AgentD
     for (const entry of entries) {
       if (!entry.isFile() || !entry.name.endsWith('.md')) continue;
       try {
-        const parsed = parseAgentDefinition(readFileSync(`${dir}/${entry.name}`, 'utf8'));
+        const stem = fileNameStemOf(entry.name);
+        if (stem === null) continue;
+        const parsed = parseAgentDefinition(readFileSync(`${dir}/${entry.name}`, 'utf8'), stem);
         if (parsed !== null && parsed.name === key.name) return `${dir}/${entry.name}`;
       } catch {
         continue;

@@ -371,7 +371,8 @@ describe("api-routes agent 定义面（T20）", () => {
       ok: boolean;
     };
     expect(upsert.ok).toBe(true);
-    expect(readFileSync(join(home, ".my-agent", "agents", "search.md"), "utf8")).toContain("name: 'search'");
+    // host-hub renderAgentTypeMd 同构：无 name 字段（name ≡ 文件主干）
+    expect(readFileSync(join(home, ".my-agent", "agents", "search.md"), "utf8")).toContain("description: d");
     // host 未启动 → 已知项目集合为空 → project 作用域一律拒绝
     const rejected = (await routes.invoke("agent/upsert", {
       definition: { ...definition, scope: "project", project: "/nowhere" },

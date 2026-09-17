@@ -3,6 +3,7 @@ import { expect, test } from 'bun:test';
 import { createLiveController } from '../live-controller';
 import { createLiveStore } from '../store';
 import type { BridgeClient } from '../client-invoke';
+import { copy } from '@/strings';
 
 /**
  * controller 编排回归（对抗审查 B-P1）：
@@ -118,6 +119,49 @@ test('症状回归：StrictMode 双挂载序列（start→dispose→start）下 
   controller.dispose();
 });
 
+test('settled ok=false → 失败通报通知条（turnFailed 文案含 reason）+ 轮内 turnFailure 错误块', async () => {
+  const store = createLiveStore();
+  const client = makeClient();
+  const controller = createLiveController(client, store);
+  await controller.start();
+  const threadId = 't1';
+  client.emitToController({ type: 'turnStarted', threadId, at: 1 });
+  client.emitToController({ type: 'turnSettled', threadId, ok: false, reason: 'rate limited', usage: null });
+  expect(store.getState().notices.map((notice) => notice.text)).toEqual([copy.flow.turnFailed('rate limited')]);
+  const thread = store.getState().threads[threadId];
+  const turn = thread?.items.find((item) => item.kind === 'turn');
+  expect(turn).toBeDefined();
+  expect(turn !== undefined && turn.kind === 'turn' ? turn.turn.blocks.some((block) => block.kind === 'turnFailure') : false).toBe(true);
+  controller.dispose();
+});
+
+test('settled ok=false 但用户主动停止：不通报失败（停止不是失败）', async () => {
+  const store = createLiveStore();
+  const client = makeClient();
+  const controller = createLiveController(client, store);
+  await controller.start();
+  const threadId = 't1';
+  client.emitToController({ type: 'turnStarted', threadId, at: 1 });
+  store.getState().stopIntent(threadId);
+  client.emitToController({ type: 'turnSettled', threadId, ok: false, reason: 'aborted', usage: null });
+  expect(store.getState().notices).toEqual([]);
+  const turn = store.getState().threads[threadId]?.items.find((item) => item.kind === 'turn');
+  expect(turn !== undefined && turn.kind === 'turn' ? turn.turn.blocks.some((block) => block.kind === 'turnFailure') : true).toBe(false);
+  controller.dispose();
+});
+
+test('settled ok=true：无失败通报', async () => {
+  const store = createLiveStore();
+  const client = makeClient();
+  const controller = createLiveController(client, store);
+  await controller.start();
+  const threadId = 't1';
+  client.emitToController({ type: 'turnStarted', threadId, at: 1 });
+  client.emitToController({ type: 'turnSettled', threadId, ok: true, usage: null });
+  expect(store.getState().notices).toEqual([]);
+  controller.dispose();
+});
+
 test('症状回归：新建任务页输入 / 无命令面板——fetchCommandPreview 拉取 command/preview，失败空目录降级', async () => {
   // 预会话目录（无 threadId 可寻址）：成功透传 CommandView[]；宿主/桥失败不抛出，
   // 空数组降级（`/` 触发不启用，@ 文件补全不受影响）。
@@ -191,7 +235,7 @@ test('症状回归「轮结算后历史全没了（对话收起来）」：窗�
         return Promise.resolve({ ok: true, data: { sessions: [], saved: [], models: [], providers: [] } } as never);
       }
       if (method === 'session/inflight') {
-        // 轮首边界 = 读口事实（turns/T35：agent_start 时刻的 leaf 条目 id = 上轮末条目）
+        // 轮首边界 = 读口事实（turn/start 时刻的 WAL seq = 上轮末条目）
         return Promise.resolve({
           ok: true,
           data: { turnStartEntryId: 'a1', message: null, toolOutputs: [], bash: null },
@@ -366,7 +410,7 @@ test('症状回归「重载后切回流式中的会话，正在生成的内容�
       if (method === 'app/bootstrap') {
         return Promise.resolve({ ok: true, data: { sessions: [], saved: [], models: [], providers: [] } } as never);
       }
-      // 全量拉补只含已落盘前缀（在途消息未 message_end 不在转写）
+      // 全量拉补只含已落盘前缀（在途消息未定形不在转写）
       if (method === 'session/entries') return Promise.resolve({ ok: true, data: { items: persisted, cursor: 1 } } as never);
       return Promise.resolve({ ok: true, data: null } as never);
     },

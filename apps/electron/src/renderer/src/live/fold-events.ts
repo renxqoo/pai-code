@@ -105,6 +105,11 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
               ? { ...block, calls: block.calls.map((call) => (call.status === 'running' ? { ...call, status: 'stopped' as const } : call)) }
               : block,
           );
+          // ok=false 的异常终态提示（与转写重建 failureOf 同一展示面）：用户主动停止
+          // 不算失败（stopping 分支已呈现 stopped），只有真实失败才挂错误块
+          if (!event.ok && !stopped) {
+            blocks.push({ kind: 'turnFailure', id: `fail-${item.turn.id}`, stopReason: 'error', message: event.reason ?? null });
+          }
           return { kind: 'turn', turn: { ...item.turn, status: stopped ? ('stopped' as const) : ('completed' as const), endedAt: now, blocks, streamingThinkingBlockId: null } };
         }),
       };
@@ -141,7 +146,6 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
     case 'host':
     case 'sessionUpdated':
     case 'sessionRemoved':
-    case 'sessionRenamed':
       return state;
     default:
       return state;
@@ -155,7 +159,7 @@ export function foldStopIntent(state: LiveThreadState): LiveThreadState {
   return { ...state, stopping: true };
 }
 
-/** 会话运行面随宿主/worker 消亡就地终态：此后不会再有任何事件（settle/queue_update/compaction_end），
+/** 会话运行面随宿主/worker 消亡就地终态：此后不会再有任何事件（turnSettled/queueChanged/compacted），
  * 滞留的 streaming 会把空闲会话的新消息判成生成中投递进永不消费的队列，队列/压缩/bash 同随进程消亡。
  * running 轮按 frozenStatus 冻结：崩溃/宿主死亡 = completed（错过 settle 的缺省形态），
  * 回收（sessionParked）= stopped——被回收打断的生成不得伪装成自然完成。权威内容由下次对账替换。 */
@@ -236,7 +240,7 @@ function onToolEnded(
   return { ...next, callStarts: omitCallStart(next.callStarts, callId) };
 }
 
-/** message_update 的 partial 被 pai-cli 剥离时增量为空 id：挂到当前流式消息。 */
+/** 增量携带空 messageId（事件源未给消息身份的防御路径）时挂到当前流式消息。 */
 function resolveMessageId(state: LiveThreadState, messageId: string): string {
   return messageId.length > 0 ? messageId : state.liveMessageId ?? messageId;
 }

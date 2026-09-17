@@ -131,6 +131,8 @@ export const zh: typeof en = {
     steerFailed: (reason: string): string => `改向失败（${reason}）。`,
     /** 思考档词表外值（hub 静默忽略——渲染层先行拒绝提示） */
     thinkingInvalid: '该思考档不可用。',
+    /** 思考档写入被 hub 拒绝（reason 为 hub 错误文案） */
+    thinkingRejected: (reason: string): string => `思考档未应用：${reason}。`,
     /** 子代理状态词（busy|idle|on-disk → 工作中/空闲/已归档） */
     subagentBusy: '工作中',
     subagentIdle: '空闲',
@@ -179,7 +181,10 @@ export const zh: typeof en = {
     editRerun: '编辑并重开（分叉）',
     retryFromHere: '从这里重试',
     forkFailed: '分叉会话失败，请重试。',
-    forkCancelled: '分叉被扩展拦截，会话未变化。',
+    /** 流式中的 fork 被 hub 拒绝（thread is streaming）：先停止会话再分叉 */
+    forkStreaming: '会话正在回复中，请先停止会话再分叉。',
+    /** 回合结算失败（settled ok=false；reason 为 hub/worker 错误文案） */
+    turnFailed: (reason: string): string => (reason.length > 0 ? `本轮回复失败（${reason}）。` : '本轮回复失败。'),
     forkedImageName: (index: number): string => `图片 ${index}`,
     resumeFailed: '会话恢复失败，请重试。',
     stopConfirmTitle: '停止全部任务？',
@@ -442,7 +447,7 @@ export const zh: typeof en = {
     loadingHint: '正在连接 coding agent 宿主。',
     failedTitle: '无法启动',
     bridgeHint: '预加载桥不可用。请从桌面入口重新启动应用。',
-    hostFailed: 'agent 宿主启动失败。请在设置中检查 Provider 配置与 pai-cli 路径。',
+    hostFailed: 'agent 宿主启动失败。请在设置中检查 Provider 配置与 host-hub 路径。',
   },
   host: {
     downBanner: 'agent 宿主未连接，模型与会话暂不可用（已配置的 Provider 不受影响）。',

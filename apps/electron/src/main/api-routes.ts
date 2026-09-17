@@ -19,6 +19,7 @@ import { createGitBranches, type GitBranches } from './git-branches';
 import { createGitGraph, type GitGraph } from './git-graph';
 import { createOpenLocation, type OpenLocation } from './open-location';
 import { createLocalRoutes } from './api-routes-local';
+import { interceptsCompact } from './compact-lexing';
 import { createSettingsRoutes } from './api-routes-settings';
 import type { AgentDefinitionsStore } from './agent-definitions-store';
 import { THINKING_LEVEL_ORDER, type ThinkingLevel } from '@paiapp/contracts';
@@ -124,10 +125,10 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     }
   };
 
-  /** prompt 通路携带 compact 完成时序（hub 对行首 /compact 拦截后完成才回包，
-   * 见 hub design.md v0.11），大上下文压缩可远超默认 30s 单命令超时——本路由
-   * 放宽到 10 分钟；普通 prompt 的接受时刻回包不受影响。 */
+  /** prompt 通路：普通消息受理即回包（秒级）；行首 /compact 被 hub 拦截为同步
+   * 压缩、完成才回包且无 settled——超时面分档。 */
   const PROMPT_REQUEST_TIMEOUT_MS = 10 * 60_000;
+  const COMPACT_REQUEST_TIMEOUT_MS = 30 * 60_000;
 
   /** 按会话文件路径找注册表行（resume 缺省 trusted 的补全源）。 */
   const findRegistryRowByPath = (sessionPath: string) => runtime.registry.list().find((row) => row.sessionPath === sessionPath) ?? null;
@@ -320,8 +321,10 @@ export function createApiRoutes(deps: ApiRouteDeps) {
             return finishResume(adopted.threadId, adopted.cwd, adopted.sessionPath, known);
           }
         }
-        // 运行中会话文件被删（对账之后失效）：与对账同语义删行，占位不再反复失败
-        if (known !== null && /not found|no such/i.test(result.reason)) {
+        // 会话文件被删或属旧 pai 布局（hub 词法拒绝）：与对账同语义删行，
+        // 占位不再反复失败（hub 错误族：not found / no such / outside sessions dir /
+        // malformed layout / cannot resume）
+        if (known !== null && /not found|no such|outside sessions dir|malformed layout|cannot resume/i.test(result.reason)) {
           runtime.removeSession(known.threadId);
         }
         return fail(result.reason);
@@ -340,7 +343,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       if (known.trusted === true) deps.audit(`session_trusted:register:${params.sessionPath}:true`);
       const result = await command({ type: 'thread/register', sessionPath: params.sessionPath, trusted: known.trusted ?? false });
       // 文件已删（对账之后失效）：与 resume 同语义删行，占位不再反复失败
-      if (!result.ok && /not found|no such|not readable/i.test(result.reason)) runtime.removeSession(known.threadId);
+      if (!result.ok && /not found|no such|not readable|outside sessions dir|malformed layout|cannot resume/i.test(result.reason)) runtime.removeSession(known.threadId);
       if (!result.ok) return fail(result.reason);
       const threadId = (result.data as { threadId?: string }).threadId ?? '';
       if (threadId !== known.threadId) return fail('thread_id_mismatch');
@@ -361,6 +364,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     'session/prompt': async (params) => {
       // 受理窗口竞态（hub 判定 pendingSends>0 ∨ streaming，app 的 streaming 状态来自
       // 事件流天然滞后）：恰一次自动降级重试（补 followUp），重试仍败才上抛
+      const compact = interceptsCompact(params.message);
       const send = (behavior?: 'steer' | 'followUp') =>
         command(
           {
@@ -370,10 +374,11 @@ export function createApiRoutes(deps: ApiRouteDeps) {
             streamingBehavior: behavior ?? params.streamingBehavior,
             images: params.images,
           },
-          PROMPT_REQUEST_TIMEOUT_MS,
+          compact ? COMPACT_REQUEST_TIMEOUT_MS : PROMPT_REQUEST_TIMEOUT_MS,
         );
       let result = await send();
-      if (!result.ok && params.streamingBehavior === undefined && /streamingBehavior required/.test(result.reason)) {
+      // 受理窗口竞态降级只适用普通消息；/compact 拦截路径无 streamingBehavior 面
+      if (!result.ok && !compact && params.streamingBehavior === undefined && /streamingBehavior required/.test(result.reason)) {
         result = await send('followUp');
       }
       if (!result.ok) return fail(result.reason);
@@ -381,7 +386,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       return { ok: true as const, data: null };
     },
     'session/abort': async (params) => {
-      // Esc/停止语义 = 清队列 + 停止当前轮（api.md 客户端约定）
+      // Esc/停止语义 = 清队列 + 停止当前轮（客户端约定）
       await command({ type: 'clear_queue', threadId: params.threadId });
       const result = await command({ type: 'abort', threadId: params.threadId });
       return result.ok ? { ok: true as const, data: null } : fail(result.reason);

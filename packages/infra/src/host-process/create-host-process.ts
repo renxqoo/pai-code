@@ -16,7 +16,7 @@ import { hubSpawnEnv } from './spawn-env';
 
 export interface HostProcessDeps {
   config: HostRuntimeConfig;
-  /** 非 response 帧交付（event/ui_request/heartbeat/hub_error/thread_died/subagent_*）。 */
+  /** 非 response 帧交付（event/ui_request/heartbeat/hub_error/thread_died/thread_parked）。 */
   onFrame: (frame: HubFrame) => void;
   onPhase: (phase: HostPhase) => void;
   /** 重启后、等待首个心跳前的恢复钩子（如按注册表逐个 thread/resume）。 */

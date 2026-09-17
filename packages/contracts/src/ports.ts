@@ -64,7 +64,7 @@ export interface SessionRow {
   createdAt: number;
   /** 会话最后活动时间（SessionView.lastActivityAt 的持久镜像）：只有新建/fork/turn 活动推进；恢复/改名等元数据写不推进。 */
   updatedAt: number;
-  /** 免闲置回收标志（v0.13 持久真相；hub 表项标志是运行期镜像，会话 live 化时 re-assert）。 */
+  /** 免闲置回收标志（注册表持久真相；hub 表项标志是运行期镜像，会话 live 化时 re-assert）。 */
   keepalive: boolean;
 }
 

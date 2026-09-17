@@ -81,7 +81,6 @@ export const enSettings = {
     permissionsDefaultModeHint: 'Used when a conversation does not pick a mode; changing it does not affect live conversations.',
     permissionsDefaultThinking: 'Default thinking level',
     permissionsDefaultThinkingHint: 'Off / Low / Medium / High for new conversations; per-session levels take priority.',
-    permissionsUnset: 'Hub default',
     permModeOptions: {
       plan: 'Plan',
       default: 'Default',

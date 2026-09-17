@@ -59,15 +59,13 @@ const uiEventDefs = {
   /** host 进程相位：starting（spawn 后）→ ready（首个心跳）→ restarting（挂死重启）| failed（重启放弃）。 */
   host: z.object({ type: z.literal('host'), phase: z.enum(['starting', 'ready', 'restarting', 'failed']) }),
   sessionUpdated: z.object({ type: z.literal('sessionUpdated'), session: SessionViewSchema }),
-  /** 会话显示名变化（session_info_changed；null = 清除命名）。 */
-  sessionRenamed: z.object({ type: z.literal('sessionRenamed'), threadId, name: z.string().nullable() }),
   sessionRemoved: z.object({ type: z.literal('sessionRemoved'), threadId }),
   /** worker 异常死亡（自动恢复中，UI 呈横幅提示）。 */
   sessionDied: z.object({ type: z.literal('sessionDied'), threadId, reason: z.string() }),
   /** worker 被收编（闲置 sweep / 手动 retire / RSS 处置），会话转 parked、发消息自动唤醒。 */
   sessionParked: z.object({ type: z.literal('sessionParked'), threadId, reason: z.enum(['idle', 'manual', 'rss']) }),
 
-  /** 一轮开始（agent_start；后台任务通知唤起的回合同样触发）。 */
+  /** 一轮开始（turn/start；后台任务通知唤起的回合同样触发）。 */
   turnStarted: z.object({ type: z.literal('turnStarted'), threadId, at: z.number() }),
   /** 用户角色消息：本地 prompt 回显或系统注入（task-notification / task-message）。 */
   userMessage: z.object({
@@ -79,7 +77,7 @@ const uiEventDefs = {
   /** 流式正文增量：只拼 delta，权威内容见 messageFinal。 */
   textDelta: z.object({ type: z.literal('textDelta'), threadId, messageId: z.string(), delta: z.string() }),
   thinkingDelta: z.object({ type: z.literal('thinkingDelta'), threadId, messageId: z.string(), delta: z.string() }),
-  /** 模型侧工具调用定形（toolcall_end）；执行进度走 toolUpdated/toolEnded。 */
+  /** 模型侧工具调用定形（tool/start 携完整参数）；执行进度走 toolUpdated/toolEnded。 */
   toolCallAdded: z.object({
     type: z.literal('toolCallAdded'),
     threadId,
@@ -99,7 +97,7 @@ const uiEventDefs = {
     /** 文件修改类工具的变更视图；null = 非文件修改。 */
     diff: z.array(DiffFileViewSchema).nullable(),
   }),
-  /** message_end 的权威形态（流式缓冲以此替换）。 */
+  /** 消息定形权威快照（assistant/stream done；流式缓冲以此替换）。 */
   messageFinal: z.object({
     type: z.literal('messageFinal'),
     threadId,

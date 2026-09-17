@@ -16,8 +16,8 @@ import type { SessionView } from '@paiapp/contracts';
 function seedThread(threadId: string, thread: Partial<LiveThreadState> = {}): void {
   const session: SessionView = {
     threadId,
-    cwd: '/tmp/pai',
-    sessionPath: `/tmp/pai/s/${threadId}.jsonl`,
+    cwd: '/tmp/t38',
+    sessionPath: `/tmp/t38/s/${threadId}.jsonl`,
     title: '会话',
     state: 'live',
     streaming: false,
@@ -91,7 +91,7 @@ describe('composer-controller', () => {
 
   test('editQueuedDraft：取出活跃线程暂存条目回填草稿并产生一次性图片信号；同 id 再取无副作用', () => {
     seedThread('t1');
-    queuedDrafts.stage('t1', '/tmp/pai/s/t1.jsonl', '排队内容', [{ name: '图.png', payload: { data: 'd', mimeType: 'image/png' } }]);
+    queuedDrafts.stage('t1', '/tmp/t38/s/t1.jsonl', '排队内容', [{ name: '图.png', payload: { data: 'd', mimeType: 'image/png' } }]);
     const id = queuedDrafts.snapshot().t1?.[0]?.id;
     expect(id).toBeDefined();
     editQueuedDraft(id as number);

@@ -81,7 +81,7 @@ describe('foldEvents · 轮次生命周期', () => {
     expect(turn.turn.status).toBe('completed');
   });
 
-  test('agent_end 等价的多段消息期间不终态；settle 恰好一次', () => {
+  test('多段消息期间不终态；settle 恰好一次', () => {
     let s = initialThreadState;
     s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(0) }), tick(0));
     // auto-retry 进行中仍 running，retrying 状态可见
@@ -115,6 +115,42 @@ describe('foldEvents · 轮次生命周期', () => {
     expect(next.turn.status).toBe('completed');
   });
 
+  test('settled ok=false：轮末挂 turnFailure 错误块（reason 透传，错误面复用转写同款）；ok=true 与用户停止不挂', () => {
+    let s = initialThreadState;
+    s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(0) }), tick(0));
+    s = foldThreadEvent(s, ev({ type: 'messageStarted', threadId: 't', messageId: 'm1', at: tick(1) }), tick(1));
+    s = foldThreadEvent(s, ev({ type: 'textDelta', threadId: 't', messageId: 'm1', delta: '部分正文' }), tick(2));
+    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', ok: false, reason: 'rate limited', usage: null }), tick(3));
+    const turn = liveTurn(s);
+    if (turn?.kind !== 'turn') throw new Error('expected turn');
+    expect(turn.turn.status).toBe('completed');
+    // 错误块恒挂轮末（与转写重建 failureOf 同构），收起态也保持可见
+    expect(turn.turn.blocks[turn.turn.blocks.length - 1]).toEqual({
+      kind: 'turnFailure',
+      id: `fail-${turn.turn.id}`,
+      stopReason: 'error',
+      message: 'rate limited',
+    });
+
+    // ok=true：无错误块
+    let okState = initialThreadState;
+    okState = foldThreadEvent(okState, ev({ type: 'turnStarted', threadId: 't', at: tick(0) }), tick(0));
+    okState = foldThreadEvent(okState, ev({ type: 'turnSettled', threadId: 't', ok: true, usage: null }), tick(1));
+    const okTurn = liveTurn(okState);
+    if (okTurn?.kind !== 'turn') throw new Error('expected turn');
+    expect(okTurn.turn.blocks.some((block) => block.kind === 'turnFailure')).toBe(false);
+
+    // 用户主动停止引发的 ok=false 不是失败：stopped 呈现、无错误块
+    let stopState = initialThreadState;
+    stopState = foldThreadEvent(stopState, ev({ type: 'turnStarted', threadId: 't', at: tick(0) }), tick(0));
+    stopState = foldStopIntent(stopState);
+    stopState = foldThreadEvent(stopState, ev({ type: 'turnSettled', threadId: 't', ok: false, reason: 'aborted', usage: null }), tick(1));
+    const stopTurn = liveTurn(stopState);
+    if (stopTurn?.kind !== 'turn') throw new Error('expected turn');
+    expect(stopTurn.turn.status).toBe('stopped');
+    expect(stopTurn.turn.blocks.some((block) => block.kind === 'turnFailure')).toBe(false);
+  });
+
   test('错过 settle 的遗留 running 轮：冻结后退场（权威内容由对账提供，防双显）', () => {
     let s = initialThreadState;
     s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(0) }), tick(0));
@@ -129,11 +165,11 @@ describe('foldEvents · 轮次生命周期', () => {
 });
 
 describe('foldEvents · 真实协议形态回归（对抗审查 P0-1/P0-2）', () => {
-  test('message_update 增量 id 为空串：挂到 message_start 建立的 liveMessageId，messageFinal 权威替换不双份', () => {
+  test('textDelta 增量 id 为空串：挂到 messageStarted 建立的 liveMessageId，messageFinal 权威替换不双份', () => {
     let s = initialThreadState;
     s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(0) }), tick(0));
     s = foldThreadEvent(s, ev({ type: 'messageStarted', threadId: 't', messageId: 'm1', at: tick(1) }), tick(1));
-    // pai-cli toWireEvent 剥离 partial/message：delta 无 id
+    // 事件源未给消息身份的防御路径：delta 无 id
     s = foldThreadEvent(s, ev({ type: 'textDelta', threadId: 't', messageId: '', delta: '苹果 ' }), tick(2));
     s = foldThreadEvent(s, ev({ type: 'textDelta', threadId: 't', messageId: '', delta: '香蕉' }), tick(3));
     s = foldThreadEvent(
@@ -149,7 +185,7 @@ describe('foldEvents · 真实协议形态回归（对抗审查 P0-1/P0-2）', (
     expect(texts[0]).toMatchObject({ text: '苹果 香蕉 橘子' });
   });
 
-  test('user 消息的 message_start/end 不再产生渲染事件（adapter 过滤后的链路）', () => {
+  test('user 消息不产生渲染事件（adapter 侧过滤）；fold 侧防御：messageStarted 空 id 不炸', () => {
     // adapter 层已过滤；fold 侧防御：messageStarted 空 id 不炸
     let s = initialThreadState;
     s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(0) }), tick(0));

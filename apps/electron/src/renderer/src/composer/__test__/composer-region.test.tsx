@@ -22,8 +22,8 @@ function model(provider: string, modelId: string): ModelInfoView {
 function session(threadId: string, overrides: Partial<SessionView> = {}): SessionView {
   return {
     threadId,
-    cwd: '/tmp/pai',
-    sessionPath: `/tmp/pai/s/${threadId}.jsonl`,
+    cwd: '/tmp/t38',
+    sessionPath: `/tmp/t38/s/${threadId}.jsonl`,
     title: `会话-${threadId}`,
     state: 'live',
     streaming: false,
@@ -158,7 +158,7 @@ describe('ComposerRegion 交互', () => {
   test('排队卡片三动作：暂存后渲染卡片堆；移除即消失；编辑回填草稿', () => {
     seedLive({ threads: { t1: { streaming: true } } });
     uiStore.getState().setDraft('t1', '第一条');
-    queuedDrafts.stage('t1', '/tmp/pai/s/t1.jsonl', '排队的消息', []);
+    queuedDrafts.stage('t1', '/tmp/t38/s/t1.jsonl', '排队的消息', []);
     const view = render(<ComposerRegion />);
     expect(view.container.textContent).toContain('排队的消息');
     React.act(() => {
@@ -166,7 +166,7 @@ describe('ComposerRegion 交互', () => {
     });
     expect(view.container.textContent).not.toContain('排队的消息');
     // 再暂存一条走编辑回填
-    queuedDrafts.stage('t1', '/tmp/pai/s/t1.jsonl', '第二条排队', []);
+    queuedDrafts.stage('t1', '/tmp/t38/s/t1.jsonl', '第二条排队', []);
     view.rerender(<ComposerRegion />);
     React.act(() => {
       [...view.container.querySelectorAll('button')].find((b) => b.getAttribute('aria-label') === '编辑排队消息')?.click();
@@ -179,7 +179,7 @@ describe('ComposerRegion 交互', () => {
     // queuedDrafts 无 reset 单例：独立线程 id 隔离跨文件残留
     seedLive({ activeThreadId: 't-steer', threads: { 't-steer': { streaming: true } } });
     const submit = jest.spyOn(workspaceActions, 'submitThreadDraft').mockResolvedValue(null);
-    queuedDrafts.stage('t-steer', '/tmp/pai/s/t-steer.jsonl', '改向消息', [{ name: '图.png', payload: { data: 'd', mimeType: 'image/png' } }]);
+    queuedDrafts.stage('t-steer', '/tmp/t38/s/t-steer.jsonl', '改向消息', [{ name: '图.png', payload: { data: 'd', mimeType: 'image/png' } }]);
     const view = render(<ComposerRegion />);
     React.act(() => {
       [...view.container.querySelectorAll('button')].find((b) => b.textContent?.trim() === '立即')?.click();
@@ -195,7 +195,7 @@ describe('ComposerRegion 交互', () => {
   test('分支段：cwd 非空渲染项目/分支上下文条', () => {
     seedLive({});
     const view = render(<ComposerRegion />);
-    expect(view.container.textContent).toContain('pai');
+    expect(view.container.textContent).toContain('t38');
     view.unmount();
   });
 });
@@ -327,7 +327,7 @@ describe('重渲边界回归（B-keystroke）', () => {
     });
     // 后台线程排队暂存（queuedDrafts 通知，但按键取快照对 t1 引用不变）
     React.act(() => {
-      queuedDrafts.stage('bg-thread', '/tmp/pai/s/bg.jsonl', '后台暂存', []);
+      queuedDrafts.stage('bg-thread', '/tmp/t38/s/bg.jsonl', '后台暂存', []);
     });
     expect(commits).toBe(0); // §1.3 预算：无关线程事件不进区域订阅面
     view.unmount();

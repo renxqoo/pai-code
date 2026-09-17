@@ -7,9 +7,9 @@ import { claimAnonymousBlocks, clip, ensureLiveTurn, findTurn, mergeAppendOnlyTe
 /**
  * 在途快照合入（T35 M2b）：`session/inflight` 的视图 → 折叠态。
  *
- * 为什么需要它：刷新落在轮次进行中时，重载前已流出的那条消息**既没落盘**（pi 在
- * `message_end` 才写会话文件）、**也不在事件流里**（订阅建立前的 delta 已随旧渲染层
- * 消亡）。它只存在于宿主内存（`agent.state.streamingMessage`），读口是唯一来源。
+ * 为什么需要它：刷新落在轮次进行中时，重载前已流出的那条消息**既没落盘**（worker 在
+ * 消息定形后才写会话文件）、**也不在事件流里**（订阅建立前的增量已随旧渲染层消亡）。
+ * 它只存在于 hub 在途面（get_inflight），读口是唯一来源。
  *
  * 合并语义（全部幂等，任一时点重复应用结果不变）：
  * - 文本/思考是 append-only：快照与 live 块必为前缀关系 → **取更长者**（不重复、不丢）；

@@ -156,11 +156,9 @@ function walEvents(transcriptPath: string): Array<Record<string, unknown>> {
 }
 
 describe('app API 全接口 × 真 host-hub（faux 默认门）', () => {
-  test(hubAvailable ? '全接口旅程 + 落存储断言' : '全接口旅程（跳过：hub 入口不存在）', async () => {
-    if (!hubAvailable) {
-      expect(hubAvailable).toBe(false);
-      return;
-    }
+  // 环境前提：本门需要旁级 my-agent 检出（hub 源码入口）。入口缺失时显式 skip
+  //（bun test 记 skip 不记 pass——不产生「绿但什么都没测」的假门）
+  test.if(hubAvailable)('全接口旅程 + 落存储断言', async () => {
     const h = makeHarness(REPLY_SCRIPT);
     await h.runtime.start();
     expect(h.runtime.host.phase).toBe('ready');
@@ -279,6 +277,12 @@ describe('app API 全接口 × 真 host-hub（faux 默认门）', () => {
     expect(existsSync(agentFile)).toBe(true);
     const listed = (await h.invoke('agent/definitions', {})) as { ok: boolean; data: Array<{ name: string }> };
     expect(listed.data.some((item) => item.name === 'code-reviewer')).toBe(true);
+    // H1 回归：app 序列化产物必须过 host-hub 解析器（agents/list 真命令可见；
+    // 症状：带引号标量/tools 块列表的旧序列化被 hub 整文件静默跳过）
+    const hubListed = await h.runtime.host.request({ type: 'agents/list' } as never);
+    expect(hubListed.ok).toBe(true);
+    const hubAgents = ((hubListed as { ok: true; data: { agents?: unknown } }).data.agents ?? []) as Array<{ name: string; source: string }>;
+    expect(hubAgents.some((item) => item.name === 'code-reviewer' && item.source === 'user')).toBe(true);
     const removed = await h.invoke('agent/remove', { name: 'code-reviewer', scope: 'user', project: null });
     expect(removed.ok).toBe(true);
     expect(existsSync(agentFile)).toBe(false);
@@ -375,11 +379,7 @@ describe('app API × 真 host-hub（GLM 真门，opt-in）', () => {
   const runnable = e2eEnabled && hubAvailable && glmKey.length > 0 && glmModel.length > 0 && glmBaseUrl.length > 0;
 
   // 真凭证旅程：GLM 预设裸 id 端点不认（T38 挂账）——走 app 渠道条目（models.json custom）
-  test(runnable ? 'GLM 全旅程：custom 渠道 → start(modelId) → prompt settled → entries → stop' : 'GLM 全旅程（跳过：未开启或缺凭证）', async () => {
-    if (!runnable) {
-      expect(runnable).toBe(false);
-      return;
-    }
+  test.if(runnable)('GLM 全旅程：custom 渠道 → start(modelId) → prompt settled → entries → stop', async () => {
     const work = mkdtempSync(join(tmpdir(), 't38-glm-'));
     const keyStore: ProviderKeyStore = {
       encryptionAvailable: false,

@@ -26,7 +26,7 @@ export type LiveThreadState = {
   turnStartSeq: number | null;
   /** 最近一次读口回报的在途工具输出（权威序 ①：转写说已完成、这里说仍在跑 → running）。 */
   inflightToolOutputs: readonly InflightToolView[];
-  /** 当前流式消息 id（message_start..message_end 期间）。 */
+  /** 当前流式消息 id（messageStarted..messageFinal 期间）。 */
   liveMessageId: string | null;
   /** 工具调用到达时刻（durationMs 客户端观测值）。 */
   callStarts: Readonly<Record<string, number>>;

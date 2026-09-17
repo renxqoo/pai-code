@@ -408,7 +408,6 @@ function samplePerUiEvent(): UiEvent[] {
   return [
     { type: 'host', phase: 'ready' },
     { type: 'sessionUpdated', session: sampleSession(t) },
-    { type: 'sessionRenamed', threadId: t, name: 'renamed' },
     { type: 'sessionRemoved', threadId: t },
     { type: 'sessionDied', threadId: t, reason: 'worker crash' },
     { type: 'sessionParked', threadId: t, reason: 'idle' },

@@ -5,7 +5,7 @@ import { ToolCallRow } from "../tool-call-row";
 import type { ToolCallModel } from "../thread-model";
 
 /** task 工具调用的行样式锚点：标签段、agent 名段（蓝色等宽）、描述段一次齐备。 */
-const SPAWN = { agent: "Explore", task: "分析 pai-cli sandbox 现状" };
+const SPAWN = { agent: "Explore", task: "分析 host-hub sandbox 现状" };
 
 function call(overrides: Partial<ToolCallModel>): ToolCallModel {
   return {
@@ -31,7 +31,7 @@ describe("ToolCallRow 子智能体执行行（参考图样式）", () => {
     expect(html).toContain("子智能体");
     expect(html).toContain("Explore");
     expect(html).toContain("·");
-    expect(html).toContain("分析 pai-cli sandbox 现状");
+    expect(html).toContain("分析 host-hub sandbox 现状");
     // 运行中整行走 shimmer（全应用执行中语言），落定后 agent 名显蓝色等宽
     expect(html).toContain("font-mono");
     const settled = renderRow(call({ status: "ok", durationMs: 1200 }));

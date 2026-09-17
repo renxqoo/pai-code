@@ -89,8 +89,9 @@ describe('agent-definitions-store 落位与生命周期', () => {
     expect(existsSync(file)).toBe(true);
     expect(readdirSync(userDir).filter((name) => name.includes('.tmp'))).toEqual([]);
     const text = readFileSync(file, 'utf8');
-    expect(text).toContain("name: 'search'");
-    expect(text).toContain('tools:');
+    // host-hub renderAgentTypeMd 同构：无 name 字段（name ≡ 主干）、无引号标量、tools 流数组
+    expect(text).toContain('description: 联网搜索专员');
+    expect(text).toContain('tools: [bash]');
     expect(text).toContain('你是搜索专员。');
   });
 
@@ -137,17 +138,18 @@ describe('agent-definitions-store 落位与生命周期', () => {
     expect(existsSync(join(userDir, 'walker.md'))).toBe(false);
   });
 
-  test('枚举：user + 已知项目合并；坏文件（缺 name / 坏 frontmatter / 非 md）跳过不拖垮', () => {
+  test('枚举：user + 已知项目合并；无 name 字段按主干回落（hub 语义）；坏文件跳过不拖垮', () => {
     const { store, userDir } = makeStore();
     const project = mkdtempSync(join(tmpdir(), 'pai-agent-proj-'));
     mkdirSync(userDir, { recursive: true });
     mkdirSync(join(project, '.my-agent', 'agents'), { recursive: true });
     writeFileSync(join(userDir, 'good.md'), '---\nname: good\ndescription: d\n---\nbody\n');
+    // name 缺省 = 文件主干（host-hub 语义）——不再是坏文件
     writeFileSync(join(userDir, 'no-name.md'), '---\ndescription: d\n---\nbody\n');
     writeFileSync(join(userDir, 'broken.md'), 'not frontmatter\n');
     writeFileSync(join(userDir, 'notes.txt'), 'plain\n');
     writeFileSync(join(project, '.my-agent', 'agents', 'scoped.md'), '---\nname: scoped\ndescription: p\n---\nbody\n');
     const list = store.list([project]);
-    expect(list.map((def) => `${def.scope}:${def.name}`).sort()).toEqual(['project:scoped', 'user:good']);
+    expect(list.map((def) => `${def.scope}:${def.name}`).sort()).toEqual(['project:scoped', 'user:good', 'user:no-name']);
   });
 });

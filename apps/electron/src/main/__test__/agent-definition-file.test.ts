@@ -3,25 +3,29 @@ import { describe, expect, test } from 'bun:test';
 import { agentDefinitionPath, parseAgentDefinition, serializeAgentDefinition } from '../agent-definition-file';
 
 /**
- * 定义文件编解码回归：hub agent-definitions.ts 的文件契约（frontmatter + 正文）。
- * 序列化产物必须能被本解析器与 hub 的 YAML 解析器同时接受（单行标量 + 列表项）。
+ * 定义文件编解码回归：写侧 = host-hub renderAgentTypeMd 同构（无 name 字段——
+ * name ≡ 文件主干、无引号标量、tools 流数组）；读侧宽容（引号/逗号串/尾注释）。
+ * 序列化往返经 stem 回落取回 name。
  */
 describe('agent 定义 md 编解码', () => {
-  test('序列化 → 解析往返（tools 列表 + model + 提示词正文）', () => {
+  test('序列化 → 解析往返（hub 规范形态：无 name 字段 + 无引号标量 + tools 流数组）', () => {
     const text = serializeAgentDefinition({
       name: 'search',
-      description: "联网搜索: '专员'（含引号）",
+      description: '联网搜索专员',
       systemPrompt: '你是搜索专员。\n\n## 工具\n\n只有 bash。',
       tools: ['read', 'bash'],
-      model: 'glm/glm-4.7',
+      model: 'glm-4.7',
     });
-    const parsed = parseAgentDefinition(text);
+    // 写侧产物与 host-hub renderAgentTypeMd 逐行同构
+    expect(text).toBe(['---', 'description: 联网搜索专员', 'model: glm-4.7', 'tools: [read, bash]', '---', '', '你是搜索专员。', '', '## 工具', '', '只有 bash。', ''].join('\n'));
+    // name 缺省 → stem 回落（hub 语义）
+    const parsed = parseAgentDefinition(text, 'search');
     expect(parsed).toEqual({
       name: 'search',
-      description: "联网搜索: '专员'（含引号）",
+      description: '联网搜索专员',
       systemPrompt: '你是搜索专员。\n\n## 工具\n\n只有 bash。\n',
       tools: ['read', 'bash'],
-      model: 'glm/glm-4.7',
+      model: 'glm-4.7',
     });
   });
 
@@ -29,8 +33,8 @@ describe('agent 定义 md 编解码', () => {
     const text = serializeAgentDefinition({ name: 'a', description: 'd', systemPrompt: 'p', tools: null, model: null });
     expect(text).not.toContain('tools');
     expect(text).not.toContain('model');
-    expect(parseAgentDefinition(text)?.tools).toBeNull();
-    expect(parseAgentDefinition(text)?.model).toBeNull();
+    expect(parseAgentDefinition(text, 'a')?.tools).toBeNull();
+    expect(parseAgentDefinition(text, 'a')?.model).toBeNull();
   });
 
   test('解析逗号串 tools（hub 历史形态）与双引号标量', () => {
@@ -53,10 +57,10 @@ describe('agent 定义 md 编解码', () => {
     expect(parseAgentDefinition('---\nname: ../evil\ndescription: d\n---\nbody')?.name).toBe('../evil');
   });
 
-  test('description 换行折叠为空格（frontmatter 保单行标量）', () => {
+  test('description 单行契约：多行描述由 store 写前校验拒绝（序列化不做折叠——hub renderAgentTypeMd 同为原样单行）', () => {
     const text = serializeAgentDefinition({ name: 'a', description: '第一行\n第二行', systemPrompt: '', tools: null, model: null });
-    const parsed = parseAgentDefinition(text);
-    expect(parsed?.description).toBe('第一行 第二行');
+    // 多行 description 破坏 frontmatter——这是调用方契约违约，store 层校验先行拒绝
+    expect(text.split('\n')[1]).toBe('description: 第一行');
   });
 
   test('hub 全形态（审查回归）：flow 数组 / 空数组 / 标量尾注释 / BOM / 栅栏尾空格 / 任意 name', () => {

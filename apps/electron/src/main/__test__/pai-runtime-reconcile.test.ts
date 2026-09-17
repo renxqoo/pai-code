@@ -204,6 +204,24 @@ describe('pai-runtime 启动对账（懒恢复，0 resume）', () => {
     expect(logs.some((line) => line.startsWith('list_saved_failed:/w/proj'))).toBe(true);
   });
 
+  test('症状回归（T38 D11）：旧 pai 布局注册表行（<root>/<编码cwd>/<时间戳>_<id>.jsonl）→ 对账即删行不留僵尸占位', async () => {
+    const work = mkdtempSync(join(tmpdir(), 'pai-reconcile-legacy-'));
+    const { runtime, events } = makeFixture(work, () => ({ ok: true, data: {} }));
+    // 旧 pai 布局：文件在盘、也在 sessionsRoot 之下——但词法不是 <root>/<id>/transcript.jsonl
+    const legacyDir = join(work, 'agent', 'sessions', 'w_proj');
+    mkdirSync(legacyDir, { recursive: true });
+    const legacyPath = join(legacyDir, '20240101T000000_abc123.jsonl');
+    writeFileSync(legacyPath, '{}');
+    seedRow(runtime, { threadId: 't6', sessionPath: legacyPath, cwd: '/w/proj', title: '旧pai会话' });
+
+    await runtime.start();
+    flushEvents(runtime);
+
+    expect(runtime.registry.get('t6')).toBeNull();
+    expect(runtime.sessions()).toEqual([]);
+    expect(events).toContainEqual({ type: 'sessionRemoved', threadId: 't6' });
+  });
+
   test('sessionPath null（从未有首条消息）→ 清理 + sessionRemoved', async () => {
     const work = mkdtempSync(join(tmpdir(), 'pai-reconcile-empty-'));
     const { runtime, events } = makeFixture(work, () => ({ ok: true, data: {} }));

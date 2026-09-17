@@ -50,7 +50,8 @@ void app.whenReady().then(async () => {
     const fromSettings = (() => {
       try {
         const hubDev = settingsRef?.get().hubDev;
-        return hubDev !== undefined && hubDev.hubEntry !== null && hubDev.bunPath !== null
+        // bunPath 非空即显式覆盖；hubEntry null = 直执行形态（bunPath 是编译产物）
+        return hubDev !== undefined && hubDev.bunPath !== null
           ? { bunPath: hubDev.bunPath, hubEntry: hubDev.hubEntry }
           : null;
       } catch {

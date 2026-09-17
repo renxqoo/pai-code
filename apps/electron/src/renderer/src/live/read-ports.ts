@@ -16,7 +16,7 @@ export interface ReadPorts {
   inflight(threadId: string): Promise<InflightView | null>;
   subagents(threadId: string): Promise<SubagentSnapshotView[] | null>;
   pendingDialogs(threadId: string): Promise<PendingDialogView[] | null>;
-  /** 会话状态面（含 v0.14 的 queue）：失败即 null（既有路径下一拍重拉）。 */
+  /** 会话状态面（含排队镜像 queue）：失败即 null（既有路径下一拍重拉）。 */
   threadState(threadId: string): Promise<ThreadStateView | null>;
   /** 宿主进程代际变化（restarting/failed）→ 清空可用性缓存重探。 */
   invalidate(): void;

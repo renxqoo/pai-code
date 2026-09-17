@@ -55,6 +55,24 @@ test('hubSettings 写入：载荷只带给定字段，成功回读成套刷新�
   expect(await createLiveController(failClient, createLiveStore()).writeHubSettings({ permissionDefaultMode: 'plan' })).toBe('write_failed');
 });
 
+test('症状回归「hubSettings null 字段把未设置语义发给 hub」：null = 不修改该键（跳过不发）；全空补丁零命令即成功', async () => {
+  const client = makeClient({
+    'app/setHubSettings': { ok: true, data: null },
+    'app/hubSettings': { ok: true, data: hubSettings },
+  });
+  const controller = createLiveController(client, createLiveStore());
+  // null 键跳过：载荷不含 permissionDefaultMode
+  expect(await controller.writeHubSettings({ permissionDefaultMode: null, thinkingDefault: 'high' })).toBeNull();
+  expect(client.calls).toContainEqual({ method: 'app/setHubSettings', params: { thinkingDefault: 'high' } });
+  // 反向：thinkingDefault null 同语义
+  expect(await controller.writeHubSettings({ permissionDefaultMode: 'plan', thinkingDefault: null })).toBeNull();
+  expect(client.calls).toContainEqual({ method: 'app/setHubSettings', params: { permissionDefaultMode: 'plan' } });
+
+  const empty = makeClient({});
+  expect(await createLiveController(empty, createLiveStore()).writeHubSettings({ permissionDefaultMode: null, thinkingDefault: null })).toBeNull();
+  expect(empty.calls.some((call) => call.method === 'app/setHubSettings')).toBe(false);
+});
+
 test('会话权限模式读取/写入透传（permission/mode | permission/setMode）', async () => {
   const mode = { mode: 'default', source: 'session' as const };
   const client = makeClient({

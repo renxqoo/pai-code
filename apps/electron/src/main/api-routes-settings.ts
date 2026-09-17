@@ -161,19 +161,20 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
       };
     },
     'app/setHubSettings': async (params) => {
-      if (params.permissionDefaultMode !== undefined) {
+      // null = 不写该键（「未设置」在 hub 侧无协议表达——settings/set 无删除语义）
+      if (params.permissionDefaultMode !== undefined && params.permissionDefaultMode !== null) {
         const result = await deps.command({
           type: 'settings/set',
           key: 'permission.defaultMode',
-          value: params.permissionDefaultMode ?? '',
+          value: params.permissionDefaultMode,
         });
         if (!result.ok) return fail(result.reason);
       }
-      if (params.thinkingDefault !== undefined) {
+      if (params.thinkingDefault !== undefined && params.thinkingDefault !== null) {
         const result = await deps.command({
           type: 'settings/set',
           key: 'thinking.default',
-          value: params.thinkingDefault ?? '',
+          value: params.thinkingDefault,
         });
         if (!result.ok) return fail(result.reason);
       }

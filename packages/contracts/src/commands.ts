@@ -36,9 +36,6 @@ export type PaiCommandType =
   | 'permission/get_mode'
   | 'settings/get'
   | 'settings/set'
-  | 'agents/list'
-  | 'agents/create'
-  | 'agents/remove'
   | 'skills/list'
   | 'skills/set_enabled'
   | 'get_session_stats'
@@ -79,9 +76,6 @@ export const PAI_COMMAND_TYPES = [
   'permission/get_mode',
   'settings/get',
   'settings/set',
-  'agents/list',
-  'agents/create',
-  'agents/remove',
   'skills/list',
   'skills/set_enabled',
   'get_session_stats',

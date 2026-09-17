@@ -13,8 +13,8 @@ function model(provider: string, modelId: string): ModelInfoView {
 function session(overrides: Partial<SessionView> = {}): SessionView {
   return {
     threadId: 't1',
-    cwd: '/tmp/pai',
-    sessionPath: '/tmp/pai/s/t1.jsonl',
+    cwd: '/tmp/t38',
+    sessionPath: '/tmp/t38/s/t1.jsonl',
     title: '会话',
     state: 'live',
     streaming: false,

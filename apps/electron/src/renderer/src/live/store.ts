@@ -141,11 +141,6 @@ export function createLiveStore() {
             }
             case 'sessionUpdated':
               return { sessions: { ...state.sessions, [event.session.threadId]: event.session } };
-            case 'sessionRenamed': {
-              const session = state.sessions[event.threadId];
-              if (session === undefined) return state;
-              return { sessions: { ...state.sessions, [event.threadId]: { ...session, title: event.name ?? session.title } } };
-            }
             case 'sessionRemoved': {
               const doomed = state.sessions[event.threadId];
               if (doomed === undefined) return state;

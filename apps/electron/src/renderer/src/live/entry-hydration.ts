@@ -125,7 +125,7 @@ export function createReadonlyHydration(input: {
   /**
    * 收敛链（T35 M2b，读序规则）：**内存态读先、落盘读最后**。
    *
-   * 顺序不是风格：worker 的落盘是「先发 message_end 事件、再 appendMessage」两步，
+   * 顺序不是风格：worker 的落盘是「先发消息定形事件、再写会话文件」两步，
    * 若先读 entries 后读 inflight，「恰在两读之间落盘」的消息两边都拿不到；反序则
    * 后读的 entries 必然包含它。三个内存态读（在途/子代理/弹窗）可并行，但整批必须
    * 在 entries 之前完成。
@@ -166,7 +166,7 @@ export function createReadonlyHydration(input: {
     if (state !== null) store.getState().applyEvent({ type: 'queueChanged', threadId, steering: state.queue.steering, followUp: state.queue.followUp }, now);
     await pull(threadId, targetId, 'reconcile');
     // 复拉兜底：轮在途、读口却是空在途面（既无消息也无工具/bash），且本地没建出该轮——
-    // 只可能是「message_end 事件已发、appendMessage 未落」的两步窗口：这条消息两侧都缺，
+    // 只可能是「消息定形事件已发、条目未落盘」的两步窗口：这条消息两侧都缺，
     // 复拉一次 entries 把它从转写带回（窗口毫秒级，拉一次即闭合）。
     const turnRunningWithEmptyFace =
       inflight?.turnStartSeq != null && inflight.message === null && inflight.toolOutputs.length === 0 && inflight.bash === null;
