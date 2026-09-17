@@ -32,10 +32,16 @@ export type SettingsRoutesDeps = {
   restartHost: () => Promise<void>;
   /** hub 命令通道（技能/设置/模型目录命令；host 未启动时各路由显式降级）。 */
   command: SettingsCommand;
+  /** 拒绝/失败落诊断日志（保存失败零日志曾致排障无据可查）。 */
+  onReject?: (message: string) => void;
 };
 
 export function createSettingsRoutes(deps: SettingsRoutesDeps) {
-  const fail = (reason: string): Promise<{ ok: false; reason: string }> => Promise.resolve({ ok: false, reason });
+  const failLogged = (reason: string): Promise<{ ok: false; reason: string }> => {
+    deps.onReject?.(`provider_route_rejected:${reason}`);
+    return Promise.resolve({ ok: false, reason });
+  };
+  const fail = failLogged;
 
   const providersView = (): ProviderConfigView[] =>
     deps.settings.listProviders().map((provider) => ({
@@ -108,21 +114,21 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
       const collides = deps.settings
         .listProviders()
         .some((provider) => provider.name !== params.name && envVarNameForProvider(provider.name) === envName);
-      if (collides) return fail('provider_name_conflict');
+      if (collides) return failLogged('provider_name_conflict');
       // api 词表校验（host-hub models/add 同源：词表外格式写盘会被目录降级剔除）
-      if (!isApiFormat(params.api)) return fail('provider_api_unsupported');
+      if (!isApiFormat(params.api)) return failLogged('provider_api_unsupported');
       // 撞 hub 预设键：custom 条目 provider 撞预设键会被 host-hub readCatalog 静默剔除
       // （渠道消失 + 目录降级仅预设）——写前显式拒绝；host 未启动时目录不可得，
       // 保守拒绝（落盘即静默失效比拒绝对用户更糟）
       const modelsResult = await deps.command({ type: 'get_models' });
-      if (!modelsResult.ok) return fail('host_unavailable');
+      if (!modelsResult.ok) return failLogged(`host_unavailable:${modelsResult.reason}`);
       const presetKeys = new Set(
         (Array.isArray(modelsResult.data) ? modelsResult.data : [])
           .filter((entry) => typeof entry === 'object' && entry !== null && (entry as Record<string, unknown>)['source'] === 'preset')
           .map((entry) => (entry as Record<string, unknown>)['provider'])
           .filter((value): value is string => typeof value === 'string'),
       );
-      if (presetKeys.has(params.name)) return fail('provider_name_conflicts_preset');
+      if (presetKeys.has(params.name)) return failLogged(`provider_name_conflicts_preset:${params.name}`);
       deps.settings.upsertProvider({
         name: params.name,
         baseUrl: params.baseUrl,

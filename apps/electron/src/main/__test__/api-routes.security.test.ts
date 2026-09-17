@@ -6,6 +6,7 @@ import { join } from "node:path";
 import type { HostCommandOutcome, HostPhase, HostProcessPort, HubFrame, PaiCommand } from "@paiapp/contracts";
 
 import { createApiRoutes } from "../api-routes";
+import { createSettingsRoutes } from "../api-routes-settings";
 import { createAgentDefinitionsStore } from "../agent-definitions-store";
 import { createFileSettings, type ProviderKeyStore } from "../file-settings";
 import { createPaiRuntime } from "../pai-runtime";
@@ -157,7 +158,7 @@ describe("api-routes 安全面（C-S2/C-S8/C-S4）", () => {
       api: "openai-completions",
       models: [{ id: "m", reasoning: false, vision: false }],
     })) as { ok: boolean; reason?: string };
-    expect(preset).toEqual({ ok: false, reason: "provider_name_conflicts_preset" });
+    expect(preset).toEqual({ ok: false, reason: "provider_name_conflicts_preset:glm" });
     const badApi = (await routes.invoke("provider/upsert", {
       name: "custom",
       baseUrl: "https://x.example.com",
@@ -179,7 +180,7 @@ describe("api-routes 安全面（C-S2/C-S8/C-S4）", () => {
       ],
     })) as { ok: boolean; reason?: string };
     // hub 目录不可得 → 预设撞键无法判定，保守拒绝（落盘即静默失效比拒绝对用户更糟）
-    expect(upserted).toEqual({ ok: false, reason: "host_unavailable" });
+    expect(upserted).toEqual({ ok: false, reason: "host_unavailable:host_unavailable" });
     const bootstrap = (await routes.invoke("app/bootstrap", {})) as { ok: boolean; data: unknown };
     expect(bootstrap.ok).toBe(true);
     await expect(routes.invoke("provider/remove", { name: "glm" })).resolves.toMatchObject({
@@ -419,5 +420,46 @@ describe("api-routes 收敛读口门禁（T35 对抗审查补：新方法必须�
       expect(out.ok).toBe(false);
       expect(out.reason).toContain("unknown_method");
     }
+  });
+});
+
+
+describe("渠道数据迁移端到端（T38 症状：渠道无法保存——旧盘退役字段整档降级清空）", () => {
+  test("旧 settings 带 thinkingFormat：读取迁移保留渠道 → upsert 新渠道 → 落盘全量保留", async () => {
+    const work = mkdtempSync(join(tmpdir(), "t38-prov-migrate-"));
+    const settingsFile = join(work, "settings.json");
+    // 旧盘形态：providers 带退役字段 thinkingFormat
+    writeFileSync(settingsFile, JSON.stringify({
+      hubDev: { bunPath: null, hubEntry: null },
+      providers: [
+        { name: "GLM", baseUrl: "https://x.example.com", api: "openai-completions", thinkingFormat: "zai",
+          models: [{ id: "glm-4.7", reasoning: true, vision: false }] },
+      ],
+      trustedDefault: false, defaultModel: null, onboarded: true,
+      projectModels: {}, pinnedSessions: [], archivedSessions: [], hiddenProjects: [], idleRecycleMinutes: 5,
+    }, null, 2));
+    const keyStore: ProviderKeyStore = { encryptionAvailable: false, getKey: () => null, setKey: () => undefined, keyNames: [] };
+    const settings = createFileSettings(settingsFile, keyStore);
+    const rejects: string[] = [];
+    const settingsRoutes = createSettingsRoutes({
+      settings,
+      keyStore,
+      restartHost: () => Promise.resolve(undefined),
+      command: (cmd) =>
+        Promise.resolve(cmd.type === "get_models"
+          ? ({ ok: true as const, data: [{ id: "glm-5.3", provider: "glm", source: "preset" }] })
+          : { ok: true as const, data: {} }),
+      onReject: (message) => rejects.push(message),
+    });
+    // 旧渠道在（迁移保留）
+    expect(settings.listProviders().map((p) => p.name)).toEqual(["GLM"]);
+    // 新渠道保存成功且不落任何拒绝
+    const upsert = await settingsRoutes.routes["provider/upsert"]({ name: "Deepseek", baseUrl: "https://d.example.com", api: "anthropic-messages", models: [{ id: "deepseek-chat", reasoning: false, vision: false }] });
+    expect(upsert.ok).toBe(true);
+    expect(rejects).toEqual([]);
+    // 落盘全量保留（旧 + 新），且无退役字段
+    const onDisk = JSON.parse(readFileSync(settingsFile, "utf8")) as { providers: Array<Record<string, unknown>> };
+    expect(onDisk.providers.map((p) => p["name"]).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))).toEqual(["Deepseek", "GLM"]);
+    expect(onDisk.providers.every((p) => !("thinkingFormat" in p))).toBe(true);
   });
 });

@@ -88,3 +88,34 @@ describe("模型参数字段", () => {
     }
   });
 });
+
+/** T38 数据迁移回归：旧盘 providers 带退役字段 thinkingFormat——剥离归一而非整档降级清空渠道。 */
+describe("退役字段数据迁移", () => {
+  test("症状回归（渠道被清空）：thinkingFormat 剥离，providers/defaultModel 完整保留", () => {
+    const legacy = {
+      hubDev: { bunPath: null, hubEntry: null },
+      providers: [
+        { name: "GLM", baseUrl: "https://x.example.com", api: "openai-completions", thinkingFormat: "zai",
+          models: [{ id: "glm-4.7", reasoning: true, vision: false }] },
+      ],
+      trustedDefault: true, defaultModel: "GLM/glm-4.7", onboarded: true,
+      projectModels: {}, pinnedSessions: [], archivedSessions: [], hiddenProjects: [], idleRecycleMinutes: 5,
+    };
+    const settings = parseSettings(legacy);
+    expect(settings.providers).toEqual([
+      { name: "GLM", baseUrl: "https://x.example.com", api: "openai-completions",
+        models: [{ id: "glm-4.7", reasoning: true, vision: false }] },
+    ]);
+    expect(settings.defaultModel).toBe("GLM/glm-4.7");
+  });
+
+  test("混合迁移：string[] 模型升级与 thinkingFormat 剥离同档生效", () => {
+    const legacy = {
+      providers: [
+        { name: "p", baseUrl: "u", api: "anthropic-messages", thinkingFormat: "default", models: ["m"] },
+      ],
+    };
+    const settings = parseSettings(legacy);
+    expect(settings.providers[0]?.models).toEqual([{ id: "m", reasoning: false, vision: false }]);
+  });
+});

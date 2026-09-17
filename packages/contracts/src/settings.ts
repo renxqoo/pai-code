@@ -82,11 +82,13 @@ export const SettingsSchema = z
 export type Settings = z.infer<typeof SettingsSchema>;
 
 /**
- * settings.json 宽容读取：磁盘旧形态（models 为 string[]）就地升级为模型条目，
- * 无法解析的整体降级默认值（垃圾输入不清空磁盘文件，仅本次运行用缺省）。
+ * settings.json 宽容读取：磁盘历史形态就地迁移（provider 级退役字段剥离、
+ * 模型 string[] 升级条目），无法解析的整体降级默认值（垃圾输入不清空磁盘文件，
+ * 仅本次运行用缺省）。退役字段剥离是数据迁移不是兼容层——字段已从 schema
+ * 删除，读旧盘数据时丢弃它把文件归一到新形态；整档降级只留给真垃圾输入。
  */
 export function parseSettings(raw: unknown): Settings {
-  const migrated = migrateProviders(raw);
+  const migrated = migrateSettings(raw);
   try {
     return SettingsSchema.parse(migrated);
   } catch {
@@ -94,23 +96,23 @@ export function parseSettings(raw: unknown): Settings {
   }
 }
 
-function migrateProviders(raw: unknown): unknown {
+function migrateSettings(raw: unknown): unknown {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return raw;
-  const providers = (raw as { providers?: unknown }).providers;
+  const record = raw as Record<string, unknown>;
+  const providers = record["providers"];
   if (!Array.isArray(providers)) return raw;
+  return { ...record, providers: providers.map(migrateProvider) };
+}
+
+/** provider 级退役字段剥离（thinkingFormat——写侧不再产出；读旧盘丢弃归一）。 */
+function migrateProvider(provider: unknown): unknown {
+  if (typeof provider !== "object" || provider === null || Array.isArray(provider)) return provider;
+  const { thinkingFormat: _retired, ...rest } = provider as Record<string, unknown> & { thinkingFormat?: unknown };
+  void _retired;
+  const models = rest["models"];
+  if (!Array.isArray(models)) return rest;
   return {
-    ...(raw as Record<string, unknown>),
-    providers: providers.map((provider) => {
-      if (typeof provider !== "object" || provider === null || Array.isArray(provider))
-        return provider;
-      const models = (provider as { models?: unknown }).models;
-      if (!Array.isArray(models)) return provider;
-      return {
-        ...(provider as Record<string, unknown>),
-        models: models.map((model) =>
-          typeof model === "string" ? { id: model, reasoning: false } : model,
-        ),
-      };
-    }),
+    ...rest,
+    models: models.map((model) => (typeof model === "string" ? { id: model, reasoning: false } : model)),
   };
 }

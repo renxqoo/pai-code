@@ -72,6 +72,8 @@ export interface ApiRouteDeps {
   monitor: RuntimeMonitor;
   /** 档位 hub 同步失败落档钩子（监督日志 → 监控时间线）。 */
   onPolicySyncFailed?: (minutes: number, reason: string) => void;
+  /** 设置路由拒绝/失败落诊断日志（api-routes 装配层接主进程 log）。 */
+  onRouteRejected?: (message: string) => void;
   /** 诊断包落盘（装配层注入：真实 fs + reveal；测试注入替身）。 */
   exportDiagnosticsBundle: () => string;
   /** 系统工具打开能力（访达/终端/编辑器；缺省走真实 execFile 探测）。 */
@@ -209,6 +211,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     keyStore: deps.keyStore,
     restartHost: restartHostForProviders,
     command: command as Parameters<typeof createSettingsRoutes>[0]['command'],
+    ...(deps.onRouteRejected !== undefined ? { onReject: deps.onRouteRejected } : {}),
   });
   const { providersView, preferencesView, skillsList } = settings;
 
@@ -237,7 +240,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     cwd: string,
     sessionPath: string,
     known: ReturnType<typeof findRegistryRowByPath>,
-  ): { ok: true; data: SessionViewOfRoute } => {
+  ): { ok: true; data: ReturnType<PaiRuntime["applyStartOutcome"]> } => {
     // threadId 只信响应；标题沿用注册表行（占位视图/既有命名的延续，不回退默认标题）
     // 恢复不是会话活动：活动时间 = max(注册表行, 会话文件 mtime)——await 窗口内到达的
     // turn 事件可能已推进行/文件（帧同步派发先于本续体），不得用过期快照写回旧值；
@@ -254,7 +257,6 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     fillSessionMeta(threadId);
     return { ok: true as const, data: view };
   };
-  type SessionViewOfRoute = ReturnType<PaiRuntime['applyStartOutcome']>;
 
   /** 渠道真相域过滤（纯函数见模块级 channelScopedModels）：model/list 与 bootstrap 同口径。 */
   const channelModels = (models: readonly ModelInfoView[]): ModelInfoView[] =>

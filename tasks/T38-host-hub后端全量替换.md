@@ -316,6 +316,15 @@
 - **L4**（§1.2 词表口径）→ 文档措辞修正：agents/user-injected 与 agents/idle 为「显式忽略」。
 - **L5**（版本叙事注释）→ 清除。
 
+### 核销后缺陷修复（2026-09-18 用户报障：渠道无法保存）
+
+**根因（数据丢失链，沙箱复现）**：旧盘 settings.json 的 providers 携带退役字段 thinkingFormat → 严格 schema 解析抛错 → parseSettings 整档静默降级默认值（providers 清空）→ 用户首次写设置（patch/upsert）把空态落盘——旧渠道定义永久丢失（本地无快照可恢复；密钥因 T37 分支的 Keychain 迁移改名 .migrated 而幸存）。用户重建渠道受阻即本报障。
+
+**修复**：
+1. parseSettings 迁移器升级——provider 级退役字段（thinkingFormat）读盘剥离归一（数据迁移非兼容层：写侧永远只产新形态）；模型 string[] 升级逻辑保留；整档降级只留给真垃圾输入。回归：旧形态 round-trip 渠道/defaultModel 完整保留 + 端到端（读取迁移 → upsert → 落盘全量、无退役字段）。
+2. 保存失败可诊断性——settings 路由全部拒绝/失败分支经 onReject 钩子进主进程日志（报障时零日志致排障无据）。reason 带细节后缀（preset 名/上游 reason）。
+3. 用户数据恢复：provider-keys.json.migrated → provider-keys.json 复制复原（同机 safeStorage 密文可解；渠道名 GLM/Deepseek 与密钥重新关联）。渠道定义需重录一次（baseUrl/模型 id 无本地恢复源）。
+
 ### W6 集成 e2e（默认门，已全绿）
 
 `host-hub.integration.test.ts`：真 host-hub（源码形态）+ faux provider，经真 api-routes 翻译层驱动全部 hub 触达 API 面（bootstrap/start/prompt/entries 游标/state/inflight/stats/subagents/steer 错误面/setName/WAL session_meta/setModel/setThinking 预算双路径/permission mode/hubSettings 落盘/skills 种子+禁用/agents CRUD 文件/fork/bash confirm 弹窗应答+WAL 信封/受理窗口重试/abort/retire→parked→resume 收养/keepalive/setIdleRecycle/listSaved 标题/forceRetire/stop/runtime 快照/models.json 形状）。落存储断言口径 = D12。装置事实（回写）：faux 剧本 env 值是**裸数组**；hub 对 cwd realpath 归一；事件面在 bootstrap 前缓冲（harness 先开门）；monitor 快照需 poll。GLM 真门保留 opt-in。

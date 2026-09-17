@@ -189,6 +189,7 @@ void app.whenReady().then(async () => {
         return directory;
       },
       audit: (message) => logger.log(`audit:${message}`),
+      onRouteRejected: (message) => logger.log(message),
       agentDefinitions: createAgentDefinitionsStore(),
       agentDir: paths.agentDir,
       revealPath: (path) => shell.showItemInFolder(path),
