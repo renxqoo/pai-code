@@ -1,30 +1,37 @@
-import type { ApiMethod, ApiOutcome, ApiParams, ProviderConfigView } from '@paiapp/contracts';
+import type { ApiMethod, ApiOutcome, ApiParams, ProviderConfigView, SkillView } from '@paiapp/contracts';
+import { isApiFormat } from '@paiapp/contracts';
 
-import { envVarNameForProvider } from './models-config';
+import { HUB_API_FORMATS, envVarNameForProvider } from './models-config';
 import { createProviderProbe } from './provider-probe';
-import { createSkillsCatalog } from './skills-catalog';
-import type { AgentDirFiles } from './agent-dir-files';
 import type { createFileSettings, ProviderKeyStore } from './file-settings';
 
 /**
- * 设置与目录路由组（api-routes 的本地配置子集）：providers/技能目录/偏好写。
- * 视图构建器（providersView/preferencesView）与技能目录随路由一并产出——
- * bootstrap 与 command/preview 在主表侧复用同一实例。
+ * 设置与目录路由组（api-routes 的本地配置子集）：providers/技能目录/hub 设置/偏好写。
+ * 技能清单与启停走 hub 命令（skills/list、skills/set_enabled——hub 是
+ * ~/.my-agent/skills 布局与 hub-settings skills.disabled 名单的单一写者）；
+ * 视图构建器（providersView/preferencesView）随路由一并产出。
  */
 
 type Handler<M extends ApiMethod> = (params: ApiParams<M>) => Promise<ApiOutcome<M>>;
 
 type FileSettings = ReturnType<typeof createFileSettings>;
 
+export type SettingsCommand = (
+  cmd:
+    | { type: 'skills/list' }
+    | { type: 'skills/set_enabled'; name: string; enabled: boolean }
+    | { type: 'settings/get' }
+    | { type: 'settings/set'; key: string; value: unknown }
+    | { type: 'get_models' },
+) => Promise<{ ok: true; data: unknown } | { ok: false; reason: string }>;
+
 export type SettingsRoutesDeps = {
   settings: FileSettings;
   keyStore: ProviderKeyStore;
-  agentDir: string;
-  agentDirFiles: AgentDirFiles;
-  /** 用户级技能目录源（测试注入替身）。 */
-  skillSources?: () => ReadonlyArray<{ origin: 'agent' | 'agents'; dir: string }>;
-  /** provider 配置变更后重启 host（env 注入的 key 只在启动时读入）。 */
+  /** provider 配置变更后重启 host（models.json 只在启动期读入）。 */
   restartHost: () => Promise<void>;
+  /** hub 命令通道（技能/设置/模型目录命令；host 未启动时各路由显式降级）。 */
+  command: SettingsCommand;
 };
 
 export function createSettingsRoutes(deps: SettingsRoutesDeps) {
@@ -36,7 +43,6 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
       baseUrl: provider.baseUrl,
       api: provider.api,
       models: provider.models.map((model) => ({ ...model })),
-      thinkingFormat: provider.thinkingFormat,
       hasKey: deps.keyStore.getKey(provider.name) !== null,
     }));
 
@@ -54,12 +60,25 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
     };
   };
 
-  /** 用户级技能目录装配（清单/启停/预构命令目录；测试可注入目录源替身）。 */
-  const skills = createSkillsCatalog({
-    agentDir: deps.agentDir,
-    agentDirFiles: deps.agentDirFiles,
-    skillSources: deps.skillSources,
-  });
+  /** 技能清单（hub skills/list 收窄；host 未启动降级空表）。 */
+  const skillsList = async (): Promise<SkillView[]> => {
+    const result = await deps.command({ type: 'skills/list' }).catch(() => null);
+    if (result === null || !result.ok) return [];
+    const raw = (result.data as { skills?: unknown }).skills;
+    if (!Array.isArray(raw)) return [];
+    const out: SkillView[] = [];
+    for (const item of raw) {
+      if (typeof item !== 'object' || item === null) continue;
+      const entry = item as Record<string, unknown>;
+      const name = typeof entry['name'] === 'string' ? entry['name'] : '';
+      if (name.length === 0) continue;
+      const source =
+        entry['source'] === 'skill-builtin' ? 'builtin' : entry['source'] === 'skill-project' ? 'project' : entry['source'] === 'skill-user' ? 'user' : null;
+      if (source === null) continue;
+      out.push({ name, enabled: entry['disabled'] !== true, source });
+    }
+    return out;
+  };
 
   /** 连接探活（主进程直发，不经 hub；key 不进日志）。 */
   const probe = createProviderProbe({
@@ -73,12 +92,15 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
     'provider/upsert': Handler<'provider/upsert'>;
     'provider/remove': Handler<'provider/remove'>;
     'provider/test': Handler<'provider/test'>;
+    'app/hubSettings': Handler<'app/hubSettings'>;
+    'app/setHubSettings': Handler<'app/setHubSettings'>;
     'app/setPreference': Handler<'app/setPreference'>;
   } = {
-    'skills/list': () => Promise.resolve({ ok: true as const, data: skills.list() }),
-    'skills/setEnabled': (params) => {
-      const error = skills.setEnabled(params.name, params.enabled);
-      return error === null ? Promise.resolve({ ok: true as const, data: skills.list() }) : fail(error);
+    'skills/list': async () => ({ ok: true as const, data: await skillsList() }),
+    'skills/setEnabled': async (params) => {
+      const result = await deps.command({ type: 'skills/set_enabled', name: params.name, enabled: params.enabled });
+      if (!result.ok) return fail(result.reason);
+      return { ok: true as const, data: await skillsList() };
     },
     'provider/upsert': async (params) => {
       // env 变量名碰撞防护：不同名字 sanitize 后同名会导致 key 互串（a-b 与 a_b 同映射 PAI_KEY_A_B）
@@ -87,12 +109,25 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
         .listProviders()
         .some((provider) => provider.name !== params.name && envVarNameForProvider(provider.name) === envName);
       if (collides) return fail('provider_name_conflict');
+      // api 词表校验（host-hub models/add 同源：词表外格式写盘会被目录降级剔除）
+      if (!isApiFormat(params.api)) return fail('provider_api_unsupported');
+      // 撞 hub 预设键：custom 条目 provider 撞预设键会被 host-hub readCatalog 静默剔除
+      // （渠道消失 + 目录降级仅预设）——写前显式拒绝；host 未启动时目录不可得，
+      // 保守拒绝（落盘即静默失效比拒绝对用户更糟）
+      const modelsResult = await deps.command({ type: 'get_models' });
+      if (!modelsResult.ok) return fail('host_unavailable');
+      const presetKeys = new Set(
+        (Array.isArray(modelsResult.data) ? modelsResult.data : [])
+          .filter((entry) => typeof entry === 'object' && entry !== null && (entry as Record<string, unknown>)['source'] === 'preset')
+          .map((entry) => (entry as Record<string, unknown>)['provider'])
+          .filter((value): value is string => typeof value === 'string'),
+      );
+      if (presetKeys.has(params.name)) return fail('provider_name_conflicts_preset');
       deps.settings.upsertProvider({
         name: params.name,
         baseUrl: params.baseUrl,
         api: params.api,
         models: params.models.map((model) => ({ ...model })),
-        thinkingFormat: params.thinkingFormat ?? 'default',
         apiKey: params.apiKey,
       });
       await deps.restartHost();
@@ -108,6 +143,41 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
       return outcome.ok
         ? { ok: true as const, data: { latencyMs: outcome.latencyMs } }
         : fail(outcome.reason);
+    },
+    'app/hubSettings': async () => {
+      const result = await deps.command({ type: 'settings/get' });
+      if (!result.ok) return fail(result.reason);
+      const values = (result.data as { values?: Record<string, unknown> }).values ?? {};
+      const mode = values['permission.defaultMode'];
+      const thinking = values['thinking.default'];
+      return {
+        ok: true as const,
+        data: {
+          permissionDefaultMode:
+            mode === 'plan' || mode === 'default' || mode === 'acceptEdits' || mode === 'fullAuto' ? mode : null,
+          thinkingDefault:
+            thinking === 'off' || thinking === 'low' || thinking === 'medium' || thinking === 'high' ? thinking : null,
+        },
+      };
+    },
+    'app/setHubSettings': async (params) => {
+      if (params.permissionDefaultMode !== undefined) {
+        const result = await deps.command({
+          type: 'settings/set',
+          key: 'permission.defaultMode',
+          value: params.permissionDefaultMode ?? '',
+        });
+        if (!result.ok) return fail(result.reason);
+      }
+      if (params.thinkingDefault !== undefined) {
+        const result = await deps.command({
+          type: 'settings/set',
+          key: 'thinking.default',
+          value: params.thinkingDefault ?? '',
+        });
+        if (!result.ok) return fail(result.reason);
+      }
+      return { ok: true as const, data: null };
     },
     'app/setPreference': (params) => {
       const patch: Parameters<FileSettings['patch']>[0] = {};
@@ -126,7 +196,9 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
   return {
     providersView,
     preferencesView,
-    skills,
+    skillsList,
     routes,
   };
 }
+
+export { HUB_API_FORMATS };

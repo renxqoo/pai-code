@@ -9,16 +9,16 @@ import type {
   SkillView,
   ApiData,
   ModelInfoView,
-  PermissionRules,
+  PermMode,
   PreferencesView,
   ProviderConfigView,
   SavedSessionView,
   SessionView,
+  ThinkingLevel,
   UiEvent,
 } from '@paiapp/contracts';
 import type { SubagentModel, ThreadModel } from '@/thread/thread-model';
 
-import { strListField } from '@paiapp/adapter';
 import { foldDeath, foldStopIntent, foldThreadEvent } from './fold-events';
 import { foldHydrate } from './fold-hydrate';
 import { initialThreadState, type HydrateAction, type LiveThreadState } from './live-thread-state';
@@ -28,17 +28,34 @@ import { initialThreadState, type HydrateAction, type LiveThreadState } from './
  * store 只做状态容器与折叠派发；副作用（invoke/对账拉取）在 controller。
  */
 
+/** 挂起的 confirm 对话框（host-hub 仅实现 confirm：tool/summary/reason 三字段平铺）。 */
 export type PendingDialog = {
   requestId: string;
   threadId: string;
   method: string;
-  title?: string;
-  message?: string;
-  options?: string[];
-  placeholder?: string;
-  prefill?: string;
-  subagentId?: string;
-  agent?: string;
+  tool?: string;
+  summary?: string;
+  reason?: string;
+  /** 子代理中继的对话框身份。 */
+  agentName?: string;
+};
+
+/** hub 用户级缺省（app/hubSettings；null 字段 = 未设置按 hub 缺省）。 */
+export type HubSettingsView = {
+  permissionDefaultMode: PermMode | null;
+  thinkingDefault: ThinkingLevel | null;
+};
+
+/** 活跃会话权限模式读口视图（permission/mode）。 */
+export type SessionPermissionModeView = {
+  mode: string;
+  source: 'session' | 'project' | 'user' | 'default';
+};
+
+/** 活跃会话思考档读口视图（session/thinkingLevels）。 */
+export type ThinkingLevelStateView = {
+  level: string;
+  source: 'session' | 'project' | 'user' | 'unset';
 };
 
 export interface LiveStoreState {
@@ -51,31 +68,32 @@ export interface LiveStoreState {
   providers: readonly ProviderConfigView[];
   /** 应用偏好（默认模型 / 引导完成标志）。 */
   preferences: PreferencesView;
-  /** 全局权限规则（null = 未加载；设置页打开时拉取）。 */
-  permissionRules: PermissionRules | null;
-  /** 会话级规则（null = 未加载）。 */
-  sessionRules: { rules: PermissionRules; source: 'thread' | 'global' } | null;
+  /** hub 用户级缺省（null = 未加载；新任务页控件与设置页共用）。 */
+  hubSettings: HubSettingsView | null;
+  /** 活跃会话权限模式（null = 未加载/无会话）。 */
+  sessionPermissionMode: SessionPermissionModeView | null;
   /** 子 agent 定义管理面（文件真相；进 Agents 分区时拉取）。 */
   agentDefinitions: readonly AgentDefinition[];
-  /** 用户级技能目录（进技能分区时拉取；启停真相在 pi settings）。 */
+  /** 用户级技能目录（进技能分区时拉取；启停真相在 hub settings）。 */
   skills: readonly SkillView[];
   /** 活跃会话的斜杠命令目录（`/` 补全数据源；拉取 effect 写入，切会话同步清空）。 */
   commands: readonly CommandView[];
-  /** 活跃会话的思考档位（协议档位值；拉取 effect 写入，切会话同步清空）。 */
-  effortLevels: readonly string[];
+  /** 活跃会话思考档读口（{level,source}；null = 未加载）。 */
+  thinkingLevel: ThinkingLevelStateView | null;
   threads: Readonly<Record<string, LiveThreadState>>;
   /** 挂起对话框队列（入队序即呈现序；数组本身即真相，无伴生索引）。 */
   dialogs: readonly PendingDialog[];
   activeThreadId: string | null;
   stats: Readonly<Record<string, SessionStatsView>>;
-  /** 通知条（notify/setStatus 类对话框的瞬时呈现）。 */
+  /** 通知条（bash 携图拒绝/失败类接线层提示的瞬时呈现）。 */
   notices: readonly { id: string; text: string }[];
 }
 
 export interface LiveStoreActions {
   applyEvent(event: UiEvent, now: number): void;
   hydrate(threadId: string, action: HydrateAction): void;
-  /** 子代理快照合入（T35 M2b 收敛读口）：按 subagentId 合并（快照为权威态），本地缺的补建、本地有而快照无的保留。 */
+  /** 子代理快照合入（T35 M2b 收敛读口）：按 agentName 合并（快照为权威态），
+   * 本地缺的补建、本地有而快照无的保留。 */
   hydrateSubagents(threadId: string, snapshot: readonly SubagentSnapshotView[], now: number): void;
   /** 待答弹窗合入（T35 M2b 收敛读口）：按 requestId 合并（快照权威），**只增不删**——
    * 快照读取与应用之间存在在途窗口，凭快照删除会复活刚结算的弹窗；删除只走 dialogSettled。 */
@@ -165,14 +183,8 @@ export function createLiveStore() {
               };
             }
             case 'dialogRequest': {
-              if (event.method === 'notify') {
-                const text = event.message ?? event.title ?? '';
-                if (text.length === 0) return state;
-                // 与 dialog 路径对称：同 requestId 重投去重
-                const deduped = state.notices.filter((notice) => notice.id !== event.requestId);
-                return { notices: [...deduped.slice(-4), { id: event.requestId, text }] };
-              }
-              if (event.method === 'setStatus') return state;
+              // host-hub 仅实现 confirm：全部入队（无 notify/setStatus 分支——通知条
+              // 只服务接线层提示，见 pushNotice）
               const dialogs = [...state.dialogs.filter((dialog) => dialog.requestId !== event.requestId), toPendingDialog(event)];
               return { dialogs };
             }
@@ -193,18 +205,19 @@ export function createLiveStore() {
         set((state) => {
           const agents = [...(state.threads[threadId]?.agents ?? [])];
           for (const entry of snapshot) {
-            const index = agents.findIndex((agent) => agent.id === entry.subagentId);
+            const index = agents.findIndex((agent) => agent.name === entry.agentName);
             const base: SubagentModel =
               index === -1
-                ? { id: entry.subagentId, name: entry.agent, agentType: entry.agent, model: '', effort: '', tokens: null, toolCount: 0, status: 'working', startedAt: Math.max(0, now - entry.elapsedMs), endedAt: null, summary: '', tools: [] }
+                ? { id: entry.agentName, agentId: entry.agentId, name: entry.agentName, agentType: entry.agentType ?? entry.agentName, task: entry.work, model: '', effort: '', tokens: null, toolCount: 0, status: entry.status, startedAt: now, endedAt: null, summary: '', pendingAsk: null, tools: [] }
                 : (agents[index] as SubagentModel);
             const merged: SubagentModel = {
               ...base,
-              name: entry.agent.length > 0 ? entry.agent : base.name,
-              agentType: entry.agent.length > 0 ? entry.agent : base.agentType,
-              status: toSubagentStatus(entry.status),
-              endedAt: entry.status === 'running' || entry.status === 'queued' ? null : base.endedAt ?? now,
-              summary: entry.output.length > 0 ? entry.output : base.summary,
+              agentId: entry.agentId.length > 0 ? entry.agentId : base.agentId,
+              // 快照缺 agentType 时不抹掉本地已知值
+              agentType: entry.agentType !== undefined && entry.agentType.length > 0 ? entry.agentType : base.agentType,
+              task: entry.work.length > 0 ? entry.work : base.task,
+              status: entry.status,
+              endedAt: entry.status === 'on-disk' ? base.endedAt ?? now : null,
             };
             if (index === -1) agents.push(merged);
             else agents[index] = merged;
@@ -326,40 +339,27 @@ function toPendingDialog(event: DialogViewSource): PendingDialog {
     requestId: event.requestId,
     threadId: event.threadId,
     method: event.method,
-    title: event.title,
-    message: event.message,
-    options: event.options,
-    placeholder: event.placeholder,
-    prefill: event.prefill,
-    subagentId: event.subagentId,
-    agent: event.agent,
+    tool: event.tool,
+    summary: event.summary,
+    reason: event.reason,
+    agentName: event.agentName,
   };
 }
 
 type DialogViewSource = Extract<UiEvent, { type: 'dialogRequest' }>;
 
-/** 子代理快照状态 → 面板状态（registry 词表 → 视图词表「working/done」）。 */
-function toSubagentStatus(status: SubagentSnapshotView['status']): SubagentModel['status'] {
-  return status === 'running' || status === 'queued' ? 'working' : 'done';
-}
-
-/** 待答弹窗视图 → store 形状（与 dialogRequest 事件同一套字段收窄）。 */
+/** 待答弹窗视图 → store 形状（与 dialogRequest 事件同一套字段收窄；confirm 平铺载荷）。 */
 function toPendingDialogFromView(entry: PendingDialogView): PendingDialog {
   const payload = entry.payload;
-  const str = (value: unknown): string | undefined => (typeof value === 'string' ? value : undefined);
-  // 与实时帧同一套收窄（strListField）：对象形态 {label,value} 的选项重建后不得消失
-  const options = strListField(payload['options']);
+  const str = (value: unknown): string | undefined => (typeof value === 'string' && value.length > 0 ? value : undefined);
   return {
     requestId: entry.requestId,
     threadId: entry.threadId,
     method: entry.method,
-    title: str(payload['title']),
-    message: str(payload['message']),
-    options,
-    placeholder: str(payload['placeholder']),
-    prefill: str(payload['prefill']),
-    subagentId: str(payload['subagentId']),
-    agent: str(payload['agent']),
+    tool: str(payload['tool']),
+    summary: str(payload['summary']),
+    reason: str(payload['reason']),
+    agentName: str(payload['agentName']),
   };
 }
 
@@ -372,15 +372,15 @@ function omitKey<T>(source: Readonly<Record<string, T>>, key: string): Record<st
 }
 
 /**
- * 活跃线程翻转时的会话级视图失效补丁：sessionRules/commands/effortLevels 是活跃
- * 会话的视图，翻转即同步清空（防旧会话的规则/补全目录在操作栏残留一帧；新值由
+ * 活跃线程翻转时的会话级视图失效补丁：sessionPermissionMode/commands/thinkingLevel
+ * 是活跃会话的视图，翻转即同步清空（防旧会话的规则/补全目录在操作栏残留一帧；新值由
  * 切会话 effect 重拉）。全部翻转路径（setActiveThread / sessionRemoved 继任者
  * 回落 / bootstrap 回落）必须经此，禁止直写 activeThreadId 不带补丁。
  */
 function activeThreadFlip(state: LiveStoreState, threadId: string | null) {
   return state.activeThreadId === threadId
     ? {}
-    : { activeThreadId: threadId, sessionRules: null, commands: [] as const, effortLevels: [] as const };
+    : { activeThreadId: threadId, sessionPermissionMode: null, commands: [] as const, thinkingLevel: null };
 }
 
 function firstSessionId(sessions: Readonly<Record<string, SessionView>>): string | null {
@@ -400,10 +400,10 @@ function initialStoreState(): LiveStoreState {
     agentDefinitions: [],
     skills: [],
     commands: [],
-    effortLevels: [],
+    thinkingLevel: null,
     preferences: { defaultModel: null, onboarded: false, projectModels: {}, pinnedSessions: [], trustedDefault: false, hiddenProjects: [], idleRecycleMinutes: 5, archivedSessions: [] },
-    permissionRules: null,
-    sessionRules: null,
+    hubSettings: null,
+    sessionPermissionMode: null,
     threads: {},
     dialogs: [],
     activeThreadId: null,

@@ -1,6 +1,7 @@
 import { ChevronDown, Shield } from 'lucide-react';
 
-import type { PermissionRules } from '@paiapp/contracts';
+import type { PermMode } from '@paiapp/contracts';
+import { PERM_MODES } from '@paiapp/contracts';
 import { MenuButton, type MenuItemDef } from '@paiapp/ui';
 
 import { copy } from '@/strings';
@@ -8,46 +9,37 @@ import { copy } from '@/strings';
 import { menuTriggerClassName } from '@paiapp/ui';
 
 type PermissionModeMenuProps = {
-  /** 当前生效模式（sidecar 优先，否则全局）。 */
-  mode: PermissionRules['mode']
-  /** true = 生效规则来自全局文件（无会话 sidecar），「跟随全局」不可再点。 */
-  followsGlobal: boolean
-  onSelectMode: (mode: PermissionRules['mode']) => void
-  onFollowGlobal: () => void
+  /** 当前生效模式（permission/mode 读口；normalizePermMode 已收敛为词表值）。 */
+  mode: PermMode
+  onSelectMode: (mode: PermMode) => void
 }
 
-const MODES: readonly PermissionRules['mode'][] = ['ask', 'allow-all', 'block-all'];
+/** 权限模式展示名（语言切换后随渲染重估——模块级常量会冻结首个 locale）。 */
+export function permModeLabel(mode: PermMode): string {
+  return copy.settings.permModeOptions[mode];
+}
 
-/** 会话权限模式下拉：切换以当前生效规则为基线写 sidecar；「跟随全局」删 sidecar。 */
-function PermissionModeMenu({ mode, followsGlobal, onSelectMode, onFollowGlobal }: PermissionModeMenuProps) {
-  // 语言切换后随渲染重估（模块级常量会冻结首个 locale）
-  const labels: Record<PermissionRules['mode'], string> = {
-    ask: copy.settings.permissionsModeAsk,
-    'allow-all': copy.settings.permissionsModeAllowAll,
-    'block-all': copy.settings.permissionsModeBlockAll,
-  };
-  const items: MenuItemDef[] = [
-    ...MODES.map((value) => ({ kind: 'item' as const, id: value, label: labels[value], selected: mode === value })),
-    { kind: 'separator' },
-    { kind: 'item', id: 'follow-global', label: copy.settings.permissionsFollowGlobalAction, disabled: followsGlobal },
-  ];
+/** 会话权限模式下拉：读 permission/mode、写 permission/setMode（四档；下一工具裁决生效）。 */
+function PermissionModeMenu({ mode, onSelectMode }: PermissionModeMenuProps) {
+  const items: MenuItemDef[] = PERM_MODES.map((value) => ({
+    kind: 'item' as const,
+    id: value,
+    label: permModeLabel(value),
+    selected: mode === value,
+  }));
   return (
     <MenuButton
       aria-label={copy.composer.permissionMode}
       align="start"
       items={items}
       onSelect={(id) => {
-        if (id === 'follow-global') {
-          onFollowGlobal();
-          return;
-        }
-        if ((MODES as readonly string[]).includes(id)) onSelectMode(id as PermissionRules['mode']);
+        if ((PERM_MODES as readonly string[]).includes(id)) onSelectMode(id as PermMode);
       }}
       triggerClassName={`${menuTriggerClassName} shrink-0`}
       trigger={
         <>
           <Shield size={13} className="text-muted-foreground" strokeWidth={2} />
-          <span className="whitespace-nowrap">{labels[mode]}</span>
+          <span className="whitespace-nowrap">{permModeLabel(mode)}</span>
           <ChevronDown className="size-3 text-muted-foreground/70" strokeWidth={2} />
         </>
       }

@@ -35,16 +35,25 @@ export type ToolCallModel = {
   status: ToolCallStatus;
 };
 
-export type SubagentStatus = 'working' | 'done';
+/**
+ * 子代理状态（manager 词表）：busy = 执行中；idle = 存活未在跑；
+ * on-disk = 终态归档（settled / 快照落盘）。
+ */
+export type SubagentStatus = 'busy' | 'idle' | 'on-disk';
 
 export type SubagentModel = {
+  /** 面板列表键（事件流身份）；保留旧字段名避免全量改写消费面。 */
   id: string;
+  /** steer 寻址 id（subagent/steer 的 agentId 入参；'' = 未知，行内输入不显示）。 */
+  agentId: string;
   name: string;
   /** 面板类型胶囊：Explore / general-purpose */
   agentType: string;
+  /** 任务描述（subagentStarted/快照 work；'' = 未知）。 */
+  task: string;
   model: string;
   effort: string;
-  /** null = 尚无 token 计量，展示为占位符 */
+  /** null = 无 token 计量，展示为占位符 */
   tokens: number | null;
   /** 已启动的工具调用数 */
   toolCount: number;
@@ -52,8 +61,10 @@ export type SubagentModel = {
   startedAt: number;
   /** null = 仍在运行，耗时实时累加 */
   endedAt: number | null;
-  /** 完成后的报告摘要（面板完成态展示） */
+  /** 流式正文累积（终态展示为报告摘要） */
   summary: string;
+  /** 权限请求等待中（agents/permission-ask：协议无应答命令，hub 到期自动拒绝——仅信息展示）。 */
+  pendingAsk: { toolName: string; summary: string } | null;
   tools: readonly ToolCallModel[];
 };
 

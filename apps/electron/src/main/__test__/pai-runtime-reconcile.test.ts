@@ -6,15 +6,16 @@ import { join } from 'node:path';
 import type { HostCommandOutcome, HostPhase, HostProcessPort, HubFrame, PaiCommand, UiEvent } from '@paiapp/contracts';
 
 import { createApiRoutes } from '../api-routes';
-import { createAgentDirFiles } from '../agent-dir-files';
 import { createAgentDefinitionsStore } from '../agent-definitions-store';
 import { createFileSettings, type ProviderKeyStore } from '../file-settings';
 import { createPaiRuntime, type PaiRuntime } from '../pai-runtime';
+import { createRuntimeMonitor } from '../runtime-monitor/create-runtime-monitor';
 
 /**
  * 启动懒恢复回归（T16）：启动/host 重启只对账（list_saved 聚合），
  * 0 个 thread/resume；确认缺失删行、暂态失败保留、parked 占位渲染；
- * resume 路由保留注册表标题、换 id 旧行整行替换。
+ * resume 路由保留注册表标题、换 id 旧行整行替换；
+ * resume 撞 already open 时按 thread/list 收养既有表项（parked 懒恢复回落路径）。
  */
 
 type Reply = HostCommandOutcome;
@@ -24,15 +25,25 @@ interface SeededRow {
   sessionPath: string | null;
   cwd: string;
   title: string;
+  keepalive?: boolean;
 }
 
-function savedReply(paths: string[]): { ok: true; data: unknown } {
+/** thread/list_saved 响应（hub 形状 {sessions:[{id,title,updatedAt,messageCount,cwd}]}）。 */
+function savedReply(ids: string[]): { ok: true; data: unknown } {
   return {
     ok: true,
     data: {
-      sessions: paths.map((path) => ({ path, id: 'sid', cwd: '', name: null, modified: '2026-01-01T00:00:00Z', messageCount: 1, firstMessage: '' })),
+      sessions: ids.map((id) => ({ id, title: 't', updatedAt: 1, messageCount: 1, cwd: '/w/proj' })),
     },
   };
+}
+
+/** 会话文件布局契约路径（<sessionsRoot>/<id>/transcript.jsonl）；建 id 目录——
+ *  resume 白名单对缺失文件的父目录做 realpath 归一，目录在才能落进白名单。 */
+function sessionFileOf(work: string, id: string): string {
+  const dir = join(work, 'agent', 'sessions', id);
+  mkdirSync(dir, { recursive: true });
+  return join(dir, 'transcript.jsonl');
 }
 
 function makeFixture(work: string, reply: (cmd: PaiCommand) => Reply) {
@@ -81,7 +92,14 @@ function makeFixture(work: string, reply: (cmd: PaiCommand) => Reply) {
       return port;
     },
   });
-  return { runtime, events, logs, sent, agentDir, pushFrame: (frame: HubFrame) => frameCb?.(frame) };
+  return {
+    runtime,
+    events,
+    logs,
+    sent,
+    agentDir,
+    pushFrame: (frame: HubFrame) => frameCb?.(frame),
+  };
 }
 
 const emptyKeyStore: ProviderKeyStore = {
@@ -100,6 +118,7 @@ function seedRow(runtime: PaiRuntime, row: SeededRow): void {
     trusted: false,
     createdAt: 1_000,
     updatedAt: 2_000,
+    keepalive: row.keepalive ?? false,
   });
 }
 
@@ -117,11 +136,12 @@ function makeRoutes(work: string, reply: (cmd: PaiCommand) => Reply) {
     settings,
     keyStore: emptyKeyStore,
     audit: () => undefined,
-    agentDirFiles: createAgentDirFiles(fixture.agentDir),
-    agentDefinitions: createAgentDefinitionsStore(fixture.agentDir),
+    agentDefinitions: createAgentDefinitionsStore(join(work, 'home')),
     agentDir: fixture.agentDir,
     revealPath: () => undefined,
     pickDirectory: () => Promise.resolve(null),
+    exportDiagnosticsBundle: () => work,
+    monitor: createRuntimeMonitor({ host: () => null, appMetrics: () => ({ rssBytes: null, cpuPercent: null }), systemMemory: () => ({ totalBytes: null, availableBytes: null }), idleRecycleMinutes: () => 5, appVersion: () => 'test' }),
   });
   return { ...fixture, routes };
 }
@@ -129,14 +149,14 @@ function makeRoutes(work: string, reply: (cmd: PaiCommand) => Reply) {
 describe('pai-runtime 启动对账（懒恢复，0 resume）', () => {
   test('症状回归：启动只对账渲染占位，不发任何 thread/resume', async () => {
     const work = mkdtempSync(join(tmpdir(), 'pai-reconcile-'));
-    const onDisk: Record<string, string[]> = { '/w/proj': ['a.jsonl', 'b.jsonl'], '/w/other': ['c.jsonl'] };
+    const onDisk: Record<string, string[]> = { '/w/proj': ['a', 'b'], '/w/other': ['c'] };
     const { runtime, sent } = makeFixture(work, (cmd) => {
       if (cmd.type === 'thread/list_saved' && cmd.cwd !== undefined && cmd.cwd in onDisk) return savedReply(onDisk[cmd.cwd] ?? []);
       return { ok: true, data: {} };
     });
-    seedRow(runtime, { threadId: 't1', sessionPath: 'a.jsonl', cwd: '/w/proj', title: '调试' });
-    seedRow(runtime, { threadId: 't2', sessionPath: 'b.jsonl', cwd: '/w/proj', title: '重构' });
-    seedRow(runtime, { threadId: 't3', sessionPath: 'c.jsonl', cwd: '/w/other', title: '笔记' });
+        seedRow(runtime, { threadId: 't1', sessionPath: sessionFileOf(work, 'a'), cwd: '/w/proj', title: '调试' });
+    seedRow(runtime, { threadId: 't2', sessionPath: sessionFileOf(work, 'b'), cwd: '/w/proj', title: '重构' });
+    seedRow(runtime, { threadId: 't3', sessionPath: sessionFileOf(work, 'c'), cwd: '/w/other', title: '笔记' });
 
     await runtime.start();
 
@@ -151,11 +171,11 @@ describe('pai-runtime 启动对账（懒恢复，0 resume）', () => {
   test('确认缺失（该 cwd 列举成功且不含此文件）→ 删行 + sessionRemoved', async () => {
     const work = mkdtempSync(join(tmpdir(), 'pai-reconcile-missing-'));
     const { runtime, sent, events } = makeFixture(work, (cmd) => {
-      if (cmd.type === 'thread/list_saved' && cmd.cwd === '/w/proj') return savedReply(['a.jsonl']);
+      if (cmd.type === 'thread/list_saved' && cmd.cwd === '/w/proj') return savedReply(['a']);
       return { ok: true, data: {} };
     });
-    seedRow(runtime, { threadId: 't1', sessionPath: 'a.jsonl', cwd: '/w/proj', title: '在盘' });
-    seedRow(runtime, { threadId: 't4', sessionPath: 'd.jsonl', cwd: '/w/proj', title: '已删' });
+    seedRow(runtime, { threadId: 't1', sessionPath: sessionFileOf(work, 'a'), cwd: '/w/proj', title: '在盘' });
+    seedRow(runtime, { threadId: 't4', sessionPath: sessionFileOf(work, 'd'), cwd: '/w/proj', title: '已删' });
 
     await runtime.start();
     flushEvents(runtime);
@@ -172,12 +192,12 @@ describe('pai-runtime 启动对账（懒恢复，0 resume）', () => {
       if (cmd.type === 'thread/list_saved' && cmd.cwd === '/w/proj') return { ok: false, error: 'timeout' };
       return { ok: true, data: {} };
     });
-    seedRow(runtime, { threadId: 't3', sessionPath: 'c.jsonl', cwd: '/w/proj', title: '未知' });
+    seedRow(runtime, { threadId: 't3', sessionPath: sessionFileOf(work, 'c'), cwd: '/w/proj', title: '未知' });
 
     await runtime.start();
     flushEvents(runtime);
 
-    expect(runtime.registry.get('t3')?.sessionPath).toBe('c.jsonl');
+    expect(runtime.registry.get('t3')?.sessionPath).toBe(sessionFileOf(work, 'c'));
     expect(runtime.sessions().map((view) => view.state)).toEqual(['parked']);
     expect(events).toContainEqual(expect.objectContaining({ type: 'sessionUpdated', session: expect.objectContaining({ threadId: 't3', state: 'parked' }) }));
     expect(events.filter((event) => event.type === 'sessionRemoved')).toEqual([]);
@@ -200,13 +220,13 @@ describe('pai-runtime 启动对账（懒恢复，0 resume）', () => {
   test('host 重启钩子：对账回落 parked，无 thread/resume', async () => {
     const work = mkdtempSync(join(tmpdir(), 'pai-reconcile-restart-'));
     const { runtime, sent } = makeFixture(work, (cmd) => {
-      if (cmd.type === 'thread/list_saved' && cmd.cwd === '/w/proj') return savedReply(['a.jsonl']);
+      if (cmd.type === 'thread/list_saved' && cmd.cwd === '/w/proj') return savedReply(['a']);
       return { ok: true, data: {} };
     });
-    seedRow(runtime, { threadId: 't1', sessionPath: 'a.jsonl', cwd: '/w/proj', title: '调试' });
+    seedRow(runtime, { threadId: 't1', sessionPath: sessionFileOf(work, 'a'), cwd: '/w/proj', title: '调试' });
 
     await runtime.start();
-    runtime.applyStartOutcome('t1', '/w/proj', 'a.jsonl', '调试', Date.now());
+    runtime.applyStartOutcome('t1', '/w/proj', sessionFileOf(work, 'a'), '调试', Date.now());
     expect(runtime.sessions()[0]?.state).toBe('live');
 
     await runtime.host.restart('watchdog');
@@ -223,15 +243,16 @@ describe('pai-runtime 启动对账（懒恢复，0 resume）', () => {
     const gate = new Promise<unknown>((resolve) => {
       releaseSaved = resolve;
     });
+    const sessionPath = sessionFileOf(work, 'a');
     const { runtime } = makeFixture(work, (cmd) => {
       if (cmd.type === 'thread/list_saved' && cmd.cwd === '/w/proj') {
         listSavedCalls += 1;
-        if (listSavedCalls === 1) return { ok: true, data: { sessions: [{ sessionPath: 'a.jsonl' }] } };
-        return gate.then(() => ({ ok: true, data: { sessions: [{ sessionPath: 'a.jsonl' }] } })) as never;
+        if (listSavedCalls === 1) return { ok: true, data: { sessions: [{ id: 'a', title: 't', updatedAt: 1, messageCount: 1, cwd: '/w/proj' }] } };
+        return gate.then(() => ({ ok: true, data: { sessions: [{ id: 'a', title: 't', updatedAt: 1, messageCount: 1, cwd: '/w/proj' }] } })) as never;
       }
       return { ok: true, data: {} };
     });
-    seedRow(runtime, { threadId: 't1', sessionPath: 'a.jsonl', cwd: '/w/proj', title: '调试' });
+    seedRow(runtime, { threadId: 't1', sessionPath: sessionPath, cwd: '/w/proj', title: '调试' });
     await runtime.start();
 
     const reconciling = runtime.reconcileSessions();
@@ -239,8 +260,8 @@ describe('pai-runtime 启动对账（懒恢复，0 resume）', () => {
       setTimeout(r, 10);
     });
     // 对账挂起期间并发 resume 成功（applyStartOutcome 置 live 并推进注册表行）
-    runtime.applyStartOutcome('t1', '/w/proj', 'a.jsonl', '调试', Date.now());
-    releaseSaved({ ok: true, data: { sessions: [{ sessionPath: 'a.jsonl' }] } });
+    runtime.applyStartOutcome('t1', '/w/proj', sessionPath, '调试', Date.now());
+    releaseSaved({ ok: true, data: { sessions: [{ id: 'a', title: 't', updatedAt: 1, messageCount: 1, cwd: '/w/proj' }] } });
     await reconciling;
 
     expect(runtime.sessions()[0]?.state).toBe('live');
@@ -250,7 +271,7 @@ describe('pai-runtime 启动对账（懒恢复，0 resume）', () => {
 describe('api-routes session/resume（懒恢复通路）', () => {
   test('症状回归：恢复已注册会话保留注册表标题（不再抹成 New conversation）', async () => {
     const work = mkdtempSync(join(tmpdir(), 'pai-resume-title-'));
-    const sessionPath = join(work, 'agent', 'sessions', 'a.jsonl');
+    const sessionPath = sessionFileOf(work, 'a');
     const { runtime, routes } = makeRoutes(work, (cmd) => {
       if (cmd.type === 'thread/resume') return { ok: true, data: { threadId: 't1', cwd: '/w/proj', sessionPath } };
       return { ok: true, data: {} };
@@ -267,7 +288,7 @@ describe('api-routes session/resume（懒恢复通路）', () => {
 
   test('threadId 只信响应：resume 换 id → 旧行删除 + sessionRemoved + 新行落库', async () => {
     const work = mkdtempSync(join(tmpdir(), 'pai-resume-reid-'));
-    const sessionPath = join(work, 'agent', 'sessions', 'a.jsonl');
+    const sessionPath = sessionFileOf(work, 'a');
     const { runtime, routes, events } = makeRoutes(work, (cmd) => {
       if (cmd.type === 'thread/resume') return { ok: true, data: { threadId: 't9', cwd: '/w/proj', sessionPath } };
       return { ok: true, data: {} };
@@ -288,7 +309,7 @@ describe('api-routes session/resume（懒恢复通路）', () => {
 
   test('症状回归：点击恢复不置顶——活动时间三面保留（视图/响应/注册表行），时间标签不再跳「刚刚」', async () => {
     const work = mkdtempSync(join(tmpdir(), 'pai-resume-activity-'));
-    const sessionPath = join(work, 'agent', 'sessions', 'a.jsonl');
+    const sessionPath = sessionFileOf(work, 'a');
     const { runtime, routes } = makeRoutes(work, (cmd) => {
       if (cmd.type === 'thread/resume') return { ok: true, data: { threadId: 't1', cwd: '/w/proj', sessionPath } };
       return { ok: true, data: {} };
@@ -306,10 +327,10 @@ describe('api-routes session/resume（懒恢复通路）', () => {
 
   test('症状回归：恢复后 host 重启对账不重排——占位 lastActivityAt = 保留值', async () => {
     const work = mkdtempSync(join(tmpdir(), 'pai-resume-reorder-'));
-    const sessionPath = join(work, 'agent', 'sessions', 'a.jsonl');
+    const sessionPath = sessionFileOf(work, 'a');
     const { runtime, routes } = makeRoutes(work, (cmd) => {
       if (cmd.type === 'thread/resume') return { ok: true, data: { threadId: 't1', cwd: '/w/proj', sessionPath } };
-      if (cmd.type === 'thread/list_saved' && cmd.cwd === '/w/proj') return savedReply([sessionPath]);
+      if (cmd.type === 'thread/list_saved' && cmd.cwd === '/w/proj') return savedReply(['a']);
       return { ok: true, data: {} };
     });
     await runtime.start();
@@ -327,7 +348,7 @@ describe('api-routes session/resume（懒恢复通路）', () => {
 
   test('History 首开（无注册表行）：活动时间取会话文件 mtime，不置顶为「刚刚」', async () => {
     const work = mkdtempSync(join(tmpdir(), 'pai-resume-mtime-'));
-    const sessionPath = join(work, 'agent', 'sessions', 'history.jsonl');
+    const sessionPath = sessionFileOf(work, 'history');
     const { runtime, routes } = makeRoutes(work, (cmd) => {
       if (cmd.type === 'thread/resume') return { ok: true, data: { threadId: 't1', cwd: '/w/proj', sessionPath } };
       return { ok: true, data: {} };
@@ -346,7 +367,7 @@ describe('api-routes session/resume（懒恢复通路）', () => {
 
   test('History 首开且文件不可读：活动时间降级当前时刻（恢复仍成功）', async () => {
     const work = mkdtempSync(join(tmpdir(), 'pai-resume-ghost-'));
-    const sessionPath = join(work, 'agent', 'sessions', 'ghost.jsonl');
+    const sessionPath = sessionFileOf(work, 'ghost');
     const before = Date.now();
     const { runtime, routes } = makeRoutes(work, (cmd) => {
       if (cmd.type === 'thread/resume') return { ok: true, data: { threadId: 't1', cwd: '/w/proj', sessionPath } };
@@ -377,19 +398,19 @@ describe('api-routes session/resume（懒恢复通路）', () => {
 
   test('对抗审查 #1：resume 续体前真活动已推进（帧先于微任务）——活动时间不得写回旧值', async () => {
     const work = mkdtempSync(join(tmpdir(), 'pai-resume-race-'));
-    const sessionPath = join(work, 'agent', 'sessions', 'a.jsonl');
+    const sessionPath = sessionFileOf(work, 'a');
     const { runtime, routes, pushFrame } = makeRoutes(work, (cmd) => {
       if (cmd.type === 'thread/resume') return { ok: true, data: { threadId: 't1', cwd: '/w/proj', sessionPath } };
-      if (cmd.type === 'thread/list_saved' && cmd.cwd === '/w/proj') return savedReply([sessionPath]);
+      if (cmd.type === 'thread/list_saved' && cmd.cwd === '/w/proj') return savedReply(['a']);
       return { ok: true, data: {} };
     });
     // 先 seed 再 start：对账渲染 parked 占位视图（推帧的活动副作用只作用于已有视图）
     seedRow(runtime, { threadId: 't1', sessionPath, cwd: '/w/proj', title: '旧会话' });
     await runtime.start();
     expect(runtime.sessions()[0]?.state).toBe('parked');
-    // 模拟 await 窗口内到达的 agent_start（同 chunk 帧同步派发先于路由续体）：行/视图已推进到当前
+    // 模拟 await 窗口内到达的 turn/start（同 chunk 帧同步派发先于路由续体）：行/视图已推进到当前
     const turnAt = Date.now();
-    pushFrame({ type: 'event', threadId: 't1', event: { type: 'agent_start' } });
+    pushFrame({ type: 'event', threadId: 't1', name: 'turn/start', payload: { ts: turnAt } });
     expect(runtime.registry.get('t1')?.updatedAt ?? 0).toBeGreaterThanOrEqual(turnAt);
 
     const outcome = (await routes.invoke('session/resume', { sessionPath })) as { ok: boolean; data: { lastActivityAt: number } };
@@ -399,15 +420,15 @@ describe('api-routes session/resume（懒恢复通路）', () => {
     expect(runtime.registry.get('t1')?.updatedAt ?? 0).toBeGreaterThanOrEqual(turnAt);
     // 恢复后的下一轮照常推进（streaming 镜像重置不卡死活动）
     const secondTurnAt = Date.now();
-    pushFrame({ type: 'event', threadId: 't1', event: { type: 'agent_start' } });
+    pushFrame({ type: 'event', threadId: 't1', name: 'turn/start', payload: { ts: secondTurnAt } });
     expect(runtime.registry.get('t1')?.updatedAt ?? 0).toBeGreaterThanOrEqual(secondTurnAt);
-    pushFrame({ type: 'event', threadId: 't1', event: { type: 'agent_settled' } });
+    pushFrame({ type: 'event', threadId: 't1', name: 'settled', payload: { ok: true } });
     expect(runtime.registry.get('t1')?.updatedAt ?? 0).toBeGreaterThanOrEqual(secondTurnAt);
   });
 
   test('对抗审查 #1：resume 换 id 且旧文件更旧——新行活动时间保留旧行值（不被 Date.now() 顶替）', async () => {
     const work = mkdtempSync(join(tmpdir(), 'pai-resume-reid-stamp-'));
-    const sessionPath = join(work, 'agent', 'sessions', 'a.jsonl');
+    const sessionPath = sessionFileOf(work, 'a');
     const { runtime, routes } = makeRoutes(work, (cmd) => {
       if (cmd.type === 'thread/resume') return { ok: true, data: { threadId: 't9', cwd: '/w/proj', sessionPath } };
       return { ok: true, data: {} };
@@ -429,7 +450,7 @@ describe('api-routes session/resume（懒恢复通路）', () => {
 describe('api-routes 对抗审查修复面（T16 M3）', () => {
   test('session/stop remove 语义：true 删行 / false 保行摘视图（内部重开链 title/trusted 存续）', async () => {
     const work = mkdtempSync(join(tmpdir(), 'pai-stop-remove-'));
-    const sessionPath = join(work, 'agent', 'sessions', 'a.jsonl');
+    const sessionPath = sessionFileOf(work, 'a');
     const { runtime, routes } = makeRoutes(work, (cmd) => {
       if (cmd.type === 'thread/resume') return { ok: true, data: { threadId: 't1', cwd: '/w/proj', sessionPath } };
       return { ok: true, data: {} };
@@ -458,7 +479,7 @@ describe('api-routes 对抗审查修复面（T16 M3）', () => {
       if (cmd.type === 'thread/list_saved' && cmd.cwd === '/w/proj') return savedReply([]);
       return { ok: true, data: {} };
     });
-    const sessionFile = join(work, 'agent', 'sessions', 'x.jsonl');
+    const sessionFile = sessionFileOf(work, 'x');
     writeFileSync(sessionFile, '');
     seedRow(runtime, { threadId: 't1', sessionPath: sessionFile, cwd: '/w/proj', title: '在盘' });
 
@@ -470,9 +491,9 @@ describe('api-routes 对抗审查修复面（T16 M3）', () => {
 
   test('parked 重命名本地落注册表：不发 hub 命令、恢复标题延续', async () => {
     const work = mkdtempSync(join(tmpdir(), 'pai-rename-parked-'));
-    const sessionPath = join(work, 'agent', 'sessions', 'a.jsonl');
+    const sessionPath = sessionFileOf(work, 'a');
     const { runtime, routes, sent } = makeRoutes(work, (cmd) => {
-      if (cmd.type === 'thread/list_saved' && cmd.cwd === '/w/proj') return savedReply([sessionPath]);
+      if (cmd.type === 'thread/list_saved' && cmd.cwd === '/w/proj') return savedReply(['a']);
       if (cmd.type === 'thread/resume') return { ok: true, data: { threadId: 't1', cwd: '/w/proj', sessionPath } };
       return { ok: true, data: {} };
     });
@@ -491,7 +512,7 @@ describe('api-routes 对抗审查修复面（T16 M3）', () => {
 
   test('resume not-found（运行中文件被删）→ 删行 + sessionRemoved，占位不再反复失败', async () => {
     const work = mkdtempSync(join(tmpdir(), 'pai-resume-notfound-'));
-    const sessionPath = join(work, 'agent', 'sessions', 'gone.jsonl');
+    const sessionPath = sessionFileOf(work, 'gone');
     const { runtime, routes, events } = makeRoutes(work, (cmd) => {
       if (cmd.type === 'thread/resume') return { ok: false, error: 'Session file not found' };
       return { ok: true, data: {} };
@@ -515,12 +536,12 @@ describe('对账边界：空 cwd 行', () => {
       if (cmd.type === 'thread/list_saved') return savedReply([]);
       return { ok: true, data: {} };
     });
-    seedRow(runtime, { threadId: 't1', sessionPath: 'a.jsonl', cwd: '', title: '空目录' });
+    seedRow(runtime, { threadId: 't1', sessionPath: sessionFileOf(work, 'a'), cwd: '', title: '空目录' });
 
     await runtime.start();
 
     expect(sent.some((cmd) => cmd.type === 'thread/list_saved' && (cmd.cwd ?? '') === '')).toBe(false);
-    expect(runtime.registry.get('t1')?.sessionPath).toBe('a.jsonl');
+    expect(runtime.registry.get('t1')?.sessionPath).toBe(sessionFileOf(work, 'a'));
     expect(runtime.sessions().map((view) => view.state)).toEqual(['parked']);
   });
 });

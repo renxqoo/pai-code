@@ -122,12 +122,6 @@ export function recycleCountdownLabel(recycleInMs: number): string {
   return copy.runtime.recycleIn(Math.max(0, Math.ceil(recycleInMs / SECOND)));
 }
 
-/** 上下文水位展示：0-1 → 百分比；null = 未知。 */
-export function contextUsagePercent(contextUsage: number | null): string {
-  if (contextUsage === null || !Number.isFinite(contextUsage)) return '—';
-  return `${Math.round(Math.min(1, Math.max(0, contextUsage)) * 100)}%`;
-}
-
 /** 摘要文本（剪贴板）：版本/相位/心跳/重启/线程计数/workers 数。 */
 export function buildSummaryText(snapshot: RuntimeSnapshotView): string {
   const lines: string[] = [
@@ -140,7 +134,7 @@ export function buildSummaryText(snapshot: RuntimeSnapshotView): string {
     `${copy.runtime.workersTitle}: ${snapshot.workers.length}`,
   ];
   const host = snapshot.hostInfo;
-  if (host !== null) lines.push(`Hub ${host.version} · pi ${host.piVersion} · ${copy.runtime.bunLabel} ${host.bunVersion}`);
+  if (host !== null) lines.push(`Hub ${host.version} · ${copy.runtime.bunLabel} ${host.bunVersion}`);
   return lines.join('\n');
 }
 

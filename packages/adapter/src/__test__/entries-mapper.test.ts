@@ -1,194 +1,263 @@
 import { describe, expect, test } from 'bun:test';
 
 import { mapEntries } from '../entries-mapper';
-import { diffFromPatch } from '../diff-extract';
-import { sessionStatsView, savedSessions, modelInfos, threadStateView, thinkingLevels } from '../response-views';
+import { diffFromPatch, isFileMutatingTool } from '../diff-extract';
 
-function messageEntry(id: string, message: Record<string, unknown>): Record<string, unknown> {
-  return { type: 'message', id, parentId: null, timestamp: '2026-01-01T00:00:00Z', message };
+/** WAL 事件行 {seq, ts, event}（get_entries 响应 entries 元素的形状）。 */
+function row(seq: number, ts: number, event: Record<string, unknown>): Record<string, unknown> {
+  return { seq, ts, event };
 }
 
-describe('mapEntries（转写真相源）', () => {
-  test('user 双形态扁平化：string 与 [{type:text}] 数组', () => {
-    const { items, cursor } = mapEntries([
-      messageEntry('e1', { role: 'user', content: 'hello', timestamp: 1 }),
-      messageEntry('e2', { role: 'user', content: [{ type: 'text', text: 'a' }, { type: 'image', data: 'x', mimeType: 'image/png' }, { type: 'text', text: 'b' }], timestamp: 2 }),
-    ]);
+describe('mapEntries（WAL 转写真相源）', () => {
+  test('user 消息：text 块扁平化、image 块 mediaType 提取、origin 收窄', () => {
+    const { items, cursor } = mapEntries({
+      entries: [
+        row(1, 100, {
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'text', text: '看图' }, { type: 'image', data: 'aGk=', mediaType: 'image/png' }],
+          origin: 'user',
+        }),
+        row(2, 200, { type: 'message', role: 'user', content: [{ type: 'text', text: '[task]普通消息' }], origin: 'steering' }),
+        row(3, 300, { type: 'message', role: 'user', content: [{ type: 'text', text: '子代理完成' }], origin: 'notification' }),
+        row(4, 400, { type: 'message', role: 'user', content: [{ type: 'text', text: '系统注入' }], origin: 'system' }),
+        row(5, 500, { type: 'message', role: 'user', content: [{ type: 'text', text: '缺 origin' }] }),
+      ],
+    });
     expect(items).toEqual([
-      { kind: 'user', id: 'e1', text: 'hello', origin: 'user', images: [], at: 1767225600000 },
-      { kind: 'user', id: 'e2', text: 'a\nb', origin: 'user', images: [{ type: 'image', data: 'x', mimeType: 'image/png' }], at: 1767225600000 },
+      { kind: 'user', id: 'seq-1', text: '看图', origin: 'user', images: [{ type: 'image', data: 'aGk=', mediaType: 'image/png' }], at: 100 },
+      { kind: 'user', id: 'seq-2', text: '[task]普通消息', origin: 'user', images: [], at: 200 },
+      { kind: 'user', id: 'seq-3', text: '子代理完成', origin: 'system', images: [], at: 300 },
+      { kind: 'user', id: 'seq-4', text: '系统注入', origin: 'system', images: [], at: 400 },
+      { kind: 'user', id: 'seq-5', text: '缺 origin', origin: 'user', images: [], at: 500 },
     ]);
-    expect(cursor).toBe('e2');
+    expect(cursor).toBe(5);
   });
 
-  test('症状回归：用户消息图片块提取进视图（垃圾图片块丢弃，文本不受影响）', () => {
-    const { items } = mapEntries([
-      messageEntry('e1', {
-        role: 'user',
-        timestamp: 1,
-        content: [
-          { type: 'text', text: '图片有什么' },
-          { type: 'image', data: 'aGk=', mimeType: 'image/png' },
-          { type: 'image', data: '', mimeType: 'image/png' },
-          { type: 'image', data: 'aGk=' },
-          { type: 'image', mimeType: 'image/png' },
-        ],
-      }),
-    ]);
+  test('垃圾图片块丢弃（data/mediaType 空缺），文本不受影响', () => {
+    const { items } = mapEntries({
+      entries: [
+        row(1, 1, {
+          type: 'message',
+          role: 'user',
+          content: [
+            { type: 'text', text: '图片有什么' },
+            { type: 'image', data: 'aGk=', mediaType: 'image/png' },
+            { type: 'image', data: '', mediaType: 'image/png' },
+            { type: 'image', data: 'aGk=' },
+            { type: 'image', mediaType: 'image/png' },
+          ],
+        }),
+      ],
+    });
     expect(items).toEqual([
-      {
-        kind: 'user',
-        id: 'e1',
-        text: '图片有什么',
-        origin: 'user',
-        images: [{ type: 'image', data: 'aGk=', mimeType: 'image/png' }],
-        at: 1767225600000,
-      },
+      { kind: 'user', id: 'seq-1', text: '图片有什么', origin: 'user', images: [{ type: 'image', data: 'aGk=', mediaType: 'image/png' }], at: 1 },
     ]);
   });
 
-  test('task-notification / task-message 信封 → origin system', () => {
-    const { items } = mapEntries([
-      messageEntry('e1', { role: 'user', content: '[task-notification] subagent s1 completed.', timestamp: 1 }),
-      messageEntry('e2', { role: 'user', content: '[task-message] from subagent s2: hi', timestamp: 2 }),
-      messageEntry('e3', { role: 'user', content: '[task]普通消息', timestamp: 3 }),
-    ]);
-    expect(items.map((i) => (i.kind === 'user' ? i.origin : 'x'))).toEqual(['system', 'system', 'user']);
-  });
-
-  test('assistant 正文/thinking 分离 + toolResult 并入所属 assistant 条目', () => {
-    const { items } = mapEntries([
-      messageEntry('e1', { role: 'user', content: '跑测试', timestamp: 1 }),
-      messageEntry('e2', {
-        role: 'assistant',
-        timestamp: 2,
-        content: [
-          { type: 'thinking', thinking: '先跑' },
-          { type: 'text', text: '跑起来了' },
-          { type: 'toolCall', id: 'tc1', name: 'bash', arguments: { command: 'bun test' } },
-        ],
-        usage: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0, total: 15 },
-      }),
-      messageEntry('e3', { role: 'toolResult', toolCallId: 'tc1', toolName: 'bash', content: [{ type: 'text', text: '3 pass' }], isError: false, timestamp: 3 }),
-      messageEntry('e4', { role: 'assistant', timestamp: 4, content: [{ type: 'text', text: '全绿' }], usage: { input: 30, output: 2, total: 32 } }),
-    ]);
+  test('assistant 消息：text/thinking/tool_use 块分离 + usage 视图 {input,output}', () => {
+    const { items } = mapEntries({
+      entries: [
+        row(1, 100, {
+          type: 'message',
+          role: 'assistant',
+          content: [
+            { type: 'thinking', text: '先跑' },
+            { type: 'text', text: '跑起来了' },
+            { type: 'tool_use', id: 'tc1', name: 'bash', input: { command: 'bun test' } },
+          ],
+          usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+        }),
+      ],
+    });
     expect(items).toEqual([
-      { kind: 'user', id: 'e1', text: '跑测试', origin: 'user', images: [], at: 1767225600000 },
       {
         kind: 'assistant',
-        id: 'e2',
-        messageTs: 2,
-        at: 1767225600000,
+        id: 'seq-1',
+        at: 100,
+        messageTs: 100,
         text: '跑起来了',
         thinking: '先跑',
-        toolCalls: [{ id: 'tc1', name: 'bash', argsPreview: 'bun test', output: '3 pass', isError: false, diff: null }],
+        toolCalls: [{ id: 'tc1', name: 'bash', argsPreview: 'bun test', output: '', isError: false, diff: null }],
         usage: { input: 10, output: 5 },
         stopReason: null,
         errorMessage: null,
       },
-      { kind: 'assistant', id: 'e4', messageTs: 4, at: 1767225600000, text: '全绿', thinking: '', toolCalls: [], usage: { input: 30, output: 2 }, stopReason: null, errorMessage: null },
     ]);
   });
 
-  test('症状回归：assistant 异常终态透传——error 带 errorMessage、aborted 不带、正常 stop 归 null', () => {
-    const { items } = mapEntries([
-      messageEntry('e1', { role: 'assistant', timestamp: 1, content: [], stopReason: 'error', errorMessage: '401 {"type":"error"}' }),
-      messageEntry('e2', { role: 'assistant', timestamp: 2, content: [], stopReason: 'aborted', errorMessage: 'Request aborted' }),
-      messageEntry('e3', { role: 'assistant', timestamp: 3, content: [{ type: 'text', text: '正常' }] }),
-      messageEntry('e4', { role: 'assistant', timestamp: 4, content: [], stopReason: 'error' }),
-    ]);
-    const assistants = items.filter((item): item is Extract<typeof item, { kind: 'assistant' }> => item.kind === 'assistant');
-    expect(assistants[0]).toMatchObject({ stopReason: 'error', errorMessage: '401 {"type":"error"}' });
-    // aborted 的原始 errorMessage 不进视图（提示文案由渲染层给）
-    expect(assistants[1]).toMatchObject({ stopReason: 'aborted', errorMessage: null });
-    expect(assistants[2]).toMatchObject({ stopReason: null, errorMessage: null });
-    // error 但缺 errorMessage：stopReason 保留、message 为 null
-    expect(assistants[3]).toMatchObject({ stopReason: 'error', errorMessage: null });
-  });
-
-  test('task 工具调用在转写重建中携带 subagents，toolResult 并入后保留', () => {
-    const { items } = mapEntries([
-      messageEntry('e1', { role: 'user', content: '并行分析', timestamp: 1 }),
-      messageEntry('e2', {
-        role: 'assistant',
-        timestamp: 2,
-        content: [
-          { type: 'toolCall', id: 'tc1', name: 'task', arguments: { tasks: [{ agent: 'Explore', task: '分析 A' }, { agent: 'general-purpose', task: '调研 B' }] } },
-        ],
-        usage: { input: 10, output: 5, total: 15 },
-      }),
-      messageEntry('e3', { role: 'toolResult', toolCallId: 'tc1', toolName: 'task', content: [{ type: 'text', text: 'done' }], isError: false, timestamp: 3 }),
-    ]);
-    if (items[1]?.kind !== 'assistant') throw new Error('expected assistant item');
-    expect(items[1].toolCalls).toEqual([
-      {
-        id: 'tc1',
-        name: 'task',
-        // parallel 参数无已知预览字段，argsPreview 回落浅层 JSON（行展示改走 subagents，不受影响）
-        argsPreview: '[{"agent":"Explore","task":"分析 A"},{"agent":"general-purpose","task":"调研 B"}]',
-        output: 'done',
-        isError: false,
-        diff: null,
-        subagents: [
-          { agent: 'Explore', task: '分析 A' },
-          { agent: 'general-purpose', task: '调研 B' },
-        ],
-      },
+  test('assistant 异常终态收窄：error 带 meta.error、aborted/length 透传不带文案、正常 stop/tool_use 归 null', () => {
+    const { items } = mapEntries({
+      entries: [
+        row(1, 1, { type: 'message', role: 'assistant', content: [], stopReason: 'error', meta: { error: '401 {"type":"error"}' } }),
+        row(2, 2, { type: 'message', role: 'assistant', content: [], stopReason: 'aborted', meta: { error: 'interrupted' } }),
+        row(3, 3, { type: 'message', role: 'assistant', content: [{ type: 'text', text: '正常' }], stopReason: 'tool_use' }),
+        row(4, 4, { type: 'message', role: 'assistant', content: [{ type: 'text', text: '截断' }], stopReason: 'length' }),
+        row(5, 5, { type: 'message', role: 'assistant', content: [], stopReason: 'error' }),
+      ],
+    });
+    const assistants = items.map((item) => (item.kind === 'assistant' ? { stopReason: item.stopReason, errorMessage: item.errorMessage } : null));
+    expect(assistants).toEqual([
+      { stopReason: 'error', errorMessage: '401 {"type":"error"}' },
+      { stopReason: 'aborted', errorMessage: null },
+      { stopReason: null, errorMessage: null },
+      { stopReason: 'length', errorMessage: null },
+      { stopReason: 'error', errorMessage: null },
     ]);
   });
 
-  test('toolResult 找不到所属 assistant（异常序）→ 丢弃不抛', () => {
-    const { items } = mapEntries([messageEntry('e1', { role: 'toolResult', toolCallId: 'ghost', toolName: 'bash', content: [], isError: true, timestamp: 1 })]);
-    expect(items).toEqual([]);
+  test('tool_result 事件按 toolUseId 并入前一条 assistant 的 toolCalls（原位更新）', () => {
+    const { items } = mapEntries({
+      entries: [
+        row(1, 1, { type: 'message', role: 'user', content: [{ type: 'text', text: '跑测试' }] }),
+        row(2, 2, {
+          type: 'message',
+          role: 'assistant',
+          content: [
+            { type: 'tool_use', id: 'tc1', name: 'bash', input: { command: 'bun test' } },
+            { type: 'tool_use', id: 'tc2', name: 'read', input: { path: 'a.ts' } },
+          ],
+        }),
+        row(3, 3, { type: 'tool_result', toolUseId: 'tc1', toolName: 'bash', content: [{ type: 'text', text: '3 pass' }], isError: false }),
+        row(4, 4, { type: 'tool_result', toolUseId: 'tc2', toolName: 'read', content: [{ type: 'text', text: 'oops' }], isError: true }),
+      ],
+    });
+    const assistant = items[1];
+    if (assistant?.kind !== 'assistant') throw new Error('expected assistant item');
+    expect(assistant.toolCalls).toEqual([
+      { id: 'tc1', name: 'bash', argsPreview: 'bun test', output: '3 pass', isError: false, diff: null },
+      { id: 'tc2', name: 'read', argsPreview: 'a.ts', output: 'oops', isError: true, diff: null },
+    ]);
   });
 
-  test('edit 结果 diff 并入（patch 解析）；write 从参数提取', () => {
-    const patch = '--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1,2 @@\n-x\n+y\n+z';
-    const { items } = mapEntries([
-      messageEntry('e1', {
-        role: 'assistant',
-        timestamp: 1,
-        content: [
-          { type: 'toolCall', id: 't1', name: 'edit', arguments: { path: 'src/a.ts', edits: [] } },
-          { type: 'toolCall', id: 't2', name: 'write', arguments: { path: 'new.ts', content: 'a\nb' } },
-        ],
-      }),
-      messageEntry('e2', { role: 'toolResult', toolCallId: 't1', toolName: 'edit', content: [], isError: false, details: { diff: 'd', patch } }),
-      messageEntry('e3', { role: 'toolResult', toolCallId: 't2', toolName: 'write', content: [], isError: false, details: undefined }),
-    ]);
+  test('write/edit 的参数 diff 与 agent 的 subagents 在 tool_result 并入后保留', () => {
+    const { items } = mapEntries({
+      entries: [
+        row(1, 1, {
+          type: 'message',
+          role: 'assistant',
+          content: [
+            { type: 'tool_use', id: 't1', name: 'edit_file', input: { path: 'src/a.ts', edits: [{ oldText: 'x\ny', newText: 'z' }] } },
+            { type: 'tool_use', id: 't2', name: 'write_file', input: { path: 'new.ts', content: 'a\nb' } },
+            { type: 'tool_use', id: 't3', name: 'agent', input: { prompt: '扫描 A', subagent_type: 'explore' } },
+          ],
+        }),
+        row(2, 2, { type: 'tool_result', toolUseId: 't1', toolName: 'edit_file', content: [{ type: 'text', text: 'done' }], isError: false }),
+        row(3, 3, { type: 'tool_result', toolUseId: 't2', toolName: 'write_file', content: [], isError: false }),
+        row(4, 4, { type: 'tool_result', toolUseId: 't3', toolName: 'agent', content: [{ type: 'text', text: 'ok' }], isError: false }),
+      ],
+    });
     const assistant = items[0];
     if (assistant?.kind !== 'assistant') throw new Error('expected assistant');
-    expect(assistant.toolCalls[0]?.diff).toEqual([{ path: 'src/a.ts', additions: 2, deletions: 1 }]);
-    expect(assistant.toolCalls[1]?.diff).toEqual([{ path: 'new.ts', additions: 2, deletions: 0 }]);
+    expect(assistant.toolCalls).toEqual([
+      // edit/write 的 diff 来自参数（执行前已知），tool_result 无 diff 不得清掉
+      { id: 't1', name: 'edit_file', argsPreview: 'src/a.ts', output: 'done', isError: false, diff: [{ path: 'src/a.ts', additions: 1, deletions: 2 }] },
+      { id: 't2', name: 'write_file', argsPreview: 'new.ts', output: '', isError: false, diff: [{ path: 'new.ts', additions: 2, deletions: 0 }] },
+      { id: 't3', name: 'agent', argsPreview: 'explore', output: 'ok', isError: false, diff: null, subagents: [{ agent: 'explore', task: '扫描 A' }] },
+    ]);
   });
 
-  test('bashExecution 条目 → bash HistoryItem', () => {
-    const { items } = mapEntries([
-      messageEntry('e1', { role: 'bashExecution', command: 'git status', output: 'clean', exitCode: 0, cancelled: false, timestamp: 1 }),
-    ]);
-    expect(items).toEqual([{ kind: 'bash', id: 'e1', command: 'git status', output: 'clean', exitCode: 0, cancelled: false, at: 1767225600000 }]);
+  test('tool_use 块缺 name 时以 tool_result 的 toolName 回填（diff 按块名判定，回填不追溯重建）', () => {
+    const { items } = mapEntries({
+      entries: [
+        row(1, 1, {
+          type: 'message',
+          role: 'assistant',
+          content: [{ type: 'tool_use', id: 't1', name: '', input: { path: 'src/a.ts', edits: [{ oldText: 'x', newText: 'z' }] } }],
+        }),
+        row(2, 2, { type: 'tool_result', toolUseId: 't1', toolName: 'edit_file', content: [{ type: 'text', text: 'done' }], isError: false }),
+      ],
+    });
+    const assistant = items[0];
+    if (assistant?.kind !== 'assistant') throw new Error('expected assistant');
+    expect(assistant.toolCalls).toEqual([{ id: 't1', name: 'edit_file', argsPreview: 'src/a.ts', output: 'done', isError: false, diff: null }]);
   });
 
-  test('元数据条目跳过但推进 cursor', () => {
-    const { items, cursor } = mapEntries([
-      { type: 'thinking_level_change', id: 'm1', parentId: null, timestamp: 't', thinkingLevel: 'high' },
-      { type: 'session_info', id: 'm2', parentId: null, timestamp: 't', name: 'n' },
-      { type: 'compaction', id: 'm3', parentId: null, timestamp: 't' },
+  test('孤儿 tool_result（找不到所属 assistant）丢弃不抛；user 消息后旧 tool_use 不可再并入', () => {
+    const { items } = mapEntries({
+      entries: [
+        row(1, 1, { type: 'tool_result', toolUseId: 'ghost', toolName: 'bash', content: [], isError: true }),
+        row(2, 2, { type: 'message', role: 'assistant', content: [{ type: 'tool_use', id: 'tc1', name: 'bash', input: { command: 'ls' } }] }),
+        row(3, 3, { type: 'message', role: 'user', content: [{ type: 'text', text: '插话' }] }),
+        row(4, 4, { type: 'tool_result', toolUseId: 'tc1', toolName: 'bash', content: [{ type: 'text', text: 'late' }], isError: false }),
+      ],
+    });
+    expect(items).toHaveLength(2);
+    const assistant = items[0];
+    if (assistant?.kind !== 'assistant') throw new Error('expected assistant');
+    expect(assistant.toolCalls).toEqual([{ id: 'tc1', name: 'bash', argsPreview: 'ls', output: '', isError: false, diff: null }]);
+  });
+
+  test('bash 信封还原：首行 `[bash] $ <cmd>`、其余为输出', () => {
+    const { items } = mapEntries({
+      entries: [
+        row(1, 1, { type: 'message', role: 'user', content: [{ type: 'text', text: '[bash] $ git status\nclean\nnothing to commit' }], origin: 'user' }),
+        row(2, 2, { type: 'message', role: 'user', content: [{ type: 'text', text: '[bash] $ echo hi' }] }),
+        row(3, 3, { type: 'message', role: 'user', content: [{ type: 'text', text: '[bash] $' }] }),
+      ],
+    });
+    expect(items).toEqual([
+      { kind: 'bash', id: 'seq-1', command: 'git status', output: 'clean\nnothing to commit', exitCode: 0, cancelled: false, at: 1 },
+      { kind: 'bash', id: 'seq-2', command: 'echo hi', output: '', exitCode: 0, cancelled: false, at: 2 },
+      // 前缀不完整（缺尾随空格）不算信封，落普通 user 条目
+      { kind: 'user', id: 'seq-3', text: '[bash] $', origin: 'user', images: [], at: 3 },
     ]);
+  });
+
+  test('元数据事件不产条目但 cursor 推进（按行消费不按渲染条目消费）', () => {
+    const { items, cursor } = mapEntries({
+      entries: [
+        row(1, 1, { type: 'session_init', sessionId: 's1', depth: 0, createdAt: 1, cwd: '/p' }),
+        row(2, 2, { type: 'message', role: 'user', content: [{ type: 'text', text: 'hi' }] }),
+        row(3, 3, { type: 'session_meta', key: 'title', value: 'n' }),
+        row(4, 4, { type: 'compaction', replacedCount: 5 }),
+        row(5, 5, { type: 'inbox_spliced', spliced: 1 }),
+        row(6, 6, { type: 'llm_retry', attempt: 1 }),
+        row(7, 7, { type: 'permission_decision', decision: 'allow' }),
+        row(8, 8, { type: 'turn_start', turnId: 1 }),
+        row(9, 9, { type: 'tool_result_redacted', toolUseId: 'x' }),
+        row(10, 10, { type: 'custom', id: 'e1' }),
+        row(11, 11, { type: 'message', role: 'mystery', content: [] }),
+      ],
+    });
+    expect(items).toEqual([{ kind: 'user', id: 'seq-2', text: 'hi', origin: 'user', images: [], at: 2 }]);
+    expect(cursor).toBe(11);
+  });
+
+  test('cursor = 最后有效 seq 行（数字）；无 seq 的行整行跳过不推进', () => {
+    const { items, cursor } = mapEntries({
+      entries: [row(3, 3, { type: 'session_meta', key: 'k' }), null, 42, { ts: 9, event: { type: 'message' } }, row(7, 7, { type: 'session_meta', key: 'k' })],
+    });
     expect(items).toEqual([]);
-    expect(cursor).toBe('m3');
+    expect(cursor).toBe(7);
   });
 
-  test('垃圾输入降级：非数组/缺 id → 空形态', () => {
+  test('行 ts 缺省回落 0（messageTs/at 不因此丢行）', () => {
+    const { items } = mapEntries({ entries: [{ seq: 1, event: { type: 'message', role: 'user', content: 'hi' } }] });
+    expect(items).toEqual([{ kind: 'user', id: 'seq-1', text: 'hi', origin: 'user', images: [], at: 0 }]);
+  });
+
+  test('垃圾输入降级：非对象/非数组/空 → 空形态', () => {
     expect(mapEntries(undefined)).toEqual({ items: [], cursor: null });
-    expect(mapEntries([null, { type: 'message' }, 42])).toEqual({ items: [], cursor: null });
+    expect(mapEntries(null)).toEqual({ items: [], cursor: null });
+    expect(mapEntries({})).toEqual({ items: [], cursor: null });
+    expect(mapEntries({ entries: 'nope' })).toEqual({ items: [], cursor: null });
+    expect(mapEntries([row(1, 1, { type: 'message', role: 'user', content: 'hi' })])).toEqual({ items: [], cursor: null });
+    expect(mapEntries({ entries: [] })).toEqual({ items: [], cursor: null });
   });
 });
 
 describe('diffFromPatch', () => {
-  test('统一 diff：+++ 头取路径、+/− 计数、b/ 前缀剥除', () => {
+  test('统一 diff：+++ 头取路径、+/- 计数、a|b 前缀剥除', () => {
     const patch = '--- a/p/q.ts\n+++ b/p/q.ts\n@@ -1,3 +1,4 @@\n ctx\n-rem\n+add\n+add2\n ctx2';
     expect(diffFromPatch(patch)).toEqual({ path: 'p/q.ts', additions: 2, deletions: 1 });
+  });
+
+  test('文件头带时间戳列（tab 分隔）：取 tab 前路径；--- 兜底头也可定路径', () => {
+    const patch = '--- p/q.ts\t2026-01-01\n+++ p/q.ts\t2026-01-02\n@@ -1 +1 @@\n-a\n+b';
+    expect(diffFromPatch(patch)).toEqual({ path: 'p/q.ts', additions: 1, deletions: 1 });
+    const fallback = '--- only/old.ts\n+++ /dev/null\n@@ -1 +0 @@\n-gone';
+    expect(diffFromPatch(fallback)).toEqual({ path: 'only/old.ts', additions: 0, deletions: 1 });
   });
 
   test.each([
@@ -200,78 +269,14 @@ describe('diffFromPatch', () => {
   });
 });
 
-describe('response-views', () => {
-
-  test('threadStateView：model.id 收窄 + 缺省降级 + v0.14 queue 面', () => {
-    expect(
-      threadStateView({
-        model: { provider: 'glm', id: 'glm-5.3' },
-        thinkingLevel: 'high',
-        isStreaming: true,
-        isCompacting: false,
-        sessionName: 'n',
-        messageCount: 7,
-        queue: { steering: ['插一句'], followUp: ['接着问', 3] },
-      }),
-    ).toEqual({
-      model: { provider: 'glm', modelId: 'glm-5.3' },
-      thinkingLevel: 'high',
-      isStreaming: true,
-      isCompacting: false,
-      sessionName: 'n',
-      messageCount: 7,
-      queue: { steering: ['插一句'], followUp: ['接着问'] },
-    });
-    expect(threadStateView({}).model).toBeNull();
-    // 缺 queue / 垃圾形状 → 两个空数组（无队列后端即此形态）
-    expect(threadStateView({}).queue).toEqual({ steering: [], followUp: [] });
-    expect(threadStateView({ queue: { steering: 'x', followUp: null } }).queue).toEqual({ steering: [], followUp: [] });
-  });
-
-  test('savedSessions：Date/字符串时间戳都收窄；缺 path 跳过', () => {
-    const views = savedSessions({ sessions: [{ path: '/a.jsonl', id: 'a', cwd: '/w', name: 'N', modified: new Date(5_000), messageCount: 2, firstMessage: 'hi' }, { id: 'x' }] });
-    expect(views).toEqual([{ sessionPath: '/a.jsonl', sessionId: 'a', cwd: '/w', name: 'N', modifiedAt: 5000, messageCount: 2, firstMessage: 'hi' }]);
-  });
-
-  test('modelInfos：缺 provider/id 跳过', () => {
-    expect(modelInfos({ models: [{ provider: 'glm', id: 'm1' }, { provider: '', id: 'm2' }, 3] })).toEqual([{ provider: 'glm', modelId: 'm1' }]);
-  });
-
-  test('modelInfos：思考能力面放行（reasoning 仅 true 落位；map 只收 string|null，垃圾值丢弃）', () => {
-    const views = modelInfos({
-      models: [
-        { provider: 'glm', id: 'm1', reasoning: true, thinkingLevelMap: { high: 'high', xhigh: null, bad: 3 } },
-        { provider: 'glm', id: 'm2', reasoning: 'yes', thinkingLevelMap: 'nope' },
-      ],
-    });
-    expect(views[0]).toEqual({
-      provider: 'glm',
-      modelId: 'm1',
-      reasoning: true,
-      thinkingLevelMap: { high: 'high', xhigh: null },
-    });
-    expect(views[1]).toEqual({ provider: 'glm', modelId: 'm2' });
-  });
-
-  test('sessionStatsView：contextUsage.percent（0-100 刻度）归一为 0-1 比率；垃圾/缺省 → null', () => {
-    expect(sessionStatsView({ userMessages: 2, assistantMessages: 3, toolCalls: 4, tokens: { total: 99 }, cost: 0.5, contextUsage: { tokens: 10, contextWindow: 100, percent: 10 } })).toEqual({
-      userMessages: 2,
-      assistantMessages: 3,
-      toolCalls: 4,
-      tokensTotal: 99,
-      cost: 0.5,
-      contextUsage: 0.1,
-    });
-    expect(sessionStatsView({}).contextUsage).toBeNull();
-    expect(sessionStatsView({ contextUsage: { tokens: 5, contextWindow: 100, percent: -1 } }).contextUsage).toBeNull();
-  });
-
-  test('症状回归：hub percent 9.87（9.87%）曾被当比率 ×100 显示成 987%——归一后视图为 0.0987', () => {
-    expect(sessionStatsView({ contextUsage: { tokens: 22600, contextWindow: 229000, percent: 9.87 } }).contextUsage).toBeCloseTo(0.0987, 10);
-  });
-
-  test('thinkingLevels：仅 levels（协议无 current 字段，当前值走 get_state）', () => {
-    expect(thinkingLevels({ current: 'high', levels: ['off', 'high'] })).toEqual({ allowed: ['off', 'high'] });
-    expect(thinkingLevels(null)).toEqual({ allowed: [] });
+describe('isFileMutatingTool · 内核文件工具词表', () => {
+  test.each([
+    ['edit_file', true],
+    ['write_file', true],
+    ['bash', false],
+    ['agent', false],
+    ['', false],
+  ])('%s → %s', (name, expected) => {
+    expect(isFileMutatingTool(name)).toBe(expected);
   });
 });

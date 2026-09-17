@@ -41,7 +41,7 @@ function seedLongHistory(store: ReturnType<typeof createLiveStore>): { historyTa
   for (let turn = 0; turn < HISTORY_TURNS; turn += 1) items.push(...historyItems(turn));
   // 水化走生产形态（转写权威轮），非 live 前缀轮（会被后续轮次逐轮过滤）
   store.getState().setActiveThread(THREAD);
-  store.getState().hydrate(THREAD, { kind: 'hydrate/initial', items, cursor: `cursor-${HISTORY_TURNS}` });
+  store.getState().hydrate(THREAD, { kind: 'hydrate/initial', items, cursor: HISTORY_TURNS });
   const seeded = store.getState().threads[THREAD]?.items ?? [];
   const historyTail = seeded[seeded.length - 1];
   if (historyTail === undefined) throw new Error('seed_failed');

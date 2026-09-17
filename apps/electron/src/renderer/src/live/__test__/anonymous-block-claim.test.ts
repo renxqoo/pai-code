@@ -68,7 +68,7 @@ const waitMs = (ms: number): Promise<void> =>
   });
 
 function inflightView(partial: Partial<InflightView> = {}): InflightView {
-  return { turnStartEntryId: null, turnStartedAt: null, message: null, toolOutputs: [], bash: null, ...partial };
+  return { turnStartSeq: null, turnStartedAt: null, message: null, toolOutputs: [], bash: null, ...partial };
 }
 
 const ev = (event: UiEvent): UiEvent => event;
@@ -94,7 +94,7 @@ describe('匿名块认领（空 id 增量在身份确立前折出的中转块）
     // 收敛读口随后带回在途快照（消息身份 messageTs=7 + 此刻已流出全文）
     state = foldHydrate(state, {
       kind: 'hydrate/inflight',
-      view: inflightView({ turnStartEntryId: 'e0', message: { messageTs: 7, text: '', thinking: 'The user pasted a Baidu Finance URL for stock 300840. This is an A-share stock (', toolCalls: [] } }),
+      view: inflightView({ turnStartSeq: 0, message: { messageTs: 7, text: '', thinking: 'The user pasted a Baidu Finance URL for stock 300840. This is an A-share stock (', toolCalls: [] } }),
       at: 2,
     });
     // 身份确立后的增量直接进正确块
@@ -122,7 +122,7 @@ describe('匿名块认领（空 id 增量在身份确立前折出的中转块）
     state = foldThreadEvent(state, ev({ type: 'toolCallAdded', threadId: 't1', messageId: '', call: { id: 'c1', name: 'bash', argsPreview: 'rxstock quote 300840' }, diff: null }), 1);
     state = foldHydrate(state, {
       kind: 'hydrate/inflight',
-      view: inflightView({ turnStartEntryId: 'e0', message: { messageTs: 7, text: '', thinking: '', toolCalls: [{ id: 'c1', name: 'bash', argsPreview: 'rxstock quote 300840' }] } }),
+      view: inflightView({ turnStartSeq: 0, message: { messageTs: 7, text: '', thinking: '', toolCalls: [{ id: 'c1', name: 'bash', argsPreview: 'rxstock quote 300840' }] } }),
       at: 2,
     });
 
@@ -134,7 +134,7 @@ describe('匿名块认领（空 id 增量在身份确立前折出的中转块）
     const client = makeClient((method) => {
       if (method === 'app/bootstrap') return bootstrapOf(sessions);
       if (method === 'session/inflight')
-        return { ok: true, data: inflightView({ turnStartEntryId: 'e0', message: { messageTs: 7, text: '', thinking: 'The user pasted a Baidu Finance URL for stock 300840. This is an A-share stock (', toolCalls: [] } }) };
+        return { ok: true, data: inflightView({ turnStartSeq: 0, message: { messageTs: 7, text: '', thinking: 'The user pasted a Baidu Finance URL for stock 300840. This is an A-share stock (', toolCalls: [] } }) };
       if (method === 'session/entries') return { ok: true, data: { items: [], cursor: null } };
       return { ok: true, data: null };
     });
@@ -162,7 +162,7 @@ describe('匿名块认领（空 id 增量在身份确立前折出的中转块）
     const client = makeClient((method) => {
       if (method === 'app/bootstrap') return bootstrapOf(sessions);
       if (method === 'session/inflight')
-        return { ok: true, data: inflightView({ turnStartEntryId: 'e0', message: { messageTs: 7, text: '', thinking: '快照先到', toolCalls: [] } }) };
+        return { ok: true, data: inflightView({ turnStartSeq: 0, message: { messageTs: 7, text: '', thinking: '快照先到', toolCalls: [] } }) };
       if (method === 'session/entries') return { ok: true, data: { items: [], cursor: null } };
       return { ok: true, data: null };
     });

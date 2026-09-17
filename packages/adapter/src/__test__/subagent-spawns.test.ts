@@ -2,63 +2,42 @@ import { describe, expect, test } from 'bun:test';
 
 import { subagentsField, subagentSpawnsOf } from '../subagent-spawns';
 
-describe('subagentSpawnsOf · task 参数展开', () => {
+describe('subagentSpawnsOf · agent 工具参数展开', () => {
   test.each([
-    ['single 模式 {agent, task}', { agent: 'Explore', task: '分析 pai-cli sandbox 现状' }, [{ agent: 'Explore', task: '分析 pai-cli sandbox 现状' }]],
-    [
-      'parallel 模式 tasks 数组逐项展开',
-      { tasks: [{ agent: 'Explore', task: '分析 A' }, { agent: 'general-purpose', task: '调研 B' }] },
-      [
-        { agent: 'Explore', task: '分析 A' },
-        { agent: 'general-purpose', task: '调研 B' },
-      ],
-    ],
-    ['chain 模式 chain 数组逐项展开', { chain: [{ agent: 'Explore', task: '第一步' }, { agent: 'Explore', task: '第二步' }] }, [
-      { agent: 'Explore', task: '第一步' },
-      { agent: 'Explore', task: '第二步' },
-    ]],
-    ['tasks 优先于 chain（与 hub 模式判定同序）', { tasks: [{ agent: 'A', task: 'x' }], chain: [{ agent: 'B', task: 'y' }] }, [{ agent: 'A', task: 'x' }]],
-    ['cwd 等附加字段不进清单', { agent: 'Explore', task: 'T', cwd: '/tmp' }, [{ agent: 'Explore', task: 'T' }]],
-    [
-      '症状回归：空 tasks 数组不算数组模式，single 字段照常展开（hub 长度>0 才成立）',
-      { agent: 'Explore', task: 'T', tasks: [] },
-      [{ agent: 'Explore', task: 'T' }],
-    ],
-    [
-      '双模式并存按 tasks 展开（hub 会拒绝该调用，行显失败；宽容展开只影响展示）',
-      { tasks: [{ agent: 'A', task: 'x' }], agent: 'B', task: 'y' },
-      [{ agent: 'A', task: 'x' }],
-    ],
-    ['缺 task 只留 agent 仍保留（半形状不整项丢弃）', { agent: 'Explore' }, [{ agent: 'Explore', task: '' }]],
-    ['缺 agent 只留 task 仍保留', { task: 'T' }, [{ agent: '', task: 'T' }]],
+    ['{prompt, subagent_type} 单发形态', { prompt: '扫描现状', subagent_type: 'explore' }, [{ agent: 'explore', task: '扫描现状' }]],
+    ['subagent_type 缺省回退 name 显示名', { prompt: '写摘要', name: 'summary-writer' }, [{ agent: 'summary-writer', task: '写摘要' }]],
+    ['双身份并存 subagent_type 优先', { prompt: 'T', subagent_type: 'explore', name: '别名' }, [{ agent: 'explore', task: 'T' }]],
+    ['只有 prompt：agent 回落通用名', { prompt: '做点什么' }, [{ agent: 'agent', task: '做点什么' }]],
+    ['只有 subagent_type：task 空串仍保留（半形状不整项丢弃）', { subagent_type: 'explore' }, [{ agent: 'explore', task: '' }]],
+    ['cwd 等附加字段不进清单', { prompt: 'T', subagent_type: 'explore', cwd: '/tmp', work: 'w' }, [{ agent: 'explore', task: 'T' }]],
+    ['空白 subagent_type 折叠后为空，回退 name', { prompt: 'T', subagent_type: '  ', name: 'writer' }, [{ agent: 'writer', task: 'T' }]],
   ])('%s', (_name, args, expected) => {
-    expect(subagentSpawnsOf('task', args as Record<string, unknown>)).toEqual(expected);
+    expect(subagentSpawnsOf('agent', args as Record<string, unknown>)).toEqual(expected);
   });
 
   test.each([
-    ['非 task 工具不展开', 'read', { agent: 'Explore', task: 'T' }],
-    ['write 同样不展开', 'write', { agent: 'Explore', task: 'T' }],
+    ['非 agent 工具不展开（task 是旧协议工具名）', 'task', { prompt: 'T', subagent_type: 'explore' }],
+    ['read 同样不展开', 'read', { prompt: 'T' }],
+    ['write_file 同样不展开', 'write_file', { prompt: 'T' }],
   ])('%s', (_name, tool, args) => {
     expect(subagentSpawnsOf(tool, args as Record<string, unknown>)).toEqual([]);
   });
 
-  test('工具名大小写不敏感（协议侧小写，演示与扩展出现过大写）', () => {
-    expect(subagentSpawnsOf('Task', { agent: 'Explore', task: 'T' })).toEqual([{ agent: 'Explore', task: 'T' }]);
-    expect(subagentSpawnsOf(' task ', { agent: 'Explore', task: 'T' })).toEqual([{ agent: 'Explore', task: 'T' }]);
+  test('工具名大小写与空白不敏感（trim + toLowerCase 判定）', () => {
+    expect(subagentSpawnsOf('Agent', { prompt: 'T' })).toEqual([{ agent: 'agent', task: 'T' }]);
+    expect(subagentSpawnsOf(' agent ', { prompt: 'T', subagent_type: 'explore' })).toEqual([{ agent: 'explore', task: 'T' }]);
   });
 
   test.each([
-    ['空参数', {}],
-    ['垃圾形状（无 agent/task 的杂项）', { background: true, cwd: '/tmp' }],
-    ['tasks 非数组回落 single', { tasks: 'nope' }],
-    ['数组元素非对象逐个丢弃', { tasks: ['x', 3, null] }],
-    ['数组元素全缺 agent/task', { tasks: [{ cwd: '/tmp' }, {}] }],
+    ['空参数（prompt 与 agent 双空）', {}],
+    ['垃圾形状（无 prompt/subagent_type/name）', { background: true, cwd: '/tmp' }],
+    ['字段非字符串（clip 后为空，agent 回落通用名再因 prompt 空而空）', { prompt: 42, subagent_type: 7, name: {} }],
   ])('空形态降级：%s', (_name, args) => {
-    expect(subagentSpawnsOf('task', args as Record<string, unknown>)).toEqual([]);
+    expect(subagentSpawnsOf('agent', args as Record<string, unknown>)).toEqual([]);
   });
 
-  test('多行任务文本折叠单行并截断到 160（预览域同一语义）', () => {
-    const spawns = subagentSpawnsOf('task', { agent: 'Explore', task: `a\n b\t${'c'.repeat(300)}` });
+  test('多行 prompt 折叠单行并截断到 160（预览域同一语义）', () => {
+    const spawns = subagentSpawnsOf('agent', { prompt: `a\n b\t${'c'.repeat(300)}` });
     expect(spawns).toHaveLength(1);
     const task = spawns[0]?.task ?? '';
     expect(task.length).toBe(160);
@@ -69,12 +48,12 @@ describe('subagentSpawnsOf · task 参数展开', () => {
 
 describe('subagentsField · 空展开不携带字段', () => {
   test('非空展开携带字段', () => {
-    expect(subagentsField('task', { agent: 'Explore', task: 'T' })).toEqual({
-      subagents: [{ agent: 'Explore', task: 'T' }],
+    expect(subagentsField('agent', { prompt: 'T', subagent_type: 'explore' })).toEqual({
+      subagents: [{ agent: 'explore', task: 'T' }],
     });
   });
   test('空展开返回空对象（wire 不携带）', () => {
     expect(subagentsField('read', { path: 'x.ts' })).toEqual({});
-    expect(subagentsField('task', {})).toEqual({});
+    expect(subagentsField('agent', {})).toEqual({});
   });
 });

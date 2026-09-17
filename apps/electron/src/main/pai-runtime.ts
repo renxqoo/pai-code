@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-import { mapDialogRequest, mapSessionEvent, mapSubagentEvent, savedSessions, toSessionView } from '@paiapp/adapter';
+import { createEventMapper, mapDialogRequest, savedSessions, toSessionView } from '@paiapp/adapter';
 import { autoTitleCandidateOf } from './auto-title';
 import {
   openRegistryStore,
@@ -45,6 +45,8 @@ export interface PaiRuntimeDeps {
   logger: { log(message: string): void };
   /** 事件出口（装配层接 IPC 推送）。 */
   emit: (event: UiEvent) => void;
+  /** 追加 spawn env（白名单/buildEnv 之后合并；测试注入 HUB_WORKER_PROVIDER 等 hub 旋钮）。 */
+  extraSpawnEnv?: () => Record<string, string>;
   timing?: HostProcessDeps['timing'];
   /** host 工厂注入缝（缺省 infra 实现；单测注入 fake port）。 */
   createHost?: (deps: HostProcessDeps) => HostProcessPort;
@@ -88,8 +90,10 @@ export interface PaiRuntime {
 
 export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
   const registry = openRegistryStore(deps.paths.registryDb);
+  const sessionsRoot = join(deps.paths.agentDir, 'sessions');
   const sessions = new Map<string, SessionView>();
   const eventBuffer: UiEvent[] = [];
+  const eventMapper = createEventMapper({ now: () => Date.now() });
   let bootstrapped = false;
   let host: HostProcessPort | null = null;
 
@@ -169,31 +173,31 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
 
   const dispatchFrame = (frame: Parameters<HostProcessDeps['onFrame']>[0]): void => {
     switch (frame.type) {
-      case 'event':
-        applyUiEvents(frame.threadId, mapSessionEvent(frame.threadId, frame.event, { now: () => Date.now() }));
+      case 'event': {
+        if (frame.name === 'inbox/spliced') {
+          // 队列结构信号：hub 只发 queue/op/ids（无文本），按迁移指引拉 get_state.queue
+          // 合成 queueChanged（文本快照与读命令同源）
+          void host?.request({ type: 'get_state', threadId: frame.threadId }).then((outcome) => {
+            if (!outcome.ok) return;
+            const queue = (outcome.data as { queue?: { steering?: unknown; followUp?: unknown } }).queue ?? {};
+            const steering = Array.isArray(queue.steering) ? queue.steering.filter((item): item is string => typeof item === 'string') : [];
+            const followUp = Array.isArray(queue.followUp) ? queue.followUp.filter((item): item is string => typeof item === 'string') : [];
+            emit({ type: 'queueChanged', threadId: frame.threadId, steering, followUp });
+          }).catch(() => undefined);
+          return;
+        }
+        applyUiEvents(frame.threadId, eventMapper.mapEvent(frame));
         return;
+      }
       case 'ui_request':
         emit(mapDialogRequest(frame));
-        return;
-      case 'subagent_event':
-        applyUiEvents(frame.threadId, mapSubagentEvent(frame));
-        return;
-      case 'subagent_message':
-        emit({
-          type: 'subagentMessage',
-          threadId: frame.threadId,
-          subagentId: frame.subagentId,
-          agent: frame.agent,
-          text: frame.text,
-          to: frame.to ?? null,
-        });
         return;
       case 'heartbeat':
         // 1Hz 推送只喂运行状态监控器（runtime-monitor 经 host.onFrame 订阅），
         // 不进 UiEvent 面（渲染层按需拉快照）
         return;
       case 'thread_parked': {
-        // worker 被收编（闲置/手动）：视图转 parked 折叠 streaming 镜像；注册表行
+        // worker 被收编（闲置/手动/RSS）：视图转 parked 折叠 streaming 镜像；注册表行
         // 保留（发消息自动唤醒）——与 thread_died 同型的终态折叠
         const parkedView = sessions.get(frame.threadId);
         // 事件与折叠同守卫（状态转移恰好广播一次；重复帧/未知线程零副作用）
@@ -211,7 +215,7 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
         return;
       }
       case 'hub_error':
-        log(`hub_error:${frame.scope}:${frame.threadId ?? '-'}:${frame.error}`);
+        log(`hub_error:${frame.threadId ?? '-'}:${frame.message}`);
         return;
       default:
         return;
@@ -237,7 +241,7 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
         continue;
       }
       listedCwds.add(cwd);
-      for (const session of savedSessions(outcome.data)) onDisk.add(session.sessionPath);
+      for (const session of savedSessions(outcome.data, sessionsRoot)) onDisk.add(session.sessionPath);
     }
     for (const row of rows) {
       if (row.sessionPath === null) {
@@ -288,6 +292,7 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
         buildEnv: () => ({
           ...writeModelsConfig(deps.paths.agentDir, deps.providers(), deps.keyStore).env,
           HUB_IDLE_RETIRE_MS: String(deps.idleRecycleMinutes() * 60_000),
+          ...(deps.extraSpawnEnv !== undefined ? deps.extraSpawnEnv() : {}),
         }),
       },
       onFrame: handleFrame,
@@ -307,7 +312,7 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
       return host;
     },
     get sessionsRoot(): string {
-      return join(deps.paths.agentDir, 'sessions');
+      return sessionsRoot;
     },
     registry,
     defaultTitle: DEFAULT_TITLE,

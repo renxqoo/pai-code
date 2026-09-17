@@ -17,7 +17,7 @@ const zhipu: ProviderConfigView = {
     { id: 'glm-4.6', reasoning: true, vision: false },
     { id: 'glm-5', reasoning: false, vision: false },
   ],
-  thinkingFormat: 'default',
+ 
   hasKey: true,
 };
 
@@ -26,7 +26,7 @@ const claude: ProviderConfigView = {
   baseUrl: 'https://api.anthropic.com',
   api: 'anthropic-messages',
   models: [{ id: 'claude-sonnet-4', reasoning: false, vision: true }],
-  thinkingFormat: 'default',
+ 
   hasKey: false,
 };
 

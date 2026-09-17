@@ -8,9 +8,10 @@ import type { ProviderConfig } from "@paiapp/contracts";
 import type { ProviderKeyStore } from "../file-settings";
 
 /**
- * models.json 生成回归：模型条目缺 reasoning 时 pi 侧思考档只有 Off（症状：会话思考不可选）；
- * 缺 vision 声明时 pi 按纯文本模型处理（症状：多模态模型收不到图片，发送时被剥成占位文本）——
- * 能力声明与思考形态必须完整落进生成文件。
+ * models.json 生成回归（host-hub 扁平形状 {models:[{id,provider,api,baseUrl,apiKeyEnv,...}]}）：
+ * 模型条目缺 reasoning 时 pi 侧思考档只有 Off（症状：会话思考不可选）；缺 vision 声明时
+ * hub 按纯文本模型处理（症状：多模态模型收不到图片，发送时被剥成占位文本）——能力声明
+ * 必须完整落进生成文件；key 只以 apiKeyEnv 的 env 引用注入，不落文件。
  */
 
 const dirs: string[] = [];
@@ -37,11 +38,10 @@ const provider = (overrides: Partial<ProviderConfig> = {}): ProviderConfig => ({
   baseUrl: "https://open.bigmodel.cn/api/paas/v4",
   api: "openai-completions",
   models: [{ id: "glm-5.3-flash", reasoning: true, vision: false }],
-  thinkingFormat: "zai",
   ...overrides,
 });
 
-test('症状回归：reasoning 模型生成 reasoning:true；vision 模型生成 input:["text","image"]；thinkingFormat 非 default 落 compat；key 只以 $ENV 引用', () => {
+test('症状回归：reasoning 模型生成 reasoning:true；vision 模型生成 input:["text","image"]；key 只以 apiKeyEnv 引用', () => {
   const dir = tempDir();
   const { env } = writeModelsConfig(
     dir,
@@ -49,30 +49,43 @@ test('症状回归：reasoning 模型生成 reasoning:true；vision 模型生成
     memoryKeyStore,
   );
   const file = JSON.parse(readFileSync(join(dir, "models.json"), "utf8")) as {
-    providers: Record<
-      string,
-      {
-        apiKey: string;
-        compat?: { thinkingFormat: string };
-        models: { id: string; reasoning?: boolean; input?: string[] }[];
-      }
-    >;
+    models: Array<{ id: string; provider: string; api: string; baseUrl: string; apiKeyEnv: string; reasoning?: boolean; input?: string[] }>;
   };
-  const glm = file.providers["glm"];
-  expect(glm?.models).toEqual([{ id: "glm-5.3-flash", reasoning: true, input: ["text", "image"] }]);
-  expect(glm?.compat).toEqual({ thinkingFormat: "zai" });
-  expect(glm?.apiKey).toBe("$PAI_KEY_GLM");
+  expect(file.models).toEqual([
+    {
+      id: "glm-5.3-flash",
+      provider: "glm",
+      api: "openai-completions",
+      baseUrl: "https://open.bigmodel.cn/api/paas/v4",
+      apiKeyEnv: "PAI_KEY_GLM",
+      reasoning: true,
+      input: ["text", "image"],
+    },
+  ]);
   expect(env).toEqual({ PAI_KEY_GLM: "sk-secret" });
 });
 
-test('症状回归：未声明 vision 的多模态模型图片被剥（pi 侧 input 缺省 ["text"]）——vision:false 不写 input 字段', () => {
+test('症状回归：未声明 vision 的多模态模型图片被剥（hub 侧 input 缺省纯文本）——vision:false 不写 input 字段', () => {
   const file = JSON.parse(serializeModelsConfig([provider()])) as {
-    providers: Record<string, { models: { id: string; input?: string[] }[] }>;
+    models: Array<{ id: string; input?: string[] }>;
   };
-  expect(file.providers["glm"]?.models).toEqual([{ id: "glm-5.3-flash", reasoning: true }]);
+  expect(file.models).toEqual([
+    { id: "glm-5.3-flash", provider: "glm", api: "openai-completions", baseUrl: "https://open.bigmodel.cn/api/paas/v4", apiKeyEnv: "PAI_KEY_GLM", reasoning: true },
+  ]);
 });
 
-test("模型参数：contextWindow/maxTokens 声明则落模型定义，缺省不写字段（回落 pi 默认 128000/16384）", () => {
+test("多渠道扁平并列（同一文件 models[] 内按渠道顺序展开）；env 变量名按渠道名 sanitize", () => {
+  const file = JSON.parse(
+    serializeModelsConfig([
+      provider(),
+      provider({ name: "zai-glm", api: "anthropic-messages", baseUrl: "https://z.ai/api", models: [{ id: "glm-5", reasoning: false, vision: false }] }),
+    ]),
+  ) as { models: Array<{ id: string; provider: string; apiKeyEnv: string }> };
+  expect(file.models.map((model) => model.provider)).toEqual(["glm", "zai-glm"]);
+  expect(file.models.map((model) => model.apiKeyEnv)).toEqual(["PAI_KEY_GLM", "PAI_KEY_ZAI_GLM"]);
+});
+
+test("模型参数：contextWindow/maxTokens 声明则落模型定义，缺省不写字段（回落 hub 缺省）", () => {
   const file = JSON.parse(
     serializeModelsConfig([
       provider({
@@ -83,59 +96,32 @@ test("模型参数：contextWindow/maxTokens 声明则落模型定义，缺省�
         ],
       }),
     ]),
-  ) as {
-    providers: Record<
-      string,
-      { models: { id: string; contextWindow?: number; maxTokens?: number }[] }
-    >;
-  };
-  expect(file.providers["glm"]?.models).toEqual([
-    { id: "tuned", contextWindow: 200000, maxTokens: 8192 },
-    { id: "defaulted" },
-    { id: "half", maxTokens: 4096 },
+  ) as { models: Array<{ id: string; contextWindow?: number; maxTokens?: number }> };
+  expect(file.models).toEqual([
+    { id: "tuned", provider: "glm", api: "openai-completions", baseUrl: "https://open.bigmodel.cn/api/paas/v4", apiKeyEnv: "PAI_KEY_GLM", contextWindow: 200000, maxTokens: 8192 },
+    { id: "defaulted", provider: "glm", api: "openai-completions", baseUrl: "https://open.bigmodel.cn/api/paas/v4", apiKeyEnv: "PAI_KEY_GLM" },
+    { id: "half", provider: "glm", api: "openai-completions", baseUrl: "https://open.bigmodel.cn/api/paas/v4", apiKeyEnv: "PAI_KEY_GLM", maxTokens: 4096 },
   ]);
 });
 
-test("reasoning:false 与 default 形态不写多余字段（生成面最小化）", () => {
+test("reasoning:false 形态不写多余字段（生成面最小化）", () => {
   const dir = tempDir();
   writeModelsConfig(
     dir,
     [
       provider({
         models: [{ id: "m", reasoning: false, vision: false }],
-        thinkingFormat: "default",
       }),
     ],
     memoryKeyStore,
   );
-  const file = JSON.parse(readFileSync(join(dir, "models.json"), "utf8")) as {
-    providers: Record<string, { compat?: unknown; models: { id: string; reasoning?: boolean }[] }>;
-  };
-  const glm = file.providers["glm"];
-  if (glm === undefined) throw new Error("provider missing");
-  expect("compat" in glm).toBe(false);
-  expect(glm.models).toEqual([{ id: "m" }]);
+  const file = JSON.parse(readFileSync(join(dir, "models.json"), "utf8")) as { models: Array<Record<string, unknown>> };
+  expect(file.models).toEqual([
+    { id: "m", provider: "glm", api: "openai-completions", baseUrl: "https://open.bigmodel.cn/api/paas/v4", apiKeyEnv: "PAI_KEY_GLM" },
+  ]);
 });
 
-test("症状回归：非 OpenAI 兼容格式写入 thinkingFormat 被忽略（compat 只对 openai-completions 生效）", () => {
-  const file = JSON.parse(
-    serializeModelsConfig([
-      provider({ api: "anthropic-messages" }),
-      provider({ name: "google", api: "google-generative-ai" }),
-    ]),
-  ) as {
-    providers: Record<string, { compat?: unknown }>;
-  };
-  expect("compat" in (file.providers["glm"] ?? {})).toBe(false);
-  expect("compat" in (file.providers["google"] ?? {})).toBe(false);
-  // 同配置下 openai-completions 仍落 compat（对照组，证明门控只按 api 判定）
-  const openai = JSON.parse(serializeModelsConfig([provider()])) as {
-    providers: Record<string, { compat?: { thinkingFormat: string } }>;
-  };
-  expect(openai.providers["glm"]?.compat).toEqual({ thinkingFormat: "zai" });
-});
-
-test("modelsConfigDiffers：能力/形态变更与文件缺失都判需重载；一致时判无需", () => {
+test("modelsConfigDiffers：能力/参数/端点变更与文件缺失都判需重载；一致时判无需", () => {
   const dir = tempDir();
   mkdirSync(dir, { recursive: true });
   // 缺文件 → 需要
@@ -155,9 +141,9 @@ test("modelsConfigDiffers：能力/形态变更与文件缺失都判需重载；
       provider({ models: [{ id: "glm-5.3-flash", reasoning: true, vision: true }] }),
     ]),
   ).toBe(true);
-  // 仅思考形态变化 → 需要
-  expect(modelsConfigDiffers(dir, [provider({ thinkingFormat: "qwen" })])).toBe(true);
-  // 仅模型参数（contextWindow/maxTokens）变化 → 需要（pi 侧 compaction 阈值/输出上限随之变）
+  // 端点/格式变化 → 需要（hub 拨号面随之变）
+  expect(modelsConfigDiffers(dir, [provider({ baseUrl: "https://other.example.com" })])).toBe(true);
+  // 仅模型参数（contextWindow/maxTokens）变化 → 需要（compaction 阈值/输出上限随之变）
   expect(
     modelsConfigDiffers(dir, [
       provider({

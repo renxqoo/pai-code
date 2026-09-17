@@ -3,7 +3,8 @@ import type { HubFrame } from '@paiapp/contracts';
 /**
  * stdout 帧解码器：LF 是唯一记录分隔符（U+2028/U+2029 是 JSON 字符串内容，
  * 不得断行；因此不能用按行读取的宿主 API，必须自行按 \n 切）。
- * 单行超过上限整行丢弃并上报（pai-cli 侧按 16 MiB 字节计，此处按字符数防御，量级等价）。
+ * 单行超过上限整行丢弃并上报（host-hub 侧 client→host 按 16 MiB 字节计，
+ * 此处按字符数防御，量级等价）。
  */
 
 const DEFAULT_MAX_LINE_CHARS = 16 * 1024 * 1024;
@@ -44,24 +45,20 @@ function classifyKnown(obj: Record<string, unknown>, type: string): { frame: Hub
     case 'response':
       return { frame: { type: 'response', id: optString(obj.id), command: reqString(obj.command), success: obj.success === true, data: obj.data, error: optString(obj.error) } };
     case 'event':
-      return { frame: { type: 'event', threadId: reqString(obj.threadId), event: requireEventPayload(obj.event) } };
+      return { frame: { type: 'event', threadId: reqString(obj.threadId), name: reqString(obj.name), payload: requirePayload(obj.payload), ...(obj.agentName !== undefined ? { agentName: reqString(obj.agentName) } : {}) } };
     case 'ui_request':
-      return { frame: { type: 'ui_request', requestId: reqString(obj.requestId), threadId: reqString(obj.threadId), method: optString(obj.method), subagentId: optString(obj.subagentId), agent: optString(obj.agent), ...restFields(obj, ['type', 'requestId', 'threadId', 'method', 'subagentId', 'agent']) } };
+      return { frame: { type: 'ui_request', requestId: reqString(obj.requestId), threadId: reqString(obj.threadId), method: optString(obj.method), ...(obj.agentName !== undefined ? { agentName: reqString(obj.agentName) } : {}), ...restFields(obj, ['type', 'requestId', 'threadId', 'method', 'agentName']) } };
     case 'heartbeat':
-      return { frame: { type: 'heartbeat', subagents: optNumber(obj.subagents), rssBytes: optNumber(obj.rssBytes), cpuPercent: optNumber(obj.cpuPercent) } };
+      return { frame: { type: 'heartbeat', rssBytes: optNumber(obj.rssBytes), cpuPercent: optNumber(obj.cpuPercent) } };
     case 'hub_error':
-      return { frame: { type: 'hub_error', threadId: optString(obj.threadId), scope: reqString(obj.scope), error: reqString(obj.error) } };
+      return { frame: { type: 'hub_error', threadId: optString(obj.threadId), message: reqString(obj.message) } };
     case 'thread_died':
       return { frame: { type: 'thread_died', threadId: reqString(obj.threadId), reason: reqString(obj.reason) } };
     case 'thread_parked': {
       const reason = obj.reason;
-      if (reason !== 'idle' && reason !== 'manual') throw new Error('thread_parked_reason_invalid');
+      if (reason !== 'idle' && reason !== 'manual' && reason !== 'rss') throw new Error('thread_parked_reason_invalid');
       return { frame: { type: 'thread_parked', threadId: reqString(obj.threadId), reason } };
     }
-    case 'subagent_event':
-      return { frame: { type: 'subagent_event', threadId: reqString(obj.threadId), subagentId: reqString(obj.subagentId), agent: reqString(obj.agent), task: reqString(obj.task), event: requireEventPayload(obj.event) } };
-    case 'subagent_message':
-      return { frame: { type: 'subagent_message', threadId: reqString(obj.threadId), subagentId: reqString(obj.subagentId), agent: reqString(obj.agent), text: reqString(obj.text), to: optString(obj.to) } };
     default:
       return { reason: `frame_type_unknown:${type}` };
   }
@@ -75,10 +72,10 @@ function optString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
-/** 事件载荷防线：非对象/缺 type 的 event 视为垃圾帧（下游映射器据此免于崩溃）。 */
-function requireEventPayload(value: unknown): { type: string } & Record<string, unknown> {
-  if (typeof value === 'object' && value !== null && !Array.isArray(value) && typeof (value as Record<string, unknown>)['type'] === 'string') {
-    return value as { type: string } & Record<string, unknown>;
+/** 事件载荷防线：非对象视为垃圾帧（下游映射器据此免于崩溃）。 */
+function requirePayload(value: unknown): Record<string, unknown> {
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
   }
   throw new Error('event_payload_invalid');
 }
@@ -87,7 +84,7 @@ function optNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
-/** ui_request 允许透传任意扩展字段（method 负载平铺在帧上）。 */
+/** ui_request 允许透传任意扩展字段（confirm 载荷平铺在帧上：tool/summary/reason）。 */
 function restFields(obj: Record<string, unknown>, known: readonly string[]): Record<string, unknown> {
   const rest: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
@@ -105,7 +102,7 @@ export function createFrameDecoder(onFrame: (frame: HubFrame) => void, options: 
   let discarding = false;
 
   const handleLine = (line: string): void => {
-    // pai-cli 以 \n 收行；防御 Windows 编辑器写出的 \r 尾
+    // hub 以 \n 收行；防御 Windows 编辑器写出的 \r 尾
     const text = line.endsWith('\r') ? line.slice(0, -1) : line;
     if (text.length === 0) return;
     let parsed: unknown;
@@ -179,10 +176,8 @@ export function createFrameDecoder(onFrame: (frame: HubFrame) => void, options: 
         return;
       }
       if (tail.length === 0) return;
-      if (tail.length > maxLineChars) {
-        options.onDropped?.('line_too_long');
-        return;
-      }
+      // 尾巴超限在 push 的提前判定已不可能（未完成行以 scanned 为基线持续受检，
+      // 压缩后尾巴长度 ≤ 上限恒成立）——无需重复防线
       handleLine(tail);
     },
   };

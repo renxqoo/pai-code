@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { initialThreadState } from '@/live/live-thread-state';
+import { initialThreadState, type LiveThreadState } from '@/live/live-thread-state';
 
 import { branchSwitchLocked } from '../branch-switch-lock';
 
@@ -9,7 +9,7 @@ import { branchSwitchLocked } from '../branch-switch-lock';
  * 在跑的判定面：streaming / 子 agent working / 直执行 bash / 自动重试。
  */
 
-function thread(patch: Partial<ReturnType<typeof initialThreadState>>): ReturnType<typeof initialThreadState> {
+function thread(patch: Partial<LiveThreadState>): LiveThreadState {
   return { ...initialThreadState, ...patch };
 }
 
@@ -21,8 +21,8 @@ describe('branchSwitchLocked', () => {
   test.each([
     ['流式回复中', thread({ streaming: true })],
     ['直执行 bash 在途', thread({ bashRunning: true })],
-    ['自动重试中', thread({ retrying: { attempt: 1, maxAttempts: 3, errorMessage: 'x' } })],
-  ])('%s → 锁定', (_name: string, busy: ReturnType<typeof initialThreadState>) => {
+    ['自动重试中', thread({ retrying: { attempt: 1, errorMessage: 'x' } })],
+  ])('%s → 锁定', (_name: string, busy: LiveThreadState) => {
     expect(branchSwitchLocked({ t1: { cwd: '/w/repo' } }, { t1: busy }, '/w/repo')).toBe(true);
   });
 
@@ -31,15 +31,20 @@ describe('branchSwitchLocked', () => {
       agents: [
         {
           id: 'a1',
+          agentId: 'sub-1',
           name: 'Researcher',
           agentType: 'Explore',
+          task: '',
           model: 'openai/gpt',
           effort: 'medium',
           tokens: 5,
           toolCount: 0,
-          status: 'working',
+          status: 'busy',
           startedAt: 1,
           endedAt: null,
+          summary: '',
+          pendingAsk: null,
+          tools: [],
         },
       ],
     });

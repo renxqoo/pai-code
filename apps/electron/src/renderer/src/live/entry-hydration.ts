@@ -19,7 +19,7 @@ export function createEntryHydration(input: {
 }) {
   const { client, store, reconciling, isDisposed } = input;
 
-  const fetchEntries = async (threadId: string, since: string | null, dropLiveTurn: boolean): Promise<void> => {
+  const fetchEntries = async (threadId: string, since: number | null, dropLiveTurn: boolean): Promise<void> => {
     if (reconciling.has(`${threadId}:${dropLiveTurn}`)) return;
     reconciling.add(`${threadId}:${dropLiveTurn}`);
     try {
@@ -46,7 +46,7 @@ export function createEntryHydration(input: {
    */
   const rebuildFromTranscript = async (
     threadId: string,
-    since: string | null = null,
+    since: number | null = null,
     opts: { liveTurnPresent?: () => boolean; staleGuard?: () => boolean } = {},
   ): Promise<void> => {
     const outcome = await client.invoke('session/entries', { threadId, since: since ?? undefined });
@@ -169,7 +169,7 @@ export function createReadonlyHydration(input: {
     // 只可能是「message_end 事件已发、appendMessage 未落」的两步窗口：这条消息两侧都缺，
     // 复拉一次 entries 把它从转写带回（窗口毫秒级，拉一次即闭合）。
     const turnRunningWithEmptyFace =
-      inflight?.turnStartEntryId != null && inflight.message === null && inflight.toolOutputs.length === 0 && inflight.bash === null;
+      inflight?.turnStartSeq != null && inflight.message === null && inflight.toolOutputs.length === 0 && inflight.bash === null;
     if (turnRunningWithEmptyFace && liveTurnBlockCount(store.getState().threads[threadId]) === 0) {
       await pull(threadId, targetId, 'reconcile');
     }

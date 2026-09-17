@@ -4,10 +4,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { createApiRoutes } from '../api-routes';
-import { createAgentDirFiles } from '../agent-dir-files';
 import { createAgentDefinitionsStore } from '../agent-definitions-store';
 import { createFileSettings, type ProviderKeyStore } from '../file-settings';
 import { createPaiRuntime } from '../pai-runtime';
+import { createRuntimeMonitor } from '../runtime-monitor/create-runtime-monitor';
 import type { FileRead } from '../file-read';
 import type { OpenLocation } from '../open-location';
 
@@ -39,6 +39,7 @@ function makeRoutes(work: string, openLocation: OpenLocation, fileRead: FileRead
     },
     keyStore,
     providers: () => [],
+    idleRecycleMinutes: () => 5,
     hubPaths: () => ({ bunPath: 'bun', hubEntry: '/nonexistent/cli.js' }),
     logger: { log: () => undefined },
     emit: () => undefined,
@@ -49,10 +50,12 @@ function makeRoutes(work: string, openLocation: OpenLocation, fileRead: FileRead
     settings: createFileSettings(join(work, 'settings.json'), keyStore),
     keyStore,
     audit: (message) => audits.push(message),
-    agentDirFiles: createAgentDirFiles(agentDir),
-    agentDefinitions: createAgentDefinitionsStore(agentDir),
+    agentDefinitions: createAgentDefinitionsStore(join(work, 'home')),
+    agentDir,
     revealPath: () => undefined,
     pickDirectory: () => Promise.resolve(null),
+    exportDiagnosticsBundle: () => work,
+    monitor: createRuntimeMonitor({ host: () => null, appMetrics: () => ({ rssBytes: null, cpuPercent: null }), systemMemory: () => ({ totalBytes: null, availableBytes: null }), idleRecycleMinutes: () => 5, appVersion: () => 'test' }),
     extraCwds: () => [project],
     openLocation,
     fileRead,
@@ -132,7 +135,7 @@ describe('archivedSessions 偏好回写往返', () => {
     const work = mkdtempSync(join(tmpdir(), 'pai-pref-archive-'));
     const fake = makeFakeCapabilities();
     const { routes } = makeRoutes(work, fake.openLocation, fake.fileRead);
-    const initial = await routes.invoke('app/bootstrap', {});
+    const initial = (await routes.invoke('app/bootstrap', {})) as { ok: boolean; data: { preferences: { archivedSessions: string[] } } };
     expect(initial.ok && initial.data.preferences.archivedSessions).toEqual([]);
     const written = await routes.invoke('app/setPreference', { archivedSessions: ['/a/b.jsonl'] });
     expect(written).toEqual({

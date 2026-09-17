@@ -8,9 +8,10 @@ import type { SavedSessionView } from '@paiapp/contracts';
 function saved(overrides: Partial<SavedSessionView> = {}): SavedSessionView {
   return {
     sessionPath: '/tmp/pai/s/a.jsonl',
+    sessionId: 'a',
+    cwd: '/tmp/pai',
     name: null,
     firstMessage: '第一条消息很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长',
-    cwd: '/tmp/pai',
     modifiedAt: 1000,
     messageCount: 3,
     ...overrides,

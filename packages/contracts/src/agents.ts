@@ -1,36 +1,29 @@
 /**
- * 子 agent 定义的静态词表（单一真相）。
- * 内置工具 id 是 hub/pi 工具注册表的协议事实：frontmatter tools 只认精确名，
- * 未知名被静默忽略（无通配符）；这里集中维护供表单多选与文件面校验共用。
+ * 子 agent 定义的静态词表（单一真相，host-hub plugins/agents/src/registry.ts 镜像）。
+ * frontmatter 严格四字段（name/description/tools/model；name/tools/model 可选缺省），
+ * 未知字段拒绝；tools 只认精确名，未知名被静默忽略（无通配符）。
+ * 布局：user = ~/.my-agent/agents；project = <项目>/.my-agent/agents（仅受信会话加载）。
  */
-export const AGENT_TOOL_IDS = ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls', 'powershell'] as const;
+
+/** agent 工具 id 词表（host-hub 工具注册表的名字；agent 委派族恒剔除、不在表单面）。 */
+export const AGENT_TOOL_IDS = ['read_file', 'write_file', 'edit_file', 'bash', 'grep'] as const;
 
 export type AgentToolId = (typeof AGENT_TOOL_IDS)[number];
 
 /**
- * agent 名（同时是定义文件名主干）。校验边界 = 文件名安全的必要集，不是命名风格规范：
- * 允许空格、中文等任意 Unicode（hub frontmatter name 本就无约束，"code reviewer" 这类
- * 名字是常态）；禁止的是会让文件路径失去意义或跨平台出错的形态——
- * 路径分隔符（/ \）与 Windows 禁字符（: * ? " < > |）、控制字符、点开头（. / ..
- * 保留）、首尾空白（部分工具会剥尾空格造成文件不可达）。长度 ≤ 64 字符。
+ * agent 名（= 定义文件名主干）。host-hub NAME_PATTERN = ^[a-z0-9]+(-[a-z0-9]+)*$
+ * （kebab-case）；保留名 fork/main 拒绝。description ≤500 字符（单行）。
  */
-const AGENT_NAME_FORBIDDEN = /[/\\:*?"<>|]/;
+export const AGENT_NAME_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
-function hasControlChar(value: string): boolean {
-  for (let i = 0; i < value.length; i += 1) {
-    const code = value.charCodeAt(i);
-    if (code < 0x20 || code === 0x7f) return true;
-  }
-  return false;
-}
+export const AGENT_RESERVED_NAMES = new Set(['fork', 'main']);
+
+export const AGENT_DESCRIPTION_MAX = 500;
 
 export function isValidAgentName(name: string): boolean {
-  if (name.length === 0 || name.length > 64) return false;
-  if (name.startsWith('.') || name.endsWith(' ') || name.startsWith(' ')) return false;
-  if (name !== name.trim()) return false;
-  if (AGENT_NAME_FORBIDDEN.test(name)) return false;
-  return !hasControlChar(name);
+  if (!AGENT_NAME_PATTERN.test(name)) return false;
+  return !AGENT_RESERVED_NAMES.has(name);
 }
 
-/** 定义作用域：user = agentDir/agents（全局）；project = <项目>/.pi/agents（仅受信会话）。 */
+/** 定义作用域：user = ~/.my-agent/agents（hub agents/create|remove 命令面）；project = <项目>/.my-agent/agents（app 直写同格式）。 */
 export type AgentScope = 'user' | 'project';

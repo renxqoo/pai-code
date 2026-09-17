@@ -60,7 +60,7 @@ describe('agent 定义表单渲染冒烟', () => {
 
   test('编辑带 tools 回填「自定义工具」：工具词表渲染，预填名称/描述/提示词/模型', () => {
     const html = renderToStaticMarkup(
-      <AgentDefinitionForm {...makeFormProps({ initial: existing, previous: { file: 'search', scope: 'user', project: null } })} />,
+      <AgentDefinitionForm {...makeFormProps({ initial: existing, previous: { name: 'search', scope: 'user', project: null } })} />,
     );
     expect(html).toContain('search');
     expect(html).toContain('联网搜索专员');

@@ -12,9 +12,16 @@ const withFiles =
   (path: string): boolean =>
     new Set(paths).has(path);
 
+/** devHubEntryCandidates 恒返回 [src, dist] 双候选（元组断言去 noUncheckedIndexedAccess 噪音）。 */
+function candidatesOf(root: string): [string, string] {
+  const [src, dist] = devHubEntryCandidates(root);
+  if (src === undefined || dist === undefined) throw new Error('dev candidates malformed');
+  return [src, dist];
+}
+
 describe('hub-paths 解析链（设置 > env > dev 同级探测 > 打包产物）', () => {
   test('症状回归：无 env 无 settings 时探测同级 my-agent 检出，src 优先于 dist', () => {
-    const [src, dist] = devHubEntryCandidates('/work/agent-app');
+    const [src, dist] = candidatesOf('/work/agent-app');
     expect(src).toBe('/work/my-agent/packages/host-hub/src/host/cli.ts');
     expect(dist).toBe('/work/my-agent/packages/host-hub/dist/host/cli.js');
     const resolved = resolveHubPaths({
@@ -29,7 +36,7 @@ describe('hub-paths 解析链（设置 > env > dev 同级探测 > 打包产物�
   });
 
   test('同级检出不完整（只有 dist 产物）时回落 dist/host/cli.js', () => {
-    const [, dist] = devHubEntryCandidates('/work/agent-app');
+    const [, dist] = candidatesOf('/work/agent-app');
     const resolved = resolveHubPaths({
       fromSettings: null,
       fromEnv: null,
@@ -42,7 +49,7 @@ describe('hub-paths 解析链（设置 > env > dev 同级探测 > 打包产物�
   });
 
   test('设置覆盖与 env 均优先于探测', () => {
-    const [src] = devHubEntryCandidates('/work/agent-app');
+    const [src] = candidatesOf('/work/agent-app');
     const deps = {
       fromEnv: { bunPath: 'bun', hubEntry: '/env/cli.ts' },
       fromPackaged: null,
@@ -57,7 +64,7 @@ describe('hub-paths 解析链（设置 > env > dev 同级探测 > 打包产物�
   });
 
   test('打包态跳过探测（内嵌直执行产物缺省）；devRepoRoot null 同样不探测', () => {
-    const [src] = devHubEntryCandidates('/work/agent-app');
+    const [src] = candidatesOf('/work/agent-app');
     const packaged: { bunPath: string; hubEntry: string | null } = { bunPath: '/res/host-hub/host-hub', hubEntry: null };
     expect(
       resolveHubPaths({ fromSettings: null, fromEnv: null, fromPackaged: packaged, devRepoRoot: '/work/agent-app', packaged: true, exists: withFiles(src) }),

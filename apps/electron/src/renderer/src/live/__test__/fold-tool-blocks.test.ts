@@ -25,10 +25,10 @@ function liveTurn(state: { items: readonly ThreadItem[] }): ThreadItem {
 }
 
 test('症状回归「流式工具输出重复累积」：toolUpdated 是累积快照，整体替换而非拼接', () => {
-  let s = foldThreadEvent(initialThreadState, ev({ type: 'turnStarted', threadId: T, at: tick(1) }), tick(1));
-  s = foldThreadEvent(s, ev({ type: 'toolCallAdded', threadId: T, messageId: 'm1', at: tick(2), call: { id: 'c1', name: 'bash', argsPreview: 'bun test', subagents: [] } }), tick(2));
-  s = foldThreadEvent(s, ev({ type: 'toolUpdated', threadId: T, callId: 'c1', output: 'line1\n' }), tick(3));
-  s = foldThreadEvent(s, ev({ type: 'toolUpdated', threadId: T, callId: 'c1', output: 'line1\nline2\n' }), tick(4));
+  let s = foldThreadEvent(initialThreadState, ev({ type: 'turnStarted', threadId: 't', at: tick(1) }), tick(1));
+  s = foldThreadEvent(s, ev({ type: 'toolCallAdded', threadId: 't', messageId: 'm1', call: { id: 'c1', name: 'bash', argsPreview: 'bun test', subagents: [] }, diff: null }), tick(2));
+  s = foldThreadEvent(s, ev({ type: 'toolUpdated', threadId: 't', callId: 'c1', output: 'line1\n' }), tick(3));
+  s = foldThreadEvent(s, ev({ type: 'toolUpdated', threadId: 't', callId: 'c1', output: 'line1\nline2\n' }), tick(4));
   const turn = s.items.find((item) => item.kind === 'turn');
   const calls = turn?.kind === 'turn' ? turn.turn.blocks.flatMap((block) => (block.kind === 'tools' ? block.calls : [])) : [];
   expect(calls[0]?.output).toBe('line1\nline2\n');
@@ -49,7 +49,7 @@ describe('foldEvents · 工具块按消息归块', () => {
       ev({ type: 'textDelta', threadId: 't', messageId: 'b', delta: '结论' }),
       ev({ type: 'toolCallAdded', threadId: 't', messageId: 'b', call: { id: 'c2', name: 'bash', argsPreview: 'ls' }, diff: null }),
       ev({ type: 'messageFinal', threadId: 't', message: { id: 'b', text: '结论', thinking: '想二', toolCalls: [{ id: 'c2', name: 'bash', argsPreview: 'ls' }], usage: null } }),
-      ev({ type: 'turnSettled', threadId: 't', usage: null }),
+      ev({ type: 'turnSettled', threadId: 't', ok: true, usage: null }),
     ];
   }
 
@@ -137,20 +137,20 @@ describe('foldEvents · 工具块按消息归块', () => {
     s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(0) }), tick(0));
     s = foldThreadEvent(s, ev({ type: 'messageStarted', threadId: 't', messageId: 'a', at: tick(1) }), tick(1));
     s = foldThreadEvent(s, ev({ type: 'toolCallAdded', threadId: 't', messageId: 'a', call: { id: 'c1', name: 'task', argsPreview: 'x' }, diff: null }), tick(2));
-    s = foldThreadEvent(s, ev({ type: 'subagentStarted', threadId: 't', subagentId: 's1', agent: 'Explore', task: '查' }), tick(3));
+    s = foldThreadEvent(s, ev({ type: 'subagentStarted', threadId: 't', agentId: 's1', agentName: 'Explore', task: '查' }), tick(3));
     s = foldThreadEvent(s, ev({ type: 'messageStarted', threadId: 't', messageId: 'b', at: tick(4) }), tick(4));
     s = foldThreadEvent(s, ev({ type: 'thinkingDelta', threadId: 't', messageId: 'b', delta: '想' }), tick(5));
     const turn = liveTurn(s);
     if (turn?.kind !== 'turn') throw new Error('expected turn');
     expect(turn.turn.blocks.map((block) => block.kind)).toEqual(['tools', 'thinking']);
-    expect(s.agents.map((agent) => agent.id)).toEqual(['s1']);
+    expect(s.agents.map((agent) => agent.id)).toEqual(['Explore']);
   });
 
   test('settle 终态化残留 running 调用（auto-retry 弃置的半成品不再走表）', () => {
     let s = initialThreadState;
     s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(0) }), tick(0));
     s = foldThreadEvent(s, ev({ type: 'toolCallAdded', threadId: 't', messageId: 'a', call: { id: 'c1', name: 'read', argsPreview: 'x' }, diff: null }), tick(1));
-    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', usage: null }), tick(9));
+    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', ok: true, usage: null }), tick(9));
     const turn = liveTurn(s);
     if (turn?.kind !== 'turn') throw new Error('expected turn');
     const tools = turn.turn.blocks.find((block) => block.kind === 'tools');

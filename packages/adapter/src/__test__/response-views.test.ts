@@ -1,111 +1,370 @@
 import { describe, expect, test } from 'bun:test';
 
-import { previewCommands, sessionCommands, hostInfoView, threadListRows } from '../response-views';
+import {
+  hostInfoView,
+  inflightView,
+  modelInfos,
+  pendingDialogsView,
+  previewCommands,
+  savedSessions,
+  sessionCommands,
+  sessionStatsView,
+  subagentSnapshotView,
+  thinkingLevelView,
+  threadListRows,
+  threadStateView,
+  toSessionView,
+} from '../response-views';
 
-/** get_commands 收窄回归：四源透传（含 hub builtin 内置命令）、垃圾降级。 */
-
-test('四源条目透传，description 缺失收窄 null', () => {
-  const raw = {
-    commands: [
-      { name: '/review', description: 'Review the diff', source: 'extension' },
-      { name: '/deploy', source: 'prompt' },
-      { name: 'skill:writer', description: '写文档', source: 'skill' },
-      { name: 'compact', description: 'Manually compact the session context', source: 'builtin' },
-    ],
-  };
-  expect(sessionCommands(raw)).toEqual([
-    { name: '/review', description: 'Review the diff', source: 'extension' },
-    { name: '/deploy', description: null, source: 'prompt' },
-    { name: 'skill:writer', description: '写文档', source: 'skill' },
-    { name: 'compact', description: 'Manually compact the session context', source: 'builtin' },
-  ]);
-});
-
-test.each([
-  ['缺名丢弃', [{ description: 'x', source: 'prompt' }]],
-  ['空名丢弃', [{ name: '', source: 'prompt' }]],
-  ['source 词表外丢弃', [{ name: '/x', source: 'mcp' }]],
-  ['非对象条目丢弃', ['/review', 42, null]],
-  ['description 非字符串收窄 null', [{ name: '/x', description: 7, source: 'prompt' }]],
-])('垃圾降级：%s', (_name, commands) => {
-  const kept = sessionCommands({ commands });
-  expect(kept.every((item) => typeof item.name === 'string' && item.name.length > 0)).toBe(true);
-  expect(kept.every((item) => item.source === 'extension' || item.source === 'prompt' || item.source === 'skill' || item.source === 'builtin')).toBe(true);
-});
-
-test('commands 非数组 / 顶层非对象 → 空数组', () => {
-  expect(sessionCommands({ commands: 'nope' })).toEqual([]);
-  expect(sessionCommands(null)).toEqual([]);
-  expect(sessionCommands([1, 2])).toEqual([]);
-});
-
-test('混合垃圾条目中合法条目保留', () => {
-  const kept = sessionCommands({
-    commands: [{ name: '/ok', source: 'prompt' }, { name: 1, source: 'prompt' }, 'junk'],
+describe('toSessionView · 缺省兜底', () => {
+  test('最少输入 → 缺省形态', () => {
+    expect(toSessionView({ threadId: 't', cwd: '/w', sessionPath: null })).toEqual({
+      threadId: 't',
+      cwd: '/w',
+      sessionPath: null,
+      title: 'New conversation',
+      state: 'live',
+      streaming: false,
+      model: null,
+      thinkingLevel: null,
+      lastActivityAt: 0,
+    });
   });
-  expect(kept).toEqual([{ name: '/ok', description: null, source: 'prompt' }]);
-});
 
-/** 预会话目录（新建任务页 `/` 补全）：技能清单 → get_commands 的 skill 源同型条目。 */
-
-test('技能名加 skill: 前缀成 skill 源条目，description 原样透传（含 null）', () => {
-  expect(
-    previewCommands([
-      { name: 'rxopen-hot', description: '查热搜' },
-      { name: 'writer', description: null },
-    ]),
-  ).toEqual([
-    { name: 'skill:rxopen-hot', description: '查热搜', source: 'skill' },
-    { name: 'skill:writer', description: null, source: 'skill' },
-  ]);
-});
-
-test('空名技能丢弃；空清单 → 空目录', () => {
-  expect(previewCommands([{ name: '', description: 'x' }])).toEqual([]);
-  expect(previewCommands([])).toEqual([]);
-});
-
-
-
-describe('hostInfoView（get_host_info 收窄）', () => {
   test('全字段 round-trip', () => {
-    const data = {
-      version: '0.13.0', piVersion: '0.85.1', bunVersion: '1.4.2', pid: 42, uptimeMs: 1000, rssBytes: 2048,
-      threads: { live: 1, parked: 2, dead: 3 }, subagents: { running: 4 },
-      limits: { maxThreads: 32, idleRetireMs: 300000, workerStaleMs: 30000, workerExitTimeoutMs: 10000, maxSubagents: 8, bashTimeoutMs: 600000 },
-      backend: { id: 'pi-coding-agent', version: '0.85.1', capabilities: ['session.fork', 1] },
-    };
-    expect(hostInfoView(data)).toEqual({
-      version: '0.13.0', piVersion: '0.85.1', bunVersion: '1.4.2', pid: 42, uptimeMs: 1000, rssBytes: 2048,
-      threads: { live: 1, parked: 2, dead: 3 }, subagents: { running: 4 },
-      limits: { maxThreads: 32, idleRetireMs: 300000, workerStaleMs: 30000, workerExitTimeoutMs: 10000, maxSubagents: 8, bashTimeoutMs: 600000 },
-      backend: { id: 'pi-coding-agent', version: '0.85.1', capabilities: ['session.fork'] },
+    expect(
+      toSessionView({
+        threadId: 't',
+        cwd: '/w',
+        sessionPath: '/w/s.jsonl',
+        state: 'parked',
+        streaming: true,
+        title: '标题',
+        model: 'glm/glm-5.3',
+        thinkingLevel: 'high',
+        lastActivityAt: 42,
+      }),
+    ).toEqual({
+      threadId: 't',
+      cwd: '/w',
+      sessionPath: '/w/s.jsonl',
+      state: 'parked',
+      streaming: true,
+      title: '标题',
+      model: 'glm/glm-5.3',
+      thinkingLevel: 'high',
+      lastActivityAt: 42,
+    });
+  });
+});
+
+describe('threadStateView（get_state）', () => {
+  test('model {provider, modelId} 收窄 + queue 面（非字符串项过滤）', () => {
+    expect(
+      threadStateView({
+        model: { provider: 'glm', modelId: 'glm-5.3' },
+        isStreaming: true,
+        isCompacting: false,
+        sessionName: 'n',
+        messageCount: 7,
+        queue: { steering: ['插一句'], followUp: ['接着问', 3] },
+      }),
+    ).toEqual({
+      model: { provider: 'glm', modelId: 'glm-5.3' },
+      isStreaming: true,
+      isCompacting: false,
+      sessionName: 'n',
+      messageCount: 7,
+      queue: { steering: ['插一句'], followUp: ['接着问'] },
+    });
+  });
+
+  test('降级：缺 provider/modelId、空 sessionName、垃圾 queue → 空形态', () => {
+    expect(threadStateView({ model: { modelId: 'm' } }).model).toBeNull();
+    expect(threadStateView({ model: { provider: 'p' } }).model).toBeNull();
+    expect(threadStateView({ sessionName: '' }).sessionName).toBeNull();
+    expect(threadStateView({}).queue).toEqual({ steering: [], followUp: [] });
+    expect(threadStateView({ queue: { steering: 'x', followUp: null } }).queue).toEqual({ steering: [], followUp: [] });
+    expect(threadStateView('junk')).toEqual({
+      model: null,
+      isStreaming: false,
+      isCompacting: false,
+      sessionName: null,
+      messageCount: 0,
+      queue: { steering: [], followUp: [] },
+    });
+  });
+});
+
+describe('inflightView（get_inflight）', () => {
+  test('全字段：text/thinking 块拼接、tool_use_partial 宽容解析、toolOutputs、bash', () => {
+    expect(
+      inflightView({
+        turnStartSeq: 12,
+        turnStartedAt: 5000,
+        message: {
+          role: 'assistant',
+          content: [
+            { type: 'thinking', text: '先想' },
+            { type: 'text', text: '正在跑' },
+            { type: 'tool_use_partial', id: 'tc1', name: 'bash', text: '{"command":"ls -la"}' },
+          ],
+        },
+        toolOutputs: [
+          { callId: 'tc0', output: 'tail…', truncated: true, startedAt: 9 },
+          { output: '无 callId 丢弃' },
+          { callId: 'tcX', output: 'o', truncated: false, startedAt: 1 },
+        ],
+        bash: { id: 'b1', command: 'git status', startedAt: 8 },
+      }),
+    ).toEqual({
+      turnStartSeq: 12,
+      turnStartedAt: 5000,
+      message: {
+        messageTs: 5000,
+        text: '正在跑',
+        thinking: '先想',
+        toolCalls: [{ id: 'tc1', name: 'bash', argsPreview: 'ls -la' }],
+      },
+      toolOutputs: [
+        { callId: 'tc0', output: 'tail…', truncated: true, startedAt: 9 },
+        { callId: 'tcX', output: 'o', truncated: false, startedAt: 1 },
+      ],
+      bash: { id: 'b1', command: 'git status', startedAt: 8 },
+    });
+  });
+
+  test('tool_use_partial 的 text 是流式半成品 JSON：解析失败退空参数（argsPreview 空串）', () => {
+    const view = inflightView({
+      message: { role: 'assistant', content: [{ type: 'tool_use_partial', id: 'tc1', name: 'write_file', text: '{"path":"a.ts","con' }] },
+    });
+    expect(view.message).toEqual({ messageTs: 0, text: '', thinking: '', toolCalls: [{ id: 'tc1', name: 'write_file', argsPreview: '' }] });
+  });
+
+  test('降级：message 缺省/非对象 null、缺 turnStart 序对 null、垃圾 toolOutputs/bash', () => {
+    expect(inflightView({})).toEqual({ turnStartSeq: null, turnStartedAt: null, message: null, toolOutputs: [], bash: null });
+    expect(inflightView('junk').message).toBeNull();
+    expect(inflightView({ toolOutputs: 'x', bash: 42 }).toolOutputs).toEqual([]);
+    expect(inflightView({ toolOutputs: 'x', bash: 42 }).bash).toBeNull();
+    expect(inflightView({ message: { content: 'x' } }).message).toEqual({ messageTs: 0, text: '', thinking: '', toolCalls: [] });
+  });
+});
+
+describe('subagentSnapshotView（get_subagents）', () => {
+  test('合法快照收窄（agentType 可选携带、词表外 status 回落 idle）', () => {
+    expect(
+      subagentSnapshotView({
+        subagents: [
+          { agentId: 'a1', agentName: 'explore', work: '扫描', status: 'busy', runId: 3, sessionId: 's1', agentType: 'explore' },
+          { agentId: 'a2', agentName: 'writer', work: '写', status: 'weird', runId: 'x', sessionId: 's2' },
+        ],
+      }),
+    ).toEqual([
+      { agentId: 'a1', agentName: 'explore', work: '扫描', status: 'busy', runId: 3, sessionId: 's1', agentType: 'explore' },
+      { agentId: 'a2', agentName: 'writer', work: '写', status: 'idle', runId: 0, sessionId: 's2' },
+    ]);
+  });
+
+  test('缺 agentId 条目丢弃；非数组/垃圾 → 空形态', () => {
+    expect(subagentSnapshotView({ subagents: [{ agentName: 'x' }, 42, null] })).toEqual([]);
+    expect(subagentSnapshotView({})).toEqual([]);
+    expect(subagentSnapshotView(null)).toEqual([]);
+  });
+});
+
+describe('pendingDialogsView（get_pending_dialogs）', () => {
+  test('与 ui_request 帧同字段收窄（requestId/method 必填）', () => {
+    expect(
+      pendingDialogsView({
+        dialogs: [
+          { requestId: 'r1', threadId: 't', method: 'confirm', payload: { tool: 'bash', summary: 's' } },
+          { requestId: '', threadId: 't', method: 'confirm', payload: {} },
+          { requestId: 'r2', method: '', payload: {} },
+        ],
+      }),
+    ).toEqual([{ requestId: 'r1', threadId: 't', method: 'confirm', payload: { tool: 'bash', summary: 's' } }]);
+    expect(pendingDialogsView({ dialogs: [{ requestId: 'r', method: 'confirm' }] })[0]?.payload).toEqual({});
+  });
+
+  test('非数组/垃圾 → 空数组', () => {
+    expect(pendingDialogsView({})).toEqual([]);
+    expect(pendingDialogsView('junk')).toEqual([]);
+  });
+});
+
+describe('savedSessions（thread/list_saved）', () => {
+  test('summary 无 sessionPath：按 <sessionsRoot>/<id>/transcript.jsonl 重建', () => {
+    expect(
+      savedSessions(
+        {
+          sessions: [
+            { id: 'abc', title: '会话一', cwd: '/w', updatedAt: 5000, messageCount: 2 },
+            { id: 'def', title: '', cwd: '/w2', updatedAt: 'x' },
+            { title: '缺 id 丢弃' },
+          ],
+        },
+        '/root/sessions',
+      ),
+    ).toEqual([
+      { sessionPath: '/root/sessions/abc/transcript.jsonl', sessionId: 'abc', cwd: '/w', name: '会话一', modifiedAt: 5000, messageCount: 2, firstMessage: '会话一' },
+      { sessionPath: '/root/sessions/def/transcript.jsonl', sessionId: 'def', cwd: '/w2', name: null, modifiedAt: 0, messageCount: 0, firstMessage: '' },
+    ]);
+  });
+
+  test('非数组/垃圾 → 空数组', () => {
+    expect(savedSessions({}, '/root')).toEqual([]);
+    expect(savedSessions(null, '/root')).toEqual([]);
+  });
+});
+
+describe('modelInfos（get_models 扁平数组）', () => {
+  test('provider+id 必填、source 词表收窄', () => {
+    expect(
+      modelInfos([
+        { id: 'glm-5.3', provider: 'glm', source: 'preset', contextWindow: 200000 },
+        { id: 'm2', provider: 'glm', source: 'custom' },
+        { id: 'm3', provider: 'glm', source: 'weird' },
+        { id: '', provider: 'glm' },
+        { id: 'm4' },
+        42,
+      ]),
+    ).toEqual([
+      { provider: 'glm', modelId: 'glm-5.3', source: 'preset' },
+      { provider: 'glm', modelId: 'm2', source: 'custom' },
+      { provider: 'glm', modelId: 'm3' },
+    ]);
+  });
+
+  test('非数组 → 空数组', () => {
+    expect(modelInfos({ models: [{ id: 'm', provider: 'p' }] })).toEqual([]);
+    expect(modelInfos(null)).toEqual([]);
+  });
+});
+
+describe('sessionStatsView（get_session_stats）', () => {
+  test('tokens 三元组 + 计数面 round-trip', () => {
+    expect(sessionStatsView({ userMessages: 2, assistantMessages: 3, toolCalls: 4, tokens: { input: 10, output: 5, total: 15 }, cost: 0.5 })).toEqual({
+      userMessages: 2,
+      assistantMessages: 3,
+      toolCalls: 4,
+      tokens: { input: 10, output: 5, total: 15 },
+      cost: 0.5,
     });
   });
 
   test('垃圾输入降级全零形态不抛', () => {
-    const view = hostInfoView('junk');
-    expect(view.pid).toBe(0);
-    expect(view.threads).toEqual({ live: 0, parked: 0, dead: 0 });
-    expect(view.backend.capabilities).toEqual([]);
+    expect(sessionStatsView({})).toEqual({ userMessages: 0, assistantMessages: 0, toolCalls: 0, tokens: { input: 0, output: 0, total: 0 }, cost: 0 });
+    expect(sessionStatsView('junk')).toEqual({ userMessages: 0, assistantMessages: 0, toolCalls: 0, tokens: { input: 0, output: 0, total: 0 }, cost: 0 });
+    expect(sessionStatsView({ tokens: 'x', cost: 'y' }).tokens).toEqual({ input: 0, output: 0, total: 0 });
   });
 });
 
-describe('threadListRows（thread/list 行收窄）', () => {
-  test('合法行 + 观测字段（rss null 容错）', () => {
-    const rows = threadListRows({ threads: [
-      { threadId: 't1', cwd: '/w', sessionPath: '/w/s.jsonl', isStreaming: true, state: 'live', idleMs: 12, subagents: 2, rssBytes: 111, keepalive: true },
-      { threadId: 't2', cwd: '/w', sessionPath: null, isStreaming: false, state: 'parked', idleMs: 0, subagents: 0, rssBytes: null, keepalive: false },
-    ] });
-    expect(rows.length).toBe(2);
-    expect(rows[0]).toMatchObject({ threadId: 't1', state: 'live', idleMs: 12, rssBytes: 111, keepalive: true });
-    expect(rows[1]).toMatchObject({ threadId: 't2', state: 'parked', rssBytes: null });
+describe('thinkingLevelView（get_thinking_level）', () => {
+  test('level 透传 + source 词表内收窄', () => {
+    expect(thinkingLevelView({ level: 'high', source: 'session' })).toEqual({ level: 'high', source: 'session' });
+    expect(thinkingLevelView({ level: 'unset', source: 'project' })).toEqual({ level: 'unset', source: 'project' });
+    expect(thinkingLevelView({ level: 'off', source: 'user' })).toEqual({ level: 'off', source: 'user' });
   });
 
-  test('缺 threadId 或未知 state 的行丢弃（未来 hub 新状态不误读为 dead）；非数组降级空', () => {
-    expect(threadListRows({ threads: [{ cwd: '/w' }, { threadId: 'ok', state: 'weird' }] }).length).toBe(0);
-    expect(threadListRows({})).toEqual([]);
+  test('source 词表外 → unset；垃圾 → 空串 + unset', () => {
+    expect(thinkingLevelView({ level: 'low', source: 'weird' })).toEqual({ level: 'low', source: 'unset' });
+    expect(thinkingLevelView({})).toEqual({ level: '', source: 'unset' });
+    expect(thinkingLevelView(null)).toEqual({ level: '', source: 'unset' });
+  });
+});
+
+describe('sessionCommands（get_commands 顶层数组）', () => {
+  test('三源条目透传（plugin/skill/builtin），description 缺失收窄 null', () => {
+    expect(
+      sessionCommands([
+        { name: '/deploy', source: 'plugin' },
+        { name: 'skill:writer', description: '写文档', source: 'skill' },
+        { name: 'compact', description: 'Manually compact', source: 'builtin' },
+      ]),
+    ).toEqual([
+      { name: '/deploy', description: null, source: 'plugin' },
+      { name: 'skill:writer', description: '写文档', source: 'skill' },
+      { name: 'compact', description: 'Manually compact', source: 'builtin' },
+    ]);
+  });
+
+  test.each([
+    ['缺名丢弃', [{ description: 'x', source: 'plugin' }]],
+    ['空名丢弃', [{ name: '', source: 'plugin' }]],
+    ['source 词表外丢弃', [{ name: '/x', source: 'mcp' }]],
+    ['非对象条目丢弃', ['/review', 42, null]],
+    ['description 非字符串收窄 null', [{ name: '/x', description: 7, source: 'plugin' }]],
+  ])('垃圾降级：%s', (_name, commands) => {
+    const kept = sessionCommands(commands);
+    expect(kept.every((item) => typeof item.name === 'string' && item.name.length > 0)).toBe(true);
+    expect(kept.every((item) => item.source === 'plugin' || item.source === 'skill' || item.source === 'builtin')).toBe(true);
+  });
+
+  test('混合垃圾条目中合法条目保留；非数组 → 空', () => {
+    expect(sessionCommands([{ name: '/ok', source: 'plugin' }, { name: 1, source: 'plugin' }, 'junk'])).toEqual([
+      { name: '/ok', description: null, source: 'plugin' },
+    ]);
+    expect(sessionCommands({ commands: [{ name: '/x', source: 'plugin' }] })).toEqual([]);
+    expect(sessionCommands(null)).toEqual([]);
+  });
+});
+
+describe('previewCommands · 预会话目录（新建任务页 `/` 补全）', () => {
+  test('技能名加 skill: 前缀成 skill 源条目（description 恒 null）', () => {
+    expect(previewCommands([{ name: 'rxopen-hot' }, { name: 'writer' }])).toEqual([
+      { name: 'skill:rxopen-hot', description: null, source: 'skill' },
+      { name: 'skill:writer', description: null, source: 'skill' },
+    ]);
+  });
+
+  test('空名技能丢弃；空清单 → 空目录', () => {
+    expect(previewCommands([{ name: '' }])).toEqual([]);
+    expect(previewCommands([])).toEqual([]);
+  });
+});
+
+describe('hostInfoView（get_host_info）', () => {
+  test('全字段 round-trip', () => {
+    const data = {
+      version: '1.0.0',
+      bunVersion: '1.4.2',
+      pid: 42,
+      uptimeMs: 1000,
+      rssBytes: 2048,
+      threads: { live: 1, parked: 2, dead: 3 },
+      limits: { maxThreads: 32, idleRetireMs: 300000, workerStaleMs: 30000, workerExitTimeoutMs: 10000, rssRetireBytes: 536870912, bashTimeoutMs: 600000 },
+    };
+    expect(hostInfoView(data)).toEqual(data);
+  });
+
+  test('垃圾输入降级全零形态不抛（limits 数值位回落 1/0）', () => {
+    expect(hostInfoView('junk')).toEqual({
+      version: '',
+      bunVersion: '',
+      pid: 0,
+      uptimeMs: 0,
+      rssBytes: 0,
+      threads: { live: 0, parked: 0, dead: 0 },
+      limits: { maxThreads: 1, idleRetireMs: 1, workerStaleMs: 1, workerExitTimeoutMs: 1, rssRetireBytes: 0, bashTimeoutMs: 0 },
+    });
+  });
+});
+
+describe('threadListRows（thread/list 顶层数组）', () => {
+  test('合法行 + 观测字段（rss null 容错）', () => {
+    const rows = threadListRows([
+      { threadId: 't1', cwd: '/w', sessionPath: '/w/s.jsonl', state: 'live', isStreaming: true, idleMs: 12, rssBytes: 111, keepalive: true },
+      { threadId: 't2', cwd: '/w', sessionPath: null, state: 'parked', isStreaming: false, idleMs: 0, rssBytes: null, keepalive: false },
+    ]);
+    expect(rows).toEqual([
+      { threadId: 't1', cwd: '/w', sessionPath: '/w/s.jsonl', state: 'live', isStreaming: true, idleMs: 12, rssBytes: 111, keepalive: true },
+      { threadId: 't2', cwd: '/w', sessionPath: null, state: 'parked', isStreaming: false, idleMs: 0, rssBytes: null, keepalive: false },
+    ]);
+  });
+
+  test('缺 threadId 或词表外 state 的行丢弃（未来 hub 新状态不误读）；非数组降级空', () => {
+    expect(threadListRows([{ cwd: '/w' }, { threadId: 'ok', state: 'weird' }])).toEqual([]);
+    expect(threadListRows({ threads: [{ threadId: 't', state: 'live' }] })).toEqual([]);
     expect(threadListRows(null)).toEqual([]);
-    expect(threadListRows({ threads: [{ threadId: 't', state: 'weird' }] })).toEqual([]);
   });
 });

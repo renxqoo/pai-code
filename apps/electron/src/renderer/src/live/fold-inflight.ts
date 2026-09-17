@@ -17,29 +17,30 @@ import { claimAnonymousBlocks, clip, ensureLiveTurn, findTurn, mergeAppendOnlyTe
  *   客户端观测值），live 不认识的按快照补入（running + 参数）；
  * - 工具在途输出：**替换**（宿主保留的是累积快照的尾部），status 归 running，时长由
  *   `startedAt` 复原——这是「刷新后正在跑的工具卡不再空着」的来源；
- * - bash 在途：横幅（bashRunning/尾部输出）可重建；
- * - `turnStartEntryId` 非空 = 轮在途 → `streaming` 置真（避免把在途轮里的新消息误判为空闲）。
+ * - bash 在途：横幅（bashRunning）可重建；快照只有 command/startedAt，尾部输出由
+ *   bashOutput 事件增量累积；
+ * - `turnStartSeq` 非空 = 轮在途 → `streaming` 置真（避免把在途轮里的新消息误判为空闲）。
  */
 
 export function applyInflight(state: LiveThreadState, view: InflightView, now: number): LiveThreadState {
-  const turnStartEntryId = view.turnStartEntryId;
+  const turnStartSeq = view.turnStartSeq;
   let next: LiveThreadState =
-    state.turnStartEntryId === turnStartEntryId
+    state.turnStartSeq === turnStartSeq
       ? state
-      : { ...state, turnStartEntryId };
+      : { ...state, turnStartSeq };
   // 在途输出随轮存活：转写重建（尾 span 合入）也要按 callId 把「转写说已完成、读口说仍在跑」
   // 的调用纠回 running（权威序 ①），否则工具执行中刷新会呈现「假完成 + 空输出」。
   if (state.inflightToolOutputs !== view.toolOutputs) next = { ...next, inflightToolOutputs: view.toolOutputs };
 
-  if (turnStartEntryId !== null && !next.streaming) next = { ...next, streaming: true };
+  if (turnStartSeq !== null && !next.streaming) next = { ...next, streaming: true };
 
   // 有在途轮就建轮（不只在有在途消息时）：工具执行期 streamingMessage 为 null，但本轮仍有
   // 在途事实（工具输出/bash），没有 live 轮这些事实无处落脚，转写前缀会被插成独立历史轮。
   // 轮边界缺失（读口不可用）而在途消息仍在时同样建轮——否则正文无处落块。
-  if (turnStartEntryId !== null || view.message !== null) next = ensureLiveTurn(next, now);
+  if (turnStartSeq !== null || view.message !== null) next = ensureLiveTurn(next, now);
 
   // 轮计时取轮首事实（刷新后续算）：hub 报的轮首时刻优先于「本渲染层看到第一个事件的时刻」。
-  if (turnStartEntryId !== null && view.turnStartedAt !== null) {
+  if (turnStartSeq !== null && view.turnStartedAt !== null) {
     const startedAt = view.turnStartedAt;
     next = updateTurn(next, next.liveTurnId ?? '', (current) => ({ ...current, startedAt }));
   }
@@ -60,7 +61,9 @@ export function applyInflight(state: LiveThreadState, view: InflightView, now: n
 
   if (view.toolOutputs.length > 0) next = applyToolOutputs(next, view.toolOutputs, now);
 
-  if (view.bash !== null) next = { ...next, bashRunning: true, bashTail: view.bash.output.slice(-2000) };
+  // bash 在途：横幅点亮；快照只给 command/startedAt，尾部输出由 bashOutput 事件累积
+  // （重载场景存量输出不可得，横幅先亮、后续增量照常拼接）
+  if (view.bash !== null) next = { ...next, bashRunning: true };
 
   return next;
 }

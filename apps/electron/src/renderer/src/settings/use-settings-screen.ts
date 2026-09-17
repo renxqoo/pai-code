@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import type { AgentDefinition, IdleRecycleMinutes, PermissionRules, ProviderConfigView, ProviderModel, SkillView, ThinkingFormat } from '@paiapp/contracts';
+import type { AgentDefinition, IdleRecycleMinutes, PermMode, ProviderConfigView, ProviderModel, SkillView, ThinkingLevel } from '@paiapp/contracts';
 import { AGENT_TOOL_IDS } from '@paiapp/contracts';
 import type { Theme } from '@/components/theme-context';
 import { useTheme } from '@/components/use-theme';
@@ -18,9 +18,9 @@ type SavedSession = { sessionPath: string; title: string; cwd: string; modifiedA
  * 按开即读派发：分区目录/文件面无推送，每次进入都拉取；其余分区 no-op。
  * 分区 ↔ 动作映射在这里集中（导航层不认识 workspace 动作面）。
  */
-export function dispatchSectionEnter(id: SettingsSectionId, actions: Pick<WorkspaceActions, 'refreshPermissionRules' | 'refreshAgentDefinitions' | 'refreshSkills'>): void {
+export function dispatchSectionEnter(id: SettingsSectionId, actions: Pick<WorkspaceActions, 'refreshHubSettings' | 'refreshAgentDefinitions' | 'refreshSkills'>): void {
   if (!FETCH_ON_ENTER_SECTIONS.has(id)) return;
-  if (id === 'permissions') actions.refreshPermissionRules();
+  if (id === 'permissions') actions.refreshHubSettings();
   else if (id === 'agents') actions.refreshAgentDefinitions();
   else actions.refreshSkills();
 }
@@ -62,19 +62,16 @@ export type SettingsScreenProps = {
     list: readonly ProviderConfigView[];
     defaultModel: string | null;
     modelOptions: readonly string[];
-    onUpsert: (input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; thinkingFormat: ThinkingFormat; apiKey?: string }) => Promise<boolean>;
+    onUpsert: (input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; apiKey?: string }) => Promise<boolean>;
     onRemove: (name: string) => Promise<boolean>;
     onSelectDefaultModel: (value: string | null) => void;
     onTest: (name: string, modelId?: string) => Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }>;
   };
   permissions: {
-    rules: PermissionRules | null;
-    onSave: (rules: PermissionRules) => Promise<boolean>;
-    sessionRules: { rules: PermissionRules; source: 'thread' | 'global' } | null;
-    onLoadSession: () => void;
-    onSaveSession: (rules: PermissionRules | null) => Promise<boolean>;
+    hubSettings: { permissionDefaultMode: PermMode | null; thinkingDefault: ThinkingLevel | null } | null;
+    onSaveDefaults: (patch: { permissionDefaultMode?: PermMode | null; thinkingDefault?: ThinkingLevel | null }) => Promise<boolean>;
   };
-  /** 子 agent 定义键位（作用域 + 项目 + 文件名主干）；upsert 的 previous 与 remove 共用。 */
+  /** 子 agent 定义键位（作用域 + 项目 + name）；upsert 的 previous 与 remove 共用。 */
   agents: {
     definitions: readonly AgentDefinition[];
     /** 可指定为 project 作用域的项目目录（已保存会话 cwd 去重）。 */
@@ -85,9 +82,9 @@ export type SettingsScreenProps = {
     onRefresh: () => void;
     onSave: (
       definition: AgentDefinition,
-      previous: { file: string; scope: 'user' | 'project'; project: string | null } | null,
+      previous: { name: string; scope: 'user' | 'project'; project: string | null } | null,
     ) => Promise<string | null>;
-    onRemove: (key: { file: string; scope: 'user' | 'project'; project: string | null }) => Promise<string | null>;
+    onRemove: (key: { name: string; scope: 'user' | 'project'; project: string | null }) => Promise<string | null>;
   };
   skills: { list: readonly SkillView[]; onToggle: (name: string, enabled: boolean) => Promise<boolean>; onRefresh: () => void };
   history: {
@@ -131,8 +128,7 @@ export function useSettingsScreen({ open, onClose, initialSection }: UseSettings
   const providers = useStore(liveStore, (s) => s.providers);
   const models = useStore(liveStore, (s) => s.models);
   const preferences = useStore(liveStore, (s) => s.preferences);
-  const permissionRules = useStore(liveStore, (s) => s.permissionRules);
-  const sessionRules = useStore(liveStore, (s) => s.sessionRules);
+  const hubSettings = useStore(liveStore, (s) => s.hubSettings);
   const agentDefinitions = useStore(liveStore, (s) => s.agentDefinitions);
   const skills = useStore(liveStore, (s) => s.skills);
   const modelOptions = React.useMemo(() => models.map((model) => `${model.provider}/${model.modelId}`), [models]);
@@ -207,11 +203,8 @@ export function useSettingsScreen({ open, onClose, initialSection }: UseSettings
       onTest: actions.testProvider,
     },
     permissions: {
-      rules: permissionRules,
-      onSave: actions.writePermissionRules,
-      sessionRules: sessionRules,
-      onLoadSession: actions.readSessionRules,
-      onSaveSession: actions.writeSessionRules,
+      hubSettings,
+      onSaveDefaults: actions.saveHubDefaults,
     },
     agents: {
       definitions: agentDefinitions,

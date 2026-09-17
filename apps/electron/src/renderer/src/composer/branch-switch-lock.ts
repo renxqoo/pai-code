@@ -9,7 +9,7 @@ export type BranchSwitchThreads = Readonly<Record<string, LiveThreadState>>;
 function threadBusy(thread: LiveThreadState): boolean {
   return (
     thread.streaming ||
-    summarizeAgents(thread.agents).workingCount > 0 ||
+    summarizeAgents(thread.agents).busyCount > 0 ||
     thread.bashRunning ||
     thread.retrying !== null
   );

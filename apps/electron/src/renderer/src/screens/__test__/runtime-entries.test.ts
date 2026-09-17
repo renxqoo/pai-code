@@ -14,7 +14,6 @@ function worker(overrides: Partial<WorkerRowView> = {}): WorkerRowView {
     state: 'live',
     isStreaming: false,
     idleMs: 0,
-    subagents: 0,
     rssBytes: null,
     keepalive: false,
     ...overrides,
@@ -35,13 +34,12 @@ function session(threadId: string, title: string): SessionView {
   };
 }
 
-const stats = (tokensTotal: number): SessionStatsView => ({
+const stats = (total: number): SessionStatsView => ({
   userMessages: 1,
   assistantMessages: 1,
   toolCalls: 0,
-  tokensTotal,
+  tokens: { input: Math.round(total / 2), output: total - Math.round(total / 2), total },
   cost: 0,
-  contextUsage: 0.5,
 });
 
 describe('buildRuntimeRows', () => {
@@ -58,7 +56,7 @@ describe('buildRuntimeRows', () => {
       queueCountOf: (threadId) => (threadId === 't1' ? 3 : 0),
       idleRetireMs: 300_000,
     });
-    expect(rows[0]).toMatchObject({ threadId: 't1', title: '重构渲染层', stats: { tokensTotal: 1200 }, queueCount: 3, recycleInMs: 240_000 });
+    expect(rows[0]).toMatchObject({ threadId: 't1', title: '重构渲染层', stats: { tokens: { total: 1200 } }, queueCount: 3, recycleInMs: 240_000 });
     // 表外会话：标题回落 threadId 前缀，stats null
     expect(rows[1]?.title.length).toBeLessThanOrEqual(13);
     expect(rows[1]?.stats).toBeNull();

@@ -5,7 +5,7 @@ import { autoTitleCandidateOf } from '../auto-title';
 describe('autoTitleCandidateOf：自动命名标题语料判定', () => {
   test('普通消息：空白折叠、截断 48 字符', () => {
     expect(autoTitleCandidateOf('修复  登录\n超时问题')).toBe('修复 登录 超时问题');
-    expect(autoTitleCandidateOf('a'.repeat(60)).length).toBe(48);
+    expect(autoTitleCandidateOf('a'.repeat(60))?.length).toBe(48);
   });
 
   test('空文本与纯空白：null（不命名）', () => {

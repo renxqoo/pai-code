@@ -3,24 +3,26 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import type { RuntimeSnapshotView } from '@paiapp/contracts';
+
 import { writeDiagnosticsBundle } from '../export-diagnostics';
 
 describe('writeDiagnosticsBundle（诊断包导出）', () => {
-  test('目录四件 + 日志副本 + 摘要可读', () => {
+  test('目录四件 + 日志副本 + 摘要可读（hub 版本行）', () => {
     const work = mkdtempSync(join(tmpdir(), 'pai-export-'));
     try {
       const logFile = join(work, 'main.log');
       writeFileSync(logFile, 'line1\nline2\n');
-      const snapshot = {
+      const snapshot: RuntimeSnapshotView = {
         hostPhase: 'ready',
-        hostInfo: null,
+        hostInfo: { version: '1.2.3', bunVersion: '1.4.2', pid: 7, uptimeMs: 9, rssBytes: 1, threads: { live: 1, parked: 0, dead: 0 }, limits: { maxThreads: 4, idleRetireMs: 1, workerStaleMs: 1, workerExitTimeoutMs: 1, rssRetireBytes: 1, bashTimeoutMs: 1 } },
         heartbeatAgeMs: 12,
         restarts: { count: 0, lastCause: null, lastAt: null },
         workers: [],
         latest: { at: 1, appRssBytes: 10, appCpuPercent: 1, hubRssBytes: null, hubCpuPercent: null, workersRssBytes: null, systemTotalBytes: null, systemAvailableBytes: null },
         history: [],
         events: [],
-        idleRecycleMinutes: 5 as const,
+        idleRecycleMinutes: 5,
         appVersion: '0.0.0-test',
       };
       const directory = writeDiagnosticsBundle(join(work, 'diagnostics'), { snapshot, events: [], stderrTail: 'err tail', logFile }, 1_700_000_000_000);
@@ -32,6 +34,7 @@ describe('writeDiagnosticsBundle（诊断包导出）', () => {
       const summary = readFileSync(join(directory, 'summary.md'), 'utf8');
       expect(summary).toContain('app version: 0.0.0-test');
       expect(summary).toContain('host phase: ready');
+      expect(summary).toContain('hub 1.2.3 / bun 1.4.2');
     } finally {
       rmSync(work, { recursive: true, force: true });
     }

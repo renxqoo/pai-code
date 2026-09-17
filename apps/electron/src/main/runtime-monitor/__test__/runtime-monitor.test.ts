@@ -18,24 +18,19 @@ import { createRuntimeMonitor, type RuntimeMonitorDeps } from '../create-runtime
  */
 
 const HOST_INFO_DATA = {
-  version: '0.13.0',
-  piVersion: '0.85.1',
+  version: '0.1.0',
   bunVersion: '1.4.2',
   pid: 4321,
   uptimeMs: 120_000,
   rssBytes: 200 * 1024 * 1024,
   threads: { live: 1, parked: 2, dead: 0 },
-  subagents: { running: 1 },
-  limits: { maxThreads: 32, idleRetireMs: 300_000, workerStaleMs: 30_000, workerExitTimeoutMs: 10_000, maxSubagents: 8, bashTimeoutMs: 600_000 },
-  backend: { id: 'pi-coding-agent', version: '0.85.1', capabilities: ['session.fork'] },
+  limits: { maxThreads: 32, idleRetireMs: 300_000, workerStaleMs: 30_000, workerExitTimeoutMs: 10_000, rssRetireBytes: 0, bashTimeoutMs: 600_000 },
 };
 
-const THREAD_LIST_DATA = {
-  threads: [
-    { threadId: 't1', cwd: '/w/a', sessionPath: '/w/a/s.jsonl', isStreaming: true, state: 'live', idleMs: 0, subagents: 2, rssBytes: 111, keepalive: false },
-    { threadId: 't2', cwd: '/w/b', sessionPath: '/w/b/s.jsonl', isStreaming: false, state: 'parked', idleMs: 0, subagents: 0, rssBytes: null, keepalive: true },
-  ],
-};
+const THREAD_LIST_DATA = [
+  { threadId: 't1', cwd: '/w/a', sessionPath: '/w/a/sessions/t1/transcript.jsonl', isStreaming: true, state: 'live', idleMs: 0, rssBytes: 111, keepalive: false },
+  { threadId: 't2', cwd: '/w/b', sessionPath: '/w/b/sessions/t2/transcript.jsonl', isStreaming: false, state: 'parked', idleMs: 0, rssBytes: null, keepalive: true },
+];
 
 function makePort(overrides: Partial<Record<PaiCommand['type'], HostCommandOutcome>> = {}): HostProcessPort {
   return {

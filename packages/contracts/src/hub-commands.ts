@@ -1,0 +1,488 @@
+import type { ImagePayload } from './hub-protocol';
+
+/**
+ * host-hub 命令入参形状（55 命令；从 hub-protocol 拆出保持行数预算）。
+ * 规格真相源 = host-hub 仓库 src/protocol/commands.ts 与各 handler 实现。
+ */
+
+// ============================================================================
+// Commands (stdin -> host-hub)
+// ============================================================================
+
+export interface ThreadStartCmd {
+  type: 'thread/start';
+  /** Working directory（hub 经 normalizeCwd 归一）；缺省 = hub 进程 cwd。 */
+  cwd?: string;
+  /** 裸模型 id（三级消歧）；缺省 = 目录首条。 */
+  modelId?: string;
+  /** 信任项目级扩展（.my-agent/agents、skills、settings）；缺省 false。 */
+  trusted?: boolean;
+  /** 会话权限模式初值（词表外静默忽略）。 */
+  permissionMode?: 'plan' | 'default' | 'acceptEdits' | 'fullAuto';
+  /** 思考档初值（词表外静默降级 unset）。 */
+  thinkingLevel?: 'off' | 'low' | 'medium' | 'high';
+}
+
+export interface ThreadResumeCmd {
+  type: 'thread/resume';
+  /** 会话文件（`<sessionsRoot>/<id>/transcript.jsonl` 词法围栏）。 */
+  sessionPath: string;
+  cwd?: string;
+  trusted?: boolean;
+  permissionMode?: 'plan' | 'default' | 'acceptEdits' | 'fullAuto';
+  thinkingLevel?: 'off' | 'low' | 'medium' | 'high';
+}
+
+/** 会话文件纳管为 parked 表项（host 本地、零 worker、幂等）。 */
+export interface ThreadRegisterCmd {
+  type: 'thread/register';
+  sessionPath: string;
+  trusted?: boolean;
+}
+
+export interface ThreadStopCmd {
+  type: 'thread/stop';
+  threadId: string;
+}
+
+/** 手动闲置收编（表项转 parked，会话文件保留）。 */
+export interface ThreadRetireCmd {
+  type: 'thread/retire';
+  threadId: string;
+}
+
+/** 表项「免闲置收编」标志（host 本地零 worker；只豁免闲置 sweep；不持久化，fork 不继承）。 */
+export interface ThreadSetKeepaliveCmd {
+  type: 'thread/set_keepalive';
+  threadId: string;
+  keepalive: boolean;
+}
+
+export interface ThreadListCmd {
+  type: 'thread/list';
+}
+
+export interface ThreadListSavedCmd {
+  type: 'thread/list_saved';
+  cwd?: string;
+}
+
+export interface PromptCmd {
+  type: 'prompt';
+  threadId: string;
+  message: string;
+  /** 受理窗口（hub 判定 pendingSends>0 ∨ streaming）内必填。 */
+  streamingBehavior?: 'steer' | 'followUp';
+  images?: ImagePayload[];
+}
+
+export interface SteerCmd {
+  type: 'steer';
+  threadId: string;
+  message: string;
+  images?: ImagePayload[];
+}
+
+export interface FollowUpCmd {
+  type: 'follow_up';
+  threadId: string;
+  message: string;
+  images?: ImagePayload[];
+}
+
+export interface AbortCmd {
+  type: 'abort';
+  threadId: string;
+}
+
+export interface ClearQueueCmd {
+  type: 'clear_queue';
+  threadId: string;
+}
+
+export interface CompactCmd {
+  type: 'compact';
+  threadId: string;
+  customInstructions?: string;
+}
+
+export interface GetStateCmd {
+  type: 'get_state';
+  threadId: string;
+}
+
+export interface GetMessagesCmd {
+  type: 'get_messages';
+  threadId: string;
+}
+
+/** 游标 = WAL seq（整数）；未知 seq 显式失败。 */
+export interface GetEntriesCmd {
+  type: 'get_entries';
+  threadId: string;
+  since?: number;
+  before?: number;
+  limit?: number;
+}
+
+export interface GetInflightCmd {
+  type: 'get_inflight';
+  threadId: string;
+}
+
+export interface GetSubagentsCmd {
+  type: 'get_subagents';
+  threadId: string;
+}
+
+export interface GetPendingDialogsCmd {
+  type: 'get_pending_dialogs';
+  threadId: string;
+}
+
+export interface GetTreeCmd {
+  type: 'get_tree';
+  threadId: string;
+}
+
+export interface SetSessionNameCmd {
+  type: 'set_session_name';
+  threadId: string;
+  name: string;
+}
+
+export interface GetSessionStatsCmd {
+  type: 'get_session_stats';
+  threadId: string;
+}
+
+export interface GetCommandsCmd {
+  type: 'get_commands';
+  threadId: string;
+}
+
+export interface GetForkMessagesCmd {
+  type: 'get_fork_messages';
+  threadId: string;
+}
+
+/** 会话分叉（seq 域：WAL 行号）；流式中拒绝（thread is streaming，先 abort）。 */
+export interface ForkCmd {
+  type: 'fork';
+  threadId: string;
+  seq: number;
+  position?: 'before' | 'at';
+}
+
+export interface CloneCmd {
+  type: 'clone';
+  threadId: string;
+}
+
+export interface SetModelCmd {
+  type: 'set_model';
+  threadId: string;
+  provider: string;
+  modelId: string;
+}
+
+export interface GetModelsCmd {
+  type: 'get_models';
+}
+
+/** 模型参数覆写（写 models.json modelOverrides + 快照热刷新）。 */
+export interface SetModelOverrideCmd {
+  type: 'set_model_override';
+  provider: string;
+  modelId: string;
+  contextWindow?: number | null;
+  maxTokens?: number | null;
+  remove?: boolean;
+}
+
+export interface GetHostInfoCmd {
+  type: 'get_host_info';
+}
+
+export interface SetIdleRetireMsCmd {
+  type: 'set_idle_retire_ms';
+  value: number;
+}
+
+export interface SetRssRetireBytesCmd {
+  type: 'set_rss_retire_bytes';
+  value: number;
+}
+
+export interface SetThinkingLevelCmd {
+  type: 'set_thinking_level';
+  threadId: string;
+  level: 'off' | 'low' | 'medium' | 'high';
+}
+
+/** 读会话思考档（单数；level=unset 表示各级均未设置，按 source 层级回退）。 */
+export interface GetThinkingLevelCmd {
+  type: 'get_thinking_level';
+  threadId: string;
+}
+
+/** 会话权限模式（写）。 */
+export interface PermissionSetModeCmd {
+  type: 'permission/set_mode';
+  threadId: string;
+  mode: 'plan' | 'default' | 'acceptEdits' | 'fullAuto';
+}
+
+/** 会话权限模式（读；source = session|project|user|default）。 */
+export interface PermissionGetModeCmd {
+  type: 'permission/get_mode';
+  threadId: string;
+}
+
+export interface AuthListCmd {
+  type: 'auth/list';
+}
+
+export interface AuthSetApiKeyCmd {
+  type: 'auth/set_api_key';
+  provider: string;
+  apiKey: string;
+}
+
+export interface AuthRemoveKeyCmd {
+  type: 'auth/remove_key';
+  provider: string;
+}
+
+export interface BashCmd {
+  type: 'bash';
+  threadId: string;
+  command: string;
+  excludeFromContext?: boolean;
+  timeoutMs?: number;
+  /** 执行 id = 命令关联 id（app 的 request 层自动分配，不可显式指定）。 */
+  id?: string;
+}
+
+export interface AbortBashCmd {
+  type: 'abort_bash';
+  threadId: string;
+  /** 缺省 = 中止全部在跑（app 侧唯一用法）。 */
+  id?: string;
+}
+
+export interface UiResponseCmd {
+  type: 'ui_response';
+  requestId: string;
+  /** confirm 应答形态：{ confirmed: boolean }。 */
+  payload: Record<string, unknown>;
+}
+
+/** 宿主设置读写（键白名单：permission.defaultMode / thinking.default / skills.disabled；带 cwd = 项目级，须已信任）。 */
+export interface SettingsGetCmd {
+  type: 'settings/get';
+  cwd?: string;
+}
+
+export interface SettingsSetCmd {
+  type: 'settings/set';
+  key: string;
+  value: unknown;
+  cwd?: string;
+}
+
+/** 信任工作区登记/枚举（无 cwd = 枚举 {trusted: string[]}）。 */
+export interface WorkspaceTrustCmd {
+  type: 'workspace/trust';
+  cwd?: string;
+  trusted?: boolean;
+}
+
+export interface ModelsAddCmd {
+  type: 'models/add';
+  id: string;
+  provider: string;
+  api: 'anthropic-messages' | 'openai-completions';
+  baseUrl: string;
+  apiKeyEnv?: string;
+  contextWindow?: number;
+  maxTokens?: number;
+  reasoning?: boolean;
+  input?: Array<'text' | 'image'>;
+  cost?: { input: number; output: number; cacheRead?: number; cacheWrite?: number };
+}
+
+export interface ModelsRemoveCmd {
+  type: 'models/remove';
+  id: string;
+}
+
+export interface AgentsListCmd {
+  type: 'agents/list';
+  threadId?: string;
+}
+
+/** agent 类型定义 CRUD（user 级：hub 写 ~/.my-agent/agents/<name>.md）。 */
+export interface AgentsCreateCmd {
+  type: 'agents/create';
+  /** ^[a-z0-9][a-z0-9-]*$（保留名 fork/main 拒绝）。 */
+  name: string;
+  /** 非空单行，≤500 字符。 */
+  description: string;
+  /** 非空正文。 */
+  systemPrompt: string;
+  model?: string;
+  tools?: string[];
+}
+
+export interface AgentsRemoveCmd {
+  type: 'agents/remove';
+  name: string;
+}
+
+export interface SkillsListCmd {
+  type: 'skills/list';
+  cwd?: string;
+}
+
+export interface SkillsSetEnabledCmd {
+  type: 'skills/set_enabled';
+  name: string;
+  enabled: boolean;
+  cwd?: string;
+}
+
+export interface SkillsRemoveCmd {
+  type: 'skills/remove';
+  name: string;
+}
+
+/** 向运行中的子 agent 注入 steer（轮边界投递；非驻留/非 busy 拒绝；寻址键 agentId）。 */
+export interface SubagentSteerCmd {
+  type: 'subagent/steer';
+  threadId: string;
+  agentId: string;
+  message: string;
+}
+
+export type HubCommand =
+  | (ThreadStartCmd & { id?: string })
+  | (ThreadResumeCmd & { id?: string })
+  | (ThreadRegisterCmd & { id?: string })
+  | (ThreadStopCmd & { id?: string })
+  | (ThreadRetireCmd & { id?: string })
+  | (ThreadSetKeepaliveCmd & { id?: string })
+  | (ThreadListCmd & { id?: string })
+  | (ThreadListSavedCmd & { id?: string })
+  | (PromptCmd & { id?: string })
+  | (SteerCmd & { id?: string })
+  | (FollowUpCmd & { id?: string })
+  | (AbortCmd & { id?: string })
+  | (ClearQueueCmd & { id?: string })
+  | (CompactCmd & { id?: string })
+  | (GetStateCmd & { id?: string })
+  | (GetMessagesCmd & { id?: string })
+  | (GetEntriesCmd & { id?: string })
+  | (GetInflightCmd & { id?: string })
+  | (GetSubagentsCmd & { id?: string })
+  | (GetPendingDialogsCmd & { id?: string })
+  | (GetTreeCmd & { id?: string })
+  | (SetSessionNameCmd & { id?: string })
+  | (GetSessionStatsCmd & { id?: string })
+  | (GetCommandsCmd & { id?: string })
+  | (GetForkMessagesCmd & { id?: string })
+  | (ForkCmd & { id?: string })
+  | (CloneCmd & { id?: string })
+  | (SetModelCmd & { id?: string })
+  | (GetModelsCmd & { id?: string })
+  | (SetModelOverrideCmd & { id?: string })
+  | (GetHostInfoCmd & { id?: string })
+  | (SetIdleRetireMsCmd & { id?: string })
+  | (SetRssRetireBytesCmd & { id?: string })
+  | (SetThinkingLevelCmd & { id?: string })
+  | (GetThinkingLevelCmd & { id?: string })
+  | (PermissionSetModeCmd & { id?: string })
+  | (PermissionGetModeCmd & { id?: string })
+  | (AuthListCmd & { id?: string })
+  | (AuthSetApiKeyCmd & { id?: string })
+  | (AuthRemoveKeyCmd & { id?: string })
+  | (BashCmd & { id?: string })
+  | (AbortBashCmd & { id?: string })
+  | (UiResponseCmd & { id?: string })
+  | (SettingsGetCmd & { id?: string })
+  | (SettingsSetCmd & { id?: string })
+  | (WorkspaceTrustCmd & { id?: string })
+  | (ModelsAddCmd & { id?: string })
+  | (ModelsRemoveCmd & { id?: string })
+  | (AgentsListCmd & { id?: string })
+  | (AgentsCreateCmd & { id?: string })
+  | (AgentsRemoveCmd & { id?: string })
+  | (SkillsListCmd & { id?: string })
+  | (SkillsSetEnabledCmd & { id?: string })
+  | (SkillsRemoveCmd & { id?: string })
+  | (SubagentSteerCmd & { id?: string });
+
+/** 命令词表（与 host-hub COMMAND_NAMES 逐一对应；测试做封闭断言）。 */
+export const HUB_COMMAND_TYPES = [
+  'thread/start',
+  'thread/resume',
+  'thread/register',
+  'thread/stop',
+  'thread/retire',
+  'thread/set_keepalive',
+  'thread/list',
+  'thread/list_saved',
+  'prompt',
+  'steer',
+  'follow_up',
+  'abort',
+  'clear_queue',
+  'compact',
+  'get_state',
+  'get_messages',
+  'get_entries',
+  'get_inflight',
+  'get_subagents',
+  'get_pending_dialogs',
+  'get_tree',
+  'set_session_name',
+  'get_session_stats',
+  'get_commands',
+  'get_fork_messages',
+  'fork',
+  'clone',
+  'set_model',
+  'get_models',
+  'set_model_override',
+  'get_host_info',
+  'set_idle_retire_ms',
+  'set_rss_retire_bytes',
+  'set_thinking_level',
+  'get_thinking_level',
+  'permission/set_mode',
+  'permission/get_mode',
+  'auth/list',
+  'auth/set_api_key',
+  'auth/remove_key',
+  'bash',
+  'abort_bash',
+  'ui_response',
+  'settings/get',
+  'settings/set',
+  'workspace/trust',
+  'models/add',
+  'models/remove',
+  'agents/list',
+  'agents/create',
+  'agents/remove',
+  'skills/list',
+  'skills/set_enabled',
+  'skills/remove',
+  'subagent/steer',
+] as const;
+
+
+// 编译期封闭断言：命令词表与类型联合双向绑定（漏登记即编译失败）。
+type CoversUnion<T, U extends T> = [T] extends [U] ? unknown : never;
+const _hubCommandsCover = null as unknown as CoversUnion<HubCommand['type'], (typeof HUB_COMMAND_TYPES)[number]>;
+void _hubCommandsCover;

@@ -35,14 +35,14 @@ function makeClient(): BridgeClient & { invokes: string[]; emitToController: (ev
       if (method === 'app/bootstrap') {
         return Promise.resolve({
           ok: true,
-          data: { sessions: [], saved: [], models: [], providers: [] },
+          data: { sessions: [], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [], trustedDefault: false, hiddenProjects: [], idleRecycleMinutes: 5, archivedSessions: [] }, hostPhase: 'ready' },
         } as never);
       }
       if (method === 'session/entries') {
         return { ok: true, data: { items: [], cursor: null } } as never;
       }
       if (method === 'session/stats') {
-        return { ok: true, data: { contextUsage: null, tokensTotal: 0 } } as never;
+        return { ok: true, data: { userMessages: 0, assistantMessages: 0, toolCalls: 0, tokens: { input: 0, output: 0, total: 0 }, cost: 0 } } as never;
       }
       return { ok: true, data: null } as never;
     },
@@ -62,11 +62,11 @@ test('B-P1：settle→rebuild 窗口内新轮开始，重建让位不执行', as
   const controller = createLiveController(client, store);
   await controller.start();
   const threadId = 't1';
-  store.getState().bootstrap({ sessions: [], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } });
+  store.getState().bootstrap({ sessions: [], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [], trustedDefault: false, hiddenProjects: [], idleRecycleMinutes: 5, archivedSessions: [] }, hostPhase: 'ready' });
 
   // 第一轮：开轮 → settle（安排延迟 rebuild）；事件走 controller 订阅入口
   client.emitToController({ type: 'turnStarted', threadId, at: 1 });
-  client.emitToController({ type: 'turnSettled', threadId, usage: null });
+  client.emitToController({ type: 'turnSettled', threadId, ok: true, usage: null });
   // settle 安排的 timer 挂起中，新一轮开始（followUp 自动续轮）
   client.emitToController({ type: 'turnStarted', threadId, at: 3 });
 
@@ -91,7 +91,7 @@ test('B-P1 对照：无新轮时 rebuild 正常执行', async () => {
   await controller.start();
   const threadId = 't1';
   client.emitToController({ type: 'turnStarted', threadId, at: 1 });
-  client.emitToController({ type: 'turnSettled', threadId, usage: null });
+  client.emitToController({ type: 'turnSettled', threadId, ok: true, usage: null });
   const entriesBefore = client.invokes.filter((m) => m === 'session/entries').length;
   timers.fire();
   await new Promise((resolve) => {
@@ -200,10 +200,10 @@ test('症状回归「轮结算后历史全没了（对话收起来）」：窗�
       if (method === 'session/entries') {
         // 轮末窗口拉取：since=轮首边界（a1 之后的本轮转写）；无 since = 全量
         const since = (params as { since?: string } | undefined)?.since;
-        return Promise.resolve({ ok: true, data: since === undefined ? { items: [...(hist as unknown[]), ...(window_ as unknown[])], cursor: 'a2' } : { items: window_, cursor: 'a2' } } as never);
+        return Promise.resolve({ ok: true, data: since === undefined ? { items: [...(hist as unknown[]), ...(window_ as unknown[])], cursor: 2 } : { items: window_, cursor: 2 } } as never);
       }
       if (method === 'session/stats') {
-        return Promise.resolve({ ok: true, data: { contextUsage: null, tokensTotal: 0 } } as never);
+        return Promise.resolve({ ok: true, data: { userMessages: 0, assistantMessages: 0, toolCalls: 0, tokens: { input: 0, output: 0, total: 0 }, cost: 0 } } as never);
       }
       return Promise.resolve({ ok: true, data: null } as never);
     },
@@ -221,17 +221,17 @@ test('症状回归「轮结算后历史全没了（对话收起来）」：窗�
     sessions: {
       [threadId]: { threadId, cwd: '/w', sessionPath: '/w/s/t1.jsonl', title: 't', state: 'live', streaming: false, model: null, thinkingLevel: null, lastActivityAt: 1 },
     },
-    threads: { [threadId]: undefined },
+    threads: {},
     activeThreadId: threadId,
   });
   // 既有历史（冷启动水化形态）
-  store.getState().hydrate(threadId, { kind: 'hydrate/initial', items: hist, cursor: 'a1' });
+  store.getState().hydrate(threadId, { kind: 'hydrate/initial', items: hist, cursor: 1 });
   // 本轮：开轮（轮首边界来自读口 = a1）→ 用户回显（entry id=u2）→ 结算
   emit({ type: 'turnStarted', threadId, at: 5 });
   // 读口是异步的（invoke → 微任务）；stubTimers 下不得用 setTimeout 冲刷
   for (let tick = 0; tick < 10; tick += 1) await Promise.resolve();
   emit({ type: 'userMessage', threadId, message: { id: 'u2', text: '新问', origin: 'user' } });
-  emit({ type: 'turnSettled', threadId, usage: null });
+  emit({ type: 'turnSettled', threadId, ok: true, usage: null });
   timers.fire();
   await new Promise((resolve) => {
     setTimeout(resolve, 10);
@@ -279,7 +279,7 @@ test('症状回归「流式中 ! 直执行：正在生成的回复瞬间消失�
       [threadId]: { threadId, cwd: '/w', sessionPath: '/w/s/t1.jsonl', title: 't', state: 'live', streaming: false, model: null, thinkingLevel: null, lastActivityAt: 1 },
     },
     activeThreadId: threadId,
-    threads: { [threadId]: undefined },
+    threads: {},
   });
   // 在途轮：已流出一段未落盘增量
   emit({ type: 'turnStarted', threadId, at: 1 });
@@ -304,8 +304,8 @@ test('症状回归「followUp 续轮开头一段流式内容消失」：settle �
   const store = createLiveStore();
   const threadId = 't1';
   let listener: ((event: unknown) => void) | undefined;
-  let releaseEntries: ((outcome: { ok: true; data: { items: unknown[]; cursor: string | null } }) => void) | undefined;
-  const gate = new Promise<{ ok: true; data: { items: unknown[]; cursor: string | null } }>((resolve) => {
+  let releaseEntries: ((outcome: { ok: true; data: { items: unknown[]; cursor: number | null } }) => void) | undefined;
+  const gate = new Promise<{ ok: true; data: { items: unknown[]; cursor: number | null } }>((resolve) => {
     releaseEntries = resolve;
   });
   const client: BridgeClient = {
@@ -315,7 +315,7 @@ test('症状回归「followUp 续轮开头一段流式内容消失」：settle �
         return Promise.resolve({ ok: true, data: { sessions: [], saved: [], models: [], providers: [] } } as never);
       }
       if (method === 'session/entries') return gate as never;
-      if (method === 'session/stats') return Promise.resolve({ ok: true, data: { contextUsage: null, tokensTotal: 0 } } as never);
+      if (method === 'session/stats') return Promise.resolve({ ok: true, data: { userMessages: 0, assistantMessages: 0, toolCalls: 0, tokens: { input: 0, output: 0, total: 0 }, cost: 0 } } as never);
       return Promise.resolve({ ok: true, data: null } as never);
     },
     subscribe: (onEvent: (event: unknown) => void) => {
@@ -333,18 +333,18 @@ test('症状回归「followUp 续轮开头一段流式内容消失」：settle �
       [threadId]: { threadId, cwd: '/w', sessionPath: '/w/s/t1.jsonl', title: 't', state: 'live', streaming: false, model: null, thinkingLevel: null, lastActivityAt: 1 },
     },
     activeThreadId: threadId,
-    threads: { [threadId]: undefined },
+    threads: {},
   });
   emit({ type: 'turnStarted', threadId, at: 1 });
   emit({ type: 'messageStarted', threadId, messageId: 'm1', at: 2 });
-  emit({ type: 'turnSettled', threadId, usage: null });
+  emit({ type: 'turnSettled', threadId, ok: true, usage: null });
   timers.fire(); // settle 的 120ms 定时器触发 → entries invoke 挂起（gate）
   // invoke 在途时 followUp 自动续轮开始并流出一段内容
   emit({ type: 'turnStarted', threadId, at: 5 });
   emit({ type: 'messageStarted', threadId, messageId: 'm2', at: 6 });
   emit({ type: 'textDelta', threadId, messageId: 'm2', delta: '续轮在途' });
   // 旧轮的窗口应答迟到：staleGuard 必须弃用（不得拆掉新轮）
-  releaseEntries?.({ ok: true, data: { items: [{ kind: 'user', id: 'u1', text: '问', origin: 'user', images: [], at: 1 }], cursor: 'u1' } });
+  releaseEntries?.({ ok: true, data: { items: [{ kind: 'user', id: 'u1', text: '问', origin: 'user', images: [], at: 1 }], cursor: 1 } });
   await new Promise((resolve) => {
     setTimeout(resolve, 10);
   });
@@ -367,7 +367,7 @@ test('症状回归「重载后切回流式中的会话，正在生成的内容�
         return Promise.resolve({ ok: true, data: { sessions: [], saved: [], models: [], providers: [] } } as never);
       }
       // 全量拉补只含已落盘前缀（在途消息未 message_end 不在转写）
-      if (method === 'session/entries') return Promise.resolve({ ok: true, data: { items: persisted, cursor: 'u1' } } as never);
+      if (method === 'session/entries') return Promise.resolve({ ok: true, data: { items: persisted, cursor: 1 } } as never);
       return Promise.resolve({ ok: true, data: null } as never);
     },
     subscribe: (onEvent: (event: unknown) => void) => {
@@ -386,7 +386,7 @@ test('症状回归「重载后切回流式中的会话，正在生成的内容�
       [threadId]: { threadId, cwd: '/w', sessionPath: '/w/s/t1.jsonl', title: 't', state: 'live', streaming: false, model: null, thinkingLevel: null, lastActivityAt: 1 },
     },
     activeThreadId: threadId,
-    threads: { [threadId]: undefined },
+    threads: {},
   });
   emit({ type: 'turnStarted', threadId, at: 1 });
   emit({ type: 'messageStarted', threadId, messageId: 'm1', at: 2 });
@@ -425,7 +425,7 @@ test('症状回归「重载落在轮次进行中：同一轮折叠分裂成两�
       if (method === 'session/entries' && (params as { threadId?: string } | undefined)?.threadId === 't2') {
         return Promise.reject(new Error('bridge_down')) as never;
       }
-      if (method === 'session/entries') return Promise.resolve({ ok: true, data: { items: persisted, cursor: 'a1' } } as never);
+      if (method === 'session/entries') return Promise.resolve({ ok: true, data: { items: persisted, cursor: 1 } } as never);
       return Promise.resolve({ ok: true, data: null } as never);
     },
     subscribe: (onEvent: (event: unknown) => void) => {
@@ -443,7 +443,7 @@ test('症状回归「重载落在轮次进行中：同一轮折叠分裂成两�
       [threadId]: { threadId, cwd: '/w', sessionPath: '/w/s/t1.jsonl', title: 't', state: 'live', streaming: false, model: null, thinkingLevel: null, lastActivityAt: 1 },
     },
     activeThreadId: threadId,
-    threads: { [threadId]: undefined },
+    threads: {},
   });
 
   // 重载回落序：冷启动拉补先落（在途轮的持久前缀成为独立折叠轮）

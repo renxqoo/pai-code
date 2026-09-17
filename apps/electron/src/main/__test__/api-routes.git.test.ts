@@ -5,10 +5,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { createApiRoutes } from '../api-routes';
-import { createAgentDirFiles } from '../agent-dir-files';
 import { createAgentDefinitionsStore } from '../agent-definitions-store';
 import { createFileSettings, type ProviderKeyStore } from '../file-settings';
 import { createPaiRuntime } from '../pai-runtime';
+import { createRuntimeMonitor } from '../runtime-monitor/create-runtime-monitor';
 import type { GitBranches } from '../git-branches';
 import type { GitGraph } from '../git-graph';
 
@@ -52,10 +52,12 @@ function makeRoutes(work: string, git?: GitBranches, graph?: GitGraph) {
     settings: createFileSettings(join(work, 'settings.json'), keyStore),
     keyStore,
     audit: (message) => audits.push(message),
-    agentDirFiles: createAgentDirFiles(agentDir),
-    agentDefinitions: createAgentDefinitionsStore(agentDir),
+    agentDefinitions: createAgentDefinitionsStore(join(work, 'home')),
+    agentDir,
     revealPath: () => undefined,
     pickDirectory: () => Promise.resolve(null),
+    exportDiagnosticsBundle: () => work,
+    monitor: createRuntimeMonitor({ host: () => null, appMetrics: () => ({ rssBytes: null, cpuPercent: null }), systemMemory: () => ({ totalBytes: null, availableBytes: null }), idleRecycleMinutes: () => 5, appVersion: () => 'test' }),
     // 本次运行白名单：系统选择器选过的目录（此处直接注入被测目录）
     extraCwds: () => [project],
     ...(git === undefined ? {} : { git }),
@@ -228,7 +230,10 @@ describe('git 路由 × 真 git（隔离世界）', () => {
     // 但 for-each-ref 会列出它们——若不过滤/不拦，点选会变成 git 选项
     git('update-ref', 'refs/heads/-f', 'HEAD');
     git('update-ref', 'refs/heads/--detach', 'HEAD');
-    const listed = await routes.invoke('git/branches', { cwd: repo });
+    const listed = (await routes.invoke('git/branches', { cwd: repo })) as {
+      ok: boolean;
+      data: { branches: string[] };
+    };
     expect(listed.ok).toBe(true);
     if (listed.ok) {
       expect(listed.data.branches).not.toContain('-f');
@@ -259,7 +264,14 @@ describe('git 路由 × 真 git（隔离世界）', () => {
     git('commit', '-m', 'main work');
     git('merge', '--no-ff', '-m', 'merge dev', 'dev');
 
-    const graph = await routes.invoke('git/graph', { cwd: repo });
+    const graph = (await routes.invoke('git/graph', { cwd: repo })) as {
+      ok: boolean;
+      data: {
+        isRepo: boolean;
+        truncated: boolean;
+        commits: Array<{ isHead: boolean; refs: string[]; parents: string[]; subject: string; shortHash: string }>;
+      };
+    };
     expect(graph.ok).toBe(true);
     if (!graph.ok) return;
     expect(graph.data.isRepo).toBe(true);

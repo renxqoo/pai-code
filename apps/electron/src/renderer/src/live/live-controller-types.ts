@@ -3,27 +3,28 @@ import type {
   ApiOutcome,
   CommandView,
   ImagePayload,
-  PermissionRules,
+  PermMode,
   PreferencesView,
   ProviderModel,
   SkillView,
-  ThinkingFormat,
 } from '@paiapp/contracts';
 
 import type { RuntimeController } from './runtime-controller';
+import type { HubSettingsView, SessionPermissionModeView, ThinkingLevelStateView } from './store';
 
 /**
  * 控制器对外契约（从 live-controller.ts 拆出，一文件一事）：
  * 渲染层唯一的数据/动作入口面——组件只依赖它，不感知 IPC 与协议。
  */
 
-/** 新会话入参（渲染层动作面形状）：思考档与权限模式在 thread/start 成功后后置应用。 */
+/** 新会话入参（渲染层动作面形状）：权限模式与思考档经 session/start 直达（hub 原生支持）。 */
 export type CreateSessionInput = {
   cwd: string
   trusted?: boolean
+  /** 裸模型 id（hub 三级消歧；app 级 "provider/modelId" 记忆由调用方拆解）。 */
   model?: { provider: string; modelId: string }
   thinkingLevel?: string
-  permissionMode?: PermissionRules['mode']
+  permissionMode?: PermMode
 }
 
 /** 会话创建结果：成功带新 threadId（调用方据此把首条消息/草稿寻址到新会话）。 */
@@ -55,30 +56,32 @@ export interface LiveController {
   readonly refreshSaved: () => Promise<void>;
   /** 模型目录刷新（provider 保存触发 host 重启后向导/设置页手动补拉）。 */
   readonly refreshModels: () => Promise<void>;
-  /** 全局权限规则读取（agentDir/permission-rules.json 视图；成功后同步刷新活跃会话生效视图；失败返回 null）。 */
-  readonly refreshPermissionRules: () => Promise<PermissionRules | null>;
-  /** 全局权限规则写入（原子写，hub 热读即时生效；成功后同步刷新活跃会话生效视图）；成功返回 null，失败返回原因。 */
-  readonly writePermissionRules: (rules: PermissionRules) => Promise<string | null>;
-  /** 向运行中子代理注入 steer（非 running 一律失败，原因透传）。 */
-  readonly steerSubagent: (threadId: string, subagentId: string, message: string) => Promise<string | null>;
-  /** 会话级规则（sidecar）读取；source=thread 表示存在独立规则。 */
-  readonly readSessionRules: (threadId: string) => Promise<{ rules: PermissionRules; source: 'thread' | 'global' } | null>;
-  /** 会话级规则写入（null = 删除 sidecar 回退全局）；成功返回 null。 */
-  readonly writeSessionRules: (threadId: string, rules: PermissionRules | null) => Promise<string | null>;
+  /** hub 用户级缺省读取（app/hubSettings；新任务页权限控件与设置页共用）；失败返回 null。 */
+  readonly readHubSettings: () => Promise<HubSettingsView | null>;
+  /** hub 用户级缺省写入（app/setHubSettings，部分字段）；成功返回 null，失败返回原因。 */
+  readonly writeHubSettings: (patch: { permissionDefaultMode?: PermMode | null; thinkingDefault?: string | null }) => Promise<string | null>;
+  /** 活跃会话权限模式读取（permission/mode）；失败返回 null。 */
+  readonly readSessionPermissionMode: (threadId: string) => Promise<SessionPermissionModeView | null>;
+  /** 会话权限模式写入（permission/setMode，下一工具裁决生效）；成功返回 null。 */
+  readonly setSessionPermissionMode: (threadId: string, mode: PermMode) => Promise<string | null>;
+  /** 活跃会话思考档读取（session/thinkingLevels）；失败返回 null。 */
+  readonly readThinkingLevel: (threadId: string) => Promise<ThinkingLevelStateView | null>;
+  /** 向运行中子代理注入 steer（agentId 寻址；非 running 一律失败，原因透传）。 */
+  readonly steerSubagent: (threadId: string, agentId: string, message: string) => Promise<string | null>;
   readonly restartHost: () => void;
   /** 运行状态方法族（T29：快照/回收/档位/诊断包——runtime-controller.ts）。 */
   readonly runtime: RuntimeController;
-  /** 子 agent 定义管理面刷新（主进程文件面快照；失败静默保持旧值）。 */
+  /** 子 agent 定义管理面刷新（hub/文件面快照；失败静默保持旧值）。 */
   readonly refreshAgentDefinitions: () => Promise<void>;
-  /** 子 agent 定义新建/编辑/改名/移动（previous 非空时含旧文件清理）；成功返回 null。 */
-  readonly upsertAgentDefinition: (definition: AgentDefinition, previous: { file: string; scope: 'user' | 'project'; project: string | null } | null) => Promise<string | null>;
-  /** 子 agent 定义删除（删定义文件，file = 文件名主干）；成功返回 null。 */
-  readonly removeAgentDefinition: (key: { file: string; scope: 'user' | 'project'; project: string | null }) => Promise<string | null>;
+  /** 子 agent 定义新建/编辑/改名/移动（previous 非空时含改名与作用域移动）；成功返回 null。 */
+  readonly upsertAgentDefinition: (definition: AgentDefinition, previous: { name: string; scope: 'user' | 'project'; project: string | null } | null) => Promise<string | null>;
+  /** 子 agent 定义删除（身份键 = name+scope+project）；成功返回 null。 */
+  readonly removeAgentDefinition: (key: { name: string; scope: 'user' | 'project'; project: string | null }) => Promise<string | null>;
   /** 用户级技能目录刷新（含启用态）。 */
   readonly refreshSkills: () => Promise<void>;
   /** 预会话命令目录（新建任务页 `/` 补全数据源；失败空目录降级）。 */
   readonly fetchCommandPreview: () => Promise<CommandView[]>;
-  /** 技能启停：写 pi settings skills overrides；返回写后清单（失败 null + 原因）。 */
+  /** 技能启停：写 hub skills 名单；返回写后清单（失败 null + 原因）。 */
   readonly setSkillEnabled: (name: string, enabled: boolean) => Promise<{ ok: true; data: SkillView[] } | { ok: false; reason: string }>;
   /** 技能开关完整编排：写 + 串行重开全部 live 会话（链式排队，交错不叠加）；失败返回重开失败数。 */
   readonly applySkillToggle: (name: string, enabled: boolean) => Promise<{ ok: true; reopenFailures: number } | { ok: false; reason: string }>;
@@ -91,7 +94,7 @@ export interface LiveController {
   readonly listGitGraph: (cwd: string) => Promise<ApiOutcome<'git/graph'>>;
   /** 切换/创建并检出分支（成功返回 {ok:true}；失败原因透传，由调用方转文案）。 */
   readonly checkoutGitBranch: (cwd: string, branch: string, create: boolean) => Promise<ApiOutcome<'git/checkout'>>;
-  readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; thinkingFormat?: ThinkingFormat; apiKey?: string }) => Promise<boolean>;
+  readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; apiKey?: string }) => Promise<boolean>;
   readonly removeProvider: (name: string) => Promise<boolean>;
   /** 应用偏好部分写（返回写后视图；失败返回 null，原因走通知条）。 */
   readonly updatePreferences: (patch: { defaultModel?: string | null; onboarded?: boolean; projectModels?: Record<string, string>; pinnedSessions?: string[]; trustedDefault?: boolean; hiddenProjects?: string[]; archivedSessions?: string[]; hubDev?: { bunPath: string | null; hubEntry: string | null } }) => Promise<PreferencesView | null>;
@@ -102,8 +105,8 @@ export interface LiveController {
   readonly abortBash: (threadId: string) => Promise<void>;
   /** 在系统文件管理器中显示会话文件（主进程白名单校验）。 */
   readonly revealSession: (sessionPath: string) => Promise<void>;
-  /** 从历史条目分叉（position=before）→ 旧线程镜像终态 + 激活新会话；失败带原因（cancelled 拦截单列）。 */
-  readonly forkSession: (threadId: string, entryId: string) => Promise<{ ok: true; threadId: string } | { ok: false; reason: string }>;
+  /** 从历史条目分叉（seq = WAL 行号，position=before）→ 旧线程镜像终态 + 激活新会话；失败带原因。 */
+  readonly forkSession: (threadId: string, seq: number) => Promise<{ ok: true; threadId: string } | { ok: false; reason: string }>;
   readonly refreshStats: (threadId: string) => Promise<void>;
   /** 只读水化链（纳管→直读→model 补齐；force 供重试入口越过 hydrated 守卫）。 */
   readonly ensureHydrated: (threadId: string, options?: { force?: boolean }) => Promise<void>;

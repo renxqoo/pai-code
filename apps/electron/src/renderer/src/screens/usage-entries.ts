@@ -13,7 +13,7 @@ export function buildUsageEntries(
       title: session.title,
       projectName: session.projectName,
       model: session.version,
-      tokensTotal: stats?.tokensTotal ?? 0,
+      tokensTotal: stats?.tokens.total ?? 0,
       cost: stats?.cost ?? 0,
       messageCount: (stats?.userMessages ?? 0) + (stats?.assistantMessages ?? 0),
     };

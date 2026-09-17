@@ -10,8 +10,8 @@ import { PanelSummaryBar } from './panel-summary-bar';
 type AgentPanelProps = {
   agents: readonly SubagentModel[]
   now: number
-  /** 向运行中子代理注入 steer（H1；不传则行内输入不显示）。 */
-  onSteer?: (subagentId: string, message: string) => void
+  /** 向运行中子代理注入 steer（agentId 寻址；不传则行内输入不显示）。 */
+  onSteer?: (agentId: string, message: string) => void
 }
 
 /** 子代理 pane（面板容器提供标签行与外框）：派生列表 + 底部汇总。 */

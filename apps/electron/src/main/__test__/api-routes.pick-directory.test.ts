@@ -4,10 +4,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { createApiRoutes } from '../api-routes';
-import { createAgentDirFiles } from '../agent-dir-files';
 import { createAgentDefinitionsStore } from '../agent-definitions-store';
 import { createFileSettings, type ProviderKeyStore } from '../file-settings';
 import { createPaiRuntime } from '../pai-runtime';
+import { createRuntimeMonitor } from '../runtime-monitor/create-runtime-monitor';
 
 /**
  * dialog/pickDirectory 路由回归（T12）：注入的目录选择器结果透传、
@@ -47,10 +47,12 @@ function makeRoutes(pickDirectory: (defaultPath: string | null) => Promise<strin
     settings,
     keyStore,
     audit: () => undefined,
-    agentDirFiles: createAgentDirFiles(agentDir),
-    agentDefinitions: createAgentDefinitionsStore(agentDir),
+    agentDefinitions: createAgentDefinitionsStore(join(work, 'home')),
+    agentDir,
     revealPath: () => undefined,
     pickDirectory,
+    exportDiagnosticsBundle: () => work,
+    monitor: createRuntimeMonitor({ host: () => null, appMetrics: () => ({ rssBytes: null, cpuPercent: null }), systemMemory: () => ({ totalBytes: null, availableBytes: null }), idleRecycleMinutes: () => 5, appVersion: () => 'test' }),
   });
 }
 

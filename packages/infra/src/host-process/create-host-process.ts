@@ -6,7 +6,7 @@ import type { HostDiagnostics, HostPhase, HostProcessPort, HostRuntimeConfig, Ho
 import { hubSpawnEnv } from './spawn-env';
 
 /**
- * pai-cli host 进程管理：spawn、心跳监督（>hangAfterMs 无心跳判挂死）、
+ * hub host 进程管理：spawn、心跳监督（>hangAfterMs 无心跳判挂死）、
  * 挂死/崩溃重启（SIGKILL 进程组 → 重spawn → onRestart 恢复回调）、
  * 命令 request（id 关联 + 超时 + pending 上限）、优雅退出（stdin EOF → 等 exit → 兜底杀组）。
  *

@@ -1,13 +1,13 @@
-import type { HubCommand } from './hub-protocol';
+import type { HubCommand } from './hub-commands';
 
 /**
  * Pai 实际发出的命令子集（编码层形状校验以此为准）。
  * 全量命令词表见 hub-protocol 的 HUB_COMMAND_TYPES；
- * 此处增删 = 功能面变化，同步 T10 方案的 API 面表。
+ * 此处增删 = 功能面变化，同步 T38 方案的 API 面表。
  *
- * 读命令语义（hub 契约 v0.12）：get_entries/get_state 对 parked/dead thread 由
- * host 本地直读会话文件应答（不唤醒 worker，直读不可用自动回退唤醒路径）；
- * live thread 恒透传 worker。其余 thread 级命令对非 live thread 自动唤醒。
+ * 读命令语义：get_state/get_entries/get_inflight/get_subagents/get_pending_dialogs
+ * 对 parked/dead thread 由 host 本地直读应答（不唤醒 worker，直读不可用自动回退
+ * 唤醒路径）；live thread 恒透传 worker。其余线程域命令对非 live thread 自动唤醒。
  */
 export type PaiCommandType =
   | 'thread/start'
@@ -31,7 +31,16 @@ export type PaiCommandType =
   | 'get_models'
   | 'set_model'
   | 'set_thinking_level'
-  | 'get_thinking_levels'
+  | 'get_thinking_level'
+  | 'permission/set_mode'
+  | 'permission/get_mode'
+  | 'settings/get'
+  | 'settings/set'
+  | 'agents/list'
+  | 'agents/create'
+  | 'agents/remove'
+  | 'skills/list'
+  | 'skills/set_enabled'
   | 'get_session_stats'
   | 'set_session_name'
   | 'get_commands'
@@ -39,9 +48,7 @@ export type PaiCommandType =
   | 'subagent/steer'
   | 'bash'
   | 'abort_bash'
-  | 'fork'
-  | 'get_permission_rules'
-  | 'set_permission_rules';
+  | 'fork';
 
 export type PaiCommand = Extract<HubCommand, { type: PaiCommandType }>;
 
@@ -67,7 +74,16 @@ export const PAI_COMMAND_TYPES = [
   'get_models',
   'set_model',
   'set_thinking_level',
-  'get_thinking_levels',
+  'get_thinking_level',
+  'permission/set_mode',
+  'permission/get_mode',
+  'settings/get',
+  'settings/set',
+  'agents/list',
+  'agents/create',
+  'agents/remove',
+  'skills/list',
+  'skills/set_enabled',
   'get_session_stats',
   'set_session_name',
   'get_commands',
@@ -76,8 +92,6 @@ export const PAI_COMMAND_TYPES = [
   'bash',
   'abort_bash',
   'fork',
-  'get_permission_rules',
-  'set_permission_rules',
 ] as const satisfies readonly PaiCommandType[];
 
 // 编译期封闭断言：Pai 命令词表与类型联合双向绑定（漏登记即编译失败）。

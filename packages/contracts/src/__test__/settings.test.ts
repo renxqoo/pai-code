@@ -7,22 +7,17 @@ describe("API 格式词表", () => {
   test("导出词表与 schema 选项逐项一致且顺序稳定", () => {
     expect(API_FORMAT_IDS).toEqual([...ApiFormatSchema.options]);
     expect(API_FORMAT_IDS).toEqual([
-      "openai-completions",
-      "openai-responses",
       "anthropic-messages",
-      "google-generative-ai",
-      "mistral-conversations",
+      "openai-completions",
     ]);
   });
 
   test("isApiFormat：词表内 true，其余（含需特殊鉴权的格式）false", () => {
     for (const id of API_FORMAT_IDS) expect(isApiFormat(id)).toBe(true);
     for (const id of [
-      "pi-messages",
-      "azure-openai-responses",
-      "bedrock-converse-stream",
-      "google-vertex",
-      "openai-codex-responses",
+      "openai-responses",
+      "google-generative-ai",
+      "mistral-conversations",
       "",
       "OpenAI-Completions",
     ]) {
@@ -38,7 +33,6 @@ describe("API 格式词表", () => {
           baseUrl: "https://x.example.com",
           api: "pi-messages",
           models: [{ id: "m", reasoning: false, vision: false }],
-          thinkingFormat: "default",
         },
       ],
     });
@@ -57,7 +51,6 @@ describe("模型参数字段", () => {
           baseUrl: "https://x.example.com",
           api: "openai-completions",
           models: [{ id: "m", reasoning: false, vision: false }],
-          thinkingFormat: "default",
         },
       ],
     });
@@ -75,7 +68,6 @@ describe("模型参数字段", () => {
           models: [
             { id: "m", reasoning: false, vision: false, contextWindow: 200000, maxTokens: 8192 },
           ],
-          thinkingFormat: "default",
         },
       ],
     });
@@ -89,8 +81,7 @@ describe("模型参数字段", () => {
             baseUrl: "https://x.example.com",
             api: "openai-completions",
             models: [{ id: "m", reasoning: false, vision: false, contextWindow: bad }],
-            thinkingFormat: "default",
-          },
+            },
         ],
       });
       expect(rejected.providers).toHaveLength(0);

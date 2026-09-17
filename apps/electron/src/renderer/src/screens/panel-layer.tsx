@@ -27,7 +27,7 @@ function PanelLayer(): React.JSX.Element | null {
 
   const activePanelTab = panel.tabs.find((tab) => tab.id === panel.activeId) ?? null;
   /** 子代理计时随工作状态走表（与舞台运行计时各自门控，预算 ≤2 份） */
-  const agentsWorking = summarizeAgents(activeThread.agents).workingCount;
+  const agentsWorking = summarizeAgents(activeThread.agents).busyCount;
   const agentsNow = useElapsedNow(agentsWorking > 0);
   const threadDiff = React.useMemo(() => collectThreadDiff(activeThread), [activeThread]);
 

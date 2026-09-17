@@ -1,7 +1,6 @@
 import * as React from "react";
 
-import type { ProviderConfigView, ProviderModel, ThinkingFormat } from "@paiapp/contracts";
-import { ThinkingFormatSchema } from "@paiapp/contracts";
+import type { ProviderConfigView, ProviderModel } from "@paiapp/contracts";
 import { ActionButton } from "@paiapp/ui";
 
 import { copy } from "@/strings";
@@ -13,7 +12,7 @@ import type { ProviderTestResult } from "./provider-test";
 import { SelectField } from "./select-field";
 import { TextField } from "./text-field";
 
-/** OpenAI 兼容协议 id：新建渠道的缺省格式（绝大多数自建端点），也是思考形态参数的适用条件。 */
+/** OpenAI 兼容协议 id：新建渠道的缺省格式（绝大多数自建端点）。 */
 const OPENAI_COMPAT_API = "openai-completions";
 
 export type ProviderUpsertInput = {
@@ -21,7 +20,6 @@ export type ProviderUpsertInput = {
   baseUrl: string;
   api: string;
   models: ProviderModel[];
-  thinkingFormat: ThinkingFormat;
   /** 省略 = 保持已存 key；空串 = 清除（清除走 ProviderKeyField 的独立动作）。 */
   apiKey?: string;
 };
@@ -41,14 +39,12 @@ type ProviderEditorProps = {
 /**
  * 提交视图：必填校验 + 归一。模型条目来自模型弹窗（添加/编辑共用一个表单），
  * 这里只做「至少一个模型」的必填校验。
- * 思考形态只对 OpenAI 兼容协议有意义：其余格式归 'default'（序列化侧同样门控）。
  */
 export function buildProviderSubmit(fields: {
   name: string;
   baseUrl: string;
   api: string;
   models: readonly ProviderModel[];
-  thinkingFormat: ThinkingFormat;
   apiKey: string;
 }): { ok: true; input: ProviderUpsertInput } | { ok: false; reason: "incomplete" } {
   const name = fields.name.trim();
@@ -57,7 +53,6 @@ export function buildProviderSubmit(fields: {
   if (name.length === 0 || baseUrl.length === 0 || api.length === 0 || fields.models.length === 0) {
     return { ok: false, reason: "incomplete" };
   }
-  const thinkingFormat = api === OPENAI_COMPAT_API ? fields.thinkingFormat : "default";
   return {
     ok: true,
     input: {
@@ -65,13 +60,12 @@ export function buildProviderSubmit(fields: {
       baseUrl,
       api,
       models: [...fields.models],
-      thinkingFormat,
       ...(fields.apiKey.length > 0 ? { apiKey: fields.apiKey } : {}),
     },
   };
 }
 
-/** 渠道编辑器（新建/编辑共用，onboarding 复用）：名称/地址/API 格式/思考形态/密钥/模型清单。key 不回显。 */
+/** 渠道编辑器（新建/编辑共用，onboarding 复用）：名称/地址/API 格式/密钥/模型清单。key 不回显。 */
 function ProviderEditor({
   initial,
   onSubmit,
@@ -84,9 +78,6 @@ function ProviderEditor({
   const [api, setApi] = React.useState(initial?.api ?? OPENAI_COMPAT_API);
   const [models, setModels] = React.useState<ProviderModel[]>(
     initial === null ? [] : [...initial.models],
-  );
-  const [thinkingFormat, setThinkingFormat] = React.useState<ThinkingFormat>(
-    initial?.thinkingFormat ?? "default",
   );
   const [apiKey, setApiKey] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
@@ -103,7 +94,6 @@ function ProviderEditor({
       baseUrl: initial.baseUrl,
       api: initial.api,
       models: [...initial.models],
-      thinkingFormat: initial.thinkingFormat,
       apiKey: "",
     });
   };
@@ -111,7 +101,7 @@ function ProviderEditor({
   const submit = async (): Promise<void> => {
     setError(null);
     setSaved(false);
-    const payload = buildProviderSubmit({ name, baseUrl, api, models, thinkingFormat, apiKey });
+    const payload = buildProviderSubmit({ name, baseUrl, api, models, apiKey });
     if (!payload.ok) {
       setError(copy.settings.formIncomplete);
       return;
@@ -137,15 +127,8 @@ function ProviderEditor({
     setBaseUrl("");
     setApi(OPENAI_COMPAT_API);
     setModels([]);
-    setThinkingFormat("default");
     setApiKey("");
   };
-
-  // 文案按当前 locale 在渲染期解析（模块级常量会把语言冻结在导入时刻）
-  const thinkingFormatOptions = ThinkingFormatSchema.options.map((id) => ({
-    id,
-    label: copy.settings.thinkingFormatOptions[id],
-  }));
 
   return (
     <form
@@ -188,18 +171,6 @@ function ProviderEditor({
             popupMinWidth={320}
           />
         </div>
-        {api === OPENAI_COMPAT_API ? (
-          <div className="w-[280px] shrink-0">
-            <SelectField
-              label={copy.settings.thinkingFormatLabel}
-              hint={copy.settings.thinkingFormatHint}
-              value={thinkingFormat}
-              options={thinkingFormatOptions}
-              onChange={(id) => setThinkingFormat(id)}
-              popupMinWidth={280}
-            />
-          </div>
-        ) : null}
       </div>
       <ProviderKeyField value={apiKey} onChange={setApiKey} hasKey={hasKey} onClear={clearKey} />
       <ProviderModelList models={models} onModelsChange={setModels} onTest={onTest} />

@@ -75,8 +75,8 @@ describe('agent 定义 md 编解码', () => {
     expect(parseAgentDefinition(cjk)?.name).toBe('搜索');
   });
 
-  test('键位路径：user 固定 agentDir/agents；project 固定 <项目>/.pi/agents', () => {
-    expect(agentDefinitionPath('/ad', 'user', null, 'search')).toBe('/ad/agents/search.md');
-    expect(agentDefinitionPath('/ad', 'project', '/work/app', 'search')).toBe('/work/app/.pi/agents/search.md');
+  test('键位路径：user 固定 <home>/.my-agent/agents；project 固定 <项目>/.my-agent/agents', () => {
+    expect(agentDefinitionPath('/home/u', 'user', null, 'search')).toBe('/home/u/.my-agent/agents/search.md');
+    expect(agentDefinitionPath('/home/u', 'project', '/work/app', 'search')).toBe('/work/app/.my-agent/agents/search.md');
   });
 });

@@ -1,11 +1,10 @@
 import * as React from 'react';
 import { useStore } from 'zustand';
 
-import type { CommandView } from '@paiapp/contracts';
+import type { CommandView, PermMode } from '@paiapp/contracts';
 
 import type { ComposerAttachment } from '@/composer/prompt-card';
 import { imagePayloadOf } from '@/composer/read-image-file';
-import { effortLevelsForModel } from '@/composer/composer-selection';
 import { savedSessionEntries } from '@/settings/saved-views';
 import { projectDirsOf } from '@/lib/project-dirs';
 import { copy } from '@/strings';
@@ -38,7 +37,7 @@ export function useNewTaskScreen(enterCwd: string): NewTaskScreenProps {
   const saved = React.useMemo(() => savedSessionEntries(savedRaw), [savedRaw]);
   const models = useStore(liveStore, (s) => s.models);
   const preferences = useStore(liveStore, (s) => s.preferences);
-  const permissionRules = useStore(liveStore, (s) => s.permissionRules);
+  const hubSettings = useStore(liveStore, (s) => s.hubSettings);
   const hostPhase = useStore(liveStore, (s) => s.hostPhase);
   const activeCwd = useStore(liveStore, (s) => (s.activeThreadId === null ? '' : s.sessions[s.activeThreadId]?.cwd ?? ''));
 
@@ -68,11 +67,8 @@ export function useNewTaskScreen(enterCwd: string): NewTaskScreenProps {
   /** 宿主掉线（从未构建或 failed）：模型位文案不得伪装成「未配置模型」 */
   const hostDown = hostPhase === null || hostPhase === 'failed';
   const modelOptions = React.useMemo(() => models.map((model) => `${model.provider}/${model.modelId}`), [models]);
-  /** 模型 → 可用思考档展示名（新任务页无线程，按模型能力本地计算——effortLevelsForModel 单一真相） */
-  const effortOptionsFor = React.useCallback(
-    (modelKey: string): string[] => effortLevelsForModel(models, modelKey),
-    [models],
-  );
+  /** 权限模式缺省（hub settings 未设置时按 hub 内建 default 档展示）。 */
+  const defaultPermissionMode: PermMode = hubSettings?.permissionDefaultMode ?? 'default';
 
   /** 切分支包装：成功即失效线程页只读分支段（切完后返回会话页必须看到新分支） */
   const checkoutBranch = React.useCallback(
@@ -110,10 +106,9 @@ export function useNewTaskScreen(enterCwd: string): NewTaskScreenProps {
     trustedDefault: preferences.trustedDefault,
     defaultModelFor: workspaceActions.defaultModelFor,
     modelOptions,
-    effortOptionsFor,
     noModelsLabel: hostDown ? copy.composer.hostDownModels : copy.composer.noModels,
     onOpenSettings: openSettingsAction,
-    globalPermissionMode: permissionRules === null ? null : permissionRules.mode,
+    defaultPermissionMode,
     onSearchFiles: workspaceActions.searchFilesIn,
     onListBranches: workspaceActions.listGitBranches,
     onListGraph: workspaceActions.listGitGraph,
@@ -123,5 +118,5 @@ export function useNewTaskScreen(enterCwd: string): NewTaskScreenProps {
     onClose: closeNewTaskAction,
     onNotify: workspaceActions.showNotice,
     onDialogOpenChange: (open: boolean) => uiStore.getState().setNewTaskDialogOpen(open),
-  }), [knownDirs, commands, activeCwd, preferences.trustedDefault, modelOptions, effortOptionsFor, checkoutBranch, create, hostDown, permissionRules]);
+  }), [knownDirs, commands, activeCwd, preferences.trustedDefault, modelOptions, checkoutBranch, create, hostDown, defaultPermissionMode]);
 }

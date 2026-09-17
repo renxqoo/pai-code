@@ -14,12 +14,12 @@ describe('leadingCommandHighlight', () => {
     expect(leadingCommandHighlight('/skill:writer', [SKILL])).toEqual([{ start: 0, end: 13, source: 'skill' }])
   })
 
-  test('其他命令源同样命中（扩展/模板命令：子代理、压缩等新命令入目录即生效）', () => {
-    expect(leadingCommandHighlight('/compact', [{ name: 'compact', description: null, source: 'extension' }])).toEqual([
-      { start: 0, end: 8, source: 'extension' },
+  test('其他命令源同样命中（插件/内置命令：子代理、压缩等新命令入目录即生效）', () => {
+    expect(leadingCommandHighlight('/compact', [{ name: 'compact', description: null, source: 'plugin' }])).toEqual([
+      { start: 0, end: 8, source: 'plugin' },
     ])
-    expect(leadingCommandHighlight('/review 尽快', [{ name: 'review', description: null, source: 'prompt' }])).toEqual([
-      { start: 0, end: 7, source: 'prompt' },
+    expect(leadingCommandHighlight('/review 尽快', [{ name: 'review', description: null, source: 'builtin' }])).toEqual([
+      { start: 0, end: 7, source: 'builtin' },
     ])
     // hub 内置命令（builtin 源）同一词法命中：附加指示文本不进高亮区间
     expect(leadingCommandHighlight('/compact 保留重点', [{ name: 'compact', description: 'Manually compact the session context', source: 'builtin' }])).toEqual([

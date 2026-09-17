@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { defaultPermissionRules } from '@paiapp/contracts';
 import type { ProviderConfigView, SkillView } from '@paiapp/contracts';
 import { copy } from '@/strings';
 import { SettingsScreen } from '../settings-screen';
@@ -43,25 +42,26 @@ function makeProps(overrides: Partial<SettingsScreenProps> = {}): SettingsScreen
       onTest: () => Promise.resolve({ ok: true as const, latencyMs: 1 }),
     },
     permissions: {
-      rules: defaultPermissionRules(),
-      onSave: ok,
-      sessionRules: null,
-      onLoadSession: noop,
-      onSaveSession: () => Promise.resolve(true),
+      hubSettings: { permissionDefaultMode: 'default', thinkingDefault: null },
+      onSaveDefaults: ok,
     },
     agents: { definitions: [], knownProjects: [], modelOptions: [], toolIds: [], onRefresh: noop, onSave: () => Promise.resolve(null), onRemove: () => Promise.resolve(null) },
     skills: { list: [], onToggle: ok, onRefresh: noop },
     history: {
       saved: [],
       pinned: new Set<string>(),
+      archived: new Set<string>(),
       projects: [],
       onTogglePin: noop,
       onReveal: noop,
       onOpenSaved: noop,
       onRefresh: noop,
+      onRestore: noop,
+      onOpenArchived: noop,
     },
     runtime: {
       snapshot: null,
+      fetchFailed: false,
       rows: [],
       diagnosticLog: null,
       actions: {
@@ -83,8 +83,8 @@ function makeProps(overrides: Partial<SettingsScreenProps> = {}): SettingsScreen
 }
 
 const skills: readonly SkillView[] = [
-  { name: 'feature-dev', description: '功能开发工作流', enabled: true, origin: 'agents' },
-  { name: 'humanizer', description: null, enabled: false, origin: 'agent' },
+  { name: 'feature-dev', enabled: true, source: 'user' },
+  { name: 'humanizer', enabled: false, source: 'builtin' },
 ];
 
 describe('设置页渲染冒烟', () => {
@@ -119,7 +119,7 @@ describe('设置页渲染冒烟', () => {
     const cases: ReadonlyArray<{ section: SettingsScreenProps['section']; marks: readonly string[] }> = [
       { section: 'general', marks: [copy.settings.generalTitle, copy.settings.onboardingCardAction] },
       { section: 'providers', marks: [copy.settings.providersTitle, copy.settings.defaultModelTitle, copy.settings.addProvider] },
-      { section: 'permissions', marks: [copy.settings.permissionsTitle, copy.settings.permissionsSave] },
+      { section: 'permissions', marks: [copy.settings.permissionsTitle, copy.settings.permissionsDefaultMode] },
       { section: 'agents', marks: [copy.settings.agentsTitle, copy.settings.agentsEmpty] },
       { section: 'skills', marks: [copy.settings.skillsTitle, copy.settings.skillsEmpty] },
       { section: 'history', marks: [copy.settings.historyTitle, copy.settings.historyEmpty] },

@@ -2,6 +2,7 @@ import type { HostInfoView } from '@paiapp/contracts';
 
 import { copy } from '@/strings';
 import { cn } from '@/lib/utils';
+import { formatBytes } from '@/screens/runtime-format';
 import { RuntimeCard } from '@/screens/runtime-card';
 import { RuntimeMetaRow } from '@/screens/runtime-meta-row';
 
@@ -11,7 +12,6 @@ type RuntimeCapacityCardProps = {
   /** worker 表行数（含表外会话，观察面比 hub 计数更全）。 */
   workerCount: number
   keepaliveCount: number
-  runningSubagents: number
   limits: HostInfoView['limits'] | null
 }
 
@@ -21,8 +21,8 @@ const distributionTone = {
   dead: 'bg-destructive',
 } as const;
 
-/** 容量卡：live/parked/dead 分布 + 常驻数 + 在途子代理 + 双上限（线程 n/N 与子代理 n/N）。 */
-function RuntimeCapacityCard({ threads, workerCount, keepaliveCount, runningSubagents, limits }: RuntimeCapacityCardProps) {
+/** 容量卡：live/parked/dead 分布 + 常驻数 + 线程上限（n/N）与 RSS 回收阈值（0 = 未启用）。 */
+function RuntimeCapacityCard({ threads, workerCount, keepaliveCount, limits }: RuntimeCapacityCardProps) {
   const live = threads?.live ?? 0;
   const parked = threads?.parked ?? 0;
   const dead = threads?.dead ?? 0;
@@ -68,8 +68,8 @@ function RuntimeCapacityCard({ threads, workerCount, keepaliveCount, runningSuba
       )}
       <div className="divide-y divide-border/60 pt-[6px]">
         <RuntimeMetaRow label={copy.runtime.keepaliveOn}>{keepaliveCount}</RuntimeMetaRow>
-        <RuntimeMetaRow label={copy.runtime.subagentsInFlight}>
-          {limits === null ? `${runningSubagents}` : `${runningSubagents} / ${limits.maxSubagents}`}
+        <RuntimeMetaRow label={copy.runtime.rssRetireLimit}>
+          {limits === null ? '—' : limits.rssRetireBytes > 0 ? formatBytes(limits.rssRetireBytes) : copy.runtime.rssRetireOff}
         </RuntimeMetaRow>
       </div>
     </RuntimeCard>

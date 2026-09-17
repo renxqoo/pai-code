@@ -46,7 +46,7 @@ function handle(line: string): void {
   const id = cmd['id'];
   if (type === 'emit') {
     reply(id, { ok: true });
-    process.stdout.write(`{"type":"event","threadId":"t-emit","event":{"type":"agent_start"}}\n`);
+    process.stdout.write(`{"type":"event","threadId":"t-emit","name":"turn/start","payload":{"turnId":"turn_1"}}\n`);
     return;
   }
   if (type === 'die') {

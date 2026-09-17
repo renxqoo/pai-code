@@ -15,7 +15,7 @@ type EnterActions = Parameters<typeof dispatchSectionEnter>[1];
 function makeEnterActions(): { actions: EnterActions; calls: string[] } {
   const calls: string[] = [];
   const actions = {
-    refreshPermissionRules: () => calls.push('permissions'),
+    refreshHubSettings: () => calls.push('permissions'),
     refreshAgentDefinitions: () => calls.push('agents'),
     refreshSkills: () => calls.push('skills'),
   } satisfies EnterActions;
@@ -41,7 +41,7 @@ describe('按开即读派发', () => {
 
   test('派发动作签名与 WorkspaceActions 面对齐（编译期防漂移）', () => {
     const check: Record<keyof EnterActions, keyof WorkspaceActions> = {
-      refreshPermissionRules: 'refreshPermissionRules',
+      refreshHubSettings: 'refreshHubSettings',
       refreshAgentDefinitions: 'refreshAgentDefinitions',
       refreshSkills: 'refreshSkills',
     };
@@ -79,7 +79,7 @@ function SettingsPropsProbe(): React.JSX.Element {
 }
 
 function makeProvider(name: string): ProviderConfigView {
-  return { name, baseUrl: 'https://example.com', api: 'openai', models: [], thinkingFormat: 'default', hasKey: false };
+  return { name, baseUrl: 'https://example.com', api: 'openai-completions', models: [], hasKey: false };
 }
 
 function deadSession(threadId: string): SessionView {

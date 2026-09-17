@@ -1,10 +1,10 @@
-import type { AgentDefinition, ApiOutcome, CommandView, IdleRecycleMinutes, ImagePayload, PermissionRules, ProviderModel, RuntimeSnapshotView, ThinkingFormat } from '@paiapp/contracts';
+import type { AgentDefinition, ApiOutcome, CommandView, IdleRecycleMinutes, ImagePayload, PermMode, ProviderModel, RuntimeSnapshotView } from '@paiapp/contracts';
 import { thinkingLevelOfLabel } from '@paiapp/contracts';
 
 import { writeClipboard } from '@/lib/write-clipboard';
 import { copy } from '@/strings';
+import { entrySeqOf } from './entry-seq';
 import { parseModelKey, pickSessionModel } from './pick-session-model';
-import { nextSessionRulesForMode } from './permission-mode';
 import { bridgeClient, controller, store } from './workspace-runtime';
 import { statsTargetsOf } from './stats-targets';
 
@@ -26,7 +26,7 @@ export type WorkspaceActions = {
     /** `provider/modelId`；缺省按项目记忆 → 全局默认 → 当前会话 → 首个可用重算 */
     model?: string
     thinkingLevel?: string
-    permissionMode?: PermissionRules['mode']
+    permissionMode?: PermMode
   }) => Promise<boolean>;
   /** 新建任务页提交：建会话 → 投首条消息；sendFailed 时调用方把文本回填到新会话草稿槽。 */
   readonly startTask: (input: {
@@ -34,9 +34,9 @@ export type WorkspaceActions = {
     trusted: boolean
     /** `provider/modelId` */
     model: string
-    /** null = 跟随全局规则 */
-    permissionMode: PermissionRules['mode'] | null
-    /** 思考档（协议档位值；null = 跟随模型默认） */
+    /** null = 不干预（hub 按 settings 缺省） */
+    permissionMode: PermMode | null
+    /** 思考档（协议档位值；null = 跟随缺省） */
     thinkingLevel: string | null
     text: string
     images?: readonly ImagePayload[]
@@ -56,17 +56,19 @@ export type WorkspaceActions = {
   readonly completeOnboarding: () => void;
   /** 重跑新手引导：onboarded 置回 false（偏好推回后工作区切回引导屏）。 */
   readonly restartOnboarding: () => Promise<boolean>;
-  readonly refreshPermissionRules: () => void;
-  readonly writePermissionRules: (rules: PermissionRules) => Promise<boolean>;
-  readonly readSessionRules: () => void;
-  readonly writeSessionRules: (rules: PermissionRules | null) => Promise<boolean>;
-  /** 操作栏会话权限模式切换：当前生效规则为基线只改 mode；同模式无操作不写。 */
-  readonly setSessionPermissionMode: (mode: PermissionRules['mode']) => Promise<boolean>;
+  /** hub 用户级缺省读取（新任务页权限控件/思考档缺省数据源）。 */
+  readonly refreshHubSettings: () => void;
+  /** hub 用户级缺省写入（设置页权限分区）；失败 notice。 */
+  readonly saveHubDefaults: (patch: { permissionDefaultMode?: PermMode | null; thinkingDefault?: string | null }) => Promise<boolean>;
+  /** 活跃会话权限模式读取（permission/mode）。 */
+  readonly refreshSessionPermissionMode: () => void;
+  /** 操作栏会话权限模式切换（permission/setMode，下一工具裁决生效）；失败 notice。 */
+  readonly setSessionPermissionMode: (mode: PermMode) => Promise<boolean>;
   readonly refreshAgentDefinitions: () => void;
   /** 子 agent 定义保存（新建/编辑/改名/移动统一）；失败 reason 交表单内联呈现。 */
-  readonly upsertAgentDefinition: (definition: AgentDefinition, previous: { file: string; scope: 'user' | 'project'; project: string | null } | null) => Promise<string | null>;
+  readonly upsertAgentDefinition: (definition: AgentDefinition, previous: { name: string; scope: 'user' | 'project'; project: string | null } | null) => Promise<string | null>;
   /** 子 agent 定义删除；失败 reason 交表单内联呈现。 */
-  readonly removeAgentDefinition: (key: { file: string; scope: 'user' | 'project'; project: string | null }) => Promise<string | null>;
+  readonly removeAgentDefinition: (key: { name: string; scope: 'user' | 'project'; project: string | null }) => Promise<string | null>;
   /** 技能目录刷新（设置页技能分区进入时）。 */
   readonly refreshSkills: () => void;
   /** 预会话命令目录（新建任务页打开时拉取；失败空目录降级）。 */
@@ -92,9 +94,11 @@ export type WorkspaceActions = {
   readonly removeProject: (cwd: string) => void;
   /** 项目文件清单（空查询全量 ≤200 条相对路径；cwd 须为已知会话目录）。 */
   readonly listProjectFiles: (cwd: string) => Promise<string[] | null>;
+  /** 从历史条目分叉（entryId = `seq-<n>` 水化条目 id；解析失败返回 null 并提示）。 */
   readonly forkFromEntry: (entryId: string) => Promise<string | null>;
   readonly reloadSessionTrusted: (threadId: string, trusted: boolean) => void;
-  readonly steerSubagent: (subagentId: string, message: string) => void;
+  /** 向运行中子代理注入 steer（agentId 寻址）。 */
+  readonly steerSubagent: (agentId: string, message: string) => void;
   readonly restartHost: () => void;
   /** 指定线程停止当前轮（运行状态页执行中行的停止操作；活跃线程走 stopActiveTurn）。 */
   readonly stopThread: (threadId: string) => void;
@@ -120,7 +124,7 @@ export type WorkspaceActions = {
   /** J2 通用偏好保存（trustedDefault / 宿主路径）。 */
   readonly saveGeneralPreferences: (patch: { trustedDefault?: boolean }) => Promise<boolean>;
   readonly testProvider: (name: string, modelId: string | undefined) => Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }>;
-  readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; thinkingFormat?: ThinkingFormat; apiKey?: string }) => Promise<boolean>;
+  readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; apiKey?: string }) => Promise<boolean>;
   readonly removeProvider: (name: string) => Promise<boolean>;
   readonly renameSession: (threadId: string, name: string) => Promise<boolean>;
   /** 归档：关闭会话（文件保留）+ archivedSessions 偏好标记；侧栏与历史默认隐藏。 */
@@ -138,8 +142,8 @@ function pushNotice(text: string): void {
   store.getState().pushNotice(text);
 }
 
-/** 会话规则写链：写 + 回读成对串行排队，防并发写后回读乱序覆盖生效视图（与 controller.skillToggleChain 同型）。 */
-let sessionRulesWriteChain: Promise<void> = Promise.resolve();
+/** 会话权限模式写链：写 + 回读成对串行排队，防并发写后回读乱序覆盖生效视图（与 controller.skillToggleChain 同型）。 */
+let permissionModeWriteChain: Promise<void> = Promise.resolve();
 
 function activeThreadOf(): string {
   return store.getState().activeThreadId ?? '';
@@ -172,7 +176,7 @@ export function createWorkspaceActions(): WorkspaceActions {
     trusted?: boolean
     model?: string
     thinkingLevel?: string
-    permissionMode?: PermissionRules['mode']
+    permissionMode?: PermMode
   }): Promise<{ ok: true; threadId: string } | { ok: false }> => {
     const model = parseModelKey(input.model ?? defaultModelKey(input.cwd));
     const outcome = await controller.createSession({
@@ -192,32 +196,6 @@ export function createWorkspaceActions(): WorkspaceActions {
       void controller.updatePreferences({ hiddenProjects: hidden.filter((path) => path !== input.cwd) });
     }
     return { ok: true, threadId: outcome.threadId };
-  };
-
-  const readSessionRules = (): void => {
-    const threadId = activeThreadOf();
-    if (threadId.length === 0) return;
-    void controller.readSessionRules(threadId);
-  };
-  const writeSessionRules = async (rules: PermissionRules | null): Promise<boolean> => {
-    const threadId = activeThreadOf();
-    if (threadId.length === 0) return false;
-    // threadId 捕获于入队时刻（sidecar 是按线程寻址，不是按活跃会话相对寻址）
-    const run = async (): Promise<boolean> => {
-      const reason = await controller.writeSessionRules(threadId, rules);
-      if (reason !== null) {
-        pushNotice(copy.settings.permissionSaveFailed);
-        return false;
-      }
-      await controller.readSessionRules(threadId);
-      return true;
-    };
-    const chained = sessionRulesWriteChain.then(run, run);
-    sessionRulesWriteChain = chained.then(
-      () => undefined,
-      () => undefined,
-    );
-    return chained;
   };
 
   return {
@@ -295,25 +273,41 @@ export function createWorkspaceActions(): WorkspaceActions {
       return true;
     },
     testProvider: (name, modelId) => controller.testProvider(name, modelId),
-    refreshPermissionRules: () => {
-      void controller.refreshPermissionRules();
+    refreshHubSettings: () => {
+      void controller.readHubSettings();
     },
-    readSessionRules,
-    writeSessionRules,
+    saveHubDefaults: async (patch) => {
+      const reason = await controller.writeHubSettings(patch);
+      if (reason !== null) {
+        pushNotice(copy.settings.permissionSaveFailed);
+        return false;
+      }
+      return true;
+    },
+    refreshSessionPermissionMode: () => {
+      const threadId = activeThreadOf();
+      if (threadId.length === 0) return;
+      void controller.readSessionPermissionMode(threadId);
+    },
     setSessionPermissionMode: async (mode) => {
       const threadId = activeThreadOf();
       if (threadId.length === 0) return false;
-      const current = store.getState().sessionRules ?? (await controller.readSessionRules(threadId));
-      // 未加载即无入口（控件隐藏），静默失败即可
-      if (current === null) return false;
-      const next = nextSessionRulesForMode(current.rules, mode);
-      if (next === null) return true;
-      return writeSessionRules(next);
-    },
-    writePermissionRules: async (rules) => {
-      const reason = await controller.writePermissionRules(rules);
-      if (reason !== null) pushNotice(copy.settings.permissionSaveFailed);
-      return reason === null;
+      // threadId 捕获于入队时刻（模式是按线程寻址，不是按活跃会话相对寻址）
+      const run = async (): Promise<boolean> => {
+        const reason = await controller.setSessionPermissionMode(threadId, mode);
+        if (reason !== null) {
+          pushNotice(copy.settings.permissionSaveFailed);
+          return false;
+        }
+        await controller.readSessionPermissionMode(threadId);
+        return true;
+      };
+      const chained = permissionModeWriteChain.then(run, run);
+      permissionModeWriteChain = chained.then(
+        () => undefined,
+        () => undefined,
+      );
+      return chained;
     },
     refreshAllStats: () => {
       // stats 是 worker 级查询：parked 会话不发（会唤醒全部 worker——T27 预算），
@@ -458,7 +452,13 @@ export function createWorkspaceActions(): WorkspaceActions {
       });
     },
     forkFromEntry: async (entryId) => {
-      const outcome = await controller.forkSession(activeThreadOf(), entryId);
+      // fork 寻址 = WAL seq：水化条目 id `seq-<n>` 解析（live 回显 id 不可分叉，判定在消息行）
+      const seq = entrySeqOf(entryId);
+      if (seq === null) {
+        pushNotice(copy.flow.forkFailed);
+        return null;
+      }
+      const outcome = await controller.forkSession(activeThreadOf(), seq);
       if (!outcome.ok) {
         // 扩展拦截不是瞬时故障：重试无意义，文案与「请重试」区分
         pushNotice(outcome.reason === 'fork_cancelled' ? copy.flow.forkCancelled : copy.flow.forkFailed);
@@ -485,8 +485,8 @@ export function createWorkspaceActions(): WorkspaceActions {
       if (!ok) pushNotice(copy.thread.copyFailed);
       return ok;
     },
-    steerSubagent: (subagentId, message) => {
-      void controller.steerSubagent(activeThreadOf(), subagentId, message).then((reason) => {
+    steerSubagent: (agentId, message) => {
+      void controller.steerSubagent(activeThreadOf(), agentId, message).then((reason) => {
         if (reason !== null) pushNotice(copy.flow.steerFailed(reason));
       });
     },

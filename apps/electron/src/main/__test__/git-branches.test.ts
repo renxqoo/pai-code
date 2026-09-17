@@ -290,15 +290,15 @@ describe('checkout', () => {
 
   test('切换成功后失效列表在途缓存：紧随的 list 重新探测（不复用切换前快照）', async () => {
     const calls: string[] = [];
-    let releaseProbe: (() => void) | null = null;
+    const gates: Array<() => void> = [];
     const exec: GitExec = (args) => {
       const key = args.join(' ');
       calls.push(key);
       if (key === 'rev-parse --git-dir') {
         // 第一次 list 的探测挂起，模拟慢仓库；后续直接放行
-        if (releaseProbe === null && calls.filter((call) => call === key).length === 1) {
+        if (gates.length === 0 && calls.filter((call) => call === key).length === 1) {
           return new Promise<GitExecResult>((resolve) => {
-            releaseProbe = () => resolve(ok('.git'));
+            gates.push(() => resolve(ok('.git')));
           });
         }
         return Promise.resolve(ok('.git'));
@@ -316,14 +316,14 @@ describe('checkout', () => {
     for (let i = 0; i < 5; i += 1) await Promise.resolve();
     // 缓存已失效：第二次 list 发了新探测（不是复用 pending 的那一笔）
     expect(calls.filter((call) => call === 'rev-parse --git-dir').length).toBe(probes + 1);
-    releaseProbe?.();
+    for (const release of gates.splice(0)) release();
     expect((await pending).ok).toBe(true);
     expect((await after).ok).toBe(true);
   });
 
   test('切换全局串行（跨 cwd 也不插队，后发不插队）', async () => {
     const order: string[] = [];
-    let release: (() => void) | null = null;
+    const gates: Array<() => void> = [];
     const exec: GitExec = (args, cwd) => {
       const key = args.join(' ');
       if (key === 'rev-parse --git-dir') return Promise.resolve(ok('.git'));
@@ -333,7 +333,7 @@ describe('checkout', () => {
       order.push(`${cwd}|${key}`);
       if (key === 'checkout dev') {
         return new Promise<GitExecResult>((resolve) => {
-          release = () => resolve(ok('Switched to branch dev'));
+          gates.push(() => resolve(ok('Switched to branch dev')));
         });
       }
       return Promise.resolve(ok('Switched'));
@@ -345,7 +345,7 @@ describe('checkout', () => {
     for (let i = 0; i < 20; i += 1) await Promise.resolve();
     // 第一笔未结算时第二笔不得进入执行阶段
     expect(order).toEqual(['/w/repo|checkout dev']);
-    release?.();
+    for (const release of gates.splice(0)) release();
     expect((await first).ok).toBe(true);
     expect((await second).ok).toBe(true);
     expect(order).toEqual(['/w/repo|checkout dev', '/w/repo/sub|checkout feat']);

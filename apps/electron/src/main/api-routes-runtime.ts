@@ -35,7 +35,7 @@ export function runtimeRoutes(deps: RuntimeRoutesDeps): { [M in Extract<ApiMetho
       // hub 命令失败时 settings 已落（下次宿主重启 env 生效）——半成功不静默：
       // 记监督事件（监控页时间线可见 effective 值滞后）
       deps.settings.patch({ idleRecycleMinutes: params.minutes });
-      const outcome = await command({ type: 'set_idle_retire_ms', ms: params.minutes * 60_000 });
+      const outcome = await command({ type: 'set_idle_retire_ms', value: params.minutes * 60_000 });
       if (!outcome.ok) deps.onPolicySyncFailed?.(params.minutes, outcome.reason);
       return { ok: true as const, data: { minutes: params.minutes } };
     },

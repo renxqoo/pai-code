@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { MessageList } from '../message-list';
-import type { ThreadModel } from '../thread/thread-model';
+import type { ThreadModel } from '../thread-model';
 
 const emptyThread: ThreadModel = { sessionId: 's1', items: [], agents: [] };
 
@@ -15,9 +15,12 @@ function renderList(thread: ThreadModel, loading = false): string {
       bottomInset={184}
       emptyTitle="开始新任务"
       emptyHint="输入消息"
-      onOpenAgents={() => undefined}
       onOpenDiff={() => undefined}
       onEditUserMessage={() => undefined}
+      onForkUserMessage={() => undefined}
+      onRetryHydrate={() => undefined}
+      retryLabel="重试"
+
     />,
   );
 }

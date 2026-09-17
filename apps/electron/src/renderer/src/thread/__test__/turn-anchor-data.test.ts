@@ -14,6 +14,7 @@ function turnFixture(id: string, endedAt: number | null): TurnModel {
     startedAt: 0,
     endedAt,
     blocks: [text(`t-${id}`, `结论 ${id}`)],
+    streamingThinkingBlockId: null,
   };
 }
 

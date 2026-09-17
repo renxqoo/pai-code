@@ -33,7 +33,7 @@ describe('isSafeWindowsCwd（cmd 链注入面）', () => {
     ['C:\\a"b', false],
     ['C:\\Users\\my proj', true],
     ['', false],
-  ])('%s → %s', (cwd, expected) => {
+  ])('%s → %s', (cwd: string, expected: boolean) => {
     expect(isSafeWindowsCwd(cwd)).toBe(expected);
   });
 });

@@ -1,15 +1,16 @@
 import { z } from 'zod';
 
-import { PermissionRulesSchema } from './permissions';
+import { PermModeSchema } from './permissions';
 import { RuntimeSnapshotViewSchema } from './runtime';
-import { ProviderModelSchema, ThinkingFormatSchema } from './settings';
+import { ProviderModelSchema } from './settings';
 import { InflightViewSchema, PendingDialogViewSchema, SubagentSnapshotViewSchema } from './inflight-views';
 import { DiffFileViewSchema, SessionViewSchema, SubagentSpawnViewSchema } from './ui-events';
 import { IdleRecycleMinutesSchema } from './settings';
+import { THINKING_LEVEL_ORDER } from './thinking-levels';
 
 /**
  * 渲染层 API 面：方法名用应用语义（渲染层不出现协议字面量）。
- * 主进程 api 服务按本表校验参数并翻译为 pai-cli 命令；
+ * 主进程 api 服务按本表校验参数并翻译为 host-hub 命令；
  * 传输层统一应答 {ok:true,data} | {ok:false,reason}（ApiOutcome）。
  */
 
@@ -22,11 +23,11 @@ const imagePayload = z
   .object({
     type: z.literal('image'),
     data: z.string().min(1),
-    mimeType: z.string().min(1),
+    mediaType: z.string().min(1),
   })
   .strict();
 
-/** 历史条目（session/messages 的正规化结果，渲染层水化为对话流）。 */
+/** 历史条目（session/entries 的正规化结果，渲染层水化为对话流）。 */
 export const HistoryItemSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('user'),
@@ -41,9 +42,9 @@ export const HistoryItemSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('assistant'),
     id: z.string(),
-    /** 消息自身的时间戳（ms）= 事件流的消息身份（message_start/update/end 的 messageId）。
-     * 与条目 id 不同源：它是「同一条消息」在转写/在途快照/增量流三处的共用 key。
-     * 0 = 该条目缺 message.timestamp（legacy 降级：块身份退回条目 id）。 */
+    /** 消息自身的时间戳（ms）= 事件流的消息身份（流式块归并 key）。
+     *  与条目 id 不同源：它是「同一条消息」在转写/在途快照/增量流三处的共用 key。
+     *  0 = 该条目缺消息时间戳（legacy 降级：块身份退回条目 id）。 */
     messageTs: z.number(),
     text: z.string(),
     thinking: z.string(),
@@ -57,14 +58,14 @@ export const HistoryItemSchema = z.discriminatedUnion('kind', [
         isError: z.boolean(),
         /** 文件修改类工具的变更视图；null = 非文件修改。 */
         diff: z.array(DiffFileViewSchema).nullable(),
-        /** task 工具的子代理执行清单；其余工具不携带。 */
+        /** agent 委派工具的子代理执行清单；其余工具不携带。 */
         subagents: z.array(SubagentSpawnViewSchema).optional(),
       }),
     ),
     usage: z.object({ input: z.number(), output: z.number() }).nullable(),
-    /** 异常终态（hub stopReason 收窄）；null = 正常结束（stop/toolUse）。 */
-    stopReason: z.enum(['error', 'aborted']).nullable(),
-    /** stopReason=error 时的上游原始错误信息（如 401 文本）；其余 null。 */
+    /** 异常终态（done 增量 stopReason 收窄）；null = 正常结束（stop/toolUse）。 */
+    stopReason: z.enum(['error', 'aborted', 'length']).nullable(),
+    /** stopReason=error 时的上游原始错误信息；其余 null。 */
     errorMessage: z.string().nullable(),
   }),
   z.object({
@@ -81,7 +82,6 @@ export type HistoryItem = z.infer<typeof HistoryItemSchema>;
 
 export const ThreadStateViewSchema = z.object({
   model: z.object({ provider: z.string(), modelId: z.string() }).nullable(),
-  thinkingLevel: z.string().nullable(),
   isStreaming: z.boolean(),
   isCompacting: z.boolean(),
   sessionName: z.string().nullable(),
@@ -94,20 +94,18 @@ export const SessionStatsViewSchema = z.object({
   userMessages: z.number().int(),
   assistantMessages: z.number().int(),
   toolCalls: z.number().int(),
-  tokensTotal: z.number(),
+  tokens: z.object({ input: z.number(), output: z.number(), total: z.number() }),
   cost: z.number(),
-  /** 上下文占用（0-1 比率；null = 未知，如压缩后尚未收到新响应）。 */
-  contextUsage: z.number().nullable(),
 });
 export type SessionStatsView = z.infer<typeof SessionStatsViewSchema>;
 
 export const ModelInfoViewSchema = z.object({
   provider: z.string(),
   modelId: z.string(),
-  /** 模型思考能力（新任务页按模型计算可用思考档的数据面；缺省 = 不支持思考）。 */
+  /** 模型思考能力（app 渠道配置 join 而来；预设条目缺省 = 未知）。 */
   reasoning: z.boolean().optional(),
-  /** pi models.json thinkingLevelMap 的镜像（键 = 档位，值 null = 该档不支持）。 */
-  thinkingLevelMap: z.record(z.string(), z.union([z.string(), z.null()])).optional(),
+  /** 目录来源（preset = hub 内置预设；custom = app 写入的渠道模型）。 */
+  source: z.enum(['preset', 'custom']).optional(),
 });
 export type ModelInfoView = z.infer<typeof ModelInfoViewSchema>;
 
@@ -122,29 +120,31 @@ export const SavedSessionViewSchema = z.object({
 });
 export type SavedSessionView = z.infer<typeof SavedSessionViewSchema>;
 
-/** 可用思考档位（协议 get_thinking_levels 仅返回 levels；当前值走 get_state.thinkingLevel）。 */
+/** 会话思考档读口（get_thinking_level：当前值 + 生效层级）。 */
 export const ThinkingLevelViewSchema = z.object({
-  allowed: z.array(z.string()),
+  level: z.string(),
+  source: z.enum(['session', 'project', 'user', 'unset']),
 });
 export type ThinkingLevelView = z.infer<typeof ThinkingLevelViewSchema>;
 
-/** 会话内斜杠命令/技能条目（get_commands 收窄；source 四源：hub 三源 + builtin 内置命令）。 */
+/** 会话内斜杠命令/技能条目（get_commands 收窄；source 三源：plugin/skill/builtin）。 */
 export const CommandViewSchema = z.object({
   name: z.string(),
   description: z.string().nullable(),
-  source: z.enum(['extension', 'prompt', 'skill', 'builtin']),
+  source: z.enum(['plugin', 'skill', 'builtin']),
 });
 export type CommandView = z.infer<typeof CommandViewSchema>;
 
 /**
- * agent 定义的管理面形态（主进程文件面读写；tools/model 为 null = 不写 frontmatter
- * 字段 = hub 运行期继承语义：模型继承父对话，工具用默认集）。
- * file = 定义文件名主干（hub 只认 frontmatter name，手写文件可与其不等）：枚举结果必带
- * （定位/删除的身份键）；upsert 提交时忽略——服务端恒以 name 为新文件主干（pattern 内）。
+ * agent 定义的管理面形态（hub 命令面读写 user 级 + project 级直写；
+ * tools/model 为 null = 不写 frontmatter 字段 = hub 运行期继承语义：
+ * 模型继承父对话，工具用默认集）。name 同时是文件名主干与身份键。
  */
 export const AgentDefinitionSchema = z
   .object({
+    /** kebab-case（^^[a-z0-9][a-z0-9-]*$$；保留名 fork/main 拒绝）。 */
     name: z.string().min(1),
+    /** 一句话职责（单行，≤500 字符）。 */
     description: z.string(),
     systemPrompt: z.string(),
     tools: z.array(z.string()).nullable(),
@@ -152,19 +152,17 @@ export const AgentDefinitionSchema = z
     scope: z.enum(['user', 'project']),
     /** scope=project 时的项目绝对路径（写入门禁：必须是本应用已知项目）。 */
     project: z.string().nullable(),
-    file: z.string().optional(),
   })
   .strict();
 export type AgentDefinition = z.infer<typeof AgentDefinitionSchema>;
 
-/** 用户级技能视图（skills/list 与 skills/setEnabled 共用形态）。 */
+/** 技能视图（skills/list 与 skills/setEnabled 共用形态；hub skills 域）。 */
 export const SkillViewSchema = z
   .object({
     name: z.string(),
-    description: z.string().nullable(),
     enabled: z.boolean(),
-    /** agent = agentDir/skills；agents = ~/.agents/skills */
-    origin: z.enum(['agent', 'agents']),
+    /** builtin = hub 随包内置；user = ~/.my-agent/skills；project = <项目>/.my-agent/skills。 */
+    source: z.enum(['builtin', 'user', 'project']),
   })
   .strict();
 export type SkillView = z.infer<typeof SkillViewSchema>;
@@ -174,8 +172,6 @@ export const ProviderConfigViewSchema = z.object({
   baseUrl: z.string(),
   api: z.string(),
   models: z.array(ProviderModelSchema),
-  /** 思考参数形态（default = 不写 compat）。 */
-  thinkingFormat: ThinkingFormatSchema,
   /** key 永不回传，只回传有无。 */
   hasKey: z.boolean(),
 });
@@ -268,19 +264,21 @@ export const ApiSchemas = {
     params: z
       .object({
         cwd: z.string().min(1),
-        provider: z.string().optional(),
+        /** 裸模型 id（hub 三级消歧）；app 级 "provider/modelId" 记忆由主进程拆解。 */
         modelId: z.string().optional(),
         trusted: z.boolean().optional(),
+        permissionMode: PermModeSchema.optional(),
+        thinkingLevel: z.enum(THINKING_LEVEL_ORDER).optional(),
       })
       .strict(),
     result: SessionViewSchema,
   },
   'session/resume': {
-    params: z.object({ sessionPath: z.string().min(1), trusted: z.boolean().optional() }).strict(),
+    params: z.object({ sessionPath: z.string().min(1), trusted: z.boolean().optional(), permissionMode: PermModeSchema.optional(), thinkingLevel: z.enum(THINKING_LEVEL_ORDER).optional() }).strict(),
     result: SessionViewSchema,
   },
   'session/register': {
-    // parked 会话纳管（hub 契约 v0.12）：冷启动表外会话读命令的前置；幂等、零 worker
+    // parked 会话纳管：冷启动表外会话读命令的前置；幂等、零 worker
     params: z.object({ sessionPath: z.string().min(1) }).strict(),
     result: SessionViewSchema,
   },
@@ -294,7 +292,8 @@ export const ApiSchemas = {
     result: z.array(SavedSessionViewSchema),
   },
   'session/prompt': {
-    // 纯图消息合法（message 与 images 至少其一非空）：fork 重试带图消息无文本形态
+    // 纯图消息合法（message 与 images 至少其一非空）：fork 重试带图消息无文本形态。
+    // 应答 = 受理；终态经 turnSettled 事件（settled{sendId,ok}）。
     params: z
       .object({
         threadId: z.string().min(1),
@@ -313,11 +312,12 @@ export const ApiSchemas = {
     result: z.null(),
   },
   'session/entries': {
-    params: z.object({ threadId: z.string().min(1), since: z.string().optional() }).strict(),
+    // 游标 = WAL seq（整数；与 get_inflight.turnStartSeq 同域）；null = 尚无条目。
+    params: z.object({ threadId: z.string().min(1), since: z.number().int().nonnegative().optional() }).strict(),
     result: z.object({
       items: z.array(HistoryItemSchema),
-      /** 已消费到的最后条目 id（下一次 since 游标）；null = 尚无条目。 */
-      cursor: z.string().nullable(),
+      /** 已消费到的最后条目 seq（下一次 since 游标）；null = 尚无条目。 */
+      cursor: z.number().int().nullable(),
     }),
   },
   'session/state': {
@@ -345,11 +345,12 @@ export const ApiSchemas = {
     result: z.null(),
   },
   'session/setModel': {
+    // 下一 turn 生效（hub append model-change 事件）——UI 指示容忍错位窗口。
     params: z.object({ threadId: z.string().min(1), provider: z.string().min(1), modelId: z.string().min(1) }).strict(),
     result: z.null(),
   },
   'session/setThinking': {
-    params: z.object({ threadId: z.string().min(1), level: z.string().min(1) }).strict(),
+    params: z.object({ threadId: z.string().min(1), level: z.enum(THINKING_LEVEL_ORDER) }).strict(),
     result: z.null(),
   },
   'session/thinkingLevels': {
@@ -371,7 +372,7 @@ export const ApiSchemas = {
   },
   'subagent/steer': {
     params: z
-      .object({ threadId: z.string().min(1), subagentId: z.string().min(1), message: z.string().min(1) })
+      .object({ threadId: z.string().min(1), agentId: z.string().min(1), message: z.string().min(1) })
       .strict(),
     result: z.null(),
   },
@@ -380,31 +381,29 @@ export const ApiSchemas = {
     result: z.array(CommandViewSchema),
   },
   /** 预会话命令目录（新建任务页无 threadId 可寻址）：用户级启用技能以 skill: 条目
-   * 预构；extension/prompt/builtin 源依赖会话态，建会话后以 command/list 为准。 */
+   * 预构；plugin/builtin 源依赖会话态，建会话后以 command/list 为准。 */
   'command/preview': {
     params: empty,
     result: z.array(CommandViewSchema),
   },
-  /** agent 定义管理枚举（主进程文件面：user 目录 + 已知项目 .pi/agents，含 systemPrompt 原文）。 */
+  /** agent 定义管理枚举（user = hub agents/list；project = 各已知项目 .my-agent/agents；含 systemPrompt 原文）。 */
   'agent/definitions': {
     params: empty,
     result: z.array(AgentDefinitionSchema),
   },
-  /** agent 定义新建/编辑（previous 给定时含改名与作用域移动：写新文件后删旧文件；键位 file = 旧文件名主干）。 */
+  /** agent 定义新建/编辑（previous 给定时含改名与作用域移动；身份键 = name+scope+project）。 */
   'agent/upsert': {
     params: z
       .object({
         definition: AgentDefinitionSchema,
-        previous: z.object({ file: z.string().min(1), scope: z.enum(['user', 'project']), project: z.string().nullable() }).nullable(),
+        previous: z.object({ name: z.string().min(1), scope: z.enum(['user', 'project']), project: z.string().nullable() }).nullable(),
       })
       .strict(),
     result: z.null(),
   },
-  /** agent 定义删除（删定义文件；file = 文件名主干，运行中的子代理不受影响）。 */
+  /** agent 定义删除（user = agents/remove 命令；project = 删项目内文件；运行中的子代理不受影响）。 */
   'agent/remove': {
-    params: z
-      .object({ file: z.string().min(1), scope: z.enum(['user', 'project']), project: z.string().nullable() })
-      .strict(),
+    params: z.object({ name: z.string().min(1), scope: z.enum(['user', 'project']), project: z.string().nullable() }).strict(),
     result: z.null(),
   },
   /** 项目文件搜索（@ 引用数据源；cwd 必须是本应用已知会话目录）。 */
@@ -432,9 +431,10 @@ export const ApiSchemas = {
     params: z.object({ cwd: z.string().min(1), target: z.enum(['finder', 'terminal', 'editor']) }).strict(),
     result: z.null(),
   },
-  /** 从历史条目分叉（position before|at，默认 before）→ 新会话视图。 */
+  /** 从历史条目分叉（seq = WAL 行号；position before|at，默认 before）→ 新会话视图。
+   *  流式中 hub 拒绝（thread is streaming）——调用方先 abort。 */
   'session/fork': {
-    params: z.object({ threadId: z.string().min(1), entryId: z.string().min(1), position: z.enum(['before', 'at']).optional() }).strict(),
+    params: z.object({ threadId: z.string().min(1), seq: z.number().int().positive(), position: z.enum(['before', 'at']).optional() }).strict(),
     result: SessionViewSchema,
   },
   /** 在系统文件管理器中显示会话文件（路径白名单同 resume）。 */
@@ -462,12 +462,12 @@ export const ApiSchemas = {
     params: z.object({ cwd: z.string().min(1) }).strict(),
     result: GitGraphViewSchema,
   },
-  /** 用户级技能目录（含启用态；启停真相 = agentDir/settings.json 的 skills overrides）。 */
+  /** 用户级技能目录（含启用态；启停真相 = hub-settings.json skills.disabled，经 skills/set_enabled）。 */
   'skills/list': {
     params: empty,
     result: z.array(SkillViewSchema),
   },
-  /** 技能启用/禁用（写 pi settings skills overrides；结果为写后的完整清单）。 */
+  /** 技能启用/禁用（写 hub skills.disabled 名单；结果为写后的完整清单）。 */
   'skills/setEnabled': {
     params: z.object({ name: z.string().min(1), enabled: z.boolean() }).strict(),
     result: z.array(SkillViewSchema),
@@ -477,31 +477,43 @@ export const ApiSchemas = {
     params: threadOnly,
     result: z.null(),
   },
-  /** 直执行 shell（hub 侧走同一权限门；结果在 response，流式经 bashOutput 事件）。 */
+  /** 直执行 shell（结果在 response；流式经 bashOutput 事件；>64KiB 截断置 truncated）。 */
   'session/bash': {
     params: z.object({ threadId: z.string().min(1), command: z.string().min(1) }).strict(),
-    result: z.null(),
+    result: z.object({ output: z.string(), exitCode: z.number().int(), cancelled: z.boolean(), truncated: z.boolean(), fullOutputPath: z.string().nullable() }).strict(),
   },
   'session/abortBash': {
     params: threadOnly,
     result: z.null(),
   },
-  /** 全局权限规则（agentDir/permission-rules.json，hub 热读）。 */
-  'permission/read': {
+  /** 会话权限模式读（permission/get_mode；source = 生效层级）。 */
+  'permission/mode': {
+    params: threadOnly,
+    result: z.object({ mode: z.string(), source: z.enum(['session', 'project', 'user', 'default']) }).strict(),
+  },
+  /** 会话权限模式写（permission/set_mode；下一工具裁决生效）。 */
+  'permission/setMode': {
+    params: z.object({ threadId: z.string().min(1), mode: PermModeSchema }).strict(),
+    result: z.null(),
+  },
+  /** hub 用户级设置读（settings/get；null = 未设置，按 hub 缺省）。 */
+  'app/hubSettings': {
     params: empty,
-    result: PermissionRulesSchema,
+    result: z
+      .object({
+        permissionDefaultMode: PermModeSchema.nullable(),
+        thinkingDefault: z.enum(THINKING_LEVEL_ORDER).nullable(),
+      })
+      .strict(),
   },
-  'permission/write': {
-    params: z.object({ rules: PermissionRulesSchema }).strict(),
-    result: PermissionRulesSchema,
-  },
-  /** 会话级规则（sidecar）：读取返回生效规则与来源；写 null = 删除 sidecar 回退全局。 */
-  'permission/sessionRead': {
-    params: z.object({ threadId: z.string().min(1) }).strict(),
-    result: z.object({ rules: PermissionRulesSchema, source: z.enum(['thread', 'global']) }).strict(),
-  },
-  'permission/sessionWrite': {
-    params: z.object({ threadId: z.string().min(1), rules: PermissionRulesSchema.nullable() }).strict(),
+  /** hub 用户级设置写（settings/set；省略字段不写）。 */
+  'app/setHubSettings': {
+    params: z
+      .object({
+        permissionDefaultMode: PermModeSchema.nullable().optional(),
+        thinkingDefault: z.enum(THINKING_LEVEL_ORDER).nullable().optional(),
+      })
+      .strict(),
     result: z.null(),
   },
   'provider/upsert': {
@@ -511,7 +523,6 @@ export const ApiSchemas = {
         baseUrl: z.string().min(1),
         api: z.string().min(1),
         models: z.array(ProviderModelSchema).min(1),
-        thinkingFormat: ThinkingFormatSchema.optional(),
         /** 省略 = 保留既有 key。 */
         apiKey: z.string().optional(),
       })

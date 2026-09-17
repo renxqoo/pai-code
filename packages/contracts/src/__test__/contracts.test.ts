@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   HUB_COMMAND_TYPES,
+  HUB_EVENT_NAMES,
   HUB_FRAME_TYPES,
   PAI_COMMAND_TYPES,
   UI_EVENT_TYPES,
@@ -34,29 +35,47 @@ describe('词表封闭（双向）', () => {
     expect(() => UiEventSchema.parse({ type: 'nope', threadId: 't1' })).toThrow();
   });
 
-  test('hub 帧词表 == 九类（v0.5 + v0.13 thread_parked）', () => {
+  test('hub 帧词表 == 七类（host-hub v1：subagent_event/subagent_message 摘除）', () => {
     expect([...HUB_FRAME_TYPES].sort(byStr)).toEqual(
-      ['event', 'heartbeat', 'hub_error', 'response', 'thread_died', 'thread_parked', 'ui_request', 'subagent_event', 'subagent_message'].sort(byStr),
+      ['event', 'heartbeat', 'hub_error', 'response', 'thread_died', 'thread_parked', 'ui_request'].sort(byStr),
     );
   });
 
-  test('hub 命令词表 == 46（v0.5 + v0.6-v0.9 补齐 + v0.12 thread/register + v0.13 观测三命令 + v0.14 收敛三命令）', () => {
-    expect(HUB_COMMAND_TYPES.length).toBe(46);
+  test('hub 命令词表 == 55（host-hub v1：原命令面 + 设置面 14 + workspace/trust）', () => {
+    expect(HUB_COMMAND_TYPES.length).toBe(55);
     expect([...HUB_COMMAND_TYPES].sort(byStr)).toEqual(
       [
         'thread/start', 'thread/resume', 'thread/register', 'thread/stop', 'thread/retire', 'thread/set_keepalive', 'thread/list', 'thread/list_saved',
-        'set_model_override', 'get_host_info', 'set_idle_retire_ms', 'get_sandbox_state',
+        'get_host_info', 'set_idle_retire_ms', 'set_rss_retire_bytes',
         'prompt', 'steer', 'follow_up', 'abort', 'clear_queue', 'compact',
         'get_state', 'get_messages', 'get_entries', 'get_tree', 'get_session_stats', 'set_session_name', 'get_commands', 'get_fork_messages',
         'get_inflight', 'get_subagents', 'get_pending_dialogs',
-        'fork', 'clone', 'navigate_tree',
-        'get_models', 'set_model', 'set_thinking_level', 'get_thinking_levels',
+        'fork', 'clone',
+        'get_models', 'set_model', 'set_model_override',
+        'set_thinking_level', 'get_thinking_level',
+        'permission/set_mode', 'permission/get_mode',
         'auth/list', 'auth/set_api_key', 'auth/remove_key',
         'bash', 'abort_bash',
         'ui_response',
+        'settings/get', 'settings/set',
+        'workspace/trust',
+        'models/add', 'models/remove',
+        'agents/list', 'agents/create', 'agents/remove',
+        'skills/list', 'skills/set_enabled', 'skills/remove',
         'subagent/steer',
-        'get_permission_rules', 'set_permission_rules',
-        'agents/list',
+      ].sort(byStr),
+    );
+  });
+
+  test('hub 事件名词表封闭（app 消费面；host-hub 另发 hook/error、request/start、step/*、plugin/*——app 忽略）', () => {
+    expect(HUB_EVENT_NAMES.length).toBe(19);
+    expect([...HUB_EVENT_NAMES].sort(byStr)).toEqual(
+      [
+        'assistant/stream', 'tool/start', 'tool/result', 'tool/progress',
+        'turn/start', 'turn/end', 'settled', 'inbox/spliced', 'compaction', 'llm/retry',
+        'permission/decision',
+        'agents/spawned', 'agents/state', 'agents/terminal', 'agents/evicted', 'agents/user-injected', 'agents/permission-ask', 'agents/idle',
+        'bash_execution_update',
       ].sort(byStr),
     );
   });
@@ -96,8 +115,8 @@ describe('Settings zod：round-trip 与拒绝表', () => {
 
   test('全量字段 round-trip', () => {
     const input = {
-      hubDev: { bunPath: '/usr/local/bin/bun', hubEntry: '/Users/x/pi/app/dist/cli.js' },
-      providers: [{ name: 'glm', baseUrl: 'https://api.example.com', api: 'openai-completions', models: [{ id: 'glm-5.3', reasoning: true, vision: true }], thinkingFormat: 'zai' }],
+      hubDev: { bunPath: '/usr/local/bin/bun', hubEntry: '/Users/x/my-agent/packages/host-hub/src/host/cli.ts' },
+      providers: [{ name: 'glm', baseUrl: 'https://api.example.com', api: 'openai-completions', models: [{ id: 'glm-5.3', reasoning: true, vision: true }]}],
       trustedDefault: true,
       defaultModel: 'glm/glm-5.3',
       onboarded: true,
@@ -137,7 +156,7 @@ describe('SessionView / HistoryItem schema', () => {
 
   test('HistoryItem 三形态样本', () => {
     const items = [
-      { kind: 'user', id: 'm1', text: 'hi', origin: 'user', images: [{ type: 'image', data: 'aGk=', mimeType: 'image/png' }], at: 1 },
+      { kind: 'user', id: 'm1', text: 'hi', origin: 'user', images: [{ type: 'image', data: 'aGk=', mediaType: 'image/png' }], at: 1 },
       {
         kind: 'assistant',
         id: 'm2',
@@ -190,14 +209,14 @@ describe('API schema：每方法合法/非法样本', () => {
     const ok = ApiSchemas['session/prompt'].params.parse({
       threadId: 't',
       message: 'hi',
-      images: [{ type: 'image', data: 'aGk=', mimeType: 'image/png' }],
+      images: [{ type: 'image', data: 'aGk=', mediaType: 'image/png' }],
     });
     expect(ok.images?.length).toBe(1);
     expect(() =>
-      ApiSchemas['session/prompt'].params.parse({ threadId: 't', message: 'hi', images: [{ type: 'image', data: '', mimeType: 'image/png' }] }),
+      ApiSchemas['session/prompt'].params.parse({ threadId: 't', message: 'hi', images: [{ type: 'image', data: '', mediaType: 'image/png' }] }),
     ).toThrow();
     expect(() =>
-      ApiSchemas['session/prompt'].params.parse({ threadId: 't', message: 'hi', images: [{ type: 'file', data: 'x', mimeType: 'text/plain' }] }),
+      ApiSchemas['session/prompt'].params.parse({ threadId: 't', message: 'hi', images: [{ type: 'file', data: 'x', mediaType: 'text/plain' }] }),
     ).toThrow();
   });
 
@@ -206,7 +225,7 @@ describe('API schema：每方法合法/非法样本', () => {
     const imageOnly = ApiSchemas['session/prompt'].params.parse({
       threadId: 't',
       message: '',
-      images: [{ type: 'image', data: 'aGk=', mimeType: 'image/png' }],
+      images: [{ type: 'image', data: 'aGk=', mediaType: 'image/png' }],
     });
     expect(imageOnly.message).toBe('');
     expect(() => ApiSchemas['session/prompt'].params.parse({ threadId: 't', message: '' })).toThrow();
@@ -219,10 +238,11 @@ describe('API schema：每方法合法/非法样本', () => {
     expect(ApiSchemas['session/abortBash'].params.parse({ threadId: 't' })).toEqual({ threadId: 't' });
   });
 
-  test('session/fork 与 clearQueue 样本', () => {
-    expect(ApiSchemas['session/fork'].params.parse({ threadId: 't', entryId: 'e1' })).toEqual({ threadId: 't', entryId: 'e1' });
-    expect(ApiSchemas['session/fork'].params.parse({ threadId: 't', entryId: 'e1', position: 'at' })).toEqual({ threadId: 't', entryId: 'e1', position: 'at' });
-    expect(() => ApiSchemas['session/fork'].params.parse({ threadId: 't', entryId: '', position: 'after' })).toThrow();
+  test('session/fork（seq 域）与 clearQueue 样本', () => {
+    expect(ApiSchemas['session/fork'].params.parse({ threadId: 't', seq: 5 })).toEqual({ threadId: 't', seq: 5 });
+    expect(ApiSchemas['session/fork'].params.parse({ threadId: 't', seq: 5, position: 'at' })).toEqual({ threadId: 't', seq: 5, position: 'at' });
+    expect(() => ApiSchemas['session/fork'].params.parse({ threadId: 't', seq: 0 })).toThrow();
+    expect(() => ApiSchemas['session/fork'].params.parse({ threadId: 't', seq: 5, position: 'after' })).toThrow();
     expect(ApiSchemas['session/clearQueue'].params.parse({ threadId: 't' })).toEqual({ threadId: 't' });
   });
 
@@ -232,12 +252,11 @@ describe('API schema：每方法合法/非法样本', () => {
     expect(() => ApiSchemas['file/search'].params.parse({ cwd: '/w' })).toThrow();
   });
 
-  test('isValidAgentName：文件名安全必要集（空格/Unicode 放行，分隔符/禁字符/首尾空白拒绝）', () => {
-    expect(isValidAgentName('code reviewer')).toBe(true);
-    expect(isValidAgentName('代码审查员')).toBe(true);
-    expect(isValidAgentName('a-b_c.d')).toBe(true);
-    expect(isValidAgentName('x'.repeat(64))).toBe(true);
-    for (const bad of ['', 'a/b', 'a\\b', 'a:b', 'a*b', 'a?b', 'a"b', 'a<b', 'a>b', 'a|b', '.hidden', 'trailing ', ' lead', 'x'.repeat(65), 'a\u0000b']) {
+  test('isValidAgentName：kebab-case 词表（host-hub NAME_PATTERN 镜像；保留名拒绝）', () => {
+    expect(isValidAgentName('code-reviewer')).toBe(true);
+    expect(isValidAgentName('explore2')).toBe(true);
+    expect(isValidAgentName('a-b-c-d')).toBe(true);
+    for (const bad of ['', 'Code', 'code_reviewer', 'code reviewer', '代码审查员', '-code', 'code-', 'fork', 'main', 'a/b']) {
       expect(isValidAgentName(bad)).toBe(false);
     }
   });
@@ -259,7 +278,6 @@ describe('API schema：每方法合法/非法样本', () => {
       baseUrl: 'https://x.example.com',
       api: 'openai-completions',
       models: params.models,
-      thinkingFormat: 'default',
       hasKey: false,
     });
     expect(view.models[0]?.contextWindow).toBe(200000);
@@ -277,8 +295,8 @@ describe('API schema：每方法合法/非法样本', () => {
     const definition = { name: 'search', description: 'd', systemPrompt: 'p', tools: null, model: null, scope: 'user', project: null };
     expect(ApiSchemas['agent/definitions'].params.parse({})).toEqual({});
     expect(ApiSchemas['agent/upsert'].params.parse({ definition, previous: null })).toEqual({ definition, previous: null });
-    expect(ApiSchemas['agent/upsert'].params.parse({ definition, previous: { file: 'old', scope: 'user', project: null } }).previous).toEqual({ file: 'old', scope: 'user', project: null });
-    expect(ApiSchemas['agent/remove'].params.parse({ file: 'search', scope: 'project', project: '/w' })).toEqual({ file: 'search', scope: 'project', project: '/w' });
+    expect(ApiSchemas['agent/upsert'].params.parse({ definition, previous: { name: 'old', scope: 'user', project: null } }).previous).toEqual({ name: 'old', scope: 'user', project: null });
+    expect(ApiSchemas['agent/remove'].params.parse({ name: 'search', scope: 'project', project: '/w' })).toEqual({ name: 'search', scope: 'project', project: '/w' });
   });
 
   test.each([
@@ -291,12 +309,11 @@ describe('API schema：每方法合法/非法样本', () => {
     ['command/list 缺 threadId', 'command/list', {}],
     ['command/list 未知键', 'command/list', { threadId: 't', nope: 1 }],
     ['agent/upsert 未知键', 'agent/upsert', { definition: { name: 'a', description: 'd', systemPrompt: 'p', tools: null, model: null, scope: 'user', project: null }, previous: null, nope: 1 }],
-    ['agent/remove 非法 scope', 'agent/remove', { file: 'a', scope: 'global', project: null }],
+    ['agent/remove 非法 scope', 'agent/remove', { name: 'a', scope: 'global', project: null }],
     ['session/prompt 空消息', 'session/prompt', { threadId: 't', message: '' }],
     ['session/prompt 非法 streamingBehavior', 'session/prompt', { threadId: 't', message: 'hi', streamingBehavior: 'queue' }],
     ['provider/upsert 空 models', 'provider/upsert', { name: 'p', baseUrl: 'u', api: 'openai-completions', models: [] }],
     ['provider/upsert 旧形态 string models', 'provider/upsert', { name: 'p', baseUrl: 'u', api: 'openai-completions', models: ['m'] }],
-    ['provider/upsert 非法思考形态', 'provider/upsert', { name: 'p', baseUrl: 'u', api: 'openai-completions', models: [{ id: 'm', reasoning: true }], thinkingFormat: 'chat-template' }],
     ['dialog/pickDirectory 未知键', 'dialog/pickDirectory', { defaultPath: '/w', extra: 1 }],
     ['dialog/pickDirectory 空 defaultPath', 'dialog/pickDirectory', { defaultPath: '' }],
     ['git/branches 缺 cwd', 'git/branches', {}],
@@ -403,7 +420,6 @@ function samplePerUiEvent(): UiEvent[] {
     { type: 'textDelta', threadId: t, messageId: 'a1', delta: 'he' },
     { type: 'thinkingDelta', threadId: t, messageId: 'a1', delta: '...' },
     { type: 'toolCallAdded', threadId: t, messageId: 'a1', call: { id: 'tc1', name: 'bash', argsPreview: 'ls' }, diff: null },
-    { type: 'subagentText', threadId: t, subagentId: 's1', text: 'final text' },
     { type: 'toolUpdated', threadId: t, callId: 'tc1', output: 'partial' },
     { type: 'toolEnded', threadId: t, callId: 'tc1', output: 'done', isError: false, durationMs: 12, diff: null },
     { type: 'toolEnded', threadId: t, callId: 'tc2', output: 'edit', isError: false, durationMs: 5, diff: [{ path: 'a.ts', additions: 3, deletions: 1 }] },
@@ -412,20 +428,22 @@ function samplePerUiEvent(): UiEvent[] {
       threadId: t,
       message: { id: 'a1', text: 'final', thinking: '', toolCalls: [{ id: 'tc1', name: 'bash', argsPreview: 'ls' }], usage: { input: 1, output: 2 } },
     },
-    { type: 'turnSettled', threadId: t, usage: { input: 1, output: 2 } },
-    { type: 'turnSettled', threadId: t, usage: null },
+    { type: 'turnSettled', threadId: t, ok: true, usage: { input: 1, output: 2 } },
+    { type: 'turnSettled', threadId: t, ok: false, reason: 'worker-died', usage: null },
     { type: 'queueChanged', threadId: t, steering: ['a'], followUp: [] },
     { type: 'compacting', threadId: t, active: true },
-    { type: 'retrying', threadId: t, attempt: 1, maxAttempts: 3, errorMessage: 'x' },
-    { type: 'subagentStarted', threadId: t, subagentId: 's1', agent: 'general-purpose', task: 'explore' },
-    { type: 'subagentDelta', threadId: t, subagentId: 's1', delta: 'found' },
-    { type: 'subagentTool', threadId: t, subagentId: 's1', call: { id: 'tc2', name: 'read', argsPreview: 'a.ts' }, phase: 'start' },
-    { type: 'subagentTool', threadId: t, subagentId: 's1', call: { id: 'tc2', name: 'read', argsPreview: 'a.ts' }, phase: 'end', output: 'x', isError: false },
-    { type: 'subagentSettled', threadId: t, subagentId: 's1' },
-    { type: 'subagentMessage', threadId: t, subagentId: 's1', agent: 'general-purpose', text: 'report', to: null },
-    { type: 'dialogRequest', threadId: t, requestId: 'r1', method: 'confirm', title: 'Allow bash', message: 'npm test', subagentId: 's1', agent: 'explore' },
+    { type: 'compacted', threadId: t, replacedCount: 12 },
+    { type: 'retrying', threadId: t, attempt: 1, errorMessage: 'x' },
+    { type: 'subagentStarted', threadId: t, agentId: 'ag1', agentName: 'general-purpose', task: 'explore' },
+    { type: 'subagentDelta', threadId: t, agentName: 'general-purpose', delta: 'found' },
+    { type: 'subagentTool', threadId: t, agentName: 'general-purpose', call: { id: 'tc2', name: 'read_file', argsPreview: 'a.ts' }, phase: 'start' },
+    { type: 'subagentTool', threadId: t, agentName: 'general-purpose', call: { id: 'tc2', name: 'read_file', argsPreview: 'a.ts' }, phase: 'end', output: 'x', isError: false },
+    { type: 'subagentSettled', threadId: t, agentName: 'general-purpose', status: 'completed' },
+    { type: 'subagentState', threadId: t, agentName: 'general-purpose', busy: true },
+    { type: 'subagentAsk', threadId: t, agentName: 'explore', toolName: 'bash', summary: 'npm test' },
+    { type: 'dialogRequest', threadId: t, requestId: 'r1', method: 'confirm', tool: 'bash', summary: 'npm test', reason: 'direct execution requested by client', agentName: 'explore' },
     { type: 'dialogSettled', requestId: 'r1' },
-    { type: 'bashOutput', threadId: t, id: 'b1', delta: 'out' },
+    { type: 'bashOutput', threadId: t, id: 'b1', delta: 'out', truncated: false },
   ];
 }
 

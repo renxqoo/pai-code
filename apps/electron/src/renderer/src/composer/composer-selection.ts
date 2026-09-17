@@ -1,10 +1,12 @@
-import type { ModelInfoView, SessionStatsView, SessionView } from '@paiapp/contracts';
-import { supportedThinkingLevels, thinkingLevelLabel } from '@paiapp/contracts';
+import type { ModelInfoView, SessionView } from '@paiapp/contracts';
+import { THINKING_LEVEL_ORDER, isSettableThinkingLevel, thinkingLevelLabel } from '@paiapp/contracts';
+
+import type { ThinkingLevelStateView } from '@/live/store';
 
 /**
- * 输入卡模型/思考档选择数据面（T33：自 use-live-workspace 的 buildComposer
- * 同构迁出）：useLiveWorkspace 与 ComposerRegion 共用的单一派生真相。
- * 思考档以模型能力列表为真相：拉取前/不支持时为空，控件侧禁用并给原因（不臆造默认档）。
+ * 输入卡模型/思考档选择数据面：useLiveWorkspace 与 ComposerRegion 共用的单一派生真相。
+ * 思考档菜单恒四档（off/low/medium/high——模型级能力推导已退役，能力拒绝按 hub 错误降级）；
+ * 当前值优先级：会话读口（get_thinking_level）→ 会话视图携带档位 → 首档展示。
  */
 
 export type ComposerSelection = {
@@ -12,36 +14,33 @@ export type ComposerSelection = {
   modelOptions: readonly string[];
   effort: string;
   effortOptions: readonly string[];
-  contextUsed: number;
 };
 
+/** 四档展示名（词表顺序即菜单顺序）。 */
+export function thinkingLevelOptions(): string[] {
+  return THINKING_LEVEL_ORDER.map((level) => thinkingLevelLabel(level));
+}
+
 /**
- * 模型 key（provider/modelId）→ 可用思考档协议值：按模型能力本地推导
- * （无线程/未唤醒时的唯一数据源；live 态以 hub 档位命令为准；展示名映射统一由
- * composerSelectionOf 做——state 语义单一）。新任务页 effortOptionsFor 同源。
+ * 当前档展示名：读口事实优先，会话视图兜底（parked 未发 worker 级查询）；
+ * 均未知或词表外（'unset'/扩展档）回落首档——菜单始终可选，选择即显式设置。
  */
-export function effortLevelsForModel(models: readonly ModelInfoView[], modelKey: string): string[] {
-  const model = models.find((entry) => `${entry.provider}/${entry.modelId}` === modelKey);
-  return [...supportedThinkingLevels(model)];
+export function thinkingLevelValueOf(thinking: ThinkingLevelStateView | null, session: SessionView | undefined): string {
+  const level = thinking?.level ?? session?.thinkingLevel ?? null;
+  if (level !== null && isSettableThinkingLevel(level)) return thinkingLevelLabel(level);
+  return thinkingLevelOptions()[0] ?? '';
 }
 
 export function composerSelectionOf(
   models: readonly ModelInfoView[],
-  stats: Readonly<Record<string, SessionStatsView>>,
   session: SessionView | undefined,
-  effortLevels: readonly string[],
+  thinking: ThinkingLevelStateView | null,
 ): ComposerSelection {
   const modelOptions = models.map((model) => `${model.provider}/${model.modelId}`);
-  const currentModel = session?.model ?? modelOptions[0] ?? '';
-  const levelLabels = effortLevels.map((level) => thinkingLevelLabel(level));
-  const currentLabel = session?.thinkingLevel !== undefined && session?.thinkingLevel !== null ? thinkingLevelLabel(session.thinkingLevel) : undefined;
-  // 未知档位回落到第一个可选档；无可选档时留空（触发禁用态）
-  const effort = currentLabel ?? levelLabels[0] ?? '';
   return {
-    model: currentModel,
+    model: session?.model ?? modelOptions[0] ?? '',
     modelOptions,
-    effort,
-    effortOptions: levelLabels,
-    contextUsed: stats[session?.threadId ?? '']?.contextUsage ?? 0,
+    effort: thinkingLevelValueOf(thinking, session),
+    effortOptions: thinkingLevelOptions(),
   };
 }

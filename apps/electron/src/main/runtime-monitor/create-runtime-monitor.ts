@@ -48,7 +48,6 @@ interface HeartbeatState {
   at: number;
   rssBytes: number | null;
   cpuPercent: number | null;
-  subagents: number;
 }
 
 export interface RuntimeMonitor {
@@ -60,7 +59,7 @@ export interface RuntimeMonitor {
   noteHostPhase(phase: HostPhase): void;
   noteDiagnostic(message: string): void;
   /** thread_parked 帧：worker 收编进时间线（idle=闲置 sweep / manual=手动回收）。 */
-  noteWorkerRecycled(threadId: string, reason: 'idle' | 'manual'): void;
+  noteWorkerRecycled(threadId: string, reason: 'idle' | 'manual' | 'rss'): void;
   /** thread_died 帧：worker 异常死亡进时间线。 */
   noteWorkerDied(threadId: string, reason: string): void;
   snapshot(): RuntimeSnapshotView;
@@ -134,7 +133,6 @@ export function createRuntimeMonitor(deps: RuntimeMonitorDeps): RuntimeMonitor {
         at: now(),
         rssBytes: frame.rssBytes ?? null,
         cpuPercent: frame.cpuPercent ?? null,
-        subagents: frame.subagents ?? 0,
       };
     },
     noteHostPhase(phase: HostPhase): void {

@@ -4,7 +4,7 @@ import { excludeArchivedSessions } from '../exclude-archived';
 import type { SessionCardModel } from '@/sidebar/session-card-model';
 
 function card(id: string, sessionPath: string | null): SessionCardModel {
-  return { id, projectName: 'p', title: id, version: '', cwd: '/w', sessionPath, streaming: false, lastActivityAt: 0 };
+  return { id, projectName: 'p', title: id, version: '', cwd: '/w', sessionPath, state: 'live', streaming: false, lastActivityAt: 0 };
 }
 
 describe('excludeArchivedSessions', () => {

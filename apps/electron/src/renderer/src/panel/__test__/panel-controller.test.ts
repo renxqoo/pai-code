@@ -62,7 +62,7 @@ describe('ui store panel 动作（panel-state 纯函数包装）', () => {
     uiStore.getState().openDiffPane();
     expect(uiStore.getState().panel.tabs).toHaveLength(2);
     const active = uiStore.getState().panel.activeId;
-    uiStore.getState().closePanelTabById(active);
+    if (active !== null) uiStore.getState().closePanelTabById(active);
     expect(uiStore.getState().panel.tabs).toHaveLength(1);
     uiStore.getState().closePanel();
     expect(uiStore.getState().panel.tabs).toHaveLength(0);

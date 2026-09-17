@@ -53,7 +53,7 @@ export function hydrateItems(history: readonly HistoryItem[], turnStartAt: numbe
           id: `msg-${item.id}`,
           role: item.origin === 'system' ? 'system' : 'user',
           text: clip(item.text),
-          images: item.images.map(({ data, mimeType }) => ({ data, mimeType })),
+          images: item.images.map(({ data, mediaType }) => ({ data, mimeType: mediaType })),
         },
       });
       anchor = item.at;

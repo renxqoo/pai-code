@@ -39,7 +39,7 @@ describe('foldHydrate · reconcile 拆轮防线（窗口重建语义）', () => 
     let s = foldHydrate(initialThreadState, {
       kind: 'hydrate/initial',
       items: [history({ kind: 'user', id: 'u1', text: '问' }), history({ kind: 'assistant', id: 'a1', text: '答', at: tick(1) })],
-      cursor: 'a1',
+      cursor: 1,
     });
     s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(10) }), tick(10));
     s = foldThreadEvent(s, ev({ type: 'messageStarted', threadId: 't', messageId: 'm1', at: tick(11) }), tick(11));
@@ -50,7 +50,7 @@ describe('foldHydrate · reconcile 拆轮防线（窗口重建语义）', () => 
   test('症状回归「空窗口吞掉刚结算轮」：载荷为空不得拆除当轮现场（转写未到位）', () => {
     let s = liveTurnState();
     s = foldStopIntent(s);
-    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', usage: null }), tick(20));
+    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', ok: true, usage: null }), tick(20));
     const turnsBefore = s.items.filter((item) => item.kind === 'turn');
     s = foldHydrate(s, { kind: 'hydrate/reconcile', items: [], cursor: null, dropLiveTurn: true });
     const turns = s.items.filter((item) => item.kind === 'turn');
@@ -65,7 +65,7 @@ describe('foldHydrate · reconcile 拆轮防线（窗口重建语义）', () => 
     s = foldHydrate(s, {
       kind: 'hydrate/reconcile',
       items: [history({ kind: 'user', id: 'u2', text: '新' }), history({ kind: 'assistant', id: 'a2', text: '权', at: tick(15) })],
-      cursor: 'a2',
+      cursor: 2,
       dropLiveTurn: true,
     });
     const turnIds = s.items.filter((item) => item.kind === 'turn').map((item) => (item.kind === 'turn' ? item.turn.id : ''));
@@ -80,7 +80,8 @@ describe('foldHydrate · reconcile 拆轮防线（窗口重建语义）', () => 
     const s = foldHydrate(initialThreadState, {
       kind: 'hydrate/reconcile',
       items: [history({ kind: 'user', id: 'u1', text: '问' })],
-      cursor: 'u1',
+      cursor: 1,
+      dropLiveTurn: false,
     });
     expect(s.hydrated).toBe(true);
   });
@@ -103,7 +104,8 @@ describe('foldHydrate · 在途轮归属（重载回落防同轮双渲染）', (
         history({ kind: 'user', id: 'u1', text: '看一下天气' }),
         history({ kind: 'assistant', id: 'a1', text: '在途前半', at: tick(1) }),
       ],
-      cursor: 'a1',
+      cursor: 1,
+      dropLiveTurn: false,
     });
 
     const turns = s.items.filter((item) => item.kind === 'turn');
@@ -123,7 +125,8 @@ describe('foldHydrate · 在途轮归属（重载回落防同轮双渲染）', (
         history({ kind: 'user', id: 'u1', text: '本轮问' }),
         history({ kind: 'assistant', id: 'a1', text: '在途前半', at: tick(2) }),
       ],
-      cursor: 'a1',
+      cursor: 1,
+      dropLiveTurn: false,
     });
     expect(s.items.filter((item) => item.kind === 'turn')).toHaveLength(2);
 
@@ -141,7 +144,8 @@ describe('foldHydrate · 在途轮归属（重载回落防同轮双渲染）', (
         history({ kind: 'user', id: 'u1', text: '本轮问' }),
         history({ kind: 'assistant', id: 'a1', text: '在途前半', at: tick(2) }),
       ],
-      cursor: 'a1',
+      cursor: 1,
+      dropLiveTurn: false,
     });
     const turnIds = s.items.filter((item) => item.kind === 'turn').map((item) => (item.kind === 'turn' ? item.turn.id : ''));
     expect(turnIds).toHaveLength(2); // 历史轮 + live 轮（持久前缀轮被收回）
@@ -163,7 +167,7 @@ describe('foldHydrate · 刷新落在轮次进行中（本轮已输出内容必�
     s = foldThreadEvent(s, ev({ type: 'messageStarted', threadId: 't', messageId: 'm2', at: tick(2) }), tick(2));
     s = foldThreadEvent(s, ev({ type: 'textDelta', threadId: 't', messageId: 'm2', delta: '后半' }), tick(3));
 
-    s = foldHydrate(s, { kind: 'hydrate/reconcile', items: transcript, cursor: 'a1' });
+    s = foldHydrate(s, { kind: 'hydrate/reconcile', items: transcript, cursor: 1, dropLiveTurn: false });
 
     expect(visibleText(s)).toContain('前半');
     expect(visibleText(s)).toContain('后半');
@@ -172,13 +176,13 @@ describe('foldHydrate · 刷新落在轮次进行中（本轮已输出内容必�
   });
 
   test('症状回归「刷新后已经输出的消息先显示再消失」：对账先落（前缀轮）后事件到达，补挂重定基不得抹掉', () => {
-    let s = foldHydrate(initialThreadState, { kind: 'hydrate/reconcile', items: transcript, cursor: 'a1' });
+    let s = foldHydrate(initialThreadState, { kind: 'hydrate/reconcile', items: transcript, cursor: 1, dropLiveTurn: false });
     expect(visibleText(s)).toContain('前半');
 
     s = foldThreadEvent(s, ev({ type: 'messageStarted', threadId: 't', messageId: 'm2', at: tick(3) }), tick(3));
     s = foldThreadEvent(s, ev({ type: 'textDelta', threadId: 't', messageId: 'm2', delta: '后半' }), tick(4));
     // controller 在「错过 turnStarted 的在途轮」场景派发的补挂重定基对账
-    s = foldHydrate(s, { kind: 'hydrate/reconcile', items: transcript, cursor: 'a1' });
+    s = foldHydrate(s, { kind: 'hydrate/reconcile', items: transcript, cursor: 1, dropLiveTurn: false });
 
     expect(visibleText(s)).toContain('前半');
     expect(visibleText(s)).toContain('后半');
@@ -190,7 +194,8 @@ test('bash-only 条目独立成轮（水化分组语义，无用户消息前缀�
   const s = foldHydrate(initialThreadState, {
     kind: 'hydrate/reconcile',
     items: [history({ kind: 'bash', id: 'b1', command: 'ls', output: 'x', exitCode: 0 })],
-    cursor: 'b1',
+    cursor: 1,
+    dropLiveTurn: false,
   });
   expect(s.items.filter((item) => item.kind === 'turn').map((item) => (item.kind === 'turn' ? item.turn.id : ''))).toEqual(['turn-b1']);
 });

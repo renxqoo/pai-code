@@ -6,10 +6,10 @@ import { join } from 'node:path';
 import type { HostCommandOutcome, HostPhase, HostProcessPort, HubFrame, PaiCommand, UiEvent } from '@paiapp/contracts';
 
 import { createApiRoutes } from '../api-routes';
-import { createAgentDirFiles } from '../agent-dir-files';
 import { createAgentDefinitionsStore } from '../agent-definitions-store';
 import { createFileSettings, type ProviderKeyStore } from '../file-settings';
 import { createPaiRuntime } from '../pai-runtime';
+import { createRuntimeMonitor } from '../runtime-monitor/create-runtime-monitor';
 
 /**
  * 事件/响应单一全序的主进程侧结构测试（IPC 直发后无冲批钩子，全序由「emit 同步
@@ -77,9 +77,12 @@ function makeFixture(work: string, reply: (cmd: PaiCommand, pushFrame: (frame: H
     settings,
     keyStore: emptyKeyStore,
     audit: () => undefined,
-    agentDirFiles: createAgentDirFiles(agentDir),
-    agentDefinitions: createAgentDefinitionsStore(agentDir),
+    agentDefinitions: createAgentDefinitionsStore(join(work, 'home')),
+    agentDir,
     revealPath: () => undefined,
+    pickDirectory: () => Promise.resolve(null),
+    exportDiagnosticsBundle: () => work,
+    monitor: createRuntimeMonitor({ host: () => null, appMetrics: () => ({ rssBytes: null, cpuPercent: null }), systemMemory: () => ({ totalBytes: null, availableBytes: null }), idleRecycleMinutes: () => 5, appVersion: () => 'test' }),
   });
   return { runtime, routes, events };
 }
@@ -92,7 +95,7 @@ describe('事件/响应单一全序（emit 同步直发）', () => {
     const { runtime, routes, events } = makeFixture(work, (cmd, pushFrame) => {
       if (cmd.type === 'get_entries') {
         // 事件帧先于 response：模拟 hub 把增量写在前、快照结果写在后
-        pushFrame({ type: 'event', threadId: 't1', event: { type: 'agent_start' } });
+        pushFrame({ type: 'event', threadId: 't1', name: 'turn/start', payload: { ts: 1 } });
         return { ok: true, data: { entries: [] } };
       }
       return { ok: true, data: {} };

@@ -43,11 +43,10 @@ function renderSummary(snapshot: RuntimeSnapshotView): string {
     '',
     `- app version: ${snapshot.appVersion}`,
     `- host phase: ${snapshot.hostPhase ?? 'null'}`,
-    `- host versions: pai ${info?.version ?? '-'} / pi ${info?.piVersion ?? '-'} / bun ${info?.bunVersion ?? '-'} / backend ${info?.backend.id ?? '-'}`,
+    `- host versions: hub ${info?.version ?? '-'} / bun ${info?.bunVersion ?? '-'}`,
     `- heartbeat age ms: ${snapshot.heartbeatAgeMs ?? '-'}`,
     `- restarts: ${snapshot.restarts.count} (last: ${snapshot.restarts.lastCause ?? '-'} at ${snapshot.restarts.lastAt ?? '-'})`,
     `- threads: live ${threads?.live ?? '-'} / parked ${threads?.parked ?? '-'} / dead ${threads?.dead ?? '-'}`,
-    `- in-flight subagents (grants): ${info?.subagents.running ?? '-'}`,
     `- idle recycle minutes: ${snapshot.idleRecycleMinutes}`,
     `- app rss: ${fmtBytes(latest?.appRssBytes)} / hub rss: ${fmtBytes(latest?.hubRssBytes)} / workers rss: ${fmtBytes(latest?.workersRssBytes)}`,
     `- workers: ${snapshot.workers.length}`,
@@ -56,7 +55,7 @@ function renderSummary(snapshot: RuntimeSnapshotView): string {
     '',
     ...snapshot.workers.map(
       (row) =>
-        `- ${row.threadId} [${row.state}] streaming=${row.isStreaming} idleMs=${row.idleMs} subagents=${row.subagents} rss=${fmtBytes(row.rssBytes)} keepalive=${row.keepalive} cwd=${row.cwd}`,
+        `- ${row.threadId} [${row.state}] streaming=${row.isStreaming} idleMs=${row.idleMs} rss=${fmtBytes(row.rssBytes)} keepalive=${row.keepalive} cwd=${row.cwd}`,
     ),
   ].join('\n');
 }

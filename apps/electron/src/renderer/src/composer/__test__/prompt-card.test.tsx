@@ -46,7 +46,9 @@ describe('PromptCard 壳', () => {
         }}
       />,
     );
-    expect(typeof captured?.openFilePicker).toBe('function');
+    // 回调内赋值对控制流不可见：以持有者对象避免窄化为 null
+    const controls = captured as PromptCardControls | null;
+    expect(typeof controls?.openFilePicker).toBe('function');
   });
 
   test('排队卡片堆：传入即渲染，缺省不渲染（线程页专属）', () => {

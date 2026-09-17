@@ -1,343 +1,381 @@
 import { describe, expect, test } from 'bun:test';
 
-import { mapSessionEvent, mapSubagentEvent } from '../event-mapper';
+import { createEventMapper } from '../event-mapper';
 import { encodeCommand } from '../command-encoder';
 import { mapDialogRequest } from '../dialog-mapper';
-import type { AgentSessionEvent, SubagentEventFrame, UiRequestFrame } from '@paiapp/contracts';
+import type { EventMapper } from '../event-mapper';
 
 const deps = { now: () => 1_000 };
 
-function assistantMessage(partial: Record<string, unknown>): Record<string, unknown> {
-  return { role: 'assistant', timestamp: 1234, content: [], usage: { input: 3, output: 4 }, ...partial };
+type Frame = Parameters<EventMapper['mapEvent']>[0];
+
+function frame(name: string, payload: Record<string, unknown>, agentName?: string): Frame {
+  return { threadId: 't', name, payload, ...(agentName !== undefined ? { agentName } : {}) };
 }
 
-describe('mapSessionEvent 全表', () => {
-  test('agent_start → turnStarted', () => {
-    expect(mapSessionEvent('t', { type: 'agent_start' }, deps)).toEqual([{ type: 'turnStarted', threadId: 't', at: 1000 }]);
-  });
-
-  test('message_start → messageStarted（timestamp 即消息 id）', () => {
-    expect(mapSessionEvent('t', { type: 'message_start', message: assistantMessage({}) }, deps)).toEqual([
-      { type: 'messageStarted', threadId: 't', messageId: '1234', at: 1000 },
+describe('createEventMapper · 主线程事件', () => {
+  test('turn/start → turnStarted（payload.ts 缺省回落注入时钟）', () => {
+    expect(createEventMapper(deps).mapEvent(frame('turn/start', { ts: 1234 }))).toEqual([
+      { type: 'turnStarted', threadId: 't', at: 1234 },
+    ]);
+    expect(createEventMapper(deps).mapEvent(frame('turn/start', {}))).toEqual([
+      { type: 'turnStarted', threadId: 't', at: 1000 },
     ]);
   });
 
-  test('message_update text_delta → textDelta（真实协议：partial/message 被剥离，id 为空串）', () => {
-    const events = mapSessionEvent(
-      't',
-      {
-        type: 'message_update',
-        assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: '你好' },
-      },
-      deps,
-    );
-    expect(events).toEqual([{ type: 'textDelta', threadId: 't', messageId: '', delta: '你好' }]);
+  test('assistant/stream start → messageStarted 开缓冲（messageId 计数生成）', () => {
+    const mapper = createEventMapper(deps);
+    expect(mapper.mapEvent(frame('assistant/stream', { type: 'start' }))).toEqual([
+      { type: 'messageStarted', threadId: 't', messageId: 'stream-1', at: 1000 },
+    ]);
+    // 第二轮 start 开新缓冲，计数递增不撞 id
+    mapper.mapEvent(frame('settled', { ok: true }));
+    expect(mapper.mapEvent(frame('assistant/stream', { type: 'start' }))).toEqual([
+      { type: 'messageStarted', threadId: 't', messageId: 'stream-2', at: 1000 },
+    ]);
   });
 
-  test('message_update thinking_delta → thinkingDelta（同样剥离形态）', () => {
-    const events = mapSessionEvent(
-      't',
-      { type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', contentIndex: 1, delta: 'hm' } },
-      deps,
-    );
-    expect(events).toEqual([{ type: 'thinkingDelta', threadId: 't', messageId: '', delta: 'hm' }]);
+  test('text/thinking 增量 → textDelta/thinkingDelta（同缓冲同 messageId，逐段透传）', () => {
+    const mapper = createEventMapper(deps);
+    mapper.mapEvent(frame('assistant/stream', { type: 'start' }));
+    expect(mapper.mapEvent(frame('assistant/stream', { type: 'text', text: '你好' }))).toEqual([
+      { type: 'textDelta', threadId: 't', messageId: 'stream-1', delta: '你好' },
+    ]);
+    expect(mapper.mapEvent(frame('assistant/stream', { type: 'thinking', text: '先想想' }))).toEqual([
+      { type: 'thinkingDelta', threadId: 't', messageId: 'stream-1', delta: '先想想' },
+    ]);
   });
 
-  test('回归：user 消息的 message_start/end 不产生渲染事件（pi 全消息发射）', () => {
-    const userMsg = { role: 'user', content: 'hi', timestamp: 9 };
-    expect(mapSessionEvent('t', { type: 'message_start', message: userMsg }, deps)).toEqual([]);
-    expect(mapSessionEvent('t', { type: 'message_end', message: userMsg }, deps)).toEqual([]);
-    const toolResult = { role: 'toolResult', toolCallId: 'c', toolName: 'bash', content: [], isError: false, timestamp: 10 };
-    expect(mapSessionEvent('t', { type: 'message_start', message: toolResult }, deps)).toEqual([]);
-    expect(mapSessionEvent('t', { type: 'message_end', message: toolResult }, deps)).toEqual([]);
+  test('usage 段落不产事件（并入 done 的 messageFinal）', () => {
+    const mapper = createEventMapper(deps);
+    mapper.mapEvent(frame('assistant/stream', { type: 'start' }));
+    expect(mapper.mapEvent(frame('assistant/stream', { type: 'usage', usage: { inputTokens: 3, outputTokens: 4, totalTokens: 7 } }))).toEqual([]);
   });
 
-  test('message_update toolcall_end → toolCallAdded（bash 显示命令本体；write 带 diff）', () => {
-    const bash = mapSessionEvent(
-      't',
-      {
-        type: 'message_update',
-        message: assistantMessage({}),
-        assistantMessageEvent: { type: 'toolcall_end', contentIndex: 2, toolCall: { type: 'toolCall', id: 'tc1', name: 'bash', arguments: { command: 'git status' } } },
-      },
-      deps,
-    );
-    expect(bash).toEqual([{ type: 'toolCallAdded', threadId: 't', messageId: '1234', call: { id: 'tc1', name: 'bash', argsPreview: 'git status' }, diff: null }]);
-
-    const write = mapSessionEvent(
-      't',
-      {
-        type: 'message_update',
-        message: assistantMessage({}),
-        assistantMessageEvent: {
-          type: 'toolcall_end',
-          contentIndex: 0,
-          toolCall: { type: 'toolCall', id: 'tc2', name: 'write', arguments: { path: 'a.ts', content: 'l1\nl2\nl3' } },
-        },
-      },
-      deps,
-    );
-    expect(write[0]).toMatchObject({ type: 'toolCallAdded' });
-    if (write[0]?.type === 'toolCallAdded') {
-      expect(write[0].diff).toEqual([{ path: 'a.ts', additions: 3, deletions: 0 }]);
-    }
-  });
-
-  test('message_update 其它段（start/end/done/error）→ 空', () => {
-    for (const segment of ['start', 'text_start', 'text_end', 'thinking_start', 'thinking_end', 'toolcall_start', 'toolcall_delta', 'done', 'error']) {
-      expect(
-        mapSessionEvent('t', { type: 'message_update', message: assistantMessage({}), assistantMessageEvent: { type: segment } }, deps),
-      ).toEqual([]);
-    }
-  });
-
-  test('message_end → messageFinal（权威内容 + toolCalls + usage）', () => {
-    const events = mapSessionEvent(
-      't',
-      {
-        type: 'message_end',
-        message: assistantMessage({
-          content: [
-            { type: 'thinking', thinking: 'plan' },
-            { type: 'text', text: 'hello' },
-            { type: 'toolCall', id: 'tc1', name: 'bash', arguments: { command: 'ls' } },
-          ],
-        }),
-      },
-      deps,
-    );
-    expect(events).toEqual([
+  test('done → messageFinal（text/thinking 累积 + usage 视图 + toolCalls 空）', () => {
+    const mapper = createEventMapper(deps);
+    mapper.mapEvent(frame('assistant/stream', { type: 'start' }));
+    mapper.mapEvent(frame('assistant/stream', { type: 'thinking', text: 'p' }));
+    mapper.mapEvent(frame('assistant/stream', { type: 'text', text: 'a' }));
+    mapper.mapEvent(frame('assistant/stream', { type: 'text', text: 'b' }));
+    mapper.mapEvent(frame('assistant/stream', { type: 'usage', usage: { inputTokens: 3, outputTokens: 4, totalTokens: 7 } }));
+    expect(mapper.mapEvent(frame('assistant/stream', { type: 'done', stopReason: 'stop' }))).toEqual([
       {
         type: 'messageFinal',
         threadId: 't',
-        message: {
-          id: '1234',
-          text: 'hello',
-          thinking: 'plan',
-          toolCalls: [{ id: 'tc1', name: 'bash', argsPreview: 'ls' }],
-          usage: { input: 3, output: 4 },
-        },
+        message: { id: 'stream-1', text: 'ab', thinking: 'p', toolCalls: [], usage: { input: 3, output: 4 } },
       },
     ]);
   });
 
-  test('message_end 缺 usage → null', () => {
-    const events = mapSessionEvent('t', { type: 'message_end', message: { role: 'assistant', timestamp: 1, content: [], usage: undefined } }, deps);
-    if (events[0]?.type !== 'messageFinal') throw new Error('expected messageFinal');
-    expect(events[0].message.usage).toBeNull();
+  test('done 缺 usage（前面无 usage 段）→ messageFinal.usage null', () => {
+    const mapper = createEventMapper(deps);
+    mapper.mapEvent(frame('assistant/stream', { type: 'start' }));
+    const events = mapper.mapEvent(frame('assistant/stream', { type: 'done' }));
+    expect(events).toEqual([
+      { type: 'messageFinal', threadId: 't', message: { id: 'stream-1', text: '', thinking: '', toolCalls: [], usage: null } },
+    ]);
   });
 
-  test('task 工具调用携带 subagents 清单，其余工具不携带（toolcall_end 与 message_end 同源）', () => {
-    const args = { agent: 'Explore', task: '分析 pai-cli sandbox 现状' };
-    const added = mapSessionEvent(
-      't',
-      {
-        type: 'message_update',
-        message: assistantMessage({}),
-        assistantMessageEvent: { type: 'toolcall_end', contentIndex: 2, toolCall: { type: 'toolCall', id: 'tc9', name: 'task', arguments: args } },
-      },
-      deps,
-    );
-    expect(added).toEqual([
+  test('症状回归：无 start 先到的 text 增量兜底开缓冲（messageStarted + delta 同批，不丢单词）', () => {
+    const mapper = createEventMapper(deps);
+    expect(mapper.mapEvent(frame('assistant/stream', { type: 'text', text: 'hi' }))).toEqual([
+      { type: 'messageStarted', threadId: 't', messageId: 'stream-1', at: 1000 },
+      { type: 'textDelta', threadId: 't', messageId: 'stream-1', delta: 'hi' },
+    ]);
+    // thinking 同样兜底
+    mapper.mapEvent(frame('settled', { ok: true }));
+    expect(mapper.mapEvent(frame('assistant/stream', { type: 'thinking', text: 'x' }))).toEqual([
+      { type: 'messageStarted', threadId: 't', messageId: 'stream-2', at: 1000 },
+      { type: 'thinkingDelta', threadId: 't', messageId: 'stream-2', delta: 'x' },
+    ]);
+  });
+
+  test('无缓冲时 usage/done 段 → 空（不凭空开缓冲）', () => {
+    const mapper = createEventMapper(deps);
+    expect(mapper.mapEvent(frame('assistant/stream', { type: 'usage', usage: { inputTokens: 1, outputTokens: 2 } }))).toEqual([]);
+    expect(mapper.mapEvent(frame('assistant/stream', { type: 'done' }))).toEqual([]);
+  });
+
+  test('assistant/stream 边界段（text_start/end、thinking_start/end、tool_use_*、error）→ 空', () => {
+    const mapper = createEventMapper(deps);
+    mapper.mapEvent(frame('assistant/stream', { type: 'start' }));
+    for (const segment of [
+      { type: 'text_start' },
+      { type: 'text_end' },
+      { type: 'thinking_start' },
+      { type: 'thinking_end' },
+      { type: 'tool_use_start', id: 'tc1', name: 'bash' },
+      { type: 'tool_use_input', id: 'tc1', inputDelta: '{"comm' },
+      { type: 'tool_use_end', id: 'tc1' },
+      { type: 'error', error: { code: 'x', message: 'm', retryable: false } },
+    ]) {
+      expect(mapper.mapEvent(frame('assistant/stream', segment))).toEqual([]);
+    }
+  });
+
+  test('tool/start → toolCallAdded（bash 显示命令本体；write/edit 带参数 diff；agent 带 subagents）', () => {
+    const mapper = createEventMapper(deps);
+    mapper.mapEvent(frame('assistant/stream', { type: 'start' }));
+
+    expect(
+      mapper.mapEvent(frame('tool/start', { toolUseId: 'tc1', toolName: 'bash', input: { command: 'git status' } })),
+    ).toEqual([
+      { type: 'toolCallAdded', threadId: 't', messageId: 'stream-1', call: { id: 'tc1', name: 'bash', argsPreview: 'git status' }, diff: null },
+    ]);
+
+    expect(
+      mapper.mapEvent(frame('tool/start', { toolUseId: 'tc2', toolName: 'write_file', input: { path: 'a.ts', content: 'l1\nl2\nl3' } })),
+    ).toEqual([
       {
         type: 'toolCallAdded',
         threadId: 't',
-        messageId: '1234',
-        call: { id: 'tc9', name: 'task', argsPreview: 'Explore', subagents: [{ agent: 'Explore', task: '分析 pai-cli sandbox 现状' }] },
+        messageId: 'stream-1',
+        call: { id: 'tc2', name: 'write_file', argsPreview: 'a.ts' },
+        diff: [{ path: 'a.ts', additions: 3, deletions: 0 }],
+      },
+    ]);
+
+    expect(
+      mapper.mapEvent(frame('tool/start', { toolUseId: 'tc3', toolName: 'edit_file', input: { path: 'b.ts', edits: [{ oldText: 'a\nb', newText: 'x' }] } })),
+    ).toEqual([
+      {
+        type: 'toolCallAdded',
+        threadId: 't',
+        messageId: 'stream-1',
+        call: { id: 'tc3', name: 'edit_file', argsPreview: 'b.ts' },
+        diff: [{ path: 'b.ts', additions: 1, deletions: 2 }],
+      },
+    ]);
+
+    expect(
+      mapper.mapEvent(frame('tool/start', { toolUseId: 'tc4', toolName: 'agent', input: { prompt: '扫描现状', subagent_type: 'explore' } })),
+    ).toEqual([
+      {
+        type: 'toolCallAdded',
+        threadId: 't',
+        messageId: 'stream-1',
+        call: { id: 'tc4', name: 'agent', argsPreview: 'explore', subagents: [{ agent: 'explore', task: '扫描现状' }] },
         diff: null,
       },
     ]);
+  });
 
-    const final = mapSessionEvent(
-      't',
-      {
-        type: 'message_end',
-        message: assistantMessage({ content: [{ type: 'toolCall', id: 'tc9', name: 'task', arguments: args }] }),
-      },
-      deps,
-    );
-    if (final[0]?.type !== 'messageFinal') throw new Error('expected messageFinal');
-    expect(final[0].message.toolCalls).toEqual([
-      { id: 'tc9', name: 'task', argsPreview: 'Explore', subagents: [{ agent: 'Explore', task: '分析 pai-cli sandbox 现状' }] },
+  test('tool/start 无流缓冲（turn 外孤立到达）→ 空', () => {
+    expect(createEventMapper(deps).mapEvent(frame('tool/start', { toolUseId: 'tc1', toolName: 'bash', input: { command: 'ls' } }))).toEqual([]);
+  });
+
+  test('tool/progress → toolUpdated（delta 文本）', () => {
+    expect(createEventMapper(deps).mapEvent(frame('tool/progress', { toolUseId: 'tc1', delta: 'run…' }))).toEqual([
+      { type: 'toolUpdated', threadId: 't', callId: 'tc1', output: 'run…' },
     ]);
   });
 
-  test('tool_execution_update → toolUpdated', () => {
-    const events = mapSessionEvent(
-      't',
-      { type: 'tool_execution_update', toolCallId: 'tc1', toolName: 'bash', args: {}, partialResult: { content: [{ type: 'text', text: 'run…' }], details: null } },
-      deps,
-    );
-    expect(events).toEqual([{ type: 'toolUpdated', threadId: 't', callId: 'tc1', output: 'run…' }]);
-  });
-
-  test('tool_execution_end → toolEnded（edit 从 details.patch 提取 diff）', () => {
+  test('tool/result → toolEnded（content 文本拼接、isError、durationMs；edit_file 从 details.patch 提 diff）', () => {
     const patch = ['--- a/x.ts', '+++ b/x.ts', '@@ -1,2 +1,3 @@', ' old', '+new', '+new2', '-gone'].join('\n');
-    const events = mapSessionEvent(
-      't',
+    expect(
+      createEventMapper(deps).mapEvent(
+        frame('tool/result', {
+          toolUseId: 'tc9',
+          toolName: 'edit_file',
+          content: [{ type: 'text', text: 'done' }, { type: 'text', text: 'ok' }],
+          isError: true,
+          durationMs: 42,
+          details: { patch },
+        }),
+      ),
+    ).toEqual([
       {
-        type: 'tool_execution_end',
-        toolCallId: 'tc9',
-        toolName: 'edit',
-        result: { content: [{ type: 'text', text: 'done' }], details: { diff: 'd', patch, firstChangedLine: 1 } },
-        isError: false,
+        type: 'toolEnded',
+        threadId: 't',
+        callId: 'tc9',
+        output: 'done\nok',
+        isError: true,
+        durationMs: 42,
+        diff: [{ path: 'x.ts', additions: 2, deletions: 1 }],
       },
-      deps,
-    );
-    expect(events).toEqual([
-      { type: 'toolEnded', threadId: 't', callId: 'tc9', output: 'done', isError: false, durationMs: 0, diff: [{ path: 'x.ts', additions: 2, deletions: 1 }] },
     ]);
+
+    // 非 edit_file / 无 details → diff null；非 text 块不计入 output；缺 durationMs 回落 0
+    expect(
+      createEventMapper(deps).mapEvent(
+        frame('tool/result', { toolUseId: 'tc1', toolName: 'bash', content: [{ type: 'image', data: 'x', mediaType: 'image/png' }], isError: false }),
+      ),
+    ).toEqual([{ type: 'toolEnded', threadId: 't', callId: 'tc1', output: '', isError: false, durationMs: 0, diff: null }]);
   });
 
-  test('agent_settled → turnSettled（usage null，用量由渲染层从 messageFinal 取）', () => {
-    expect(mapSessionEvent('t', { type: 'agent_settled' }, deps)).toEqual([{ type: 'turnSettled', threadId: 't', usage: null }]);
-  });
-
-  test('queue_update → queueChanged（非字符串项过滤）', () => {
-    expect(mapSessionEvent('t', { type: 'queue_update', steering: ['a', 2], followUp: [] }, deps)).toEqual([
-      { type: 'queueChanged', threadId: 't', steering: ['a'], followUp: [] },
+  test('settled → turnSettled（ok 仅 false 为假、reason 透传、usage 恒 null）并清流缓冲', () => {
+    const mapper = createEventMapper(deps);
+    expect(mapper.mapEvent(frame('settled', { ok: true, reason: '' }))).toEqual([{ type: 'turnSettled', threadId: 't', ok: true, usage: null }]);
+    expect(mapper.mapEvent(frame('settled', { ok: false, reason: 'llm unavailable' }))).toEqual([
+      { type: 'turnSettled', threadId: 't', ok: false, reason: 'llm unavailable', usage: null },
     ]);
+    // ok 缺省视为成功（worker 合成终态无 ok 字段的防御）
+    expect(mapper.mapEvent(frame('settled', {}))).toEqual([{ type: 'turnSettled', threadId: 't', ok: true, usage: null }]);
+    // settled 清缓冲：后续孤立 tool/start 不再挂在旧缓冲上
+    mapper.mapEvent(frame('assistant/stream', { type: 'start' }));
+    mapper.mapEvent(frame('settled', { ok: true }));
+    expect(mapper.mapEvent(frame('tool/start', { toolUseId: 'tc1', toolName: 'bash', input: {} }))).toEqual([]);
   });
 
-  test('compaction_start/end → compacting 翻转', () => {
-    expect(mapSessionEvent('t', { type: 'compaction_start', reason: 'manual' }, deps)).toEqual([{ type: 'compacting', threadId: 't', active: true }]);
-    expect(mapSessionEvent('t', { type: 'compaction_end', reason: 'manual', result: undefined, aborted: false, willRetry: false }, deps)).toEqual([
+  test('compaction 单事件 → compacting(false) + compacted（host-hub 无 start/end 对）', () => {
+    expect(createEventMapper(deps).mapEvent(frame('compaction', { replacedCount: 12 }))).toEqual([
       { type: 'compacting', threadId: 't', active: false },
+      { type: 'compacted', threadId: 't', replacedCount: 12 },
     ]);
   });
 
-  test('auto_retry_start → retrying', () => {
-    expect(mapSessionEvent('t', { type: 'auto_retry_start', attempt: 2, maxAttempts: 5, delayMs: 100, errorMessage: 'e' }, deps)).toEqual([
-      { type: 'retrying', threadId: 't', attempt: 2, maxAttempts: 5, errorMessage: 'e' },
+  test('llm/retry → retrying（attempt 序号 + hub 错误文案）', () => {
+    expect(createEventMapper(deps).mapEvent(frame('llm/retry', { attempt: 2, reason: 'rate_limited' }))).toEqual([
+      { type: 'retrying', threadId: 't', attempt: 2, errorMessage: 'rate_limited' },
     ]);
   });
 
-  test('session_info_changed → sessionRenamed（空名=清除→null）', () => {
-    expect(mapSessionEvent('t', { type: 'session_info_changed', name: '新标题' }, deps)).toEqual([{ type: 'sessionRenamed', threadId: 't', name: '新标题' }]);
-    expect(mapSessionEvent('t', { type: 'session_info_changed', name: undefined }, deps)).toEqual([{ type: 'sessionRenamed', threadId: 't', name: null }]);
-  });
-
-  test('bash_execution_update → bashOutput', () => {
-    expect(mapSessionEvent('t', { type: 'bash_execution_update', id: 'b1', delta: 'out' }, deps)).toEqual([
+  test('bash_execution_update → bashOutput（id 缺省 null、truncated 仅 true 落位）', () => {
+    const mapper = createEventMapper(deps);
+    expect(mapper.mapEvent(frame('bash_execution_update', { id: 'b1', delta: 'out' }))).toEqual([
       { type: 'bashOutput', threadId: 't', id: 'b1', delta: 'out' },
     ]);
+    expect(mapper.mapEvent(frame('bash_execution_update', { delta: 'more' }))).toEqual([
+      { type: 'bashOutput', threadId: 't', id: null, delta: 'more' },
+    ]);
+    expect(mapper.mapEvent(frame('bash_execution_update', { id: 'b1', delta: 'tail…', truncated: true }))).toEqual([
+      { type: 'bashOutput', threadId: 't', id: 'b1', delta: 'tail…', truncated: true },
+    ]);
+    expect(mapper.mapEvent(frame('bash_execution_update', { id: 'b1', delta: 'x', truncated: false }))).toEqual([
+      { type: 'bashOutput', threadId: 't', id: 'b1', delta: 'x' },
+    ]);
   });
 
-  test('忽略清单：turn_start/turn_end/agent_end/auto_retry_end/entry_appended/summarization_* → 空', () => {
-    for (const event of [
-      { type: 'turn_start' },
-      { type: 'turn_end', message: {}, toolResults: [] },
-      { type: 'agent_end', messages: [], willRetry: false },
-      { type: 'auto_retry_end', success: true, attempt: 1 },
-      { type: 'entry_appended', entry: { type: 'custom', id: 'e1' } },
-      { type: 'summarization_retry_scheduled', attempt: 1, maxAttempts: 2, errorMessage: 'x' },
-      { type: 'thinking_level_changed', level: 'high' },
-      { type: 'mystery_event' },
-    ] as AgentSessionEvent[]) {
-      expect(mapSessionEvent('t', event, deps)).toEqual([]);
+  test('忽略清单：结构信号/审计/前向兼容事件 → 空', () => {
+    const mapper = createEventMapper(deps);
+    for (const [name, payload] of [
+      ['inbox/spliced', { spliced: 2 }],
+      ['permission/decision', { decision: 'allow', toolName: 'bash' }],
+      ['turn/end', { turnId: 1 }],
+      ['step/start', { index: 0 }],
+      ['step/end', { index: 0 }],
+      ['hook/error', { hook: 'x' }],
+      ['request/start', { id: 'r' }],
+      ['plugin/loaded', { name: 'p' }],
+      ['agents/idle', { agentName: 'a' }],
+      ['agents/user-injected', { agentName: 'a', summary: 's' }],
+      ['mystery_event', {}],
+    ] as const) {
+      expect(mapper.mapEvent(frame(name, payload))).toEqual([]);
     }
   });
 });
 
-describe('mapSubagentEvent', () => {
-  const frame = (event: Record<string, unknown>): SubagentEventFrame =>
-    ({ type: 'subagent_event', threadId: 't', subagentId: 's1', agent: 'explore', task: 'scan', event }) as SubagentEventFrame;
-
-  test('每帧都带头事件（upsert 语义）+ 流式增量', () => {
-    const events = mapSubagentEvent(
-      frame({ type: 'message_update', message: { timestamp: 9 }, assistantMessageEvent: { type: 'text_delta', delta: 'found' } }),
-      deps,
-    );
-    expect(events).toEqual([
-      { type: 'subagentStarted', threadId: 't', subagentId: 's1', agent: 'explore', task: 'scan' },
-      { type: 'subagentDelta', threadId: 't', subagentId: 's1', delta: 'found' },
+describe('createEventMapper · 子代理分流（帧级 agentName）', () => {
+  test('assistant/stream text → subagentDelta；其余段（start/thinking/done）不透传', () => {
+    const mapper = createEventMapper(deps);
+    expect(mapper.mapEvent(frame('assistant/stream', { type: 'text', text: 'found' }, 'explore'))).toEqual([
+      { type: 'subagentDelta', threadId: 't', agentName: 'explore', delta: 'found' },
     ]);
+    for (const segment of [{ type: 'start' }, { type: 'thinking', text: 'h' }, { type: 'done' }]) {
+      expect(mapper.mapEvent(frame('assistant/stream', segment, 'explore'))).toEqual([]);
+    }
   });
 
-  test('tool_execution_start/update/end → subagentTool 三相', () => {
-    expect(mapSubagentEvent(frame({ type: 'tool_execution_start', toolCallId: 'c1', toolName: 'bash', args: { command: 'ls' } }), deps)[1]).toMatchObject({
-      type: 'subagentTool',
-      phase: 'start',
-      call: { id: 'c1', name: 'bash', argsPreview: 'ls' },
-    });
+  test('tool/start|progress|result → subagentTool 三相（progress/result 的 argsPreview 置空）', () => {
+    const mapper = createEventMapper(deps);
+    expect(mapper.mapEvent(frame('tool/start', { toolUseId: 'c1', toolName: 'bash', input: { command: 'ls' } }, 'explore'))).toEqual([
+      { type: 'subagentTool', threadId: 't', agentName: 'explore', call: { id: 'c1', name: 'bash', argsPreview: 'ls' }, phase: 'start' },
+    ]);
+    expect(mapper.mapEvent(frame('tool/progress', { toolUseId: 'c1', toolName: 'bash', delta: 'o' }, 'explore'))).toEqual([
+      { type: 'subagentTool', threadId: 't', agentName: 'explore', call: { id: 'c1', name: 'bash', argsPreview: '' }, phase: 'update', output: 'o' },
+    ]);
     expect(
-      mapSubagentEvent(frame({ type: 'tool_execution_update', toolCallId: 'c1', toolName: 'bash', partialResult: { content: [{ type: 'text', text: 'o' }] } }), deps)[1],
-    ).toMatchObject({ type: 'subagentTool', phase: 'update', output: 'o' });
-    expect(mapSubagentEvent(frame({ type: 'tool_execution_end', toolCallId: 'c1', toolName: 'bash', result: { content: [] }, isError: false }), deps)[1]).toMatchObject({
-      type: 'subagentTool',
-      phase: 'end',
-      isError: false,
-    });
-  });
-
-  test('agent_settled → subagentSettled；message_end → subagentText 权威替换', () => {
-    expect(mapSubagentEvent(frame({ type: 'agent_settled' }), deps)).toEqual([
-      { type: 'subagentStarted', threadId: 't', subagentId: 's1', agent: 'explore', task: 'scan' },
-      { type: 'subagentSettled', threadId: 't', subagentId: 's1' },
+      mapper.mapEvent(frame('tool/result', { toolUseId: 'c1', toolName: 'bash', content: [{ type: 'text', text: 'done' }], isError: true }, 'explore')),
+    ).toEqual([
+      { type: 'subagentTool', threadId: 't', agentName: 'explore', call: { id: 'c1', name: 'bash', argsPreview: '' }, phase: 'end', output: 'done', isError: true },
     ]);
-    const settled = mapSubagentEvent(frame({ type: 'message_end', message: { role: 'assistant', timestamp: 9, content: [{ type: 'text', text: 'summary' }] } }), deps);
-    expect(settled[2]).toEqual({ type: 'subagentText', threadId: 't', subagentId: 's1', text: 'summary' });
   });
 
-  test('回归：子代理 user/toolResult 的 message_end 不产 subagentText（只回头事件）', () => {
-    const userEnd = mapSubagentEvent(frame({ type: 'message_end', message: { role: 'user', content: 'go', timestamp: 1 } }), deps);
-    expect(userEnd).toEqual([{ type: 'subagentStarted', threadId: 't', subagentId: 's1', agent: 'explore', task: 'scan' }]);
-    const toolResultEnd = mapSubagentEvent(frame({ type: 'message_end', message: { role: 'toolResult', toolCallId: 'c', toolName: 'bash', content: [{ type: 'text', text: 'SECRET' }], isError: false, timestamp: 2 } }), deps);
-    expect(toolResultEnd).toEqual([{ type: 'subagentStarted', threadId: 't', subagentId: 's1', agent: 'explore', task: 'scan' }]);
+  test('agents/spawned → subagentStarted（task 空串 = 待快照回填）', () => {
+    expect(createEventMapper(deps).mapEvent(frame('agents/spawned', { agentId: 'a1', agentName: 'explore', runId: 3 }, 'explore'))).toEqual([
+      { type: 'subagentStarted', threadId: 't', agentId: 'a1', agentName: 'explore', task: '' },
+    ]);
   });
 
-  test('其它事件（agent_start 等）→ 仅头事件', () => {
-    expect(mapSubagentEvent(frame({ type: 'agent_start' }), deps)).toEqual([
-      { type: 'subagentStarted', threadId: 't', subagentId: 's1', agent: 'explore', task: 'scan' },
+  test('agents/state → subagentState（to=busy 为真、to=idle 为假）', () => {
+    const mapper = createEventMapper(deps);
+    expect(mapper.mapEvent(frame('agents/state', { agentName: 'explore', from: 'idle', to: 'busy' }, 'explore'))).toEqual([
+      { type: 'subagentState', threadId: 't', agentName: 'explore', busy: true },
+    ]);
+    expect(mapper.mapEvent(frame('agents/state', { agentName: 'explore', from: 'busy', to: 'idle' }, 'explore'))).toEqual([
+      { type: 'subagentState', threadId: 't', agentName: 'explore', busy: false },
+    ]);
+  });
+
+  test('agents/terminal → subagentSettled（status 词表原文透传）；agents/evicted → status=evicted', () => {
+    const mapper = createEventMapper(deps);
+    expect(mapper.mapEvent(frame('agents/terminal', { agentName: 'explore', status: 'completed' }, 'explore'))).toEqual([
+      { type: 'subagentSettled', threadId: 't', agentName: 'explore', status: 'completed' },
+    ]);
+    expect(mapper.mapEvent(frame('agents/evicted', { agentName: 'explore', reason: 'lru' }, 'explore'))).toEqual([
+      { type: 'subagentSettled', threadId: 't', agentName: 'explore', status: 'evicted' },
+    ]);
+  });
+
+  test('agents/permission-ask → subagentAsk（reason 可选携带）', () => {
+    const mapper = createEventMapper(deps);
+    expect(mapper.mapEvent(frame('agents/permission-ask', { agentName: 'explore', askId: 'k1', toolName: 'bash', summary: 'rm -rf /tmp/x' }, 'explore'))).toEqual([
+      { type: 'subagentAsk', threadId: 't', agentName: 'explore', toolName: 'bash', summary: 'rm -rf /tmp/x' },
+    ]);
+    expect(mapper.mapEvent(frame('agents/permission-ask', { agentName: 'explore', toolName: 'bash', summary: 's', reason: 'network' }, 'explore'))).toEqual([
+      { type: 'subagentAsk', threadId: 't', agentName: 'explore', toolName: 'bash', summary: 's', reason: 'network' },
+    ]);
+  });
+
+  test('子代理域其余事件（agents/idle、settled、turn/*）→ 空', () => {
+    const mapper = createEventMapper(deps);
+    for (const [name, payload] of [
+      ['agents/idle', { agentName: 'explore' }],
+      ['settled', { ok: true }],
+      ['turn/start', { ts: 1 }],
+      ['bash_execution_update', { delta: 'x' }],
+    ] as const) {
+      expect(mapper.mapEvent(frame(name, payload, 'explore'))).toEqual([]);
+    }
+  });
+
+  test('agentName 空串视为主线程（无中继身份语义）', () => {
+    const mapper = createEventMapper(deps);
+    expect(mapper.mapEvent(frame('assistant/stream', { type: 'text', text: 'hi' }, ''))).toEqual([
+      { type: 'messageStarted', threadId: 't', messageId: 'stream-1', at: 1000 },
+      { type: 'textDelta', threadId: 't', messageId: 'stream-1', delta: 'hi' },
     ]);
   });
 });
 
 describe('mapDialogRequest', () => {
-  test('confirm 负载：title/message + 子代理身份', () => {
-    const frame = {
-      type: 'ui_request',
-      requestId: 'r1',
-      threadId: 't',
-      method: 'confirm',
-      title: 'Allow bash',
-      message: 'npm test',
-      subagentId: 's1',
-      agent: 'explore',
-    } as UiRequestFrame;
-    expect(mapDialogRequest(frame)).toEqual({
+  test('confirm 载荷平铺帧上：tool/summary/reason + 子代理身份', () => {
+    expect(
+      mapDialogRequest({ type: 'ui_request', requestId: 'r1', threadId: 't', method: 'confirm', tool: 'bash', summary: 'npm test', reason: 'net', agentName: 'explore' }),
+    ).toEqual({
       type: 'dialogRequest',
       threadId: 't',
       requestId: 'r1',
       method: 'confirm',
-      title: 'Allow bash',
-      message: 'npm test',
-      options: undefined,
-      placeholder: undefined,
-      prefill: undefined,
-      subagentId: 's1',
-      agent: 'explore',
+      tool: 'bash',
+      summary: 'npm test',
+      reason: 'net',
+      agentName: 'explore',
     });
   });
 
-  test('select 的 options：字符串与 {label,value} 双形态都窄化为 label 列表', () => {
-    const strings = mapDialogRequest({ type: 'ui_request', requestId: 'r', threadId: 't', method: 'select', options: ['a', 'b'] } as UiRequestFrame);
-    expect(strings.options).toEqual(['a', 'b']);
-    const objects = mapDialogRequest({
-      type: 'ui_request',
-      requestId: 'r',
+  test('method 缺省 → confirm；空字段收窄 undefined；无 agentName 不携带', () => {
+    expect(mapDialogRequest({ type: 'ui_request', requestId: 'r', threadId: 't' })).toEqual({
+      type: 'dialogRequest',
       threadId: 't',
-      method: 'select',
-      options: [{ label: '甲', value: '1' }, { value: '2' }],
-    } as unknown as UiRequestFrame);
-    expect(objects.options).toEqual(['甲', '2']);
-  });
-
-  test('input placeholder / editor prefill 透传', () => {
-    const input = mapDialogRequest({ type: 'ui_request', requestId: 'r', threadId: 't', method: 'input', title: 'T', placeholder: '输入' } as UiRequestFrame);
-    expect(input.placeholder).toBe('输入');
-    const editor = mapDialogRequest({ type: 'ui_request', requestId: 'r', threadId: 't', method: 'editor', title: 'T', prefill: 'x' } as UiRequestFrame);
-    expect(editor.prefill).toBe('x');
+      requestId: 'r',
+      method: 'confirm',
+      tool: undefined,
+      summary: undefined,
+      reason: undefined,
+    });
   });
 });
 

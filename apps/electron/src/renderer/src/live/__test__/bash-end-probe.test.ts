@@ -5,7 +5,7 @@ import type { InflightView } from '@paiapp/contracts';
 
 /** 直执行 bash 收尾探测：静默后读口确认收尾；仍在跑时有界重排；四条回收路径。 */
 
-const view = (bash: InflightView['bash']): InflightView => ({ turnStartEntryId: 'e1', message: null, toolOutputs: [], bash });
+const view = (bash: InflightView['bash']): InflightView => ({ turnStartSeq: 1, turnStartedAt: null, message: null, toolOutputs: [], bash });
 
 function harness(views: Array<InflightView | null>, opts?: { slowMs?: number }): { settled: string[]; stillRunning: number; probe: ReturnType<typeof createBashEndProbe> } {
   let index = 0;
@@ -46,7 +46,7 @@ describe('bash 收尾探测', () => {
 
   test('症状回归「静默长命令耗尽快频预算后无人收尾」：快频有界，耗尽后转慢频直至收尾', async () => {
     // 前 40 次读口都说仍在跑（快频 ~31 次 + 慢频继续），之后结束
-    const running = view({ command: 'x', output: '', truncated: false, startedAt: 1 });
+    const running = view({ id: 'bash-1', command: 'x', startedAt: 1 });
     const views: Array<InflightView | null> = Array.from({ length: 40 }, () => running);
     views.push(view(null));
     const h = harness(views, { slowMs: 2 });
@@ -58,7 +58,7 @@ describe('bash 收尾探测', () => {
   });
 
   test('快频预算内的成本有界：耗尽点之后单个慢周期内不额外快频探测', async () => {
-    const running = view({ command: 'x', output: '', truncated: false, startedAt: 1 });
+    const running = view({ id: 'bash-1', command: 'x', startedAt: 1 });
     const h = harness(Array.from({ length: 100 }, () => running), { slowMs: 80 });
     h.probe.arm('t1');
     // 31 次快频（arm + 30 次快频重排）在 ~31ms 内完成；随后只剩慢频
@@ -71,7 +71,7 @@ describe('bash 收尾探测', () => {
   });
 
   test('先仍在跑、随后结束 → 最终收尾', async () => {
-    const h = harness([view({ command: 'x', output: '', truncated: false, startedAt: 1 }), view(null)]);
+    const h = harness([view({ id: 'bash-1', command: 'x', startedAt: 1 }), view(null)]);
     h.probe.arm('t1');
     await wait(40);
     expect(h.settled).toEqual(['t1']);

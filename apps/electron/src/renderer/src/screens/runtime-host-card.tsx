@@ -50,7 +50,7 @@ function RuntimeHostCard({ snapshot }: RuntimeHostCardProps) {
         <RuntimeMetaRow label={copy.runtime.versions}>
           {host === null
             ? `Pai ${snapshot.appVersion}`
-            : `Pai ${snapshot.appVersion} · Hub ${host.version} · pi ${host.piVersion} · ${copy.runtime.bunLabel} ${host.bunVersion}`}
+            : `Pai ${snapshot.appVersion} · Hub ${host.version} · ${copy.runtime.bunLabel} ${host.bunVersion}`}
         </RuntimeMetaRow>
         {host !== null ? <RuntimeMetaRow label={copy.runtime.pidLabel}>{host.pid}</RuntimeMetaRow> : null}
       </div>

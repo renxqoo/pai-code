@@ -71,7 +71,7 @@ test('逐事件 commit 的流式渲染突增：预算内完成、终态精确、
   const items: HistoryItem[] = [];
   for (let turn = 0; turn < HISTORY_TURNS; turn += 1) items.push(...historyItems(turn));
   store.getState().setActiveThread(THREAD);
-  store.getState().hydrate(THREAD, { kind: 'hydrate/initial', items, cursor: 'cursor-final' });
+  store.getState().hydrate(THREAD, { kind: 'hydrate/initial', items, cursor: 10_000 });
 
   const handle = render(<StreamStage store={store} />);
   const historyNode = document.querySelector('[data-turn-id="turn-a-29"]');

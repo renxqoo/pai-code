@@ -6,7 +6,6 @@ import { copy } from '@/strings';
 
 import {
   buildSummaryText,
-  contextUsagePercent,
   formatBytes,
   formatGigabytes,
   formatMegabytes,
@@ -128,7 +127,7 @@ describe('systemMemoryPressure / processMemorySegments', () => {
 });
 
 describe('文案取值', () => {
-  test('相位/心跳/空闲/倒计时/上下文', () => {
+  test('相位/心跳/空闲/倒计时', () => {
     expect(phaseLabel('ready')).toBe(copy.runtime.phaseReady);
     expect(phaseLabel(null)).toBe(copy.runtime.phaseFailed);
     expect(heartbeatLabel(3_400)).toBe(copy.runtime.heartbeatAgo(3));
@@ -136,31 +135,26 @@ describe('文案取值', () => {
     expect(idleLabel(125_000)).toBe(copy.runtime.idleFor(2));
     expect(recycleCountdownLabel(92_900)).toBe(copy.runtime.recycleIn(93));
     expect(recycleCountdownLabel(-5)).toBe(copy.runtime.recycleIn(0));
-    expect(contextUsagePercent(0.421)).toBe('42%');
-    expect(contextUsagePercent(null)).toBe('—');
   });
 
   test('摘要文本行序：标题/版本/相位/心跳/重启/线程/workers + hub 版本行', () => {
     const snapshot = {
       hostPhase: 'ready',
       hostInfo: {
-        version: '0.13.0',
-        piVersion: '0.9.1',
+        version: '1.0.0',
         bunVersion: '1.2.0',
         pid: 4242,
         uptimeMs: 1,
         rssBytes: 1,
         threads: { live: 2, parked: 1, dead: 0 },
-        subagents: { running: 1 },
         limits: {
           maxThreads: 8,
           idleRetireMs: 300_000,
           workerStaleMs: 1,
           workerExitTimeoutMs: 1,
-          maxSubagents: 8,
+          rssRetireBytes: 0,
           bashTimeoutMs: 0,
         },
-        backend: { id: 'pi', version: '0.9.1', capabilities: [] },
       },
       heartbeatAgeMs: 2_000,
       restarts: { count: 1, lastCause: 'stale', lastAt: 1 },
@@ -180,7 +174,7 @@ describe('文案取值', () => {
     expect(text).toContain(`${copy.runtime.restarts}: 1`);
     expect(text).toContain(`${copy.runtime.capacity}: ${copy.runtime.summaryThreads(2, 1, 0)}`);
     expect(text).toContain(`${copy.runtime.workersTitle}: 3`);
-    expect(lines.at(-1)).toContain('0.13.0');
+    expect(lines.at(-1)).toContain('1.0.0');
   });
 });
 

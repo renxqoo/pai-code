@@ -1,35 +1,29 @@
 import { expect, test } from 'bun:test';
 
-import { defaultPermissionRules, type PermissionRules } from '@paiapp/contracts';
+import { PERM_MODES, type PermMode } from '@paiapp/contracts';
 
-import { nextSessionRulesForMode } from '../permission-mode';
+import { isPermMode, normalizePermMode } from '../permission-mode';
 
-/** 操作栏会话权限模式切换的基线语义：只改 mode 保 patterns；同模式无操作。 */
+/** 权限模式词表辅助：读口宽松 string 收敛（词表内原样、词表外回落 default 档）。 */
 
-const MODES = ['ask', 'allow-all', 'block-all'] as const;
+test('isPermMode：词表内识别（permission/get_mode|set_mode 与 app/hubSettings 共用枚举）', () => {
+  for (const mode of PERM_MODES) {
+    expect(isPermMode(mode)).toBe(true);
+  }
+});
 
-function rulesOf(mode: PermissionRules['mode']): PermissionRules {
-  return {
-    ...defaultPermissionRules(),
-    mode,
-    bash: { allowPatterns: ['git status'], blockPatterns: ['sudo *'] },
-  };
-}
+test('isPermMode：词表外与垃圾输入拒绝', () => {
+  for (const value of ['ask', 'allow-all', 'block-all', '', 'FULLAUTO', 'default ']) {
+    expect(isPermMode(value)).toBe(false);
+  }
+});
 
-test.each(MODES.flatMap((from) => MODES.filter((to) => to !== from).map((to) => [from, to] as const)))(
-  '模式迁移 %s → %s：只改 mode，patterns 保留且引用全新',
-  (from, to) => {
-    const current = rulesOf(from);
-    const next = nextSessionRulesForMode(current, to);
-    if (next === null) throw new Error(`expected next rules for ${from} -> ${to}`);
-    expect(next.mode).toBe(to);
-    expect(next.bash).toEqual({ allowPatterns: ['git status'], blockPatterns: ['sudo *'] });
-    // 深拷贝独立性：改写副本数组不得影响原规则
-    next.bash.allowPatterns.push('mutated');
-    expect(current.bash.allowPatterns).toEqual(['git status']);
-  },
-);
+test.each(PERM_MODES)('normalizePermMode：词表内 %s 原样返回', (mode: PermMode) => {
+  expect(normalizePermMode(mode)).toBe(mode);
+});
 
-test.each(MODES)('同模式 %s：返回 null 无操作（不写、不造 sidecar）', (mode) => {
-  expect(nextSessionRulesForMode(rulesOf(mode), mode)).toBeNull();
+test('normalizePermMode：词表外（协议扩展/垃圾输入）回落 default 档（不崩溃不臆造新模式）', () => {
+  expect(normalizePermMode('ask')).toBe('default');
+  expect(normalizePermMode('')).toBe('default');
+  expect(normalizePermMode('full-auto')).toBe('default');
 });

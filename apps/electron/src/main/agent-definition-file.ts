@@ -177,9 +177,11 @@ export function fileNameStemOf(fileName: string): string | null {
   return isSafeFileNameStem(stem) ? stem : null;
 }
 
-/** 定义键位（作用域 + 项目 + 文件名主干）→ 定义文件绝对路径；调用方保证 stem 已过校验。 */
-export function agentDefinitionPath(agentDir: string, scope: AgentScope, project: string | null, stem: string): string {
+/** 定义键位（作用域 + 项目 + name）→ 定义文件绝对路径；调用方保证 stem 已过校验。
+ *  布局契约（host-hub agents 域）：user = ~/.my-agent/agents（core userDataRoot 缺省）；
+ *  project = <项目>/.my-agent/agents（仅受信会话加载）。 */
+export function agentDefinitionPath(homeDir: string, scope: AgentScope, project: string | null, stem: string): string {
   const fileName = `${stem}.md`;
-  if (scope === 'user') return joinPaths(agentDir, 'agents', fileName);
-  return joinPaths(project ?? '.', '.pi', 'agents', fileName);
+  if (scope === 'user') return joinPaths(homeDir, '.my-agent', 'agents', fileName);
+  return joinPaths(project ?? '.', '.my-agent', 'agents', fileName);
 }

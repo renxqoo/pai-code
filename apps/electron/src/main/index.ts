@@ -7,7 +7,6 @@ import { existsSync } from 'node:fs';
 import { ApiSchemas, type UiEvent } from '@paiapp/contracts';
 
 import { createApiRoutes } from './api-routes';
-import { createAgentDirFiles } from './agent-dir-files';
 import { createAgentDefinitionsStore } from './agent-definitions-store';
 import { createFileLogger, createFileSettings } from './file-settings';
 import { resolveHubPaths } from './hub-paths';
@@ -85,13 +84,13 @@ void app.whenReady().then(async () => {
     target.webContents.send('pai:event', event);
   };
 
-  /** K1 系统通知：窗口失焦时的权限弹窗与 host 失败（任务通知走应用内通知条）。
+  /** K1 系统通知：窗口失焦时的权限弹窗（confirm）与 host 失败。
    *  逐事件判定，类型预筛先行——高频 delta 期零原生调用，仅触发类事件才查焦点；
    *  每个触发事件一条通知（多会话同窗 settle 各自一条，对应独立会话）。 */
   const notifyIfBlurred = (event: UiEvent): boolean => {
     let body: string;
-    if (event.type === 'dialogRequest' && event.method !== 'notify' && event.method !== 'setStatus') {
-      body = event.title ?? 'Action required';
+    if (event.type === 'dialogRequest') {
+      body = event.summary ?? 'Action required';
     } else if (event.type === 'host' && event.phase === 'failed') {
       body = 'Agent host failed to start.';
     } else if (event.type === 'host' && event.phase === 'restarting') {
@@ -189,8 +188,7 @@ void app.whenReady().then(async () => {
         return directory;
       },
       audit: (message) => logger.log(`audit:${message}`),
-      agentDirFiles: createAgentDirFiles(paths.agentDir),
-      agentDefinitions: createAgentDefinitionsStore(paths.agentDir),
+      agentDefinitions: createAgentDefinitionsStore(),
       agentDir: paths.agentDir,
       revealPath: (path) => shell.showItemInFolder(path),
       extraCwds: () => [...pickedDirectories],

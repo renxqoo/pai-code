@@ -10,7 +10,7 @@ import { render } from '@/testing/render';
 import type { ModelInfoView, SessionView } from '@paiapp/contracts';
 
 /**
- * 工作区运行挂载回归（T34 M3）：切会话 effect（parked 本地档位推导 / live 离线桥
+ * 工作区运行挂载回归（T34 M3）：切会话 effect（parked 读不唤醒 / live 离线桥
  * 不写）与面板组态会话级存档/恢复（M2 挂账的关键回归——切走存档、切回恢复）。
  * controller 生命周期（start/dispose）不在单测面（桥 unavailable 时幂等）。
  */
@@ -50,42 +50,51 @@ afterEach(() => {
 });
 
 describe('useWorkspaceRuntime 切会话 effect', () => {
-  test('激活链：ensureHydrated/readSessionRules 随切会话派发（冷启动水化不断链）+ parked 档位本地推导', () => {
+  test('激活链：ensureHydrated 随切会话派发（冷启动水化不断链）；parked 不发 worker 级读口（读不唤醒）', () => {
     const hydrate = jest.spyOn(controller, 'ensureHydrated');
-    const readRules = jest.spyOn(controller, 'readSessionRules');
+    const readMode = jest.spyOn(controller, 'readSessionPermissionMode');
+    const readThinking = jest.spyOn(controller, 'readThinkingLevel');
     liveStore.setState({ models: models() });
     const view = render(<RuntimeHarness />);
-    liveStore.setState({
-      sessions: { t1: session('t1', 'parked') },
-      activeThreadId: 't1',
-      threads: { t1: initialThreadState },
+    React.act(() => {
+      liveStore.setState({
+        sessions: { t1: session('t1', 'parked') },
+        activeThreadId: 't1',
+        threads: { t1: initialThreadState },
+      });
     });
     view.rerender(<RuntimeHarness />);
-    expect(liveStore.getState().effortLevels.length).toBeGreaterThan(1); // reasoning 模型多档（词表在 contracts）
     expect(hydrate).toHaveBeenCalledWith('t1');
-    expect(readRules).toHaveBeenCalledWith('t1');
+    expect(readMode).not.toHaveBeenCalled();
+    expect(readThinking).not.toHaveBeenCalled();
     view.unmount();
   });
 
-  test('live 会话激活：离线桥下档位拉取失败不写（保持清空态）', () => {
+  test('live 会话激活：离线桥下权限模式/思考档/命令目录拉取失败不写（保持清空态）', () => {
     liveStore.setState({ models: models() });
     const view = render(<RuntimeHarness />);
-    liveStore.setState({
-      sessions: { t1: session('t1', 'live') },
-      activeThreadId: 't1',
-      threads: { t1: initialThreadState },
+    React.act(() => {
+      liveStore.setState({
+        sessions: { t1: session('t1', 'live') },
+        activeThreadId: 't1',
+        threads: { t1: initialThreadState },
+      });
     });
     view.rerender(<RuntimeHarness />);
-    expect(liveStore.getState().effortLevels).toEqual([]);
+    expect(liveStore.getState().thinkingLevel).toBe(null);
+    expect(liveStore.getState().sessionPermissionMode).toBe(null);
+    expect(liveStore.getState().commands).toEqual([]);
     view.unmount();
   });
 
   test('症状：同线程 live→parked 翻转后 commands 清空（parked worker 的斜杠目录不残留）', () => {
     liveStore.setState({ models: models() });
-    liveStore.setState({
-      sessions: { t1: session('t1', 'live') },
-      activeThreadId: 't1',
-      threads: { t1: initialThreadState },
+    React.act(() => {
+      liveStore.setState({
+        sessions: { t1: session('t1', 'live') },
+        activeThreadId: 't1',
+        threads: { t1: initialThreadState },
+      });
     });
     const view = render(<RuntimeHarness />);
     view.rerender(<RuntimeHarness />);
@@ -98,8 +107,7 @@ describe('useWorkspaceRuntime 切会话 effect', () => {
       liveStore.getState().applyEvent({ type: 'sessionParked', threadId: 't1', reason: 'idle' }, Date.now());
     });
     expect(liveStore.getState().sessions.t1?.state).toBe('parked');
-    // effect 重跑证明（parked 分支本地推导 effortLevels），commands 随翻转清空
-    expect(liveStore.getState().effortLevels.length).toBeGreaterThan(0);
+    // effect 重跑证明（parked 分支不发 worker 级读口），commands 随翻转清空
     expect(liveStore.getState().commands).toEqual([]);
     view.unmount();
   });
@@ -107,10 +115,12 @@ describe('useWorkspaceRuntime 切会话 effect', () => {
 
 describe('面板组态会话级存档/恢复', () => {
   test('t1 开 agents 面板 → 切 t2 空 → 切回 t1 恢复', () => {
-    liveStore.setState({
-      sessions: { t1: session('t1', 'live'), t2: session('t2', 'live') },
-      activeThreadId: 't1',
-      threads: { t1: initialThreadState, t2: initialThreadState },
+    React.act(() => {
+      liveStore.setState({
+        sessions: { t1: session('t1', 'live'), t2: session('t2', 'live') },
+        activeThreadId: 't1',
+        threads: { t1: initialThreadState, t2: initialThreadState },
+      });
     });
     const view = render(<RuntimeHarness />);
     React.act(() => {
@@ -119,11 +129,15 @@ describe('面板组态会话级存档/恢复', () => {
     view.rerender(<RuntimeHarness />);
     expect(uiStore.getState().panel.tabs[0]).toMatchObject(singletonTab('agents'));
     // 切到 t2：存档 t1、t2 空面板
-    liveStore.setState({ activeThreadId: 't2' });
+    React.act(() => {
+      liveStore.setState({ activeThreadId: 't2' });
+    });
     view.rerender(<RuntimeHarness />);
     expect(uiStore.getState().panel.tabs).toHaveLength(0);
     // 切回 t1：恢复 agents
-    liveStore.setState({ activeThreadId: 't1' });
+    React.act(() => {
+      liveStore.setState({ activeThreadId: 't1' });
+    });
     view.rerender(<RuntimeHarness />);
     expect(uiStore.getState().panel.tabs[0]).toMatchObject(singletonTab('agents'));
     view.unmount();

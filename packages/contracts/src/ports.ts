@@ -24,7 +24,7 @@ export type HostCommandOutcome =
 export type HostPhase = 'starting' | 'ready' | 'restarting' | 'failed';
 
 /**
- * pai-cli 宿主原语（实现：infra/host-process）。
+ * hub 宿主原语（实现：infra/host-process）。
  * request 负责 id 关联与超时；非 response 帧经 onFrame 交付；
  * 挂死检测（>10s 无心跳）由实现负责并驱动重启回调。
  */
@@ -54,7 +54,7 @@ export interface HostDiagnostics {
 
 /** 会话注册表行：窗口打开的会话（恢复链与侧栏的真相源，实现：infra/registry-store）。 */
 export interface SessionRow {
-  /** 主键 = pai-cli threadId（fork/clone 换 id 时整行替换）。 */
+  /** 主键 = hub threadId（fork/clone 换 id 时整行替换）。 */
   threadId: string;
   sessionPath: string | null;
   cwd: string;

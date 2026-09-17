@@ -4,7 +4,7 @@ import { processRuns } from '../process-runs';
 import type { ToolCallModel } from '../thread-model';
 
 function call(id: string): ToolCallModel {
-  return { id, name: 'bash', argsPreview: 'echo hi', output: '', exitCode: 0, durationMs: 12, status: 'ok' };
+  return { id, name: 'bash', argsPreview: 'echo hi', subagents: [], output: '', exitCode: 0, durationMs: 12, status: 'ok' };
 }
 
 describe('processRuns', () => {

@@ -4,11 +4,11 @@ import { collectThreadDiff } from '../collect-thread-diff';
 import type { ThreadModel, TurnModel } from '@/thread/thread-model';
 
 function turn(id: string, blocks: TurnModel['blocks']): { kind: 'turn'; turn: TurnModel } {
-  return { kind: 'turn', turn: { id, status: 'completed', startedAt: 0, endedAt: 1, blocks } };
+  return { kind: 'turn', turn: { id, status: 'completed', startedAt: 0, endedAt: 1, blocks, streamingThinkingBlockId: null } };
 }
 
-function message(id: string): { kind: 'message'; message: { id: string; role: 'user'; text: string } } {
-  return { kind: 'message', message: { id, role: 'user', text: 'hi' } };
+function message(id: string): { kind: 'message'; message: { id: string; role: 'user'; text: string; images: [] } } {
+  return { kind: 'message', message: { id, role: 'user', text: 'hi', images: [] } };
 }
 
 function diffBlock(id: string, files: { path: string; additions: number; deletions: number }[]) {

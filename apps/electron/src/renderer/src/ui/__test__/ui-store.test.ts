@@ -113,7 +113,7 @@ describe('ui store', () => {
     store.getState().beginProjectFiles({ name: 'pai', path: '/tmp/pai' });
     let s = store.getState().projectFiles;
     expect(s).toEqual({ target: { name: 'pai', path: '/tmp/pai' }, tree: [], loading: true });
-    store.getState().completeProjectFiles([{ name: 'a.ts', path: 'a.ts', children: [] }]);
+    store.getState().completeProjectFiles([{ name: 'a.ts', path: 'a.ts', kind: 'file', children: [] }]);
     s = store.getState().projectFiles;
     expect(s.loading).toBe(false);
     expect(s.tree).toHaveLength(1);

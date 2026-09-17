@@ -52,17 +52,17 @@ test('renameSession trim 后为空直接拒绝且不发出命令', async () => {
 });
 
 test('submitDraft 携带 images 透传（prompt 单一通路）；纯图消息合法投递、全空拒绝', async () => {
-  const images = [{ type: 'image' as const, data: 'aGk=', mimeType: 'image/png' }];
+  const images = [{ type: 'image' as const, data: 'aGk=', mediaType: 'image/png' }];
   const client = makeClient({});
   const store = createLiveStore();
-  store.getState().bootstrap({ sessions: [], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } });
+  store.getState().bootstrap({ sessions: [], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [], trustedDefault: false, hiddenProjects: [], idleRecycleMinutes: 5, archivedSessions: [] }, hostPhase: 'ready' });
   const controller = createLiveController(client, store);
   expect(await controller.submitDraft('t1', 'hello', images)).toBeNull();
   expect(client.calls.find((call) => call.method === 'session/prompt')?.params).toMatchObject({
     threadId: 't1',
     message: 'hello',
     streamingBehavior: 'followUp',
-    images: [{ type: 'image', data: 'aGk=', mimeType: 'image/png' }],
+    images: [{ type: 'image', data: 'aGk=', mediaType: 'image/png' }],
   });
 
   const noImages = makeClient({});
@@ -82,7 +82,7 @@ test('runBash：置位/清位 bashRunning、发出命令、随后对账拉取', 
   const client = makeClient({});
   const store = createLiveStore();
   const controller = createLiveController(client, store);
-  store.getState().bootstrap({ sessions: [], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } });
+  store.getState().bootstrap({ sessions: [], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [], trustedDefault: false, hiddenProjects: [], idleRecycleMinutes: 5, archivedSessions: [] }, hostPhase: 'ready' });
   const seen: boolean[] = [];
   const unsubscribe = store.subscribe((state) => {
     seen.push(Object.values(state.threads)[0]?.bashRunning ?? false);
@@ -108,7 +108,7 @@ test('submitDraft 显式 steer 模式以 streamingBehavior=steer 投递；默认
   const client = makeClient({});
   const store = createLiveStore();
   const controller = createLiveController(client, store);
-  store.getState().bootstrap({ sessions: [], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } });
+  store.getState().bootstrap({ sessions: [], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [], trustedDefault: false, hiddenProjects: [], idleRecycleMinutes: 5, archivedSessions: [] }, hostPhase: 'ready' });
   store.getState().applyEvent({ type: 'turnStarted', threadId: 't1', at: 1 }, 1);
   expect(await controller.submitDraft('t1', '改需求', undefined, 'steer')).toBeNull();
   expect(client.calls.find((call) => call.method === 'session/prompt')?.params).toMatchObject({
@@ -128,7 +128,7 @@ test('症状回归：对话已结束但 streaming 镜像滞留 true 时，submit
   const client = makeClient({});
   const store = createLiveStore();
   const controller = createLiveController(client, store);
-  store.getState().bootstrap({ sessions: [], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] } });
+  store.getState().bootstrap({ sessions: [], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [], trustedDefault: false, hiddenProjects: [], idleRecycleMinutes: 5, archivedSessions: [] }, hostPhase: 'ready' });
   // 宿主死亡/漏 settle 场景下镜像滞留：本地 streaming=true 而会话实际空闲
   store.getState().applyEvent({ type: 'turnStarted', threadId: 't1', at: 1 }, 1);
   expect(store.getState().threads['t1']?.streaming).toBe(true);
@@ -138,16 +138,17 @@ test('症状回归：对话已结束但 streaming 镜像滞留 true 时，submit
   expect(client.calls.some((call) => call.method === 'session/followUp' || call.method === 'session/steer')).toBe(false);
 });
 
-test('forkSession：命令形状、新会话激活与旧线程镜像终态化', async () => {
+test('forkSession：命令形状（seq = WAL 行号）、新会话激活与旧线程镜像终态化', async () => {
   const client = makeClient({
     'session/fork': { ok: true, data: { threadId: 't-fork', cwd: '/w', sessionPath: '/a.jsonl', state: 'live', streaming: false, title: '分叉', model: null, thinkingLevel: null, lastActivityAt: 0 } },
+    'session/entries': { ok: true, data: { items: [], cursor: null } },
   });
   const store = createLiveStore();
   const controller = createLiveController(client, store);
   // 旧线程处于流式（fork 常发生在生成中改主意向）：换轨后不得滞留
   store.getState().applyEvent({ type: 'turnStarted', threadId: 't1', at: 1 }, 1);
-  expect(await controller.forkSession('t1', 'entry-9')).toEqual({ ok: true, threadId: 't-fork' });
-  expect(client.calls).toContainEqual({ method: 'session/fork', params: { threadId: 't1', entryId: 'entry-9', position: 'before' } });
+  expect(await controller.forkSession('t1', 9)).toEqual({ ok: true, threadId: 't-fork' });
+  expect(client.calls).toContainEqual({ method: 'session/fork', params: { threadId: 't1', seq: 9, position: 'before' } });
   expect(store.getState().activeThreadId).toBe('t-fork');
   expect(store.getState().threads['t1']?.streaming).toBe(false);
 });
@@ -155,6 +156,6 @@ test('forkSession：命令形状、新会话激活与旧线程镜像终态化', 
 test('forkSession 失败带原因不切会话（cancelled 拦截交上层文案区分）', async () => {
   const client = makeClient({ 'session/fork': { ok: false, reason: 'fork_cancelled' } });
   const store = createLiveStore();
-  expect(await createLiveController(client, store).forkSession('t1', 'x')).toEqual({ ok: false, reason: 'fork_cancelled' });
+  expect(await createLiveController(client, store).forkSession('t1', 9)).toEqual({ ok: false, reason: 'fork_cancelled' });
   expect(store.getState().activeThreadId).toBeNull();
 });

@@ -28,7 +28,7 @@ describe('isReadableRelativePath', () => {
     ['/a', false],
     ['a\0b', false],
     ['a\nb', false],
-  ])('%s → %s', (path, expected) => {
+  ])('%s → %s', (path: string, expected: boolean) => {
     expect(isReadableRelativePath(path)).toBe(expected);
   });
 });

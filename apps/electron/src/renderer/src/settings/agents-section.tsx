@@ -15,18 +15,18 @@ import type { SettingsScreenProps } from './use-settings-screen';
 
 type AgentsSectionProps = SettingsScreenProps['agents'];
 
-/** 定义条目的唯一键（作用域 + 项目 + 文件名主干；upsert previous 与 remove 共用同一键位）。 */
-type AgentKey = { file: string; scope: 'user' | 'project'; project: string | null };
+/** 定义条目的唯一键（作用域 + 项目 + name；upsert previous 与 remove 共用同一键位）。 */
+type AgentKey = { name: string; scope: 'user' | 'project'; project: string | null };
 
 type AgentsView = { kind: 'list' } | { kind: 'form'; initial: AgentDefinition | null; previous: AgentKey | null };
 
-/** 卡片确认删除态的稳定字符串键（scope:project:file）。 */
+/** 卡片确认删除态的稳定字符串键（scope:project:name）。 */
 function agentKeyString(key: AgentKey): string {
-  return `${key.scope}:${key.project ?? ''}:${key.file}`;
+  return `${key.scope}:${key.project ?? ''}:${key.name}`;
 }
 
 function definitionKey(definition: AgentDefinition): AgentKey {
-  return { file: definition.file ?? definition.name, scope: definition.scope, project: definition.project };
+  return { name: definition.name, scope: definition.scope, project: definition.project };
 }
 
 /** 本地过滤：名称/描述包含匹配（大小写不敏感）。 */
@@ -176,7 +176,7 @@ function AgentsSection({ definitions, knownProjects, modelOptions, toolIds, onRe
                             <p className="mt-[2px] truncate font-mono text-[11.5px] leading-[16px] text-muted-foreground/80">{definition.project}</p>
                           ) : null}
                           {confirming ? (
-                            <p className="mt-[4px] text-[11.5px] leading-[16px] text-destructive">{copy.settings.agentsRemoveHint(definition.file ?? definition.name)}</p>
+                            <p className="mt-[4px] text-[11.5px] leading-[16px] text-destructive">{copy.settings.agentsRemoveHint(definition.name)}</p>
                           ) : null}
                         </div>
                         <div className="flex shrink-0 items-center gap-[4px]">

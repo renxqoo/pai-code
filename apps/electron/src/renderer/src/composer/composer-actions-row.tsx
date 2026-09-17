@@ -1,29 +1,28 @@
 import * as React from 'react';
 import { ArrowUp, ChevronDown, Plus } from 'lucide-react';
 
-import type { PermissionRules, SessionStatsView } from '@paiapp/contracts';
+import type { PermMode, SessionStatsView } from '@paiapp/contracts';
 
 import { UsageDetails } from './usage-details';
 
-import { IconButton, MenuButton, menuTriggerClassName, PickerDialog, UsageRing } from '@paiapp/ui';
+import { IconButton, MenuButton, menuTriggerClassName, PickerDialog } from '@paiapp/ui';
 import { groupModelOptions } from '@/components/group-model-options';
 import { copy } from '@/strings';
+import { formatTokenCount } from '@/thread/format-count-unit';
 
 import { PermissionModeMenu } from './permission-mode-menu';
 import { AgentStatusButton } from './agent-status-button';
 
-/** 思考档控件组：有会话走 hub 线程真相，新任务页按所选模型本地计算，两者都渲染。 */
+/** 思考档控件组：恒四档（会话读口当前值 / 新任务页本地选择），两页都渲染。 */
 type EffortControls = {
   value: string
   options: readonly string[]
   onSelect: (value: string) => void
-  unavailableLabel: string
 }
 
-/** 用量环控件组（会话面数据；无会话不渲染，不摆没有数据面的假控件）。 */
+/** 用量控件组（会话面数据；无会话不渲染，不摆没有数据面的假控件）。 */
 type UsageControls = {
-  contextUsed: number
-  /** 用量明细（I1）；null = 未拉取，环不可点。 */
+  /** 用量明细（I1）；null = 未拉取，不可点。 */
   stats: SessionStatsView | null
   label: string
 }
@@ -45,16 +44,13 @@ type ComposerActionsRowProps = {
   generating: boolean
   onStop: () => void
   /** 会话权限模式（当前生效；null = 未加载/无会话，控件不渲染） */
-  permissionMode: PermissionRules['mode'] | null
-  /** true = 生效规则来自全局文件（无会话 sidecar） */
-  permissionFollowsGlobal: boolean
-  onSelectPermissionMode: (mode: PermissionRules['mode']) => void
-  onFollowPermissionGlobal: () => void
+  permissionMode: PermMode | null
+  onSelectPermissionMode: (mode: PermMode) => void
   /** 会话面：工作中子代理状态徽标（不传 = 无会话面，不渲染）。 */
   agents?: { working: number; onOpen: () => void }
   /** 思考档控件（null = 不渲染） */
   effort: EffortControls | null
-  /** 用量环控件（null = 无会话数据面，不渲染） */
+  /** 用量控件（null = 无会话数据面，不渲染） */
   usage: UsageControls | null
 }
 
@@ -63,10 +59,10 @@ function optionItems(options: readonly string[], selected: string) {
 }
 
 /**
- * 输入框底行：左侧附件与权限模式，右侧用量环 / 模型 / 思考档 / 发送（生成中且无输入时为红色停止）。
- * 模型选择走统一 CommandDialog 弹窗（T21）；思考档在会话与新建任务页都可用
- * （选项数据源不同：会话走 hub 线程真相，新建页按模型能力本地计算）；
- * 用量环只在有会话时出现。压缩入口是斜杠命令 /compact（按钮已下线；hub prompt 通路拦截，见 T26）。
+ * 输入框底行：左侧附件与权限模式，右侧用量 / 模型 / 思考档 / 发送（生成中且无输入时为红色停止）。
+ * 模型选择走统一 CommandDialog 弹窗（T21）；思考档恒四档（会话读口当前值，新建页本地选择）；
+ * 用量入口只在有会话时出现（上下文水位已随 stats 形状退役，入口显 token 合计）。
+ * 压缩入口是斜杠命令 /compact（按钮已下线；hub prompt 通路拦截，见 T26）。
  */
 function ComposerActionsRow({
   model,
@@ -82,9 +78,7 @@ function ComposerActionsRow({
   generating,
   onStop,
   permissionMode,
-  permissionFollowsGlobal,
   onSelectPermissionMode,
-  onFollowPermissionGlobal,
   agents,
   effort,
   usage,
@@ -97,38 +91,31 @@ function ComposerActionsRow({
         <Plus strokeWidth={1.9} />
       </IconButton>
       {permissionMode !== null ? (
-        <PermissionModeMenu
-          mode={permissionMode}
-          followsGlobal={permissionFollowsGlobal}
-          onSelectMode={onSelectPermissionMode}
-          onFollowGlobal={onFollowPermissionGlobal}
-        />
+        <PermissionModeMenu mode={permissionMode} onSelectMode={onSelectPermissionMode} />
       ) : null}
       {agents === undefined ? null : <AgentStatusButton count={agents.working} onOpen={agents.onOpen} />}
       {/* 右组可收缩（min-w-0），收缩量全部由模型名截断吸收；其余控件 shrink-0 保持原宽 */}
       <div className="ml-auto flex min-w-0 items-center gap-[9px]">
         {usage === null ? null : (
-          <>
-            <span className="relative flex shrink-0 items-center">
-              {usageOpen && usage.stats !== null ? <UsageDetails stats={usage.stats} /> : null}
-              {usage.stats === null ? (
-                <span title={usage.label}>
-                  <UsageRing value={usage.contextUsed} size={17} className="text-muted-foreground/70" />
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  title={usage.label}
-                  aria-label={usage.label}
-                  aria-expanded={usageOpen}
-                  onClick={() => setUsageOpen((open) => !open)}
-                  className="cursor-pointer rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                >
-                  <UsageRing value={usage.contextUsed} size={17} className="text-muted-foreground/70" />
-                </button>
-              )}
-            </span>
-          </>
+          <span className="relative flex shrink-0 items-center">
+            {usageOpen && usage.stats !== null ? <UsageDetails stats={usage.stats} /> : null}
+            {usage.stats === null ? (
+              <span title={usage.label} className="font-mono text-[11px] leading-none text-muted-foreground/50 tabular-nums">
+                —
+              </span>
+            ) : (
+              <button
+                type="button"
+                title={usage.label}
+                aria-label={usage.label}
+                aria-expanded={usageOpen}
+                onClick={() => setUsageOpen((open) => !open)}
+                className="cursor-pointer rounded-md px-[2px] font-mono text-[11px] leading-none text-muted-foreground tabular-nums outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                {formatTokenCount(usage.stats.tokens.total) ?? '0'}
+              </button>
+            )}
+          </span>
         )}
         {modelOptions.length === 0 && onOpenSettings !== undefined ? (
           <button
@@ -166,14 +153,7 @@ function ComposerActionsRow({
             />
           </>
         )}
-        {effort === null ? null : effort.options.length === 0 ? (
-          <span
-            title={effort.unavailableLabel}
-            className="flex shrink-0 cursor-default items-center gap-2 rounded-lg py-1 pr-1 pl-1.5 text-[12px] leading-none text-muted-foreground/60 select-none"
-          >
-            <span className="whitespace-nowrap">{effort.unavailableLabel}</span>
-          </span>
-        ) : (
+        {effort === null ? null : (
           <MenuButton
             aria-label={effort.value}
             align="end"

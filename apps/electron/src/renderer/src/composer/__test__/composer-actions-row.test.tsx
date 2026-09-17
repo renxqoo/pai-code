@@ -15,13 +15,11 @@ const EFFORT: EffortControls = {
   value: 'high',
   options: ['low', 'high'],
   onSelect: noop,
-  unavailableLabel: copy.composer.effortUnavailable,
 };
 
 const USAGE: UsageControls = {
-  contextUsed: 0,
   stats: null,
-  label: copy.composer.contextUsage,
+  label: copy.composer.usageSummary,
 };
 
 function makeProps(overrides: Partial<Parameters<typeof ComposerActionsRow>[0]> = {}): Parameters<typeof ComposerActionsRow>[0] {
@@ -38,9 +36,7 @@ function makeProps(overrides: Partial<Parameters<typeof ComposerActionsRow>[0]> 
     generating: false,
     onStop: noop,
     permissionMode: null,
-    permissionFollowsGlobal: false,
     onSelectPermissionMode: noop,
-    onFollowPermissionGlobal: noop,
     effort: EFFORT,
     usage: USAGE,
     ...overrides,
@@ -80,26 +76,37 @@ describe('输入框底行模型选择（弹窗入口）', () => {
     expect(html).not.toContain(copy.composer.noModels);
   });
 
-  test('症状回归：新建任务页（只有思考档面、无用量面）思考档仍可选，用量环不摆假控件', () => {
+  test('症状回归：新建任务页（只有思考档面、无用量面）思考档仍可选，用量入口不摆假控件', () => {
     const html = renderToStaticMarkup(<ComposerActionsRow {...makeProps({ usage: null })} />);
     // 思考档控件渲染且展示当前值
     expect(html).toContain('high');
-    // 用量环是会话面数据，不渲染
-    expect(html).not.toContain(copy.composer.contextUsage);
+    // 用量入口是会话面数据，不渲染
+    expect(html).not.toContain(copy.composer.usageSummary);
     // 附件与发送仍在
     expect(html).toContain(copy.composer.attach);
     expect(html).toContain(copy.composer.send);
   });
 
-  test('思考档与用量环都缺（双 null）时两项皆不渲染', () => {
+  test('思考档与用量入口都缺（双 null）时两项皆不渲染', () => {
     const html = renderToStaticMarkup(<ComposerActionsRow {...makeProps({ effort: null, usage: null })} />);
-    expect(html).not.toContain(copy.composer.contextUsage);
-    expect(html).not.toContain(copy.composer.effortUnavailable);
+    expect(html).not.toContain(copy.composer.usageSummary);
+    // 思考档触发器带 aria-label=当前值：控件不渲染即无此标记
+    expect(html).not.toContain('aria-label="high"');
   });
 
-  test('思考档不可用（档位为空）时给禁用原因文案', () => {
-    const html = renderToStaticMarkup(<ComposerActionsRow {...makeProps({ effort: { ...EFFORT, options: [] } })} />);
-    expect(html).toContain(copy.composer.effortUnavailable);
+  test('用量入口：stats 已拉取为可点按钮（title=用量），未拉取退化为纯展示占位', () => {
+    const fetched = renderToStaticMarkup(
+      <ComposerActionsRow
+        {...makeProps({ usage: { stats: { userMessages: 1, assistantMessages: 2, toolCalls: 3, tokens: { input: 1200, output: 340, total: 1540 }, cost: 0 }, label: copy.composer.usageSummary } })}
+      />,
+    );
+    const tag = buttonTag(fetched, copy.composer.usageSummary);
+    expect(tag).toContain('aria-expanded="false"');
+    expect(fetched).toContain('1.5k');
+
+    const unfetched = renderToStaticMarkup(<ComposerActionsRow {...makeProps()} />);
+    expect(buttonTag(unfetched, copy.composer.usageSummary)).toBeNull();
+    expect(unfetched).toContain('—');
   });
 });
 
@@ -114,7 +121,7 @@ describe('输入框底行收缩契约（窄卡不把发送键顶出卡片）', (
 
   test('固定宽度控件不参与收缩：权限模式 / 思考档触发器带 shrink-0，文案保持 nowrap', () => {
     const html = renderToStaticMarkup(
-      <ComposerActionsRow {...makeProps({ permissionMode: 'allow-all' })} />,
+      <ComposerActionsRow {...makeProps({ permissionMode: 'acceptEdits' })} />,
     );
     // 触发器 class 以 shrink-0 结尾（menuTriggerClassName 尾段含 &，静态 markup 里转义为 &amp;，故只断尾段）
     expect(html).toContain(' shrink-0">');

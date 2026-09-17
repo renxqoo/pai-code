@@ -14,7 +14,7 @@ export function stopOrAbort(): void {
   const thread = threadId === null ? undefined : state.threads[threadId];
   const generating = thread?.streaming ?? false;
   const bashRunning = thread?.bashRunning ?? false;
-  const agentsActive = summarizeAgents(thread?.agents ?? []).workingCount > 0;
+  const agentsActive = summarizeAgents(thread?.agents ?? []).busyCount > 0;
   if (bashRunning) {
     workspaceActions.abortBash();
     return;

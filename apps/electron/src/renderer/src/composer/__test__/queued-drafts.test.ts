@@ -207,7 +207,7 @@ describe('queued-drafts 重开换 id 改绑', () => {
 });
 
 describe('diffSettledThreads 轮结束侦测', () => {
-  const run = (streaming: boolean, stopping = false, crashed = false) => ({ streaming, stopping, crashed });
+  const run = (streaming: boolean, stopping = false, crashed = false, parked = false) => ({ streaming, stopping, crashed, parked });
 
   test('自然结算（streaming true→false）触发冲刷', () => {
     const result = diffSettledThreads({ t1: run(true) }, { t1: run(false) }, { t1: {} });
@@ -217,6 +217,11 @@ describe('diffSettledThreads 轮结束侦测', () => {
 
   test('用户停止意图的结算不冲刷（卡片保留由用户处置）', () => {
     const result = diffSettledThreads({ t1: run(true, true) }, { t1: run(false) }, { t1: {} });
+    expect(result.flush).toEqual([]);
+  });
+
+  test('fork 换轨终态（parked）的结算不冲刷（卡片保留待按路径改绑）', () => {
+    const result = diffSettledThreads({ t1: run(true) }, { t1: run(false, false, false, true) }, { t1: {} });
     expect(result.flush).toEqual([]);
   });
 
@@ -250,7 +255,7 @@ describe('diffSettledThreads 轮结束侦测', () => {
 
 describe('runStateOf 运行面投影', () => {
   test('只取结算判定字段', () => {
-    const state = runStateOf({ t1: { streaming: true, stopping: false, crashed: false, extra: 'ignored' } });
-    expect(state.t1).toEqual({ streaming: true, stopping: false, crashed: false });
+    const state = runStateOf({ t1: { streaming: true, stopping: false, crashed: false, parked: false } });
+    expect(state.t1).toEqual({ streaming: true, stopping: false, crashed: false, parked: false });
   });
 });

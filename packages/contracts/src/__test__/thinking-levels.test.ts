@@ -1,43 +1,34 @@
 import { describe, expect, test } from 'bun:test';
 
-import { supportedThinkingLevels, thinkingLevelLabel, thinkingLevelOfLabel } from '../thinking-levels';
+import {
+  THINKING_LEVEL_LABELS,
+  THINKING_LEVEL_ORDER,
+  THINKING_LEVEL_UNSET,
+  isSettableThinkingLevel,
+  thinkingLevelLabel,
+  thinkingLevelOfLabel,
+} from '../thinking-levels';
 
 /**
- * 档位计算镜像 pi-ai getSupportedThinkingLevels：新建任务页无线程时的本地档位数据源，
- * 语义偏移会造成「新建页可选、建会话后被 hub clamp 成别的档」。
+ * 档位词表镜像 host-hub set/get_thinking_level：set 四档封闭、unset 仅 get 回退。
+ * 词表偏移会造成「UI 可选、hub 静默忽略」或反向漏档。
  */
-describe('supportedThinkingLevels', () => {
-  test('不支持思考（reasoning 缺省/非 true/未传）→ 只有 off', () => {
-    expect(supportedThinkingLevels(undefined)).toEqual(['off']);
-    expect(supportedThinkingLevels({})).toEqual(['off']);
-    expect(supportedThinkingLevels({ reasoning: false })).toEqual(['off']);
+describe('思考档词表', () => {
+  test('set 词表 = 四档且顺序稳定（UI 选项顺序）', () => {
+    expect([...THINKING_LEVEL_ORDER]).toEqual(['off', 'low', 'medium', 'high']);
   });
 
-  test('支持思考且无 map → 基础五档（xhigh/max 需显式映射，缺省不给）', () => {
-    expect(supportedThinkingLevels({ reasoning: true })).toEqual(['off', 'minimal', 'low', 'medium', 'high']);
+  test('isSettableThinkingLevel：四档 true；unset/扩展档 false（hub 对词表外 set 静默忽略——app 先行拒绝）', () => {
+    for (const level of THINKING_LEVEL_ORDER) expect(isSettableThinkingLevel(level)).toBe(true);
+    for (const bad of [THINKING_LEVEL_UNSET, 'minimal', 'xhigh', 'max', '']) expect(isSettableThinkingLevel(bad)).toBe(false);
   });
 
-  test('map 显式 null 的档被剔除', () => {
-    expect(supportedThinkingLevels({ reasoning: true, thinkingLevelMap: { minimal: null } })).toEqual([
-      'off', 'low', 'medium', 'high',
-    ]);
-  });
-
-  test('xhigh/max 仅在显式映射时可用；其余档缺省即有', () => {
-    expect(supportedThinkingLevels({ reasoning: true, thinkingLevelMap: { xhigh: '70', max: '99' } })).toEqual([
-      'off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max',
-    ]);
-    expect(supportedThinkingLevels({ reasoning: true, thinkingLevelMap: { high: 'high' } })).toEqual([
-      'off', 'minimal', 'low', 'medium', 'high',
-    ]);
-  });
-});
-
-describe('档位展示名', () => {
-  test('词表内双向可逆；词表外回落原值（手写 models.json 扩展档）', () => {
-    expect(thinkingLevelLabel('xhigh')).toBe('X-high');
-    expect(thinkingLevelOfLabel('X-high')).toBe('xhigh');
-    expect(thinkingLevelLabel('turbo')).toBe('turbo');
-    expect(thinkingLevelOfLabel('turbo')).toBe('turbo');
+  test('label ↔ level 双向映射；未知档回落原值', () => {
+    for (const [level, label] of Object.entries(THINKING_LEVEL_LABELS)) {
+      expect(thinkingLevelLabel(level)).toBe(label);
+      expect(thinkingLevelOfLabel(label)).toBe(level);
+    }
+    expect(thinkingLevelLabel('unknown-level')).toBe('unknown-level');
+    expect(thinkingLevelOfLabel('unknown-label')).toBe('unknown-label');
   });
 });

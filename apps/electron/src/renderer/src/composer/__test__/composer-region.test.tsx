@@ -11,12 +11,12 @@ import { copy } from '@/strings';
 import type { ModelInfoView, PreferencesView, SessionStatsView, SessionView } from '@paiapp/contracts';
 
 /**
- * 输入卡区域回归（T33 M2）：0+1 props 自订阅——数据形态/交互动作直落 store 与
+ * 输入卡区域回归（T33 M2）：0 props 自订阅——数据形态/交互动作直落 store 与
  * queuedDrafts；B-keystroke 双用例钉重渲半径（敲键只重渲本子树、无关线程事件零穿透）。
  */
 
 function model(provider: string, modelId: string): ModelInfoView {
-  return { provider, modelId, supportedThinkingLevels: ['medium', 'high'] } as ModelInfoView;
+  return { provider, modelId, reasoning: true } as ModelInfoView;
 }
 
 function session(threadId: string, overrides: Partial<SessionView> = {}): SessionView {
@@ -48,6 +48,8 @@ function preferences(overrides: Partial<PreferencesView> = {}): PreferencesView 
   };
 }
 
+const statsOf = (total: number): SessionStatsView => ({ userMessages: 3, assistantMessages: 5, toolCalls: 7, tokens: { input: 800, output: Math.max(0, total - 800), total }, cost: 0.1 });
+
 function seedLive(input: {
   threads?: Record<string, Partial<LiveThreadState>>
   sessionOverrides?: Partial<SessionView>
@@ -60,12 +62,11 @@ function seedLive(input: {
   for (const [id, patch] of Object.entries(input.threads ?? { [tid]: {} })) {
     threads[id] = { ...initialThreadState, ...patch };
   }
-  const stat: SessionStatsView = { contextUsage: 12, inputTokens: 0, outputTokens: 0, totalTokens: 0, cost: 0 } as SessionStatsView;
   liveStore.setState({
     sessions: { [tid]: session(tid, input.sessionOverrides) },
     activeThreadId: tid,
     threads,
-    stats: input.stats ?? { [tid]: stat },
+    stats: input.stats ?? { [tid]: statsOf(1200) },
     models: input.models ?? [model('openai', 'gpt-5.3')],
     preferences: preferences(),
   });
@@ -87,14 +88,14 @@ describe('ComposerRegion 数据形态', () => {
     seedLive({});
     uiStore.getState().setDraft('t1', 'T1 的草稿');
     uiStore.getState().setDraft('t2', 'T2 的草稿');
-    const view = render(<ComposerRegion onOpenAgents={() => undefined} />);
+    const view = render(<ComposerRegion />);
     const input = view.container.querySelector('textarea') as HTMLTextAreaElement;
     expect(input.value).toBe('T1 的草稿');
     liveStore.setState({ sessions: { t1: session('t1'), t2: session('t2') }, activeThreadId: 't2' });
-    view.rerender(<ComposerRegion onOpenAgents={() => undefined} />);
+    view.rerender(<ComposerRegion />);
     expect(input.value).toBe('T2 的草稿'); // 切线程各取各的槽
     liveStore.setState({ activeThreadId: 't1' });
-    view.rerender(<ComposerRegion onOpenAgents={() => undefined} />);
+    view.rerender(<ComposerRegion />);
     expect(input.value).toBe('T1 的草稿'); // 切回不丢
     view.unmount();
   });
@@ -102,7 +103,7 @@ describe('ComposerRegion 数据形态', () => {
   test('无模型（hostDown）：模型位换「宿主未连接」引导，点击进设置', () => {
     seedLive({ models: [] });
     liveStore.setState({ hostPhase: 'failed' });
-    const view = render(<ComposerRegion onOpenAgents={() => undefined} />);
+    const view = render(<ComposerRegion />);
     const guide = [...view.container.querySelectorAll('button')].find((b) => b.getAttribute('title')?.includes('宿主未连接'));
     expect(guide).toBeDefined();
     React.act(() => {
@@ -112,24 +113,31 @@ describe('ComposerRegion 数据形态', () => {
     view.unmount();
   });
 
-  test('用量环：stats 已拉取为可点按钮（title=上下文占用），未拉取退化为纯展示 span', () => {
+  test('用量入口：stats 已拉取为可点按钮（title=用量、显 token 合计），未拉取退化为纯展示占位', () => {
     seedLive({});
-    const view = render(<ComposerRegion onOpenAgents={() => undefined} />);
-    expect(view.container.querySelector('button[title="上下文占用"]')).not.toBeNull();
+    const view = render(<ComposerRegion />);
+    const usageButton = view.container.querySelector(`button[title="${copy.composer.usageSummary}"]`);
+    expect(usageButton).not.toBeNull();
+    expect(usageButton?.textContent).toBe('1.2k');
     view.unmount();
     seedLive({ stats: {} as Record<string, SessionStatsView> });
-    const plain = render(<ComposerRegion onOpenAgents={() => undefined} />);
-    expect(plain.container.querySelector('button[title="上下文占用"]')).toBeNull();
-    expect(plain.container.querySelector('span[title="上下文占用"]')).not.toBeNull();
+    const plain = render(<ComposerRegion />);
+    expect(plain.container.querySelector(`button[title="${copy.composer.usageSummary}"]`)).toBeNull();
+    expect(plain.container.querySelector(`span[title="${copy.composer.usageSummary}"]`)).not.toBeNull();
     plain.unmount();
   });
 
-  test('权限模式：会话规则已加载渲染操作栏控件，未加载不渲染', () => {
+  test('权限模式：读口已加载渲染操作栏控件（展示名随词表），未加载不渲染', () => {
     seedLive({});
-    liveStore.setState({ sessionRules: { rules: { mode: 'ask' }, source: 'global' } });
-    const withRules = render(<ComposerRegion onOpenAgents={() => undefined} />);
-    expect(withRules.container.textContent).toContain(copy.settings.permissionsModeAsk);
-    withRules.unmount();
+    liveStore.setState({ sessionPermissionMode: { mode: 'default', source: 'user' } });
+    const withMode = render(<ComposerRegion />);
+    expect(withMode.container.textContent).toContain(copy.settings.permModeOptions.default);
+    withMode.unmount();
+
+    liveStore.setState({ sessionPermissionMode: null });
+    const unloaded = render(<ComposerRegion />);
+    expect(unloaded.container.textContent).not.toContain(copy.settings.permModeOptions.default);
+    unloaded.unmount();
   });
 });
 
@@ -137,7 +145,7 @@ describe('ComposerRegion 交互', () => {
   test('停止三态接线：生成中无输入点击发送位 → stopOrAbort（直停路径）', () => {
     seedLive({ threads: { t1: { streaming: true } } });
     const stop = jest.spyOn(workspaceActions, 'stopActiveTurn');
-    const view = render(<ComposerRegion onOpenAgents={() => undefined} />);
+    const view = render(<ComposerRegion />);
     const stopButton = [...view.container.querySelectorAll('button')].find((b) => b.getAttribute('aria-label') === '停止生成');
     expect(stopButton).toBeDefined();
     React.act(() => {
@@ -151,7 +159,7 @@ describe('ComposerRegion 交互', () => {
     seedLive({ threads: { t1: { streaming: true } } });
     uiStore.getState().setDraft('t1', '第一条');
     queuedDrafts.stage('t1', '/tmp/pai/s/t1.jsonl', '排队的消息', []);
-    const view = render(<ComposerRegion onOpenAgents={() => undefined} />);
+    const view = render(<ComposerRegion />);
     expect(view.container.textContent).toContain('排队的消息');
     React.act(() => {
       [...view.container.querySelectorAll('button')].find((b) => b.getAttribute('aria-label') === '移除排队消息')?.click();
@@ -159,7 +167,7 @@ describe('ComposerRegion 交互', () => {
     expect(view.container.textContent).not.toContain('排队的消息');
     // 再暂存一条走编辑回填
     queuedDrafts.stage('t1', '/tmp/pai/s/t1.jsonl', '第二条排队', []);
-    view.rerender(<ComposerRegion onOpenAgents={() => undefined} />);
+    view.rerender(<ComposerRegion />);
     React.act(() => {
       [...view.container.querySelectorAll('button')].find((b) => b.getAttribute('aria-label') === '编辑排队消息')?.click();
     });
@@ -172,7 +180,7 @@ describe('ComposerRegion 交互', () => {
     seedLive({ activeThreadId: 't-steer', threads: { 't-steer': { streaming: true } } });
     const submit = jest.spyOn(workspaceActions, 'submitThreadDraft').mockResolvedValue(null);
     queuedDrafts.stage('t-steer', '/tmp/pai/s/t-steer.jsonl', '改向消息', [{ name: '图.png', payload: { data: 'd', mimeType: 'image/png' } }]);
-    const view = render(<ComposerRegion onOpenAgents={() => undefined} />);
+    const view = render(<ComposerRegion />);
     React.act(() => {
       [...view.container.querySelectorAll('button')].find((b) => b.textContent?.trim() === '立即')?.click();
     });
@@ -180,13 +188,13 @@ describe('ComposerRegion 交互', () => {
     await React.act(async () => {
       for (let i = 0; i < 6; i += 1) await Promise.resolve();
     });
-    expect(submit).toHaveBeenCalledWith('t-steer', '改向消息', [{ type: 'image', data: 'd', mimeType: 'image/png' }], 'steer');
+    expect(submit).toHaveBeenCalledWith('t-steer', '改向消息', [{ type: 'image', data: 'd', mediaType: 'image/png' }], 'steer');
     view.unmount();
   });
 
   test('分支段：cwd 非空渲染项目/分支上下文条', () => {
     seedLive({});
-    const view = render(<ComposerRegion onOpenAgents={() => undefined} />);
+    const view = render(<ComposerRegion />);
     expect(view.container.textContent).toContain('pai');
     view.unmount();
   });
@@ -213,7 +221,7 @@ describe('ComposerRegion 分支面板接线（T36）', () => {
       ok: true,
       data: { isRepo: true, commits: [], truncated: false },
     });
-    const view = render(<ComposerRegion onOpenAgents={() => undefined} />);
+    const view = render(<ComposerRegion />);
     await flushAsync();
     const trigger = branchTrigger(view);
     expect(trigger).toBeDefined();
@@ -228,7 +236,7 @@ describe('ComposerRegion 分支面板接线（T36）', () => {
       ok: true,
       data: { isRepo: true, current: 'main', branches: ['dev', 'main'], dirtyFiles: 0 },
     });
-    const view = render(<ComposerRegion onOpenAgents={() => undefined} />);
+    const view = render(<ComposerRegion />);
     await flushAsync();
     expect(listBranches).toHaveBeenCalledTimes(1); // cwd 就绪首拉
     React.act(() => {
@@ -245,7 +253,7 @@ describe('ComposerRegion 分支面板接线（T36）', () => {
       ok: true,
       data: { isRepo: true, current: 'main', branches: ['dev', 'main'], dirtyFiles: 0 },
     });
-    const view = render(<ComposerRegion onOpenAgents={() => undefined} />);
+    const view = render(<ComposerRegion />);
     await flushAsync();
     expect(branchTrigger(view)).toBeUndefined();
     // 只读段仍展示分支名（span 而非按钮）
@@ -259,7 +267,7 @@ describe('ComposerRegion 分支面板接线（T36）', () => {
       ok: true,
       data: { isRepo: false, current: null, branches: [], dirtyFiles: 0 },
     });
-    const view = render(<ComposerRegion onOpenAgents={() => undefined} />);
+    const view = render(<ComposerRegion />);
     await flushAsync();
     expect(branchTrigger(view)).toBeUndefined();
     expect(view.container.textContent).toContain(copy.composer.notARepo);
@@ -292,7 +300,7 @@ describe('重渲边界回归（B-keystroke）', () => {
     let commits = 0;
     const countCommit = (): void => { commits += 1; };
     const probe = renderProbe('host');
-    const region = <ComposerRegion onOpenAgents={() => undefined} />;
+    const region = <ComposerRegion />;
     const view = render(<RegionProbeHost probe={probe.Probe} onCommit={countCommit} region={region} />);
     commits = 0;
     probe.reset();
@@ -308,7 +316,7 @@ describe('重渲边界回归（B-keystroke）', () => {
     seedLive({ activeThreadId: 't1' });
     let commits = 0;
     const countCommit = (): void => { commits += 1; };
-    const region = <ComposerRegion onOpenAgents={() => undefined} />;
+    const region = <ComposerRegion />;
     const view = render(<RegionProbeHost onCommit={countCommit} region={region} />);
     commits = 0;
     // 后台线程 sessionUpdated：sessions 表换引用，但活跃条目 t1 保持原引用（真实事件流形态——

@@ -10,7 +10,7 @@ function user(id: string, text: string, origin: 'user' | 'system' = 'user'): His
 }
 
 function assistant(id: string, patch: Partial<Extract<HistoryItem, { kind: 'assistant' }>> = {}): HistoryItem {
-  return { kind: 'assistant', id, text: '', thinking: '', toolCalls: [], usage: null, stopReason: null, errorMessage: null, at: at(2), ...patch };
+  return { kind: 'assistant', id, messageTs: 0, text: '', thinking: '', toolCalls: [], usage: null, stopReason: null, errorMessage: null, at: at(2), ...patch };
 }
 
 function bash(id: string, command: string): HistoryItem {

@@ -40,8 +40,8 @@ function ThreadBanner(): React.JSX.Element | null {
   }
   if (retrying !== null) {
     return (
-      <BannerStrip tone="info" icon={<RefreshCw className="size-[13px]" strokeWidth={1.75} />}>
-        {copy.flow.retrying(retrying.attempt, retrying.maxAttempts)}
+      <BannerStrip tone="info" icon={<RefreshCw className="size-[13px] animate-spin" strokeWidth={1.75} />}>
+        {copy.flow.retrying(retrying.attempt)}
       </BannerStrip>
     );
   }

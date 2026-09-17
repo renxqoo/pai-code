@@ -79,7 +79,6 @@ export function createFileSettings(settingsFile: string, keyStore: ProviderKeySt
           baseUrl: input.baseUrl,
           api: input.api,
           models: input.models.map((model) => ({ ...model })),
-          thinkingFormat: input.thinkingFormat,
         },
       ].sort((a, b) => a.name.localeCompare(b.name));
       write({ ...current, providers });

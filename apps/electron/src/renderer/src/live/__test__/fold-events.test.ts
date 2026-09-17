@@ -49,7 +49,7 @@ describe('foldEvents · 轮次生命周期', () => {
       }),
       tick(40),
     );
-    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', usage: null }), tick(50));
+    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', ok: true, usage: null }), tick(50));
     expect(s.streaming).toBe(false);
     const turn = liveTurn(s);
     if (turn?.kind !== 'turn') throw new Error('expected turn');
@@ -73,7 +73,7 @@ describe('foldEvents · 轮次生命周期', () => {
     s = foldThreadEvent(s, ev({ type: 'messageStarted', threadId: 't', messageId: 'b', at: tick(4) }), tick(4));
     s = foldThreadEvent(s, ev({ type: 'textDelta', threadId: 't', messageId: 'b', delta: '结论' }), tick(5));
     s = foldThreadEvent(s, ev({ type: 'messageFinal', threadId: 't', message: { id: 'b', text: '结论', thinking: '', toolCalls: [], usage: null } }), tick(6));
-    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', usage: null }), tick(7));
+    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', ok: true, usage: null }), tick(7));
     const turn = liveTurn(s);
     if (turn?.kind !== 'turn') throw new Error('expected turn');
     const texts = turn.turn.blocks.filter((b) => b.kind === 'text');
@@ -85,16 +85,16 @@ describe('foldEvents · 轮次生命周期', () => {
     let s = initialThreadState;
     s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(0) }), tick(0));
     // auto-retry 进行中仍 running，retrying 状态可见
-    s = foldThreadEvent(s, ev({ type: 'retrying', threadId: 't', attempt: 1, maxAttempts: 3, errorMessage: 'e' }), tick(1));
+    s = foldThreadEvent(s, ev({ type: 'retrying', threadId: 't', attempt: 1, errorMessage: 'e' }), tick(1));
     expect(s.retrying).not.toBeNull();
     expect(s.streaming).toBe(true);
     s = foldThreadEvent(s, ev({ type: 'messageStarted', threadId: 't', messageId: 'm', at: tick(2) }), tick(2));
     expect(s.retrying).toBeNull();
-    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', usage: null }), tick(3));
+    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', ok: true, usage: null }), tick(3));
     expect(s.streaming).toBe(false);
     // 重复 settle 不再改变
     const settled = s;
-    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', usage: null }), tick(4));
+    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', ok: true, usage: null }), tick(4));
     expect(s.items).toEqual(settled.items);
   });
 
@@ -102,14 +102,14 @@ describe('foldEvents · 轮次生命周期', () => {
     let s = initialThreadState;
     s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(0) }), tick(0));
     s = foldStopIntent(s);
-    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', usage: null }), tick(100));
+    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', ok: true, usage: null }), tick(100));
     const turn = liveTurn(s);
     if (turn?.kind !== 'turn') throw new Error('expected turn');
     expect(turn.turn.status).toBe('stopped');
     // 迟到的 stop 点击（已 settle）不得污染下一轮
     s = foldStopIntent(s);
     s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(200) }), tick(200));
-    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', usage: null }), tick(300));
+    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', ok: true, usage: null }), tick(300));
     const next = liveTurn(s);
     if (next?.kind !== 'turn') throw new Error('expected turn');
     expect(next.turn.status).toBe('completed');
@@ -141,7 +141,7 @@ describe('foldEvents · 真实协议形态回归（对抗审查 P0-1/P0-2）', (
       ev({ type: 'messageFinal', threadId: 't', message: { id: 'm1', text: '苹果 香蕉 橘子', thinking: '', toolCalls: [], usage: null } }),
       tick(4),
     );
-    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', usage: null }), tick(5));
+    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', ok: true, usage: null }), tick(5));
     const turn = liveTurn(s);
     if (turn?.kind !== 'turn') throw new Error('expected turn');
     const texts = turn.turn.blocks.filter((b) => b.kind === 'text');
@@ -162,14 +162,14 @@ describe('foldEvents · 真实协议形态回归（对抗审查 P0-1/P0-2）', (
     let s = initialThreadState;
     s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(0) }), tick(0));
     s = foldStopIntent(s);
-    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', usage: null }), tick(10));
+    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', ok: true, usage: null }), tick(10));
     s = foldHydrate(s, {
       kind: 'hydrate/rebuild',
       items: [
         history({ kind: 'user', id: 'u1', text: '问' }),
         history({ kind: 'assistant', id: 'a1', text: '答', at: tick(5) }),
       ],
-      cursor: 'a1',
+      cursor: 1,
     });
     expect(s.liveTurnId).toBeNull();
     expect(s.items.map((i) => (i.kind === 'message' ? i.message.text : i.turn.status))).toEqual(['问', 'stopped']);
@@ -241,25 +241,23 @@ describe('foldEvents · 水化与对账', () => {
           history({ kind: 'user', id: 'e1', text: '问' }),
           history({ kind: 'assistant', id: 'e2', text: '答', at: tick(2) }),
         ],
-        cursor: 'e2',
+        cursor: 2,
       },
-      T,
     );
     expect(s.items.map((i) => (i.kind === 'message' ? i.message.text : i.turn.id))).toEqual(['问', 'turn-e2']);
-    expect(s.cursor).toBe('e2');
+    expect(s.cursor).toBe(2);
 
     // 新一轮开始：live 轮在尾部
     s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(100) }), tick(100));
     // turnStarted 对账带出用户回显（插到 live 轮之前）
     s = foldHydrate(
       s,
-      { kind: 'hydrate/reconcile', items: [history({ kind: 'user', id: 'e3', text: '追问' })], cursor: 'e3', dropLiveTurn: false },
-      tick(101),
+      { kind: 'hydrate/reconcile', items: [history({ kind: 'user', id: 'e3', text: '追问' })], cursor: 3, dropLiveTurn: false },
     );
     expect(s.items.map((i) => (i.kind === 'message' ? i.message.text : i.turn.id))).toEqual(['问', 'turn-e2', '追问', s.liveTurnId]);
     // settle：权威条目替换 live 轮
     s = foldThreadEvent(s, ev({ type: 'textDelta', threadId: 't', messageId: 'm9', delta: '流式' }), tick(110));
-    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', usage: null }), tick(120));
+    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', ok: true, usage: null }), tick(120));
     s = foldHydrate(
       s,
       {
@@ -268,24 +266,22 @@ describe('foldEvents · 水化与对账', () => {
           history({ kind: 'user', id: 'e3', text: '追问' }),
           history({ kind: 'assistant', id: 'e4', text: '权威答案', at: tick(115) }),
         ],
-        cursor: 'e4',
+        cursor: 4,
         dropLiveTurn: true,
       },
-      tick(121),
     );
     expect(s.liveTurnId).toBeNull();
     expect(s.items.map((i) => (i.kind === 'message' ? i.message.text : i.turn.id))).toEqual(['问', 'turn-e2', '追问', 'turn-e4']);
     // 重复对账同条目（重复投递/全量兜底）：去重
     s = foldHydrate(
       s,
-      { kind: 'hydrate/reconcile', items: [history({ kind: 'user', id: 'e3', text: '追问' })], cursor: 'e4', dropLiveTurn: false },
-      tick(122),
+      { kind: 'hydrate/reconcile', items: [history({ kind: 'user', id: 'e3', text: '追问' })], cursor: 4, dropLiveTurn: false },
     );
     expect(s.items.length).toBe(4);
   });
 
   test('水化失败标记 → 重试入口', () => {
-    const s = foldHydrate(initialThreadState, { kind: 'hydrate/failed' }, T);
+    const s = foldHydrate(initialThreadState, { kind: 'hydrate/failed' });
     expect(s.hydrateFailed).toBe(true);
   });
 
@@ -323,13 +319,13 @@ describe('foldEvents · 队列/压缩/崩溃', () => {
       streaming: true,
       stopping: true,
       compacting: true,
-      retrying: { attempt: 1, maxAttempts: 3, errorMessage: 'x' },
+      retrying: { attempt: 1, errorMessage: 'x' },
       bashRunning: true,
       bashTail: 'partial',
       queue: { steering: ['插入'], followUp: ['下一条'] },
     };
     s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(0) }), tick(0));
-    s = foldThreadEvent(s, ev({ type: 'subagentStarted', threadId: 't', subagentId: 's1', agent: 'explore', task: '扫描' }), tick(1));
+    s = foldThreadEvent(s, ev({ type: 'subagentStarted', threadId: 't', agentId: 's1', agentName: 'explore', task: '扫描' }), tick(1));
     s = foldThreadEvent(s, ev({ type: 'sessionDied', threadId: 't', reason: 'worker_crash' }), tick(5));
     expect(s.streaming).toBe(false);
     expect(s.stopping).toBe(false);
@@ -339,7 +335,7 @@ describe('foldEvents · 队列/压缩/崩溃', () => {
     expect(s.bashTail).toBe('');
     expect(s.queue).toEqual({ steering: [], followUp: [] });
     expect(s.crashed).toBe(true);
-    expect(s.agents[0]).toMatchObject({ id: 's1', status: 'done', endedAt: tick(5) });
+    expect(s.agents[0]).toMatchObject({ id: 'explore', agentId: 's1', status: 'on-disk', endedAt: tick(5) });
     // running 轮不会再有 settle：冻结为 completed（与错过 settle 的遗留轮一致）
     const turn = liveTurn(s);
     if (turn?.kind !== 'turn') throw new Error('expected turn');
@@ -359,53 +355,54 @@ describe('foldEvents · 子代理', () => {
   test('停止与 worker 死亡：working 子代理就地终态', () => {
     let s = initialThreadState;
     s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(0) }), tick(0));
-    s = foldThreadEvent(s, ev({ type: 'subagentStarted', threadId: 't', subagentId: 's1', agent: 'explore', task: '扫描' }), tick(1));
+    s = foldThreadEvent(s, ev({ type: 'subagentStarted', threadId: 't', agentId: 's1', agentName: 'explore', task: '扫描' }), tick(1));
     s = foldStopIntent(s);
-    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', usage: null }), tick(2));
-    expect(s.agents).toMatchObject([{ id: 's1', status: 'done' }]);
+    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', ok: false, usage: null }), tick(2));
+    expect(s.agents).toMatchObject([{ id: 'explore', agentId: 's1', status: 'on-disk' }]);
     // worker 死亡：全部 working 条目就地终态
     s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(10) }), tick(10));
-    s = foldThreadEvent(s, ev({ type: 'subagentStarted', threadId: 't', subagentId: 's2', agent: 'explore', task: '再扫' }), tick(11));
+    s = foldThreadEvent(s, ev({ type: 'subagentStarted', threadId: 't', agentId: 's2', agentName: 'explore', task: '再扫' }), tick(11));
     s = foldThreadEvent(s, ev({ type: 'sessionDied', threadId: 't', reason: 'crash' }), tick(12));
-    expect(s.agents.every((agent) => agent.status === 'done')).toBe(true);
+    expect(s.agents.every((agent) => agent.status === 'on-disk')).toBe(true);
   });
 
-  test('生命周期：started → delta → tool 三相 → report → settled', () => {
+  test('生命周期：started → delta → tool 三相 → settled', () => {
     let s = initialThreadState;
-    s = foldThreadEvent(s, ev({ type: 'subagentStarted', threadId: 't', subagentId: 's1', agent: 'explore', task: '扫描' }), tick(0));
-    s = foldThreadEvent(s, ev({ type: 'subagentDelta', threadId: 't', subagentId: 's1', delta: '发现 ' }), tick(10));
-    s = foldThreadEvent(s, ev({ type: 'subagentDelta', threadId: 't', subagentId: 's1', delta: '3 个文件' }), tick(20));
+    s = foldThreadEvent(s, ev({ type: 'subagentStarted', threadId: 't', agentId: 's1', agentName: 'explore', task: '扫描' }), tick(0));
+    s = foldThreadEvent(s, ev({ type: 'subagentDelta', threadId: 't', agentName: 'explore', delta: '发现 ' }), tick(10));
+    s = foldThreadEvent(s, ev({ type: 'subagentDelta', threadId: 't', agentName: 'explore', delta: '3 个文件' }), tick(20));
     s = foldThreadEvent(
       s,
-      ev({ type: 'subagentTool', threadId: 't', subagentId: 's1', call: { id: 'c1', name: 'read', argsPreview: 'a.ts' }, phase: 'start' }),
+      ev({ type: 'subagentTool', threadId: 't', agentName: 'explore', call: { id: 'c1', name: 'read', argsPreview: 'a.ts' }, phase: 'start' }),
       tick(30),
     );
     s = foldThreadEvent(
       s,
-      ev({ type: 'subagentTool', threadId: 't', subagentId: 's1', call: { id: 'c1', name: 'read', argsPreview: 'a.ts' }, phase: 'update', output: '内容' }),
+      ev({ type: 'subagentTool', threadId: 't', agentName: 'explore', call: { id: 'c1', name: 'read', argsPreview: 'a.ts' }, phase: 'update', output: '内容' }),
       tick(40),
     );
     s = foldThreadEvent(
       s,
-      ev({ type: 'subagentTool', threadId: 't', subagentId: 's1', call: { id: 'c1', name: 'read', argsPreview: 'a.ts' }, phase: 'end', output: '内容', isError: false }),
+      ev({ type: 'subagentTool', threadId: 't', agentName: 'explore', call: { id: 'c1', name: 'read', argsPreview: 'a.ts' }, phase: 'end', output: '内容', isError: false }),
       tick(140),
     );
-    s = foldThreadEvent(s, ev({ type: 'subagentMessage', threadId: 't', subagentId: 's1', agent: 'explore', text: '报告正文' }), tick(150));
-    s = foldThreadEvent(s, ev({ type: 'subagentSettled', threadId: 't', subagentId: 's1' }), tick(160));
+    s = foldThreadEvent(s, ev({ type: 'subagentSettled', threadId: 't', agentName: 'explore', status: 'done' }), tick(160));
 
     const agent = s.agents[0];
-    expect(agent).toMatchObject({ id: 's1', name: 'explore', agentType: 'explore', status: 'done', toolCount: 1, endedAt: tick(160) });
+    expect(agent).toMatchObject({ id: 'explore', name: 'explore', agentType: 'explore', status: 'on-disk', toolCount: 1, endedAt: tick(160) });
     expect(agent?.summary).toContain('发现 3 个文件');
-    expect(agent?.summary).toContain('报告正文');
     expect(agent?.tools[0]).toMatchObject({ id: 'c1', status: 'ok', durationMs: 110, output: '内容' });
   });
 
-  test('subagentText 权威替换增量缓冲', () => {
+  test('subagentState 忙闲迁移：终态行不被迟到的 idle 帧复活', () => {
     let s = initialThreadState;
-    s = foldThreadEvent(s, ev({ type: 'subagentStarted', threadId: 't', subagentId: 's1', agent: 'a', task: 't' }), tick(0));
-    s = foldThreadEvent(s, ev({ type: 'subagentDelta', threadId: 't', subagentId: 's1', delta: '部分' }), tick(1));
-    s = foldThreadEvent(s, ev({ type: 'subagentText', threadId: 't', subagentId: 's1', text: '全文' }), tick(2));
-    expect(s.agents[0]?.summary).toBe('全文');
+    s = foldThreadEvent(s, ev({ type: 'subagentStarted', threadId: 't', agentId: 's1', agentName: 'explore', task: '扫描' }), tick(0));
+    s = foldThreadEvent(s, ev({ type: 'subagentState', threadId: 't', agentName: 'explore', busy: false }), tick(1));
+    expect(s.agents[0]?.status).toBe('idle');
+    s = foldThreadEvent(s, ev({ type: 'subagentSettled', threadId: 't', agentName: 'explore', status: 'done' }), tick(2));
+    expect(s.agents[0]?.status).toBe('on-disk');
+    s = foldThreadEvent(s, ev({ type: 'subagentState', threadId: 't', agentName: 'explore', busy: true }), tick(3));
+    expect(s.agents[0]?.status).toBe('on-disk');
   });
 });
 
@@ -435,7 +432,7 @@ describe('foldEvents · 思考激活态（块粒度）', () => {
     s = foldThreadEvent(s, ev({ type: 'thinkingDelta', threadId: 't', messageId: 'm1', delta: '再想' }), tick(4));
     expect(liveTurn(s)?.kind === 'turn' && liveTurn(s).turn.streamingThinkingBlockId).toBe('think-m1');
     // 工具调用开始：熄灭（核心症状——工具执行期间思考不得再转圈）
-    s = foldThreadEvent(s, ev({ type: 'toolCallAdded', threadId: 't', messageId: 'm1', call: { id: 'c1', name: 'bash', argsPreview: 'rg' } }), tick(5));
+    s = foldThreadEvent(s, ev({ type: 'toolCallAdded', threadId: 't', messageId: 'm1', call: { id: 'c1', name: 'bash', argsPreview: 'rg' }, diff: null }), tick(5));
     expect(liveTurn(s)?.kind === 'turn' && liveTurn(s).turn.streamingThinkingBlockId).toBeNull();
     // 消息定形：熄灭（幂等）
     s = foldThreadEvent(s, ev({ type: 'thinkingDelta', threadId: 't', messageId: 'm1', delta: '补' }), tick(6));
@@ -450,7 +447,7 @@ describe('foldEvents · 思考激活态（块粒度）', () => {
     s = foldThreadEvent(s, ev({ type: 'thinkingDelta', threadId: 't', messageId: 'm2', delta: '工具回来了' }), tick(9));
     expect(liveTurn(s)?.kind === 'turn' && liveTurn(s).turn.streamingThinkingBlockId).toBe('think-m2');
     // 轮终态：熄灭兜底
-    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', usage: null }), tick(10));
+    s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', ok: true, usage: null }), tick(10));
     expect(liveTurn(s)?.kind === 'turn' && liveTurn(s).turn.streamingThinkingBlockId).toBeNull();
     expect(liveTurn(s)?.kind === 'turn' && liveTurn(s).turn.status).toBe('completed');
   });

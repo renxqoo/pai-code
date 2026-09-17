@@ -1,12 +1,12 @@
 import { MoreHorizontal, Pin, PinOff } from 'lucide-react';
 
-import { IconButton, MenuButton, type MenuItemDef, UsageRing } from '@paiapp/ui';
+import { IconButton, MenuButton, type MenuItemDef } from '@paiapp/ui';
 
 import { formatTokenCount } from '@/thread/format-count-unit';
 import { copy } from '@/strings';
 import { cn } from '@/lib/utils';
 import type { RuntimeWorkerRow } from '@/screens/runtime-entries';
-import { contextUsagePercent, formatBytes, idleLabel, isRecyclableIdle, recycleCountdownLabel } from '@/screens/runtime-format';
+import { formatBytes, idleLabel, isRecyclableIdle, recycleCountdownLabel } from '@/screens/runtime-format';
 import { RuntimeStatusBadge } from '@/screens/runtime-status-badge';
 
 type RuntimeWorkerRowProps = {
@@ -55,17 +55,8 @@ function RuntimeWorkerRow({ row, onStop, onRetire, onForceRetire, onToggleKeepal
       <td className={cn(cellClass, 'w-[52px] text-right')}>
         <span className={numericClass}>{row.queueCount > 0 ? row.queueCount : '—'}</span>
       </td>
-      <td className={cn(cellClass, 'w-[64px] text-right')}>
-        <span className={numericClass}>{row.subagents > 0 ? row.subagents : '—'}</span>
-      </td>
-      <td className={cn(cellClass, 'w-[76px]')}>
-        <span className={cn('flex items-center gap-[5px]', contextToneClass(row.stats?.contextUsage ?? null))}>
-          <UsageRing value={row.stats?.contextUsage ?? 0} size={14} />
-          <span className="font-mono text-[11.5px] leading-none tabular-nums">{contextUsagePercent(row.stats?.contextUsage ?? null)}</span>
-        </span>
-      </td>
       <td className={cn(cellClass, 'w-[56px] text-right')}>
-        <span className={numericClass}>{formatTokenCount(row.stats?.tokensTotal ?? null) ?? '—'}</span>
+        <span className={numericClass}>{formatTokenCount(row.stats?.tokens.total ?? null) ?? '—'}</span>
       </td>
       <td className={cn(cellClass, 'w-[72px] text-right')}>
         <span className={numericClass}>{formatBytes(row.rssBytes)}</span>
@@ -120,13 +111,6 @@ function menuItems(row: RuntimeWorkerRow): readonly MenuItemDef[] {
 function projectNameOf(row: RuntimeWorkerRow): string {
   const parts = row.cwd.split('/').filter((part) => part.length > 0);
   return parts.at(-1) ?? row.cwd;
-}
-
-function contextToneClass(contextUsage: number | null): string {
-  if (contextUsage === null) return 'text-muted-foreground/60';
-  if (contextUsage > 0.85) return 'text-destructive';
-  if (contextUsage > 0.6) return 'text-spark';
-  return 'text-muted-foreground';
 }
 
 export { RuntimeWorkerRow };

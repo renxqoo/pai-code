@@ -83,7 +83,6 @@ function RuntimeContent({ snapshot, fetchFailed, rows, diagnosticLog, actions, o
                   threads={snapshot.hostInfo?.threads ?? null}
                   workerCount={snapshot.workers.length}
                   keepaliveCount={snapshot.workers.filter((worker) => worker.keepalive).length}
-                  runningSubagents={snapshot.hostInfo?.subagents.running ?? 0}
                   limits={snapshot.hostInfo?.limits ?? null}
                 />
                 <RuntimeMemoryCard latest={snapshot.latest} />

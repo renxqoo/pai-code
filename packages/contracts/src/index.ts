@@ -9,3 +9,6 @@ export * from './client';
 export * from './settings';
 export * from './permissions';
 export * from './ports';
+export * from './hub-commands';
+export * from './hub-data';
+export * from './hub-events';

@@ -1,17 +1,21 @@
 import { afterAll, describe, expect, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import type { HostCommandOutcome, HostPhase, HostProcessPort, HubFrame, PaiCommand } from '@paiapp/contracts';
+
 import { createApiRoutes } from '../api-routes';
-import { createAgentDirFiles } from '../agent-dir-files';
 import { createAgentDefinitionsStore } from '../agent-definitions-store';
 import { createFileSettings, type ProviderKeyStore } from '../file-settings';
 import { createPaiRuntime } from '../pai-runtime';
+import { createRuntimeMonitor } from '../runtime-monitor/create-runtime-monitor';
 
 /**
- * skills/list 与 skills/setEnabled 路由回归（T13）：
- * 写 pi settings skills overrides（精确名条目）、skill_not_found / write_failed、清单回读。
+ * skills/list 与 skills/setEnabled 路由回归（hub 命令面）：
+ * 清单收窄（source 词表映射、disabled → enabled:false）、set_enabled 命令透传、
+ * host 未启动空表降级、失败 reason 透传。技能清单真相在 hub（hub-settings skills.disabled），
+ * 主进程不再本地管理。
  */
 
 const keyStore: ProviderKeyStore = {
@@ -21,18 +25,48 @@ const keyStore: ProviderKeyStore = {
   keyNames: [],
 };
 
+type SkillsEntry = Record<string, unknown>;
+
 const dirs: string[] = [];
 
-function makeRoutes(piSettingsRaw: string | null = null) {
+/** 可编程 fake host：skills 域按预置清单回放（set_enabled 记账）。 */
+function fakeSkillsHost(initial: Array<SkillsEntry | string>): { port: HostProcessPort; sent: PaiCommand[] } {
+  let skills: unknown[] = [...initial];
+  const sent: PaiCommand[] = [];
+  const port: HostProcessPort = {
+    get phase(): HostPhase {
+      return 'ready';
+    },
+    request: (command: PaiCommand): Promise<HostCommandOutcome> => {
+      sent.push(command);
+      if (command.type === 'skills/list') return Promise.resolve({ ok: true, data: { skills } });
+      if (command.type === 'skills/set_enabled') {
+        skills = skills.map((entry) => {
+          const record = typeof entry === 'object' && entry !== null ? (entry as SkillsEntry) : null;
+          return record !== null && record['name'] === command.name ? { ...record, disabled: !command.enabled } : entry;
+        });
+        return Promise.resolve({ ok: true, data: null });
+      }
+      return Promise.resolve({ ok: true, data: {} });
+    },
+    onFrame: (_cb: (frame: HubFrame) => void) => () => undefined,
+    onPhase: () => () => undefined,
+    restart: () => Promise.resolve(),
+    dispose: () => Promise.resolve(),
+    diagnostics: () => ({ stderrTail: '', restartCount: 0, lastRestartCause: null, lastRestartAt: null }),
+  };
+  return { port, sent };
+}
+
+async function makeRoutes(skills: Array<SkillsEntry | string>, options: { startHost?: boolean } = {}) {
   const work = mkdtempSync(join(tmpdir(), 'pai-skills-route-'));
   dirs.push(work);
   const agentDir = join(work, 'agent');
   mkdirSync(join(agentDir, 'sessions'), { recursive: true });
-  const skillsDir = join(work, 'user-skills');
-  mkdirSync(join(skillsDir, 'rxopen-hot'), { recursive: true });
-  writeFileSync(join(skillsDir, 'rxopen-hot', 'SKILL.md'), '---\nname: rxopen-hot\ndescription: 查热搜\n---\n');
-  if (piSettingsRaw !== null) writeFileSync(join(agentDir, 'settings.json'), piSettingsRaw);
+  // hubEntry 只需真实存在（start 的 existsSync 门）；host 本体由 fake 注入
+  writeFileSync(join(work, 'cli.js'), '');
   const settings = createFileSettings(join(work, 'settings.json'), keyStore);
+  const host = fakeSkillsHost(skills);
   const runtime = createPaiRuntime({
     paths: {
       userDataDir: work,
@@ -45,61 +79,80 @@ function makeRoutes(piSettingsRaw: string | null = null) {
     keyStore,
     providers: () => [],
     idleRecycleMinutes: () => 5,
-    hubPaths: () => null,
+    // startHost=false：host 从不构建（hub 路径未解析的运行时形态）
+    hubPaths: () => (options.startHost === false ? null : { bunPath: 'bun', hubEntry: join(work, 'cli.js') }),
     logger: { log: () => undefined },
     emit: () => undefined,
+    createHost: () => host.port,
   });
+  if (options.startHost !== false) await runtime.start();
   const routes = createApiRoutes({
     runtime,
     settings,
     keyStore,
     audit: () => undefined,
-    agentDirFiles: createAgentDirFiles(agentDir),
-    agentDefinitions: createAgentDefinitionsStore(agentDir),
+    agentDefinitions: createAgentDefinitionsStore(join(work, 'home')),
     agentDir,
     revealPath: () => undefined,
     pickDirectory: () => Promise.resolve(null),
-    skillSources: () => [{ origin: 'agent' as const, dir: skillsDir }],
+    monitor: createRuntimeMonitor({
+      host: () => null,
+      appMetrics: () => ({ rssBytes: null, cpuPercent: null }),
+      systemMemory: () => ({ totalBytes: null, availableBytes: null }),
+      idleRecycleMinutes: () => 5,
+      appVersion: () => 'test',
+    }),
+    exportDiagnosticsBundle: () => work,
   });
-  return { routes, agentDir, skillsDir };
+  return { routes, runtime, sent: host.sent, agentDir };
 }
 
-describe('api-routes skills（T13 技能开关）', () => {
-  test('list：目录扫描 + 默认全启用；预置 -name 条目判禁用', async () => {
-    const { routes } = makeRoutes(JSON.stringify({ skills: ['-skills/rxopen-hot'] }));
-    const outcome = (await routes.invoke('skills/list', {})) as { ok: boolean; data: Array<{ name: string; enabled: boolean }> };
+const CATALOG: SkillsEntry[] = [
+  { name: 'rxopen-hot', source: 'skill-user', disabled: false },
+  { name: 'rx-stock', source: 'skill-builtin', disabled: false },
+  { name: 'draft-writer', source: 'skill-project', disabled: true },
+];
+
+describe('api-routes skills（hub 命令面）', () => {
+  test('list：hub skills/list 收窄为视图（source 词表映射；disabled → enabled:false）', async () => {
+    const { routes } = await makeRoutes(CATALOG);
+    const outcome = (await routes.invoke('skills/list', {})) as { ok: boolean; data: Array<{ name: string; enabled: boolean; source: string }> };
     expect(outcome.ok).toBe(true);
-    expect(outcome.data).toEqual([{ name: 'rxopen-hot', description: '查热搜', enabled: false, origin: 'agent' }]);
+    expect(outcome.data).toEqual([
+      { name: 'rxopen-hot', enabled: true, source: 'user' },
+      { name: 'rx-stock', enabled: true, source: 'builtin' },
+      { name: 'draft-writer', enabled: false, source: 'project' },
+    ]);
   });
 
-  test('setEnabled 禁用 → 写入 -name 且保留 settings 其余键；再启用 → 条目移除', async () => {
-    const { routes, agentDir } = makeRoutes(JSON.stringify({ compaction: { enabled: false }, skills: ['+keep'] }));
+  test('list：垃圾清单条目（缺名/词表外 source/非对象）丢弃不拖垮', async () => {
+    const { routes } = await makeRoutes([{ source: 'skill-user' }, { name: 'x', source: 'weird' }, 'junk', { name: 'ok', source: 'skill-user' }]);
+    const outcome = (await routes.invoke('skills/list', {})) as { ok: boolean; data: Array<{ name: string }> };
+    expect(outcome.ok).toBe(true);
+    expect(outcome.data.map((item) => item.name)).toEqual(['ok']);
+  });
+
+  test('setEnabled → skills/set_enabled 命令透传，结果为写后清单（enabled 翻转）', async () => {
+    const { routes, sent } = await makeRoutes(CATALOG);
     const off = (await routes.invoke('skills/setEnabled', { name: 'rxopen-hot', enabled: false })) as {
       ok: boolean;
       data: Array<{ name: string; enabled: boolean }>;
     };
-    expect(off.data[0]?.enabled).toBe(false);
-    expect(JSON.parse(readFileSync(join(agentDir, 'settings.json'), 'utf8'))).toEqual({
-      compaction: { enabled: false },
-      skills: ['+keep', '-skills/rxopen-hot'],
-    });
+    expect(off.ok).toBe(true);
+    expect(off.data.find((item) => item.name === 'rxopen-hot')?.enabled).toBe(false);
+    const setCmd = sent.find((command) => command.type === 'skills/set_enabled');
+    expect(setCmd).toMatchObject({ type: 'skills/set_enabled', name: 'rxopen-hot', enabled: false });
     const on = (await routes.invoke('skills/setEnabled', { name: 'rxopen-hot', enabled: true })) as {
       ok: boolean;
       data: Array<{ name: string; enabled: boolean }>;
     };
-    expect(on.data[0]?.enabled).toBe(true);
-    expect(JSON.parse(readFileSync(join(agentDir, 'settings.json'), 'utf8'))).toEqual({
-      compaction: { enabled: false },
-      skills: ['+keep'],
-    });
+    expect(on.data.find((item) => item.name === 'rxopen-hot')?.enabled).toBe(true);
   });
 
-  test('未知技能名 → skill_not_found；坏 settings.json 按 {} 起步可写', async () => {
-    const { routes } = makeRoutes('{broken');
-    const missing = (await routes.invoke('skills/setEnabled', { name: 'ghost', enabled: false })) as { ok: boolean; reason?: string };
-    expect(missing).toEqual({ ok: false, reason: 'skill_not_found' });
-    const off = (await routes.invoke('skills/setEnabled', { name: 'rxopen-hot', enabled: false })) as { ok: boolean };
-    expect(off.ok).toBe(true);
+  test('host 未启动 → 空清单降级（不 reject）', async () => {
+    const { routes } = await makeRoutes(CATALOG, { startHost: false });
+    const outcome = (await routes.invoke('skills/list', {})) as { ok: boolean; data: unknown[] };
+    expect(outcome).toEqual({ ok: true, data: [] });
   });
 });
 

@@ -6,7 +6,6 @@ import { join } from 'node:path';
 import type { HostCommandOutcome, HostDiagnostics, HostPhase, HostProcessPort, HubFrame, PaiCommand } from '@paiapp/contracts';
 
 import { createApiRoutes } from '../api-routes';
-import { createAgentDirFiles } from '../agent-dir-files';
 import { createAgentDefinitionsStore } from '../agent-definitions-store';
 import { createFileSettings, type ProviderKeyStore } from '../file-settings';
 import { createPaiRuntime } from '../pai-runtime';
@@ -71,8 +70,8 @@ async function makeRoutes() {
     monitor,
     exportDiagnosticsBundle: () => join(work, 'bundle'),
     audit: () => undefined,
-    agentDirFiles: createAgentDirFiles(agentDir),
-    agentDefinitions: createAgentDefinitionsStore(agentDir),
+    agentDefinitions: createAgentDefinitionsStore(join(work, 'home')),
+    agentDir,
     revealPath: () => undefined,
     pickDirectory: () => Promise.resolve(null),
   });
@@ -92,10 +91,11 @@ describe('app/runtime 快照面', () => {
 
 describe('app/setIdleRecycle 档位写路径', () => {
   test('settings 持久 + set_idle_retire_ms 透传（毫秒换算）', async () => {
-    const { routes, settings } = await makeRoutes();
+    const { routes, settings, commands } = await makeRoutes();
     const outcome = (await routes.invoke('app/setIdleRecycle', { minutes: 10 })) as { ok: boolean; data: { minutes: number } };
     expect(outcome).toEqual({ ok: true, data: { minutes: 10 } });
     expect(settings.get().idleRecycleMinutes).toBe(10);
+    expect(commands.find((command) => command.type === 'set_idle_retire_ms')).toEqual({ type: 'set_idle_retire_ms', value: 600_000 });
   });
 
   test('词表外档位被 schema 拒绝', async () => {

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /**
- * 渲染层事件词表：adapter 把 pai-cli 帧折叠成这些正规化事件，
+ * 渲染层事件词表：adapter 把 host-hub 帧折叠成这些正规化事件，
  * 渲染层只认识本词表，永不接触协议字面量。
  * 同线程事件有序；跨线程无序保证。
  */
@@ -64,8 +64,8 @@ const uiEventDefs = {
   sessionRemoved: z.object({ type: z.literal('sessionRemoved'), threadId }),
   /** worker 异常死亡（自动恢复中，UI 呈横幅提示）。 */
   sessionDied: z.object({ type: z.literal('sessionDied'), threadId, reason: z.string() }),
-  /** worker 被收编（v0.13：闲置 sweep / 手动回收），会话转 parked、发消息自动唤醒。 */
-  sessionParked: z.object({ type: z.literal('sessionParked'), threadId, reason: z.enum(['idle', 'manual']) }),
+  /** worker 被收编（闲置 sweep / 手动 retire / RSS 处置），会话转 parked、发消息自动唤醒。 */
+  sessionParked: z.object({ type: z.literal('sessionParked'), threadId, reason: z.enum(['idle', 'manual', 'rss']) }),
 
   /** 一轮开始（agent_start；后台任务通知唤起的回合同样触发）。 */
   turnStarted: z.object({ type: z.literal('turnStarted'), threadId, at: z.number() }),
@@ -111,8 +111,16 @@ const uiEventDefs = {
       usage: UsageViewSchema.nullable(),
     }),
   }),
-  /** 回复彻底完成（agent_settled）：一轮恰好一次。用户主动停止后的 settle 由渲染层按停止意图标 stopped。 */
-  turnSettled: z.object({ type: z.literal('turnSettled'), threadId, usage: UsageViewSchema.nullable() }),
+  /** 回复彻底完成（settled{sendId, ok}）：每次驱动命令恰好一次；worker 死亡由 host 合成 ok:false（无悬挂）。
+   *  用户主动停止后的 settle 由渲染层按停止意图标 stopped。 */
+  turnSettled: z.object({
+    type: z.literal('turnSettled'),
+    threadId,
+    ok: z.boolean(),
+    /** ok=false 时的失败原因（hub/worker 错误文案）；ok=true 缺省。 */
+    reason: z.string().optional(),
+    usage: UsageViewSchema.nullable(),
+  }),
   queueChanged: z.object({
     type: z.literal('queueChanged'),
     threadId,
@@ -121,64 +129,66 @@ const uiEventDefs = {
   }),
   /** isStreaming 由 turnStarted/turnSettled 派生（agent 运行窗口），不设独立事件。 */
   compacting: z.object({ type: z.literal('compacting'), threadId, active: z.boolean() }),
-  /** auto-retry 进行中（agent_end 会多次触发，不驱动终态）。 */
+  /** 压缩完成事实（compaction 单事件——host-hub 无 start/end 对；active=false 随后必发）。 */
+  compacted: z.object({ type: z.literal('compacted'), threadId, replacedCount: z.number().int() }),
+  /** auto-retry 进行中（llm/retry；attempt 为重试序号，errorMessage 为 hub 错误码文案）。 */
   retrying: z.object({
     type: z.literal('retrying'),
     threadId,
     attempt: z.number().int(),
-    maxAttempts: z.number().int(),
     errorMessage: z.string(),
   }),
 
   subagentStarted: z.object({
     type: z.literal('subagentStarted'),
     threadId,
-    subagentId: z.string(),
-    agent: z.string(),
+    agentId: z.string(),
+    agentName: z.string(),
+    /** 任务描述（agents/spawned 无此文本面；空串 = 待 get_subagents 快照回填）。 */
     task: z.string(),
   }),
-  /** 子 agent 流式正文增量（累积由渲染层负责）。 */
-  subagentDelta: z.object({ type: z.literal('subagentDelta'), threadId, subagentId: z.string(), delta: z.string() }),
-  /** 子 agent 正文权威快照（message_end，整体替换增量缓冲）。 */
-  subagentText: z.object({ type: z.literal('subagentText'), threadId, subagentId: z.string(), text: z.string() }),
+  /** 子 agent 流式正文增量（event 帧 agentName 分流；累积由渲染层负责）。 */
+  subagentDelta: z.object({ type: z.literal('subagentDelta'), threadId, agentName: z.string(), delta: z.string() }),
   subagentTool: z.object({
     type: z.literal('subagentTool'),
     threadId,
-    subagentId: z.string(),
+    agentName: z.string(),
     call: ToolCallViewSchema,
     phase: z.enum(['start', 'update', 'end']),
     output: z.string().optional(),
     isError: z.boolean().optional(),
   }),
-  subagentSettled: z.object({ type: z.literal('subagentSettled'), threadId, subagentId: z.string() }),
-  /** 子 agent report/send（带 to 的为兄弟路由请求，按待转发样式提示）。 */
-  subagentMessage: z.object({
-    type: z.literal('subagentMessage'),
+  /** 子 agent 终态（agents/terminal；status = manager 终态词表原文）。 */
+  subagentSettled: z.object({ type: z.literal('subagentSettled'), threadId, agentName: z.string(), status: z.string() }),
+  /** 子 agent 忙闲迁移（agents/state busy|idle；面板状态徽标的数据源）。 */
+  subagentState: z.object({ type: z.literal('subagentState'), threadId, agentName: z.string(), busy: z.boolean() }),
+  /** 子 agent 权限请求（agents/permission-ask：协议无应答命令，hub 到期默认拒绝——仅信息展示）。 */
+  subagentAsk: z.object({
+    type: z.literal('subagentAsk'),
     threadId,
-    subagentId: z.string(),
-    agent: z.string(),
-    text: z.string(),
-    to: z.string().nullable().optional(),
+    agentName: z.string(),
+    toolName: z.string(),
+    summary: z.string(),
+    reason: z.string().optional(),
   }),
 
   dialogRequest: z.object({
     type: z.literal('dialogRequest'),
     threadId,
     requestId: z.string(),
+    /** host-hub 仅实现 confirm。 */
     method: z.string(),
-    title: z.string().optional(),
-    message: z.string().optional(),
-    options: z.array(z.string()).optional(),
-    placeholder: z.string().optional(),
-    prefill: z.string().optional(),
-    /** 子代理中继的对话框身份（v0.5；直发对话框无此字段）。 */
-    subagentId: z.string().optional(),
-    agent: z.string().optional(),
+    /** confirm 三字段（载荷平铺自 ui_request 帧）。 */
+    tool: z.string().optional(),
+    summary: z.string().optional(),
+    reason: z.string().optional(),
+    /** 子代理中继的对话框身份。 */
+    agentName: z.string().optional(),
   }),
   dialogSettled: z.object({ type: z.literal('dialogSettled'), requestId: z.string() }),
 
-  /** 直执行 bash 流式输出（v1 无 UI 入口，通路保留）。 */
-  bashOutput: z.object({ type: z.literal('bashOutput'), threadId, id: z.string().nullable().optional(), delta: z.string() }),
+  /** 直执行 bash 流式输出（payload {id, delta, truncated}；truncated 置位后粘滞）。 */
+  bashOutput: z.object({ type: z.literal('bashOutput'), threadId, id: z.string().nullable().optional(), delta: z.string(), truncated: z.boolean().optional() }),
 } as const;
 
 /**

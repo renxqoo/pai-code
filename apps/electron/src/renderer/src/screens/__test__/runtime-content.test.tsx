@@ -26,16 +26,13 @@ function snapshot(overrides: Partial<RuntimeSnapshotView> = {}): RuntimeSnapshot
   return {
     hostPhase: 'ready',
     hostInfo: {
-      version: '0.13.0',
-      piVersion: '0.9.1',
+      version: '1.0.0',
       bunVersion: '1.2.0',
       pid: 4242,
       uptimeMs: 3_600_000,
       rssBytes: 64 * 1024 * 1024,
       threads: { live: 1, parked: 1, dead: 0 },
-      subagents: { running: 2 },
-      limits: { maxThreads: 8, idleRetireMs: 300_000, workerStaleMs: 60_000, workerExitTimeoutMs: 5_000, maxSubagents: 8, bashTimeoutMs: 0 },
-      backend: { id: 'pi', version: '0.9.1', capabilities: [] },
+      limits: { maxThreads: 8, idleRetireMs: 300_000, workerStaleMs: 60_000, workerExitTimeoutMs: 5_000, rssRetireBytes: 0, bashTimeoutMs: 0 },
     },
     heartbeatAgeMs: 2_000,
     restarts: { count: 0, lastCause: null, lastAt: null },
@@ -77,12 +74,11 @@ function row(overrides: Partial<RuntimeWorkerRow> = {}): RuntimeWorkerRow {
     state: 'live',
     isStreaming: false,
     idleMs: 65_000,
-    subagents: 1,
     rssBytes: 200 * 1024 * 1024,
     keepalive: false,
     title: '重构渲染层',
     model: 'glm/glm-5.3',
-    stats: { userMessages: 1, assistantMessages: 1, toolCalls: 0, tokensTotal: 1200, cost: 0, contextUsage: 0.42 },
+    stats: { userMessages: 1, assistantMessages: 1, toolCalls: 0, tokens: { input: 800, output: 400, total: 1200 }, cost: 0 },
     queueCount: 0,
     recycleInMs: 235_000,
     ...overrides,
@@ -112,7 +108,7 @@ describe('RuntimeContent', () => {
     expect(html).toContain(copy.runtime.phaseReady);
     expect(html).toContain(copy.runtime.heartbeatAgo(2));
     expect(html).toContain(copy.runtime.stateLive);
-    expect(html).toContain(copy.runtime.subagentsInFlight);
+    expect(html).toContain(copy.runtime.capacity);
     expect(html).toContain(copy.runtime.memory);
     expect(html).toContain(copy.runtime.resourceTrend);
     expect(html).toContain(copy.runtime.recycleAllIdle);
@@ -120,13 +116,13 @@ describe('RuntimeContent', () => {
     expect(html).toContain(copy.runtime.restartHost);
   });
 
-  test('worker 行：标题/状态/倒计时/上下文水位进表', () => {
+  test('worker 行：标题/状态/倒计时/Token 计量进表', () => {
     const html = renderScreen({ rows: [row()] });
     expect(html).toContain('重构渲染层');
     expect(html).toContain(copy.runtime.idle);
     expect(html).toContain(copy.runtime.idleFor(1));
     expect(html).toContain(copy.runtime.recycleIn(235));
-    expect(html).toContain('42%');
+    expect(html).toContain('1.2k');
     expect(html).toContain('200 MB');
   });
 

@@ -1,6 +1,7 @@
 import type { HistoryItem } from '@paiapp/contracts';
 import type { ThreadItem, TurnBlock } from '@/thread/thread-model';
 
+import { entrySeqOf } from './entry-seq';
 import { applyInflight, applyInflightOutputsToBlocks } from './fold-inflight';
 import { hydrateItems, hydrateNewItems } from './hydrate-items';
 import { capSeenIds, initialThreadState, type HydrateAction, type LiveThreadState } from './live-thread-state';
@@ -38,11 +39,11 @@ export function foldHydrate(state: LiveThreadState, action: HydrateAction): Live
       for (let index = 0; index < derived.length; index += 1) {
         if ((derived[index]?.item.kind ?? null) === 'message') lastMessageIndex = index;
       }
-      // 尾 span 起点 = **读口事实**（`turnStartEntryId` 之后的条目才属本轮）：它对轮内注入的
+      // 尾 span 起点 = **读口事实**（`turnStartSeq` 之后的条目才属本轮）：它对轮内注入的
       // user 消息（task-notification/task-message）与 steer 中途插话免疫——「末位用户消息」
       // 启发式在这些情况下会把同一轮切错（切错即同轮双渲染）。读口不可用（null）时退回启发式
-      // （降级口径，见 T35 §2.3）；增量窗口里找不到边界 = 窗口整体位于边界之后。
-      const spanFrom = spanStartIndex(derived, state.turnStartEntryId, lastMessageIndex);
+      // （降级口径，见 T35 §2.3）；边界比较按条目 seq（id `seq-<n>` 解析，与游标同域）。
+      const spanFrom = spanStartIndex(derived, state.turnStartSeq, lastMessageIndex);
       const skippedTurnIds = new Set<string>();
       const spanBlocks: TurnBlock[] = [];
       const fresh: Array<{ item: ThreadItem; entryIds: readonly string[] }> = [];
@@ -132,22 +133,22 @@ export function foldHydrate(state: LiveThreadState, action: HydrateAction): Live
 }
 
 /**
- * 尾 span 起点：读口事实优先（`turnStartEntryId` 所在派生条目的**下一条**）；
- * 读口不可用（null）→ 退回「末位用户消息之后」启发式；事实不在本窗口（增量载荷）→ 窗口整体。
- * 「整体」的隐含前提：渲染层不传 limit（全量/游标增量窗口），窗口要么含边界、
- * 要么整体在边界之后；一旦启用 get_entries 分页（limit），「窗口整体在边界之前」
- * 也会落到这里——届时需显式判别窗口与边界的位置关系，不得把历史轮吞进 live 轮。
+ * 尾 span 起点：读口事实优先（首个**全部条目 seq > turnStartSeq** 的派生组——边界
+ * 条目在轮首之前，其后的组才属本轮）；读口不可用（null）→ 退回「末位用户消息之后」
+ * 启发式。seq 比较取代旧的「窗口内找边界 id」：窗口与边界的任意位置关系都能精确判定，
+ * 不再有「找不到边界 = 整窗并入」的近似（边界之前的历史轮按普通条目插入）。
  */
 function spanStartIndex(
   derived: readonly { item: ThreadItem; entryIds: readonly string[] }[],
-  turnStartEntryId: string | null,
+  turnStartSeq: number | null,
   lastMessageIndex: number,
 ): number {
-  if (turnStartEntryId === null) return lastMessageIndex + 1;
+  if (turnStartSeq === null) return lastMessageIndex + 1;
   for (let index = 0; index < derived.length; index += 1) {
-    if (derived[index]?.entryIds.includes(turnStartEntryId) === true) return index + 1;
+    const seqs = (derived[index]?.entryIds ?? []).map(entrySeqOf);
+    if (seqs.length > 0 && seqs.every((seq) => seq !== null && seq > turnStartSeq)) return index;
   }
-  return 0;
+  return derived.length;
 }
 
 /** 本轮 prompt 的提交时刻（转写里最后一条 user 条目；无则 null）。 */

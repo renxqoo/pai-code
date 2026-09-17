@@ -32,7 +32,7 @@ export function useEscDismiss(input: UseEscDismissInput): void {
   /** 运行面标量订阅（threads[tid] 布尔——批内不变即不重渲；Esc 输入不再依赖渲染帧 props） */
   const bashRunning = useStore(liveStore, (s) => (s.activeThreadId === null ? false : s.threads[s.activeThreadId]?.bashRunning === true));
   const generating = useStore(liveStore, (s) => (s.activeThreadId === null ? false : s.threads[s.activeThreadId]?.streaming === true));
-  const agentsActive = useStore(liveStore, (s) => (s.activeThreadId === null ? false : summarizeAgents(s.threads[s.activeThreadId]?.agents ?? []).workingCount > 0));
+  const agentsActive = useStore(liveStore, (s) => (s.activeThreadId === null ? false : summarizeAgents(s.threads[s.activeThreadId]?.agents ?? []).busyCount > 0));
   const confirmStop = useStore(uiStore, (s) => s.confirmStop);
   /** 侧栏内嵌层只以可见性参与（侧栏收起时不可见的搜索/面板不吞 Esc）。 */
   const sidebarSearchOpen = useStore(uiStore, (s) => s.sidebarSearchOpen && !s.sidebarCollapsed);

@@ -8,11 +8,14 @@
  * 非 png/jpeg/webp/gif 格式（如 HEIC）Canvas 无法解码 → 拒绝（返回 null 由调用方提示）。
  */
 
+import type { ImagePayload } from '@paiapp/contracts';
+
 const MAX_SOURCE_BYTES = 20 * 1024 * 1024;
 const MAX_EDGE_PX = 2000;
 const JPEG_QUALITY = 0.85;
 const MAX_ENCODED_BYTES = 4 * 1024 * 1024;
 
+/** 本地暂存形态（协议载荷的 mimeType 同义名；发送时经 imagePayloadOf 转协议 mediaType）。 */
 export type PendingImage = { data: string; mimeType: string };
 
 /** 等比缩放目标尺寸：长边超限按比例缩小，不放大；最小 1px 防退化。 */
@@ -60,8 +63,9 @@ function blobToBase64(blob: Blob): Promise<PendingImage | null> {
   });
 }
 
-export function imagePayloadOf(image: PendingImage): { type: 'image'; data: string; mimeType: string } {
-  return { type: 'image', data: image.data, mimeType: image.mimeType };
+/** 暂存形态 → 协议 ImagePayload（mimeType 本地名 → mediaType 协议名的唯一转换点）。 */
+export function imagePayloadOf(image: PendingImage): ImagePayload {
+  return { type: 'image', data: image.data, mediaType: image.mimeType };
 }
 
 /** 预览直读 data URL（CSP img-src 允许 data:；无需对象 URL 生命周期管理）。 */

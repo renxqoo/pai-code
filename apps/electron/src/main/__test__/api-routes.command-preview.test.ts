@@ -3,15 +3,18 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import type { HostCommandOutcome, HostPhase, HostProcessPort, HubFrame, PaiCommand } from '@paiapp/contracts';
+
 import { createApiRoutes } from '../api-routes';
-import { createAgentDirFiles } from '../agent-dir-files';
 import { createAgentDefinitionsStore } from '../agent-definitions-store';
 import { createFileSettings, type ProviderKeyStore } from '../file-settings';
 import { createPaiRuntime } from '../pai-runtime';
+import { createRuntimeMonitor } from '../runtime-monitor/create-runtime-monitor';
 
 /**
  * command/preview 路由回归：新建任务页（无会话）`/` 补全的预构目录——
- * 用户级启用技能以 skill: 条目下发，禁用技能不进目录，无技能时空形态降级。
+ * 用户级启用技能（hub skills/list）以 skill: 条目下发，禁用技能不进目录，
+ * host 未启动时空形态降级。
  */
 
 const keyStore: ProviderKeyStore = {
@@ -23,17 +26,30 @@ const keyStore: ProviderKeyStore = {
 
 const dirs: string[] = [];
 
-function makeRoutes(options: { piSettingsRaw?: string; emptySkills?: boolean } = {}) {
+/** fake host：skills/list 回放预置清单。 */
+function fakeHost(skills: Array<Record<string, unknown>>): HostProcessPort {
+  return {
+    get phase(): HostPhase {
+      return 'ready';
+    },
+    request: (command: PaiCommand): Promise<HostCommandOutcome> => {
+      if (command.type === 'skills/list') return Promise.resolve({ ok: true, data: { skills } });
+      return Promise.resolve({ ok: true, data: {} });
+    },
+    onFrame: (_cb: (frame: HubFrame) => void) => () => undefined,
+    onPhase: () => () => undefined,
+    restart: () => Promise.resolve(),
+    dispose: () => Promise.resolve(),
+    diagnostics: () => ({ stderrTail: '', restartCount: 0, lastRestartCause: null, lastRestartAt: null }),
+  };
+}
+
+async function makeRoutes(options: { skills?: Array<Record<string, unknown>>; startHost?: boolean } = {}) {
   const work = mkdtempSync(join(tmpdir(), 'pai-command-preview-'));
   dirs.push(work);
   const agentDir = join(work, 'agent');
   mkdirSync(join(agentDir, 'sessions'), { recursive: true });
-  const skillsDir = join(work, 'user-skills');
-  for (const name of ['rxopen-hot', 'rx-stock']) {
-    mkdirSync(join(skillsDir, name), { recursive: true });
-    writeFileSync(join(skillsDir, name, 'SKILL.md'), `---\nname: ${name}\ndescription: ${name} 技能\n---\n`);
-  }
-  if (options.piSettingsRaw !== undefined) writeFileSync(join(agentDir, 'settings.json'), options.piSettingsRaw);
+  writeFileSync(join(work, 'cli.js'), '');
   const settings = createFileSettings(join(work, 'settings.json'), keyStore);
   const runtime = createPaiRuntime({
     paths: {
@@ -47,41 +63,53 @@ function makeRoutes(options: { piSettingsRaw?: string; emptySkills?: boolean } =
     keyStore,
     providers: () => [],
     idleRecycleMinutes: () => 5,
-    hubPaths: () => null,
+    hubPaths: () => (options.startHost === false ? null : { bunPath: 'bun', hubEntry: join(work, 'cli.js') }),
     logger: { log: () => undefined },
     emit: () => undefined,
+    createHost: () => fakeHost(options.skills ?? []),
   });
+  if (options.startHost !== false) await runtime.start();
   const routes = createApiRoutes({
     runtime,
     settings,
     keyStore,
     audit: () => undefined,
-    agentDirFiles: createAgentDirFiles(agentDir),
-    agentDefinitions: createAgentDefinitionsStore(agentDir),
+    agentDefinitions: createAgentDefinitionsStore(join(work, 'home')),
     agentDir,
     revealPath: () => undefined,
     pickDirectory: () => Promise.resolve(null),
-    skillSources: () => (options.emptySkills === true ? [] : [{ origin: 'agent' as const, dir: skillsDir }]),
+    exportDiagnosticsBundle: () => work,
+    monitor: createRuntimeMonitor({ host: () => null, appMetrics: () => ({ rssBytes: null, cpuPercent: null }), systemMemory: () => ({ totalBytes: null, availableBytes: null }), idleRecycleMinutes: () => 5, appVersion: () => 'test' }),
   });
   return routes;
 }
 
 describe('api-routes command/preview（新建任务页预构命令目录）', () => {
   test('症状回归：新建任务页输入 / 无命令面板——启用技能以 skill: 条目下发预构目录', async () => {
-    const routes = makeRoutes();
+    const routes = await makeRoutes({
+      skills: [
+        { name: 'rxopen-hot', source: 'skill-user', disabled: false },
+        { name: 'rx-stock', source: 'skill-user', disabled: false },
+      ],
+    });
     const outcome = (await routes.invoke('command/preview', {})) as {
       ok: boolean;
       data: Array<{ name: string; description: string | null; source: string }>;
     };
     expect(outcome.ok).toBe(true);
     expect([...outcome.data].sort((a, b) => a.name.localeCompare(b.name))).toEqual([
-      { name: 'skill:rx-stock', description: 'rx-stock 技能', source: 'skill' },
-      { name: 'skill:rxopen-hot', description: 'rxopen-hot 技能', source: 'skill' },
+      { name: 'skill:rx-stock', description: null, source: 'skill' },
+      { name: 'skill:rxopen-hot', description: null, source: 'skill' },
     ]);
   });
 
-  test('禁用技能不进目录（pi settings overrides 过滤后仅启用项）', async () => {
-    const routes = makeRoutes({ piSettingsRaw: JSON.stringify({ skills: ['-skills/rxopen-hot'] }) });
+  test('禁用技能不进目录（hub skills.disabled 名单过滤后仅启用项）', async () => {
+    const routes = await makeRoutes({
+      skills: [
+        { name: 'rxopen-hot', source: 'skill-user', disabled: true },
+        { name: 'rx-stock', source: 'skill-user', disabled: false },
+      ],
+    });
     const outcome = (await routes.invoke('command/preview', {})) as {
       ok: boolean;
       data: Array<{ name: string }>;
@@ -90,8 +118,8 @@ describe('api-routes command/preview（新建任务页预构命令目录）', ()
     expect(outcome.data.map((item) => item.name)).toEqual(['skill:rx-stock']);
   });
 
-  test('无技能 → 空目录（空形态降级，不报错）', async () => {
-    const routes = makeRoutes({ emptySkills: true });
+  test('host 未启动 → 空目录（空形态降级，不报错）', async () => {
+    const routes = await makeRoutes({ startHost: false });
     const outcome = (await routes.invoke('command/preview', {})) as { ok: boolean; data: unknown[] };
     expect(outcome).toEqual({ ok: true, data: [] });
   });

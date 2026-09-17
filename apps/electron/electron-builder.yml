@@ -10,7 +10,7 @@ files:
   # electron-builder 不会装配任何 node_modules
   - out/**
 extraResources:
-  # 仓库根 resources/（bun/bun + pai-cli/cli.js）由 scripts/packaging/sync-resources.ts 填充
+  # 仓库根 resources/（bun/bun + host-hub/host-hub）由 scripts/packaging/sync-resources.ts 填充
   - from: ../../resources
     to: .
 mac:

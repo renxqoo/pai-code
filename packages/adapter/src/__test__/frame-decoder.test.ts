@@ -9,20 +9,19 @@ function collect(): { frames: HubFrame[]; dropped: string[]; onFrame: (f: HubFra
   return { frames, dropped, onFrame: (f) => frames.push(f) };
 }
 
-describe('classifyFrame', () => {
+describe('classifyFrame · 七帧分类', () => {
   test.each([
     ['response', { type: 'response', id: '1', command: 'prompt', success: true, data: { x: 1 } }],
-    ['event', { type: 'event', threadId: 't1', event: { type: 'message_start' } }],
-    ['ui_request', { type: 'ui_request', requestId: 'r1', threadId: 't1', method: 'confirm', title: 'T', message: 'M' }],
+    ['event', { type: 'event', threadId: 't1', name: 'assistant/stream', payload: { type: 'text', text: 'hi' } }],
+    ['event(子代理中继)', { type: 'event', threadId: 't1', name: 'assistant/stream', payload: { type: 'text', text: 'hi' }, agentName: 'explore' }],
+    ['ui_request', { type: 'ui_request', requestId: 'r1', threadId: 't1', method: 'confirm', tool: 'bash', summary: 's' }],
     ['heartbeat', { type: 'heartbeat' }],
-    ['heartbeat+subagents', { type: 'heartbeat', subagents: 3 }],
-    ['heartbeat+resources(v0.13)', { type: 'heartbeat', rssBytes: 123, cpuPercent: 4.5 }],
-    ['hub_error', { type: 'hub_error', threadId: 't1', scope: 'worker', error: 'boom' }],
+    ['heartbeat(资源位)', { type: 'heartbeat', rssBytes: 123, cpuPercent: 4.5 }],
+    ['hub_error', { type: 'hub_error', threadId: 't1', message: 'boom' }],
     ['thread_died', { type: 'thread_died', threadId: 't1', reason: 'crash' }],
     ['thread_parked(idle)', { type: 'thread_parked', threadId: 't1', reason: 'idle' }],
     ['thread_parked(manual)', { type: 'thread_parked', threadId: 't1', reason: 'manual' }],
-    ['subagent_event', { type: 'subagent_event', threadId: 't1', subagentId: 's1', agent: 'explore', task: 'go', event: { type: 'agent_start' } }],
-    ['subagent_message', { type: 'subagent_message', threadId: 't1', subagentId: 's1', agent: 'explore', text: 'hi', to: 's2' }],
+    ['thread_parked(rss)', { type: 'thread_parked', threadId: 't1', reason: 'rss' }],
   ])('%s 合法形状', (_name, value) => {
     const result = classifyFrame(value);
     expect('frame' in result).toBe(true);
@@ -35,40 +34,65 @@ describe('classifyFrame', () => {
     ['缺 type', { command: 'x' }],
     ['type 非字符串', { type: 3 }],
     ['未知 type', { type: 'mystery' }],
+    ['subagent_event（旧协议帧已摘除）', { type: 'subagent_event', threadId: 't1', agentName: 'explore', event: { name: 'x' } }],
+    ['subagent_message（旧协议帧已摘除）', { type: 'subagent_message', threadId: 't1', agentName: 'explore', text: 'hi' }],
     ['thread_parked 非法 reason', { type: 'thread_parked', threadId: 't1', reason: 'other' }],
   ])('垃圾形状：%s → reason', (_name, value) => {
     const result = classifyFrame(value);
     expect('reason' in result).toBe(true);
   });
 
+  test('subagent_* 帧归类 frame_type_unknown（前缀带原 type 名）', () => {
+    expect(classifyFrame({ type: 'subagent_event' })).toEqual({ reason: 'frame_type_unknown:subagent_event' });
+    expect(classifyFrame({ type: 'subagent_message' })).toEqual({ reason: 'frame_type_unknown:subagent_message' });
+  });
+
   test.each([
-    ['event 载荷为 null', { type: 'event', threadId: 't', event: null }],
-    ['event 载荷缺 type', { type: 'event', threadId: 't', event: { x: 1 } }],
-    ['event 载荷为数组', { type: 'event', threadId: 't', event: [1] }],
-    ['subagent_event 载荷为 null', { type: 'subagent_event', threadId: 't', subagentId: 's', agent: 'a', task: 'k', event: null }],
+    ['event 载荷为 null', { type: 'event', threadId: 't', name: 'assistant/stream', payload: null }],
+    ['event 载荷为数组', { type: 'event', threadId: 't', name: 'assistant/stream', payload: [1] }],
+    ['event 载荷为字符串', { type: 'event', threadId: 't', name: 'assistant/stream', payload: 'x' }],
   ])('垃圾事件载荷降级不穿透：%s', (_name, value) => {
     const result = classifyFrame(value);
     expect('reason' in result).toBe(true);
     expect(result).toMatchObject({ reason: expect.stringContaining('frame_payload_invalid') });
   });
 
-  test('合法 event 载荷正常放行', () => {
-    const result = classifyFrame({ type: 'event', threadId: 't', event: { type: 'agent_start' } });
-    expect('frame' in result).toBe(true);
+  test('event 帧收窄：name/payload 展开、agentName 可选不携带', () => {
+    const plain = classifyFrame({ type: 'event', threadId: 't', name: 'tool/result', payload: { toolUseId: 'c1' } });
+    expect(plain).toEqual({ frame: { type: 'event', threadId: 't', name: 'tool/result', payload: { toolUseId: 'c1' } } });
+    const relay = classifyFrame({ type: 'event', threadId: 't', name: 'tool/result', payload: {}, agentName: 'explore' });
+    expect(relay).toEqual({ frame: { type: 'event', threadId: 't', name: 'tool/result', payload: {}, agentName: 'explore' } });
   });
 
-  test('缺 command 的 response：command 收窄为空串不抛', () => {
+  test('ui_request 帧收窄：confirm 载荷平铺透传（rest 字段）', () => {
+    const result = classifyFrame({ type: 'ui_request', requestId: 'r1', threadId: 't1', method: 'confirm', tool: 'bash', summary: 'npm test', reason: 'net' });
+    expect(result).toEqual({
+      frame: { type: 'ui_request', requestId: 'r1', threadId: 't1', method: 'confirm', tool: 'bash', summary: 'npm test', reason: 'net' },
+    });
+  });
+
+  test('response 缺 command：收窄空串不抛；success 仅 true 为真', () => {
     const result = classifyFrame({ type: 'response', success: false });
     expect(result).toEqual({ frame: { type: 'response', id: undefined, command: '', success: false, data: undefined, error: undefined } });
   });
+
+  test('hub_error：threadId 可选、message 收窄字符串', () => {
+    expect(classifyFrame({ type: 'hub_error', message: 'm' })).toEqual({ frame: { type: 'hub_error', threadId: undefined, message: 'm' } });
+  });
+
+  test('heartbeat：资源位非有限数收窄 undefined', () => {
+    expect(classifyFrame({ type: 'heartbeat', rssBytes: 'x', cpuPercent: Number.NaN })).toEqual({
+      frame: { type: 'heartbeat', rssBytes: undefined, cpuPercent: undefined },
+    });
+  });
 });
 
-describe('createFrameDecoder', () => {
+describe('createFrameDecoder · 分帧器', () => {
   test('完整行直接解码', () => {
     const c = collect();
     const decoder = createFrameDecoder(c.onFrame, { onDropped: (r) => c.dropped.push(r) });
     decoder.push('{"type":"heartbeat"}\n');
-    expect(c.frames).toEqual([{ type: 'heartbeat', subagents: undefined }]);
+    expect(c.frames).toEqual([{ type: 'heartbeat' }]);
   });
 
   test('半行跨 chunk 重组（LF 唯一分隔）', () => {
@@ -88,13 +112,13 @@ describe('createFrameDecoder', () => {
     const decoder = createFrameDecoder(c.onFrame);
     const text = 'line1line2end';
     decoder.push(`${JSON.stringify({ type: 'heartbeat' })}\n`);
-    decoder.push(JSON.stringify({ type: 'event', threadId: 't', event: { type: 'x', text } }));
+    decoder.push(JSON.stringify({ type: 'event', threadId: 't', name: 'assistant/stream', payload: { type: 'text', text } }));
     decoder.push('\n');
     expect(c.frames.length).toBe(2);
     const event = c.frames[1];
     expect(event).toBeDefined();
     if (event?.type === 'event') {
-      expect((event.event as Record<string, unknown>)['text']).toBe(text);
+      expect(event.payload['text']).toBe(text);
     } else {
       throw new Error('expected event frame');
     }
@@ -110,8 +134,9 @@ describe('createFrameDecoder', () => {
   test('一行多帧按序解码', () => {
     const c = collect();
     const decoder = createFrameDecoder(c.onFrame);
-    decoder.push('{"type":"heartbeat"}\n{"type":"heartbeat"}\n');
+    decoder.push('{"type":"heartbeat"}\n{"type":"hub_error","message":"m"}\n');
     expect(c.frames.length).toBe(2);
+    expect(c.frames[1]).toMatchObject({ type: 'hub_error', message: 'm' });
   });
 
   test('超限整行丢弃且丢弃态到下一个换行才恢复（残余尾巴不误判为新行）', () => {
@@ -140,12 +165,25 @@ describe('createFrameDecoder', () => {
     expect(c.frames.length).toBe(1);
   });
 
-  test('非 JSON 行丢弃并上报', () => {
+  test('非 JSON 行丢弃并上报；未知帧分类 reason 上报（解码继续）', () => {
     const c = collect();
     const decoder = createFrameDecoder(c.onFrame, { onDropped: (r) => c.dropped.push(r) });
     decoder.push('not json\n');
-    expect(c.frames).toEqual([]);
-    expect(c.dropped).toEqual(['line_not_json']);
+    decoder.push('{"type":"mystery"}\n');
+    decoder.push('{"type":"heartbeat"}\n');
+    expect(c.frames).toEqual([{ type: 'heartbeat' }]);
+    expect(c.dropped).toEqual(['line_not_json', 'frame_type_unknown:mystery']);
+  });
+
+  test('丢弃态恢复后的残余若含完整超限行：行级防线兜底丢弃，后续行不受影响', () => {
+    const c = collect();
+    const decoder = createFrameDecoder(c.onFrame, { maxLineChars: 20, onDropped: (r) => c.dropped.push(r) });
+    // 触发丢弃态（跨 chunk 超限）
+    decoder.push(`${'x'.repeat(40)}partial`);
+    // 恢复 chunk：换行后的残余里带着一条完整超限行 + 一条合法行
+    decoder.push(`\n${'y'.repeat(30)}\n{"type":"heartbeat"}\n`);
+    expect(c.frames).toEqual([{ type: 'heartbeat' }]);
+    expect(c.dropped).toEqual(['line_too_long', 'line_too_long']);
   });
 
   test('finish 处理无换行尾巴', () => {

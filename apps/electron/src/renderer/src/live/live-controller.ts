@@ -1,4 +1,5 @@
-import type { AgentDefinition, CommandView, ImagePayload, PermissionRules, PreferencesView, ProviderModel, SkillView, ThinkingFormat, UiEvent } from '@paiapp/contracts';
+import type { AgentDefinition, CommandView, ImagePayload, PermMode, PreferencesView, ProviderModel, SkillView, UiEvent } from '@paiapp/contracts';
+import { isSettableThinkingLevel } from '@paiapp/contracts';
 
 import { copy } from '@/strings';
 import { queuedDrafts } from '@/composer/queued-drafts';
@@ -10,9 +11,8 @@ import { createDialogTimers } from './dialog-timers';
 import { createLazyResume } from './lazy-resume';
 import { createReadPorts } from './read-ports';
 import { checkoutGitBranch, listGitBranches, listGitGraph, searchFiles } from './git-actions';
-import { nextSessionRulesForMode } from './permission-mode';
 import type { CreateSessionInput, CreateSessionOutcome, LiveController } from './live-controller-types';
-import type { LiveStore } from './store';
+import type { HubSettingsView, LiveStore } from './store';
 
 /**
  * live 编排：事件订阅 → store 折叠；轮次边界的条目对账（真相源）；
@@ -96,18 +96,18 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
   /** 对话框兜底定时器（属主线程随行回收；单一真相 live/dialog-timers） */
   const dialogTimers = createDialogTimers();
 
-  /** 全局规则真相更新后刷新活跃会话的生效视图（source=global 时 rules 即全局内容，不得滞留旧值）。 */
-  const refreshActiveSessionRules = async (): Promise<void> => {
+  /** hub 缺省真相更新后刷新活跃会话的生效视图（权限模式随 hub settings 变化的回读）。 */
+  const refreshActivePermissionMode = async (): Promise<void> => {
     const active = store.getState().activeThreadId;
     if (active === null) return;
-    await controller.readSessionRules(active).catch(() => undefined);
+    await controller.readSessionPermissionMode(active).catch(() => undefined);
   };
 
-  /** 只拉全局规则文件真相（不带活跃会话回读——boot 阶段活跃线程可能是 parked 占位）。 */
-  const refreshGlobalRules = async (): Promise<PermissionRules | null> => {
-    const outcome = await client.invoke('permission/read', {});
+  /** 只拉 hub 用户级缺省（app/hubSettings；新任务页权限控件与设置页共用的数据源）。 */
+  const readHubSettings = async (): Promise<HubSettingsView | null> => {
+    const outcome = await client.invoke('app/hubSettings', {});
     if (!outcome.ok) return null;
-    store.setState({ permissionRules: outcome.data });
+    store.setState({ hubSettings: outcome.data });
     return outcome.data;
   };
 
@@ -135,9 +135,9 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       dialogTimers.dropThread(event.threadId);
       bashProbe.clear(event.threadId);
     }
-    if (event.type === 'dialogRequest' && event.method !== 'notify' && event.method !== 'setStatus') {
-      // 宿主侧 5 分钟超时默认拒绝后无回执帧：客户端同步兜底收起（超时回调复查
-      // stillPending，已结算则 no-op）
+    if (event.type === 'dialogRequest') {
+      // 宿主侧超时默认拒绝后无回执帧：客户端同步兜底收起（超时回调复查
+      // stillPending，已结算则 no-op）。host-hub 仅 confirm 一种形态，全部入队计时。
       dialogTimers.arm(event.requestId, event.threadId, () => {
         const stillPending = store.getState().dialogs.some((dialog) => dialog.requestId === event.requestId);
         if (stillPending) void controller.cancelDialog(event.requestId);
@@ -165,7 +165,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       bashProbe.arm(event.threadId);
     }
     if (event.type === 'turnStarted') {
-      // 轮首边界 = 读口事实（`get_inflight.turnStartEntryId`，agent_start 时刻的 leaf 条目 id）：
+      // 轮首边界 = 读口事实（`get_inflight.turnStartSeq`，turn/start 时刻的 WAL seq）：
       // settle 窗口重建的 since 下界与尾 span 归属共用它；事件派生游标在重载场景必然丢失。
       // 守卫：读发出之后该轮若已结算 → 快照过期（事件只是迟到于结算），丢弃。
       const settledAtTurnStart = store.getState().threads[event.threadId]?.turnsSettled ?? 0;
@@ -188,7 +188,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       // staleGuard 二次复检兜住。
       const settledTurnId = state.threads[event.threadId]?.liveTurnId ?? null;
       // 轮首边界取折叠态事实（本事件折叠前捕获的 state；fold 会在应用时清空该字段）
-      const turnStartCursor = state.threads[event.threadId]?.turnStartEntryId ?? null;
+      const turnStartCursor = state.threads[event.threadId]?.turnStartSeq ?? null;
       setTimeout(() => {
         if (disposed) return;
         const current = store.getState().threads[event.threadId];
@@ -228,8 +228,8 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       }
       if (outcome === null) return;
       store.getState().bootstrap(outcome.data);
-      // 全局权限规则启动即载（新任务页权限控件的唯一数据源；此前仅设置页进入时拉取）
-      void refreshGlobalRules();
+      // hub 用户级缺省启动即载（新任务页权限控件的数据源；此前仅设置页进入时拉取）
+      void readHubSettings();
       // bootstrap 自动选中的 parked 会话保持只读激活（历史经直读水化），
       // 发消息才唤醒 worker（T27：读不唤醒）
     },
@@ -274,26 +274,20 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       await client.invoke('session/abort', { threadId });
     },
     async createSession(input: CreateSessionInput): Promise<CreateSessionOutcome> {
+      // 权限模式与思考档是 session/start 的原生参数（hub 建线程即生效，无后置应用窗口）
       const outcome = await client.invoke('session/start', {
         cwd: input.cwd,
-        provider: input.model?.provider,
         modelId: input.model?.modelId,
         trusted: input.trusted,
+        ...(input.permissionMode !== undefined ? { permissionMode: input.permissionMode } : {}),
+        ...(input.thinkingLevel !== undefined && isSettableThinkingLevel(input.thinkingLevel)
+          ? { thinkingLevel: input.thinkingLevel }
+          : {}),
       });
       if (!outcome.ok) return { ok: false, reason: outcome.reason };
       const { threadId } = outcome.data;
       activate(threadId);
       await hydrateFull(threadId).catch(() => undefined);
-      // 后置应用（thread/start 不收这两个参数）：思考档按新线程寻址；权限模式以全局规则为基线建 sidecar
-      if (input.thinkingLevel !== undefined && input.thinkingLevel.length > 0) {
-        await client.invoke('session/setThinking', { threadId, level: input.thinkingLevel });
-      }
-      if (input.permissionMode !== undefined) {
-        // 全局规则未载时现拉（建会话后置应用的基线；拉不到则本次选择放弃，不臆造基线）
-        const globalRules = store.getState().permissionRules ?? (await refreshGlobalRules());
-        const rules = globalRules === null ? null : nextSessionRulesForMode(globalRules, input.permissionMode);
-        if (rules !== null) await client.invoke('permission/sessionWrite', { threadId, rules });
-      }
       return { ok: true, threadId };
     },
     async openSavedSession(sessionPath: string, trusted?: boolean): Promise<boolean> {
@@ -368,6 +362,11 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       await client.invoke('session/setModel', { threadId, provider, modelId });
     },
     async selectThinking(threadId: string, level: string): Promise<void> {
+      // 词表校验先行（词表外值 hub 静默忽略——渲染层拒绝发送并提示）
+      if (!isSettableThinkingLevel(level)) {
+        store.getState().pushNotice(copy.flow.thinkingInvalid);
+        return;
+      }
       await client.invoke('session/setThinking', { threadId, level });
     },
     async refreshSaved(): Promise<void> {
@@ -381,40 +380,53 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       const outcome = await client.invoke('model/list', {});
       if (outcome.ok) store.setState({ models: outcome.data });
     },
-    async refreshPermissionRules(): Promise<PermissionRules | null> {
-      const rules = await refreshGlobalRules();
-      if (rules === null) return null;
-      await refreshActiveSessionRules();
-      return rules;
+    async readHubSettings(): Promise<HubSettingsView | null> {
+      return readHubSettings();
     },
-    async writePermissionRules(rules: PermissionRules): Promise<string | null> {
-      const outcome = await client.invoke('permission/write', { rules });
+    async writeHubSettings(patch: { permissionDefaultMode?: PermMode | null; thinkingDefault?: string | null }): Promise<string | null> {
+      // 思考档词表校验（词表外值 hub 静默忽略——渲染层先行拒绝，不发空载荷）
+      if (patch.thinkingDefault !== undefined && patch.thinkingDefault !== null && !isSettableThinkingLevel(patch.thinkingDefault)) {
+        return 'thinkingInvalid';
+      }
+      if (patch.permissionDefaultMode === undefined && patch.thinkingDefault === undefined) return null;
+      const outcome = await client.invoke('app/setHubSettings', {
+        ...(patch.permissionDefaultMode !== undefined ? { permissionDefaultMode: patch.permissionDefaultMode } : {}),
+        ...(patch.thinkingDefault !== undefined ? { thinkingDefault: patch.thinkingDefault } : {}),
+      });
       if (!outcome.ok) return outcome.reason;
-      store.setState({ permissionRules: outcome.data });
-      await refreshActiveSessionRules();
+      // 写后回读成套刷新（设置页与新任务页共用同一真相）
+      await readHubSettings();
+      await refreshActivePermissionMode();
       return null;
     },
-    async readSessionRules(threadId: string): Promise<{ rules: PermissionRules; source: 'thread' | 'global' } | null> {
-      const outcome = await client.invoke('permission/sessionRead', { threadId });
+    async readSessionPermissionMode(threadId: string): Promise<{ mode: string; source: 'session' | 'project' | 'user' | 'default' } | null> {
+      const outcome = await client.invoke('permission/mode', { threadId });
       if (!outcome.ok) return null;
-      // 判活：请求在途期间活跃会话已切换则丢弃（防旧会话规则覆盖新会话视图；与目录刷新同型）
+      // 判活：请求在途期间活跃会话已切换则丢弃（防旧会话模式覆盖新会话视图；与目录刷新同型）
       if (store.getState().activeThreadId !== threadId) return null;
-      // 引用幂等：内容相同不换引用（下游草稿重置 effect 依赖引用，防刷新循环击穿用户编辑）
-      const current = store.getState().sessionRules;
-      if (current !== null && current.source === outcome.data.source && JSON.stringify(current.rules) === JSON.stringify(outcome.data.rules)) {
+      // 引用幂等：内容相同不换引用（下游菜单依赖引用，防刷新循环击穿用户交互）
+      const current = store.getState().sessionPermissionMode;
+      if (current !== null && current.mode === outcome.data.mode && current.source === outcome.data.source) {
         return current;
       }
-      store.setState({ sessionRules: outcome.data });
+      store.setState({ sessionPermissionMode: outcome.data });
       return outcome.data;
     },
-    async writeSessionRules(threadId: string, rules: PermissionRules | null): Promise<string | null> {
-      const outcome = await client.invoke('permission/sessionWrite', { threadId, rules });
+    async setSessionPermissionMode(threadId: string, mode: PermMode): Promise<string | null> {
+      const outcome = await client.invoke('permission/setMode', { threadId, mode });
       return outcome.ok ? null : outcome.reason;
     },
-    async steerSubagent(threadId: string, subagentId: string, message: string): Promise<string | null> {
+    async readThinkingLevel(threadId: string): Promise<{ level: string; source: 'session' | 'project' | 'user' | 'unset' } | null> {
+      const outcome = await client.invoke('session/thinkingLevels', { threadId });
+      if (!outcome.ok) return null;
+      if (store.getState().activeThreadId !== threadId) return null;
+      store.setState({ thinkingLevel: outcome.data });
+      return outcome.data;
+    },
+    async steerSubagent(threadId: string, agentId: string, message: string): Promise<string | null> {
       const text = message.trim();
       if (text.length === 0) return 'empty_message';
-      const outcome = await client.invoke('subagent/steer', { threadId, subagentId, message: text });
+      const outcome = await client.invoke('subagent/steer', { threadId, agentId, message: text });
       return outcome.ok ? null : outcome.reason;
     },
     restartHost(): void {
@@ -424,18 +436,19 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     async refreshAgentDefinitions(): Promise<void> {
       await refreshAgentDefinitions();
     },
-    async upsertAgentDefinition(definition: AgentDefinition, previous: { file: string; scope: 'user' | 'project'; project: string | null } | null): Promise<string | null> {
+    async upsertAgentDefinition(definition: AgentDefinition, previous: { name: string; scope: 'user' | 'project'; project: string | null } | null): Promise<string | null> {
       const outcome = await client.invoke('agent/upsert', { definition, previous });
       if (!outcome.ok) return outcome.reason;
       await refreshAgentDefinitions();
       return null;
     },
-    async removeAgentDefinition(key: { file: string; scope: 'user' | 'project'; project: string | null }): Promise<string | null> {
+    async removeAgentDefinition(key: { name: string; scope: 'user' | 'project'; project: string | null }): Promise<string | null> {
       const outcome = await client.invoke('agent/remove', key);
       if (!outcome.ok) return outcome.reason;
       await refreshAgentDefinitions();
       return null;
-    },    async refreshSkills(): Promise<void> {
+    },
+    async refreshSkills(): Promise<void> {
       const outcome = await client.invoke('skills/list', {});
       if (outcome.ok) store.setState({ skills: outcome.data });
     },
@@ -515,8 +528,8 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     async revealSession(sessionPath: string): Promise<void> {
       await client.invoke('session/reveal', { sessionPath });
     },
-    async forkSession(threadId: string, entryId: string): Promise<{ ok: true; threadId: string } | { ok: false; reason: string }> {
-      const outcome = await client.invoke('session/fork', { threadId, entryId, position: 'before' });
+    async forkSession(threadId: string, seq: number): Promise<{ ok: true; threadId: string } | { ok: false; reason: string }> {
+      const outcome = await client.invoke('session/fork', { threadId, seq, position: 'before' });
       if (!outcome.ok) return { ok: false, reason: outcome.reason };
       // fork 是原地换轨：旧 id 已失效且不再有事件，运行面镜像就地终态
       store.getState().parkThread(threadId);
@@ -528,7 +541,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     listGitBranches: (cwd: string) => listGitBranches(client, cwd),
     listGitGraph: (cwd: string) => listGitGraph(client, cwd),
     checkoutGitBranch: (cwd: string, branch: string, create: boolean) => checkoutGitBranch(client, cwd, branch, create),
-    async upsertProvider(input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; thinkingFormat?: ThinkingFormat; apiKey?: string }): Promise<boolean> {
+    async upsertProvider(input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; apiKey?: string }): Promise<boolean> {
       const outcome = await client.invoke('provider/upsert', input);
       if (!outcome.ok) return false;
       store.setState({ providers: outcome.data });

@@ -60,7 +60,7 @@ describe('queued-flush 连接器', () => {
     stage('t1', '/w/a.jsonl', '再来一句');
     drive({ type: 'sessionUpdated', session: session('t1', '/w/a.jsonl') });
     drive({ type: 'turnStarted', threadId: 't1', at: 1 });
-    drive({ type: 'turnSettled', threadId: 't1', usage: null }, 2);
+    drive({ type: 'turnSettled', threadId: 't1', ok: true, usage: null }, 2);
     await drain();
     expect(log).toEqual([
       { threadId: 't1', text: '好了吗', mode: 'followUp' },
@@ -81,7 +81,7 @@ describe('queued-flush 连接器', () => {
     store.getState().applyEvent({ type: 'sessionUpdated', session: session('t1', '/w/a.jsonl') }, 1);
     store.getState().applyEvent({ type: 'turnStarted', threadId: 't1', at: 1 }, 1);
     store.getState().stopIntent('t1');
-    store.getState().applyEvent({ type: 'turnSettled', threadId: 't1', usage: null }, 2);
+    store.getState().applyEvent({ type: 'turnSettled', threadId: 't1', ok: true, usage: null }, 2);
     await drain();
     expect(log).toEqual([]);
     expect(queuedDrafts.snapshot().t1?.map((draft) => draft.text)).toEqual(['排队消息']);

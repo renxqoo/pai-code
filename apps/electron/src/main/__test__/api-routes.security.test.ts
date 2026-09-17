@@ -3,16 +3,19 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import type { HostCommandOutcome, HostPhase, HostProcessPort, HubFrame, PaiCommand } from "@paiapp/contracts";
+
 import { createApiRoutes } from "../api-routes";
-import { createAgentDirFiles } from "../agent-dir-files";
 import { createAgentDefinitionsStore } from "../agent-definitions-store";
 import { createFileSettings, type ProviderKeyStore } from "../file-settings";
 import { createPaiRuntime } from "../pai-runtime";
+import { createRuntimeMonitor } from '../runtime-monitor/create-runtime-monitor';
 
 /**
  * 路由安全面回归（对抗审查 C-S2/C-S8/C-S4）：
- * session/resume 白名单（任意路径读取面）、provider 名 sanitize 碰撞、
- * host 未启动时全部走 {ok:false} 而非 rejected promise。
+ * session/resume 白名单（任意路径读取面）、provider 名 sanitize 碰撞与 hub 预设键
+ * 撞键、api 词表、host 未启动时全部走 {ok:false} 而非 rejected promise；
+ * 权限模式与 hub 设置走 hub 命令面（permission/get_mode|set_mode、settings/get|set）。
  */
 
 const keyStore: ProviderKeyStore = {
@@ -22,10 +25,39 @@ const keyStore: ProviderKeyStore = {
   keyNames: [],
 };
 
-function makeRoutes(work: string) {
+/** fake host：get_models 回预设目录（撞键判定源）；其余命令成功并记账。 */
+function fakeHost(models: Array<Record<string, unknown>>): { port: HostProcessPort; sent: PaiCommand[] } {
+  const sent: PaiCommand[] = [];
+  const port: HostProcessPort = {
+    get phase(): HostPhase {
+      return "ready";
+    },
+    request: (command: PaiCommand): Promise<HostCommandOutcome> => {
+      sent.push(command);
+      if (command.type === "get_models") return Promise.resolve({ ok: true, data: models });
+      if (command.type === "permission/get_mode") return Promise.resolve({ ok: true, data: { mode: "default", source: "user" } });
+      if (command.type === "settings/get") {
+        return Promise.resolve({ ok: true, data: { values: { "permission.defaultMode": "plan", "thinking.default": "low" } } });
+      }
+      return Promise.resolve({ ok: true, data: {} });
+    },
+    onFrame: (_cb: (frame: HubFrame) => void) => () => undefined,
+    onPhase: () => () => undefined,
+    restart: () => Promise.resolve(),
+    dispose: () => Promise.resolve(),
+    diagnostics: () => ({ stderrTail: "", restartCount: 0, lastRestartCause: null, lastRestartAt: null }),
+  };
+  return { port, sent };
+}
+
+async function makeRoutes(work: string, options: { models?: Array<Record<string, unknown>> } = {}) {
   const agentDir = join(work, "agent");
+  const home = join(work, "home");
   mkdirSync(join(agentDir, "sessions"), { recursive: true });
+  // hubEntry 只需真实存在（start 的 existsSync 门）；host 本体由 fake 注入
+  writeFileSync(join(work, "cli.js"), "");
   const settings = createFileSettings(join(work, "settings.json"), keyStore);
+  const host = options.models !== undefined ? fakeHost(options.models) : null;
   const runtime = createPaiRuntime({
     paths: {
       userDataDir: work,
@@ -38,28 +70,33 @@ function makeRoutes(work: string) {
     keyStore,
     providers: () => [],
     idleRecycleMinutes: () => 5,
-    hubPaths: () => ({ bunPath: "bun", hubEntry: "/nonexistent/cli.js" }),
+    // 无 models 注入 = host 从不构建（hub 路径未解析的运行时形态）
+    hubPaths: () => (host === null ? null : { bunPath: "bun", hubEntry: join(work, "cli.js") }),
     logger: { log: () => undefined },
     emit: () => undefined,
+    createHost: () => host?.port ?? fakeHost([]).port,
   });
+  if (host !== null) await runtime.start();
   const audits: string[] = [];
   const routes = createApiRoutes({
     runtime,
     settings,
     keyStore,
     audit: (m) => audits.push(m),
-    agentDirFiles: createAgentDirFiles(agentDir),
-    agentDefinitions: createAgentDefinitionsStore(agentDir),
+    agentDefinitions: createAgentDefinitionsStore(home),
+    agentDir,
     revealPath: () => undefined,
     pickDirectory: () => Promise.resolve(null),
+    exportDiagnosticsBundle: () => work,
+    monitor: createRuntimeMonitor({ host: () => null, appMetrics: () => ({ rssBytes: null, cpuPercent: null }), systemMemory: () => ({ totalBytes: null, availableBytes: null }), idleRecycleMinutes: () => 5, appVersion: () => 'test' }),
   });
-  return { routes, audits, agentDir };
+  return { routes, audits, agentDir, home, sent: host?.sent ?? [], runtime };
 }
 
 describe("api-routes 安全面（C-S2/C-S8/C-S4）", () => {
   test("C-S2：session/resume 白名单——目录外/穿越拒绝，目录内放行（macOS 符号链接归一）", async () => {
     const work = mkdtempSync(join(tmpdir(), "pai-sec-route-"));
-    const { routes, agentDir } = makeRoutes(work);
+    const { routes, agentDir } = await makeRoutes(work);
     const outside = join(work, "outside");
     mkdirSync(outside, { recursive: true });
     writeFileSync(join(outside, "evil.jsonl"), "{}\n");
@@ -86,7 +123,7 @@ describe("api-routes 安全面（C-S2/C-S8/C-S4）", () => {
 
   test("C-S8：provider 名 sanitize 碰撞拒绝（a-b 与 a_b 同映射 PAI_KEY_A_B）", async () => {
     const work = mkdtempSync(join(tmpdir(), "pai-sec-collide-"));
-    const { routes } = makeRoutes(work);
+    const { routes } = await makeRoutes(work, { models: [] });
     const first = (await routes.invoke("provider/upsert", {
       name: "a-b",
       baseUrl: "https://a.example.com",
@@ -111,10 +148,48 @@ describe("api-routes 安全面（C-S2/C-S8/C-S4）", () => {
     expect(self.ok).toBe(true);
   });
 
-  test("C-S4：host 未启动时 provider/upsert / app/bootstrap 全走 outcome 不 reject；配置落盘", async () => {
+  test("撞 hub 预设键拒绝（custom 条目会被 host 目录静默剔除——写前显式拒绝）；api 词表外拒绝", async () => {
+    const work = mkdtempSync(join(tmpdir(), "pai-sec-preset-"));
+    const { routes } = await makeRoutes(work, { models: [{ id: "glm-5.3", provider: "glm", source: "preset" }] });
+    const preset = (await routes.invoke("provider/upsert", {
+      name: "glm",
+      baseUrl: "https://x.example.com",
+      api: "openai-completions",
+      models: [{ id: "m", reasoning: false, vision: false }],
+    })) as { ok: boolean; reason?: string };
+    expect(preset).toEqual({ ok: false, reason: "provider_name_conflicts_preset" });
+    const badApi = (await routes.invoke("provider/upsert", {
+      name: "custom",
+      baseUrl: "https://x.example.com",
+      api: "pi-messages",
+      models: [{ id: "m", reasoning: false, vision: false }],
+    })) as { ok: boolean; reason?: string };
+    expect(badApi).toEqual({ ok: false, reason: "provider_api_unsupported" });
+  });
+
+  test("C-S4：host 未启动时 provider/upsert 保守拒绝（host_unavailable）；bootstrap 全走 outcome 不 reject；remove 照常", async () => {
     const work = mkdtempSync(join(tmpdir(), "pai-sec-contract-"));
-    const { routes } = makeRoutes(work);
-    // 回归（对抗审查 P0-1）：带模型参数的 upsert 必须全链通过且参数进回读视图
+    const { routes } = await makeRoutes(work);
+    const upserted = (await routes.invoke("provider/upsert", {
+      name: "glm",
+      baseUrl: "https://x.example.com",
+      api: "openai-completions",
+      models: [
+        { id: "m", reasoning: false, vision: false, contextWindow: 200000, maxTokens: 8192 },
+      ],
+    })) as { ok: boolean; reason?: string };
+    // hub 目录不可得 → 预设撞键无法判定，保守拒绝（落盘即静默失效比拒绝对用户更糟）
+    expect(upserted).toEqual({ ok: false, reason: "host_unavailable" });
+    const bootstrap = (await routes.invoke("app/bootstrap", {})) as { ok: boolean; data: unknown };
+    expect(bootstrap.ok).toBe(true);
+    await expect(routes.invoke("provider/remove", { name: "glm" })).resolves.toMatchObject({
+      ok: true,
+    });
+  });
+
+  test("host 可用：带模型参数的 upsert 全链通过且参数进回读视图", async () => {
+    const work = mkdtempSync(join(tmpdir(), "pai-sec-upsert-"));
+    const { routes } = await makeRoutes(work, { models: [] });
     const upserted = (await routes.invoke("provider/upsert", {
       name: "glm",
       baseUrl: "https://x.example.com",
@@ -135,16 +210,11 @@ describe("api-routes 安全面（C-S2/C-S8/C-S4）", () => {
       contextWindow: 200000,
       maxTokens: 8192,
     });
-    const bootstrap = (await routes.invoke("app/bootstrap", {})) as { ok: boolean; data: unknown };
-    expect(bootstrap.ok).toBe(true);
-    await expect(routes.invoke("provider/remove", { name: "glm" })).resolves.toMatchObject({
-      ok: true,
-    });
   });
 
   test("S6：dialog/respond 权限应答落审计日志", async () => {
     const work = mkdtempSync(join(tmpdir(), "pai-sec-audit-"));
-    const { routes, audits } = makeRoutes(work);
+    const { routes, audits } = await makeRoutes(work);
     await routes.invoke("dialog/respond", { requestId: "r1", payload: { confirmed: true } });
     await routes.invoke("dialog/respond", { requestId: "r2", payload: { cancelled: true } });
     expect(audits).toContain("dialog_respond:r1:confirmed");
@@ -152,62 +222,57 @@ describe("api-routes 安全面（C-S2/C-S8/C-S4）", () => {
   });
 });
 
-describe("api-routes 权限面（2d 对抗审查补）", () => {
-  test("permission/write 畸形规则 → invalid_params；合法写入落盘且审计", async () => {
-    const work = mkdtempSync(join(tmpdir(), "pai-sec-perm-"));
-    const { routes, audits, agentDir } = makeRoutes(work);
-    const bad = (await routes.invoke("permission/write", { rules: { mode: "yolo" } })) as {
+describe("api-routes 权限模式与 hub 设置（hub 命令面）", () => {
+  test("permission/mode：permission/get_mode 收窄 {mode,source}；词表外 source 降级 default", async () => {
+    const work = mkdtempSync(join(tmpdir(), "pai-sec-permmode-"));
+    const { routes } = await makeRoutes(work, { models: [] });
+    const mode = (await routes.invoke("permission/mode", { threadId: "t1" })) as {
       ok: boolean;
-      reason?: string;
+      data: { mode: string; source: string };
     };
-    expect(bad.ok).toBe(false);
-    expect(bad.reason).toBe("invalid_params");
-
-    const rules = {
-      mode: "block-all",
-      bash: { allowPatterns: [], blockPatterns: ["sudo *"] },
-      write: { allowPatterns: [], blockPatterns: [] },
-      edit: { allowPatterns: [], blockPatterns: [] },
-    };
-    const ok = (await routes.invoke("permission/write", { rules })) as {
-      ok: boolean;
-      data: { mode: string };
-    };
-    expect(ok.ok).toBe(true);
-    expect(ok.data.mode).toBe("block-all");
-    expect(audits.some((line) => line.startsWith("permission_write:block-all"))).toBe(true);
-    const onDisk = JSON.parse(readFileSync(join(agentDir, "permission-rules.json"), "utf8")) as {
-      mode: string;
-    };
-    expect(onDisk.mode).toBe("block-all");
+    expect(mode).toEqual({ ok: true, data: { mode: "default", source: "user" } });
   });
 
-  test("permission/read：缺文件降级默认；部分文件宽容呈现（不清档）", async () => {
-    const work = mkdtempSync(join(tmpdir(), "pai-sec-perm-"));
-    const { routes, agentDir } = makeRoutes(work);
-    const empty = (await routes.invoke("permission/read", {})) as {
-      ok: boolean;
-      data: { mode: string; bash: { blockPatterns: string[] } };
-    };
-    expect(empty.data.mode).toBe("ask");
-    expect(empty.data.bash.blockPatterns).toEqual([]);
+  test("permission/setMode：permission/set_mode 透传 + 审计；词表外 mode 拒绝", async () => {
+    const work = mkdtempSync(join(tmpdir(), "pai-sec-permset-"));
+    const { routes, audits, sent } = await makeRoutes(work, { models: [] });
+    const ok = (await routes.invoke("permission/setMode", { threadId: "t1", mode: "acceptEdits" })) as { ok: boolean };
+    expect(ok.ok).toBe(true);
+    expect(sent.find((command) => command.type === "permission/set_mode")).toMatchObject({
+      type: "permission/set_mode",
+      threadId: "t1",
+      mode: "acceptEdits",
+    });
+    expect(audits).toContain("permission_mode:t1:acceptEdits");
+    const bad = (await routes.invoke("permission/setMode", { threadId: "t1", mode: "yolo" })) as { ok: boolean; reason?: string };
+    expect(bad).toEqual({ ok: false, reason: "invalid_params" });
+  });
 
-    writeFileSync(
-      join(agentDir, "permission-rules.json"),
-      JSON.stringify({ bash: { blockPatterns: ["sudo *"] } }),
-      "utf8",
-    );
-    const partial = (await routes.invoke("permission/read", {})) as {
+  test("app/hubSettings：settings/get values 收窄（未设置键 → null）", async () => {
+    const work = mkdtempSync(join(tmpdir(), "pai-sec-hubget-"));
+    const { routes } = await makeRoutes(work, { models: [] });
+    const hub = (await routes.invoke("app/hubSettings", {})) as {
       ok: boolean;
-      data: { mode: string; bash: { blockPatterns: string[] } };
+      data: { permissionDefaultMode: string | null; thinkingDefault: string | null };
     };
-    expect(partial.data.mode).toBe("ask");
-    expect(partial.data.bash.blockPatterns).toEqual(["sudo *"]);
+    expect(hub).toEqual({ ok: true, data: { permissionDefaultMode: "plan", thinkingDefault: "low" } });
+  });
+
+  test("app/setHubSettings：settings/set 按键写（permission.defaultMode / thinking.default）", async () => {
+    const work = mkdtempSync(join(tmpdir(), "pai-sec-hubset-"));
+    const { routes, sent } = await makeRoutes(work, { models: [] });
+    const outcome = (await routes.invoke("app/setHubSettings", { permissionDefaultMode: "fullAuto", thinkingDefault: "high" })) as { ok: boolean };
+    expect(outcome.ok).toBe(true);
+    const sets = sent.filter((command) => command.type === "settings/set");
+    expect(sets).toEqual([
+      { type: "settings/set", key: "permission.defaultMode", value: "fullAuto" },
+      { type: "settings/set", key: "thinking.default", value: "high" },
+    ]);
   });
 
   test("session/start 带 trusted 落审计（host 未启动 → ok:false 但审计先行）", async () => {
     const work = mkdtempSync(join(tmpdir(), "pai-sec-trust-"));
-    const { routes, audits } = makeRoutes(work);
+    const { routes, audits } = await makeRoutes(work);
     const outcome = (await routes.invoke("session/start", { cwd: "/w", trusted: true })) as {
       ok: boolean;
     };
@@ -219,7 +284,7 @@ describe("api-routes 权限面（2d 对抗审查补）", () => {
 describe("api-routes 门禁（第三波审查补：file/search 与 reveal）", () => {
   test("file/search：越界 cwd 拒绝 cwd_forbidden；已知 cwd（含 .. 归一）放行", async () => {
     const work = mkdtempSync(join(tmpdir(), "pai-sec-search-"));
-    const { routes } = makeRoutes(work);
+    const { routes } = await makeRoutes(work);
     const agentDir = join(work, "agent");
     mkdirSync(join(agentDir, "sessions"), { recursive: true });
     writeFileSync(join(agentDir, "sessions", "a.jsonl"), "{}", "utf8");
@@ -268,9 +333,12 @@ describe("api-routes 门禁（第三波审查补：file/search 与 reveal）", (
       settings,
       keyStore,
       audit: () => undefined,
-      agentDirFiles: createAgentDirFiles(agentDir),
-      agentDefinitions: createAgentDefinitionsStore(agentDir),
+      agentDefinitions: createAgentDefinitionsStore(join(work, "home")),
+      agentDir,
       revealPath: (path) => revealed.push(path),
+      pickDirectory: () => Promise.resolve(null),
+      exportDiagnosticsBundle: () => work,
+      monitor: createRuntimeMonitor({ host: () => null, appMetrics: () => ({ rssBytes: null, cpuPercent: null }), systemMemory: () => ({ totalBytes: null, availableBytes: null }), idleRecycleMinutes: () => 5, appVersion: () => 'test' }),
     });
     const outside = (await routes.invoke("session/reveal", { sessionPath: "/etc/passwd" })) as {
       ok: boolean;
@@ -289,7 +357,7 @@ describe("api-routes 门禁（第三波审查补：file/search 与 reveal）", (
 describe("api-routes agent 定义面（T20）", () => {
   test("upsert user 级落位 + audit；project 未知目录拒绝（已知集合为空）；remove 落 audit", async () => {
     const work = mkdtempSync(join(tmpdir(), "pai-sec-agent-"));
-    const { routes, audits, agentDir } = makeRoutes(work);
+    const { routes, audits, home } = await makeRoutes(work);
     const definition = {
       name: "search",
       description: "d",
@@ -303,7 +371,7 @@ describe("api-routes agent 定义面（T20）", () => {
       ok: boolean;
     };
     expect(upsert.ok).toBe(true);
-    expect(readFileSync(join(agentDir, "agents", "search.md"), "utf8")).toContain("name: 'search'");
+    expect(readFileSync(join(home, ".my-agent", "agents", "search.md"), "utf8")).toContain("name: 'search'");
     // host 未启动 → 已知项目集合为空 → project 作用域一律拒绝
     const rejected = (await routes.invoke("agent/upsert", {
       definition: { ...definition, scope: "project", project: "/nowhere" },
@@ -311,7 +379,7 @@ describe("api-routes agent 定义面（T20）", () => {
     })) as { ok: boolean; reason?: string };
     expect(rejected).toEqual({ ok: false, reason: "invalid_project" });
     const removed = (await routes.invoke("agent/remove", {
-      file: "search",
+      name: "search",
       scope: "user",
       project: null,
     })) as { ok: boolean };
@@ -324,7 +392,7 @@ describe("api-routes agent 定义面（T20）", () => {
 describe("api-routes 收敛读口门禁（T35 对抗审查补：新方法必须走同一注册表校验）", () => {
   test("三个新读口缺 threadId → invalid_params（不落 host_unavailable）", async () => {
     const work = mkdtempSync(join(tmpdir(), "pai-sec-inflight-"));
-    const { routes } = makeRoutes(work);
+    const { routes } = await makeRoutes(work);
     for (const method of ["session/inflight", "session/subagents", "session/pendingDialogs"] as const) {
       const bad = (await routes.invoke(method, {})) as { ok: boolean; reason?: string };
       expect({ method, bad }).toEqual({ method, bad: { ok: false, reason: "invalid_params" } });
@@ -336,9 +404,19 @@ describe("api-routes 收敛读口门禁（T35 对抗审查补：新方法必须�
 
   test("未注册方法 → unknown_method（白名单按 ApiSchemas 单一驱动）", async () => {
     const work = mkdtempSync(join(tmpdir(), "pai-sec-unknown-"));
-    const { routes } = makeRoutes(work);
+    const { routes } = await makeRoutes(work);
     const out = (await routes.invoke("session/nope" as never, {})) as { ok: boolean; reason?: string };
     expect(out.ok).toBe(false);
     expect(out.reason).toContain("unknown_method");
+  });
+
+  test("退役方法不在白名单：permission/read|write → unknown_method", async () => {
+    const work = mkdtempSync(join(tmpdir(), "pai-sec-retired-"));
+    const { routes } = await makeRoutes(work);
+    for (const method of ["permission/read", "permission/write"] as const) {
+      const out = (await routes.invoke(method as never, {})) as { ok: boolean; reason?: string };
+      expect(out.ok).toBe(false);
+      expect(out.reason).toContain("unknown_method");
+    }
   });
 });

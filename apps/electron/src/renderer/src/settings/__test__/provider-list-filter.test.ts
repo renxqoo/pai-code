@@ -9,7 +9,7 @@ const zhipu: ProviderConfigView = {
   baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
   api: 'openai-completions',
   models: [{ id: 'glm-4.6', reasoning: true, vision: false }],
-  thinkingFormat: 'default',
+ 
   hasKey: true,
 };
 
@@ -18,7 +18,7 @@ const anthropic: ProviderConfigView = {
   baseUrl: 'https://api.anthropic.com',
   api: 'anthropic-messages',
   models: [{ id: 'claude-sonnet-4', reasoning: false, vision: true }],
-  thinkingFormat: 'default',
+ 
   hasKey: false,
 };
 

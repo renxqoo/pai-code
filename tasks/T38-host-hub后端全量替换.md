@@ -280,3 +280,22 @@
 - **M6**（事件词表不完整/permission-ask 未裁决）→ 采纳：§1.2 补全 + D14 忽略策略 + permission-ask 裁决展示。
 - **M7**（HOME 并行隔离）→ 采纳：D12 注明（bun test 每文件独立进程 + HOME 敏感断言集中专属文件）。
 - **L1-L7** → 全部采纳：L1 入 H2；L2 入 D1；L3 入 §1.1/D4；L4 入 §0（真相源=代码）+ §6（对拍对象=代码）；L5 入 D1；L6 入 §1.1/§3；L7 入 D4。
+
+## 9. 实施记录
+
+### W1（已提交 db7c78a）
+
+进程集成面：hub-paths 探测 `../my-agent/packages/host-hub`（src 源码形态优先 > dist）；spawn 直执行形态（`hubEntry: string | null`，null → `spawn(bunPath, [])`）；`HUB_AGENT_DIR`/`HUB_IDLE_RETIRE_MS`；sync-resources 改 `bun build --compile` 单文件产物进 `resources/host-hub/host-hub`（已实测编译形态全链路：worker `/$bunfs/` 自 spawn、faux、EOF exit 0）。附带根治存量缺陷：oxlint 插件测试 helper 的 PATH-node 隐藏依赖（`.bin` shim shebang 是 node——改经 process.execPath 执行 dist/cli.js；main 基线 28 挂的本机成因，CI 不受影响）。四门 1664/1664。
+
+### W2-W4 源码（单原子实施序列）
+
+- contracts：hub-protocol 拆四（hub-protocol 帧 + hub-commands 55 命令 + hub-events 事件词表 + hub-data 响应形状——max-lines 预算）；api/ui-events/inflight-views/runtime/agents/permissions/settings/thinking-levels 全量重写（词表/形状见 §1）。测试 80 用例绿。
+- adapter：五 mapper + content/diff-extract（edit_file/write_file）/subagent-spawns（agent 工具 {prompt,subagent_type}）重写；event-mapper 有状态化（assistant/stream 增量累积→done 出权威 messageFinal）；测试 155 用例绿。审查观察处置：frame-decoder finish() 不可达超限分支删除、inflightView 注释对齐。
+- main：api-routes（fork seq/权限模式化/受理重试/entries seq 游标兜底/bash 结果对象/agent 键位 name 化）、models-config（hub 扁平形状）、api-routes-settings（技能走 hub 命令、provider 三道写前校验、hub 设置读写）、agent-definitions-store（~/.my-agent 布局 + kebab 校验 + homeDir 注入缝）、pai-runtime（createEventMapper 装配、inbox/spliced→get_state 合成 queueChanged、hub_error.message、extraSpawnEnv 注入缝）、runtime-monitor（字段适配）；删除 skills-catalog/skills-inventory/agent-dir-files。
+- **实施期发现的真缺陷与修复**：
+  1. **resume 撞 already open**（集成测试抓出）：host-hub 的 parked 唤醒语义 = 按 threadId 的驱动命令自动唤醒，resume-by-path 对表内 parked 条目按设计拒绝——app 懒恢复对刚收编会话必失败。修：resume 路由遇 `already open` 从 thread/list 按 path 收养既有表项（adoptExistingThread/finishResume）。
+  2. bun 的 os.homedir() 启动即缓存——进程内 HOME 重定向无效，agent-definitions-store 加 homeDir 注入缝。
+
+### W6 集成 e2e（默认门，已全绿）
+
+`host-hub.integration.test.ts`：真 host-hub（源码形态）+ faux provider，经真 api-routes 翻译层驱动全部 hub 触达 API 面（bootstrap/start/prompt/entries 游标/state/inflight/stats/subagents/steer 错误面/setName/WAL session_meta/setModel/setThinking 预算双路径/permission mode/hubSettings 落盘/skills 种子+禁用/agents CRUD 文件/fork/bash confirm 弹窗应答+WAL 信封/受理窗口重试/abort/retire→parked→resume 收养/keepalive/setIdleRecycle/listSaved 标题/forceRetire/stop/runtime 快照/models.json 形状）。落存储断言口径 = D12。装置事实（回写）：faux 剧本 env 值是**裸数组**；hub 对 cwd realpath 归一；事件面在 bootstrap 前缓冲（harness 先开门）；monitor 快照需 poll。GLM 真门保留 opt-in。

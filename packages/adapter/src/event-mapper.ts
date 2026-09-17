@@ -1,244 +1,271 @@
-import type { AgentSessionEvent, SubagentEventFrame, UiEvent, UsageView } from '@paiapp/contracts';
+import type { UiEvent, UsageView } from '@paiapp/contracts';
 
-import { assistantText, assistantThinking, assistantToolCalls, toolResultText } from './content';
 import { previewArgs } from './args-preview';
 import { diffFromToolCall, diffFromToolResult } from './diff-extract';
 import { subagentsField } from './subagent-spawns';
 
 /**
- * AgentSessionEvent → UiEvent（渲染层流式装饰）。
- * 无状态映射：需要时刻的事件注入时钟；需要跨事件记忆的事实（如时长）由渲染层折叠。
+ * host-hub event 帧事件 → UiEvent（渲染层流式装饰）。
+ *
+ * 有状态映射：assistant/stream 的增量在 hub 侧无消息 id 与权威终快照——
+ * 本映射器按线程维护流式累积态（start 开缓冲、done 出权威 messageFinal），
+ * 渲染层的 messageFinal 语义（整体替换增量缓冲）由此保证。
+ * 需要时刻的事件注入时钟；跨事件记忆的事实（如工具时长）由渲染层折叠。
  *
  * 显式忽略清单（渲染无直接消费，或由别的事件/对账路径覆盖）：
- * turn_start / turn_end（message 粒度已覆盖）
- * message_update 的 message_start 段外字段（pai-cli toWireEvent 剥离 message/partial，
- *   增量 id 由渲染层以 liveMessageId 兜底，见 fold-events）
- * tool_execution_start（执行时长以渲染层到达时刻观测；args 已由 toolcall_end 携带）
- * agent_end（auto-retry 会多次触发；终态以 agent_settled 为准）
- * message_update 的 start/end/done/error 段（text/thinking/toolcall 三类增量已覆盖；
- *   段边界由渲染层按 contentIndex 语义重建，权威内容走 messageFinal）
- * auto_retry_end（下一次 messageStarted / turnSettled 清除重试提示）
- * entry_appended（仅扩展自定义条目；对话条目真相走 get_entries 对账）
- * summarization_retry_*（压缩内部重试，过程不进对话流）
- * thinking_level_changed / model 变更（sessionUpdated 快照携带）
+ * assistant/stream 的 start/thinking_start|end/text_start|end/tool_use_* 段
+ *   （块边界由 text/thinking 增量自明；工具参数以 tool/start 的完整 input 为准）
+ * assistant/stream 的 usage/error 段（usage 并入 done 的 messageFinal；
+ *   硬错误经 settled{ok:false} 呈现，可重试错误走 llm/retry）
+ * turn/end（终态以 settled 为准——worker 死亡 host 合成，无悬挂）
+ * inbox/spliced（结构信号：主进程层拉取 get_state.queue 合成 queueChanged）
+ * permission/decision（审计事件；对话框交互面是 ui_request 帧）
+ * step/start|end、hook/error、request/start、plugin/*（前向兼容忽略）
+ * agents/idle（manager 聚合域，面板态走 agents/state）
+ * agents/user-injected（无面板语义）
  */
 
 export interface EventMapDeps {
   now(): number;
 }
 
-export function mapSessionEvent(threadId: string, raw: AgentSessionEvent, deps: EventMapDeps): UiEvent[] {
-  switch (raw.type) {
-    case 'agent_start':
-      return [{ type: 'turnStarted', threadId, at: deps.now() }];
-    case 'message_start': {
-      // pi 对 user/toolResult 消息同样发 message_start/end（agent-loop 全消息发射），
-      // 只有 assistant 消息参与流式渲染
-      if (!isAssistant(raw.message)) return [];
-      return [{ type: 'messageStarted', threadId, messageId: messageIdOf(raw.message), at: deps.now() }];
-    }
-    case 'message_update':
-      return mapMessageUpdate(threadId, raw);
-    case 'message_end': {
-      if (!isAssistant(raw.message)) return [];
-      return [mapMessageEnd(threadId, raw.message)];
-    }
-    case 'tool_execution_update':
-      return [{ type: 'toolUpdated', threadId, callId: str(raw.toolCallId), output: partialOutput(raw.partialResult) }];
-    case 'tool_execution_end':
-      return [
-        {
-          type: 'toolEnded',
-          threadId,
-          callId: str(raw.toolCallId),
-          output: partialOutput(raw.result),
-          isError: raw.isError === true,
-          durationMs: 0,
-          diff: diffFromToolResult(str(raw.toolName), raw.result),
-        },
-      ];
-    case 'agent_settled':
-      return [{ type: 'turnSettled', threadId, usage: null }];
-    case 'queue_update':
-      return [
-        {
-          type: 'queueChanged',
-          threadId,
-          steering: strList(raw.steering),
-          followUp: strList(raw.followUp),
-        },
-      ];
-    case 'compaction_start':
-      return [{ type: 'compacting', threadId, active: true }];
-    case 'compaction_end':
-      return [{ type: 'compacting', threadId, active: false }];
-    case 'auto_retry_start':
-      return [
-        {
-          type: 'retrying',
-          threadId,
-          attempt: num(raw.attempt, 0),
-          maxAttempts: num(raw.maxAttempts, 0),
-          errorMessage: str(raw.errorMessage),
-        },
-      ];
-    case 'session_info_changed':
-      return [{ type: 'sessionRenamed', threadId, name: typeof raw.name === 'string' && raw.name.length > 0 ? raw.name : null }];
-    case 'bash_execution_update':
-      return [{ type: 'bashOutput', threadId, id: optStr(raw.id), delta: str(raw.delta) }];
-    default:
-      return [];
-  }
+/** 线程内流式累积态：assistant/stream start→done 之间的事实。 */
+interface StreamBuffer {
+  messageId: string;
+  text: string;
+  thinking: string;
+  usage: UsageView | null;
 }
 
-function mapMessageUpdate(threadId: string, raw: AgentSessionEvent): UiEvent[] {
-  const segment = raw.assistantMessageEvent as Record<string, unknown> | undefined;
-  if (segment === undefined) return [];
-  const kind = segment['type'];
-  const messageId = segmentMessageId(raw);
-  if (kind === 'text_delta') {
-    return [{ type: 'textDelta', threadId, messageId, delta: str(segment['delta']) }];
+/** 映射器实例的流式累积域（per-mapper 状态；mapStream 模块函数经此访问）。 */
+interface StreamState {
+  streams: Map<string, StreamBuffer>;
+  counter: number;
+}
+
+export interface EventMapper {
+  /** event 帧（name/payload 展开 + 子代理中继身份）→ UiEvent 列表。 */
+  mapEvent(frame: { threadId: string; name: string; payload: Record<string, unknown>; agentName?: string }): UiEvent[];
+}
+
+export function createEventMapper(deps: EventMapDeps): EventMapper {
+  const state: StreamState = { streams: new Map(), counter: 0 };
+
+  return {
+    mapEvent(frame): UiEvent[] {
+      const { threadId, name, payload } = frame;
+      if (frame.agentName !== undefined && frame.agentName !== '') {
+        return mapSubagent(threadId, name, payload, frame.agentName);
+      }
+      switch (name) {
+        case 'turn/start':
+          return [{ type: 'turnStarted', threadId, at: num(payload.ts, deps.now()) }];
+        case 'assistant/stream':
+          return mapStream(state, threadId, payload, deps);
+        case 'tool/start': {
+          const buffer = state.streams.get(threadId);
+          if (buffer === undefined) return [];
+          const toolUseId = str(payload.toolUseId);
+          const toolName = str(payload.toolName);
+          const args = recordOf(payload.input);
+          return [
+            {
+              type: 'toolCallAdded',
+              threadId,
+              messageId: buffer.messageId,
+              call: { id: toolUseId, name: toolName, argsPreview: previewArgs(args), ...subagentsField(toolName, args) },
+              diff: diffFromToolCall(toolName, args),
+            },
+          ];
+        }
+        case 'tool/progress':
+          return [{ type: 'toolUpdated', threadId, callId: str(payload.toolUseId), output: str(payload.delta) }];
+        case 'tool/result':
+          return [
+            {
+              type: 'toolEnded',
+              threadId,
+              callId: str(payload.toolUseId),
+              output: toolResultText(payload.content),
+              isError: payload.isError === true,
+              durationMs: num(payload.durationMs, 0),
+              diff: diffFromToolResult(str(payload.toolName), payload),
+            },
+          ];
+        case 'settled':
+          state.streams.delete(threadId);
+          return [
+            {
+              type: 'turnSettled',
+              threadId,
+              ok: payload.ok !== false,
+              ...(payload.reason !== undefined && payload.reason !== '' ? { reason: str(payload.reason) } : {}),
+              usage: null,
+            },
+          ];
+        case 'compaction':
+          return [
+            { type: 'compacting', threadId, active: false },
+            { type: 'compacted', threadId, replacedCount: num(payload.replacedCount, 0) },
+          ];
+        case 'llm/retry':
+          return [{ type: 'retrying', threadId, attempt: num(payload.attempt, 0), errorMessage: str(payload.reason) }];
+        case 'bash_execution_update':
+          return [
+            {
+              type: 'bashOutput',
+              threadId,
+              id: payload.id === undefined ? null : str(payload.id),
+              delta: str(payload.delta),
+              ...(payload.truncated === true ? { truncated: true } : {}),
+            },
+          ];
+        default:
+          return [];
+      }
+    },
+  };
+}
+
+function beginStream(state: StreamState): StreamBuffer {
+  state.counter += 1;
+  return { messageId: `stream-${state.counter}`, text: '', thinking: '', usage: null };
+}
+
+function mapStream(state: StreamState, threadId: string, payload: Record<string, unknown>, deps: EventMapDeps): UiEvent[] {
+  const kind = payload['type'];
+  let buffer = state.streams.get(threadId);
+  if (buffer === undefined && (kind === 'start' || kind === 'text' || kind === 'thinking')) {
+    // start 开缓冲；无 start 的增量（订阅窗口边界/竞争）同样开缓冲兜底，不丢单词
+    buffer = beginStream(state);
+    state.streams.set(threadId, buffer);
+    return [
+      { type: 'messageStarted', threadId, messageId: buffer.messageId, at: deps.now() },
+      ...mapStream(state, threadId, payload, deps),
+    ];
   }
-  if (kind === 'thinking_delta') {
-    return [{ type: 'thinkingDelta', threadId, messageId, delta: str(segment['delta']) }];
+  if (buffer === undefined) return [];
+  if (kind === 'text') {
+    const delta = str(payload.text);
+    buffer.text += delta;
+    return [{ type: 'textDelta', threadId, messageId: buffer.messageId, delta }];
   }
-  if (kind === 'toolcall_end') {
-    const toolCall = segment['toolCall'] as Record<string, unknown> | undefined;
-    if (toolCall === undefined) return [];
-    const args = recordOf(toolCall['arguments']);
-    const name = str(toolCall['name']);
+  if (kind === 'thinking') {
+    const delta = str(payload.text);
+    buffer.thinking += delta;
+    return [{ type: 'thinkingDelta', threadId, messageId: buffer.messageId, delta }];
+  }
+  if (kind === 'usage') {
+    buffer.usage = usageOf(payload.usage);
+    return [];
+  }
+  if (kind === 'done') {
     return [
       {
-        type: 'toolCallAdded',
+        type: 'messageFinal',
         threadId,
-        messageId,
-        call: { id: str(toolCall['id']), name, argsPreview: previewArgs(args), ...subagentsField(name, args) },
-        diff: diffFromToolCall(name, args),
+        message: { id: buffer.messageId, text: buffer.text, thinking: buffer.thinking, toolCalls: [], usage: buffer.usage },
       },
     ];
   }
   return [];
 }
 
-function mapMessageEnd(threadId: string, message: unknown): UiEvent {
-  const m = recordOf(message);
-  const toolCalls = assistantToolCalls(m['content']).map((call) => ({
-    id: call.id,
-    name: call.name,
-    argsPreview: previewArgs(call.args),
-    ...subagentsField(call.name, call.args),
-  }));
-  return {
-    type: 'messageFinal',
-    threadId,
-    message: {
-      id: messageIdOf(message),
-      text: assistantText(m['content']),
-      thinking: assistantThinking(m['content']),
-      toolCalls,
-      usage: usageOf(m['usage']),
-    },
-  };
-}
-
-export function mapSubagentEvent(frame: SubagentEventFrame): UiEvent[] {
-  const { threadId, subagentId, agent, task, event } = frame;
-  const header: UiEvent = { type: 'subagentStarted', threadId, subagentId, agent, task };
-  switch (event.type) {
-    case 'message_update': {
-      const segment = event.assistantMessageEvent as Record<string, unknown> | undefined;
-      const kind = segment?.['type'];
-      if (kind === 'text_delta') {
-        return [header, { type: 'subagentDelta', threadId, subagentId, delta: str(segment?.['delta']) }];
+/** 子代理中继事件（帧级 agentName 分流）：正文流 + 工具面 + agents/* 域。 */
+function mapSubagent(threadId: string, name: string, payload: Record<string, unknown>, agentName: string): UiEvent[] {
+  switch (name) {
+    case 'assistant/stream':
+      if (payload['type'] === 'text') {
+        return [{ type: 'subagentDelta', threadId, agentName, delta: str(payload['text']) }];
       }
-      if (kind === 'toolcall_end') {
-        const toolCall = recordOf(segment?.['toolCall']);
-        const call = { id: str(toolCall['id']), name: str(toolCall['name']), argsPreview: previewArgs(recordOf(toolCall['arguments'])) };
-        return [header, { type: 'subagentTool', threadId, subagentId, call, phase: 'end' }];
-      }
-      return [header];
-    }
-    case 'tool_execution_start': {
-      const call = { id: str(event.toolCallId), name: str(event.toolName), argsPreview: previewArgs(recordOf(event.args)) };
-      return [header, { type: 'subagentTool', threadId, subagentId, call, phase: 'start' }];
-    }
-    case 'tool_execution_update': {
-      const call = { id: str(event.toolCallId), name: str(event.toolName), argsPreview: '' };
-      return [header, { type: 'subagentTool', threadId, subagentId, call, phase: 'update', output: partialOutput(event.partialResult) }];
-    }
-    case 'tool_execution_end': {
-      const call = { id: str(event.toolCallId), name: str(event.toolName), argsPreview: '' };
+      return [];
+    case 'tool/start': {
+      const toolName = str(payload.toolName);
+      const args = recordOf(payload.input);
       return [
-        header,
         {
           type: 'subagentTool',
           threadId,
-          subagentId,
-          call,
-          phase: 'end',
-          output: partialOutput(event.result),
-          isError: event.isError === true,
+          agentName,
+          call: { id: str(payload.toolUseId), name: toolName, argsPreview: previewArgs(args) },
+          phase: 'start',
         },
       ];
     }
-    case 'agent_settled':
-      return [header, { type: 'subagentSettled', threadId, subagentId }];
-    case 'message_end': {
-      // 子代理正文权威快照：完整文本替换增量缓冲；
-      // 非 assistant 消息（user/toolResult）同样会发 message_end，必须过滤
-      if (!isAssistant(event.message)) return [header];
-      const text = assistantText(recordOf(event.message)['content']);
-      return [header, { type: 'subagentDelta', threadId, subagentId, delta: '' }, { type: 'subagentText', threadId, subagentId, text }];
-    }
+    case 'tool/progress':
+      return [
+        {
+          type: 'subagentTool',
+          threadId,
+          agentName,
+          call: { id: str(payload.toolUseId), name: str(payload.toolName), argsPreview: '' },
+          phase: 'update',
+          output: str(payload.delta),
+        },
+      ];
+    case 'tool/result':
+      return [
+        {
+          type: 'subagentTool',
+          threadId,
+          agentName,
+          call: { id: str(payload.toolUseId), name: str(payload.toolName), argsPreview: '' },
+          phase: 'end',
+          output: toolResultText(payload.content),
+          isError: payload.isError === true,
+        },
+      ];
+    case 'agents/spawned':
+      return [{ type: 'subagentStarted', threadId, agentId: str(payload.agentId), agentName: str(payload.agentName), task: '' }];
+    case 'agents/state':
+      return [{ type: 'subagentState', threadId, agentName: str(payload.agentName), busy: payload.to === 'busy' }];
+    case 'agents/terminal':
+      return [{ type: 'subagentSettled', threadId, agentName: str(payload.agentName), status: str(payload.status) }];
+    case 'agents/evicted':
+      return [{ type: 'subagentSettled', threadId, agentName: str(payload.agentName), status: 'evicted' }];
+    case 'agents/permission-ask':
+      return [
+        {
+          type: 'subagentAsk',
+          threadId,
+          agentName: str(payload.agentName),
+          toolName: str(payload.toolName),
+          summary: str(payload.summary),
+          ...(payload.reason !== undefined ? { reason: str(payload.reason) } : {}),
+        },
+      ];
     default:
-      return [header];
+      return [];
   }
 }
 
-/** 消息标识：流式期间以 message.timestamp 为稳定 id（messageFinal 同源）。 */
-function messageIdOf(message: unknown): string {
-  const ts = recordOf(message)['timestamp'];
-  return typeof ts === 'number' ? String(ts) : '';
-}
-
-function isAssistant(message: unknown): boolean {
-  return recordOf(message)['role'] === 'assistant';
-}
-
-function segmentMessageId(raw: AgentSessionEvent): string {
-  const partial = recordOf((recordOf(raw.assistantMessageEvent))['partial']);
-  const fromPartial = partial['timestamp'];
-  if (typeof fromPartial === 'number') return String(fromPartial);
-  return messageIdOf(raw.message);
-}
-
+/** 内核 usage {inputTokens, outputTokens} → 视图 {input, output}。 */
 function usageOf(usage: unknown): UsageView | null {
   const u = recordOf(usage);
-  const input = u['input'];
-  const output = u['output'];
+  const input = u['inputTokens'];
+  const output = u['outputTokens'];
   if (typeof input !== 'number' || typeof output !== 'number') return null;
   return { input, output };
 }
 
-function partialOutput(result: unknown): string {
-  const r = recordOf(result);
-  return toolResultText(r['content']);
+function toolResultText(content: unknown): string {
+  if (!Array.isArray(content)) return '';
+  const parts: string[] = [];
+  for (const block of content) {
+    if (typeof block === 'object' && block !== null && (block as Record<string, unknown>)['type'] === 'text') {
+      const text = (block as Record<string, unknown>)['text'];
+      if (typeof text === 'string') parts.push(text);
+    }
+  }
+  return parts.join('\n');
 }
 
 function str(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
-function optStr(value: unknown): string | null | undefined {
-  return typeof value === 'string' ? value : null;
-}
-
 function num(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
-}
-
-function strList(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 }
 
 function recordOf(value: unknown): Record<string, unknown> {

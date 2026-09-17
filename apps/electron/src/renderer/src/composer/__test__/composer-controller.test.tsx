@@ -118,7 +118,25 @@ describe('stop-or-abort 三态（读 store 真相）', () => {
   test('在途子代理且生成中→开确认条；确认前不停止', () => {
     seedThread('t1', {
       streaming: true,
-      agents: [{ id: 'a1', name: '探索', agentType: 'Explore', model: 'm', effort: 'high', tokens: 1, status: 'working' }],
+      agents: [
+        {
+          id: 'a1',
+          agentId: 'sub-1',
+          name: '探索',
+          agentType: 'Explore',
+          task: '',
+          model: 'm',
+          effort: 'high',
+          tokens: 1,
+          toolCount: 0,
+          status: 'busy',
+          startedAt: 1,
+          endedAt: null,
+          summary: '',
+          pendingAsk: null,
+          tools: [],
+        },
+      ],
     });
     const stop = jest.spyOn(workspaceActions, 'stopActiveTurn');
     stopOrAbort();

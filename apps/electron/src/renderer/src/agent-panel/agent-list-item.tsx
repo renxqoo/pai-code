@@ -3,11 +3,12 @@ import * as React from 'react';
 import { CaretToggle, DurationTag, MetaLine, StatusDot, TypePill } from '@paiapp/ui';
 
 import { copy } from '@/strings';
-import { agentActivity, panelStatusLabelKey } from '@/thread/agent-activity';
+import { agentActivity } from '@/thread/agent-activity';
 import { agentElapsedMs } from '@/thread/panel-summary';
 import { formatElapsed } from '@/thread/format-elapsed';
 import { SteerInput } from './steer-input';
 import { formatTokenCount } from '@/thread/format-count-unit';
+import { subagentStatusLabel } from '@/thread/subagent-status';
 import type { SubagentModel } from '@/thread/thread-model';
 
 import { AgentToolRow } from './agent-tool-row';
@@ -15,32 +16,34 @@ import { AgentToolRow } from './agent-tool-row';
 type AgentListItemProps = {
   agent: SubagentModel
   now: number
-  /** 运行中子代理的行内 steer 输入（H1；不传则不显示）。 */
-  onSteer?: (subagentId: string, message: string) => void
+  /** 运行中子代理的行内 steer 输入（H1；不传则不显示；agentId 未知时同样不显示）。 */
+  onSteer?: (agentId: string, message: string) => void
 }
 
 type DetailLine =
   | { kind: 'summary'; text: string }
   | { kind: 'tool'; toolName: string }
   | { kind: 'status'; label: string }
+  | { kind: 'ask'; toolName: string; summary: string }
   | { kind: 'none' };
 
 /**
- * 第二行的内容推导：进行中显「▸ 当前工具」或状态词；
- * 完成后显报告摘要，无摘要时退回最后一个工具名。
+ * 第二行的内容推导：权限等待最优先（时间敏感）；
+ * 进行中显「▸ 当前工具」，无工具在跑显状态词（工作中/空闲）；
+ * 归档后显报告摘要，无摘要时退回任务描述/最后工具名。
  */
 function detailLine(agent: SubagentModel, now: number): DetailLine {
-  if (agent.status === 'done') {
+  if (agent.pendingAsk !== null) return { kind: 'ask', toolName: agent.pendingAsk.toolName, summary: agent.pendingAsk.summary };
+  if (agent.status === 'on-disk') {
     if (agent.summary.length > 0) return { kind: 'summary', text: agent.summary };
+    if (agent.task.length > 0) return { kind: 'summary', text: agent.task };
     const lastTool = agent.tools[agent.tools.length - 1];
     if (lastTool !== undefined) return { kind: 'tool', toolName: lastTool.name };
     return { kind: 'none' };
   }
   const activity = agentActivity(agent, now);
   if (activity.kind === 'tool') return { kind: 'tool', toolName: activity.toolName };
-  const statusKey = panelStatusLabelKey(activity);
-  if (statusKey !== null) return { kind: 'status', label: copy.flow.statusWorking };
-  return { kind: 'none' };
+  return { kind: 'status', label: subagentStatusLabel(agent.status) };
 }
 
 /** 面板列表项：状态点 + 名称 + 类型胶囊 + 耗时 + 活动行 + 元信息行，可展开工具明细。 */
@@ -55,11 +58,12 @@ function AgentListItem({ agent, now, onSteer }: AgentListItemProps) {
     copy.flow.metaTokens(formatTokenCount(agent.tokens)),
     copy.flow.metaTools(agent.toolCount),
   ].filter((item): item is string => item !== null);
+  const steerable = agent.status === 'busy' && agent.agentId.length > 0;
 
   return (
     <div className="py-[8px]">
       <div className="flex h-[20px] items-center gap-[9px]">
-        <StatusDot tone={agent.status === 'working' ? 'active' : 'done'} />
+        <StatusDot tone={agent.status === 'busy' ? 'active' : agent.status === 'idle' ? 'idle' : 'done'} />
         <button
           type="button"
           onClick={toggle}
@@ -88,6 +92,10 @@ function AgentListItem({ agent, now, onSteer }: AgentListItemProps) {
               </>
             ) : detail.kind === 'status' ? (
               <span className="text-[11.5px] leading-none text-muted-foreground">{detail.label}</span>
+            ) : detail.kind === 'ask' ? (
+              <span className="truncate text-[11.5px] leading-none text-foreground/85">
+                {copy.flow.subagentAskPending(detail.toolName)}
+              </span>
             ) : (
               <span className="truncate text-[11.5px] leading-[16px] text-foreground/85">{detail.text}</span>
             )}
@@ -104,7 +112,7 @@ function AgentListItem({ agent, now, onSteer }: AgentListItemProps) {
       <div className="mt-[6px] pl-[16px]">
         <MetaLine items={metaItems} />
       </div>
-      {onSteer !== undefined && agent.status === 'working' ? <SteerInput onSubmit={(message) => onSteer(agent.id, message)} /> : null}
+      {onSteer !== undefined && steerable ? <SteerInput onSubmit={(message) => onSteer(agent.agentId, message)} /> : null}
     </div>
   );
 }

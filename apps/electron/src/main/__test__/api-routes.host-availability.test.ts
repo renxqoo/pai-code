@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { createApiRoutes } from '../api-routes';
-import { createAgentDirFiles } from '../agent-dir-files';
 import { createAgentDefinitionsStore } from '../agent-definitions-store';
 import { createFileSettings, type ProviderKeyStore } from '../file-settings';
 import { createPaiRuntime } from '../pai-runtime';
@@ -51,7 +50,7 @@ function makeRoutes(work: string) {
     idleRecycleMinutes: () => 5,
     appVersion: () => 'test',
   });
-  const routes = createApiRoutes({ runtime, settings, keyStore, monitor, exportDiagnosticsBundle: () => work, audit: () => undefined, agentDirFiles: createAgentDirFiles(agentDir), agentDefinitions: createAgentDefinitionsStore(agentDir), revealPath: () => undefined,
+  const routes = createApiRoutes({ runtime, settings, keyStore, monitor, exportDiagnosticsBundle: () => work, audit: () => undefined, agentDefinitions: createAgentDefinitionsStore(join(work, 'home')), agentDir, revealPath: () => undefined,
     pickDirectory: () => Promise.resolve(null) });
   return { routes, monitor };
 }

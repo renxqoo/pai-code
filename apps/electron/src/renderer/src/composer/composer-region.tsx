@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useStore } from 'zustand';
 
-import type { PermissionRules } from '@paiapp/contracts';
+import type { PermMode } from '@paiapp/contracts';
 
 import { CONVERSATION_COLUMN_CLASS } from '@/thread/conversation-column';
 import { baseNameOf } from '@/lib/project-dirs';
@@ -10,6 +10,7 @@ import { queuedDrafts } from '@/composer/queued-drafts';
 import { submitQueuedDraft } from '@/composer/queued-submit';
 import { ComposerActionsRow } from '@/composer/composer-actions-row';
 import { composerSelectionOf } from '@/composer/composer-selection';
+import { normalizePermMode } from '@/live/permission-mode';
 import {
   editQueuedDraft,
   registerComposerTextarea,
@@ -51,10 +52,10 @@ function ComposerRegion(): React.JSX.Element {
   const activeSession = useStore(liveStore, (s) => (s.activeThreadId === null ? undefined : s.sessions[s.activeThreadId]));
   const models = useStore(liveStore, (s) => s.models);
   const activeStats = useStore(liveStore, (s) => s.stats[s.activeThreadId ?? '']) ?? null;
-  const sessionRules = useStore(liveStore, (s) => s.sessionRules);
+  const sessionPermissionMode = useStore(liveStore, (s) => s.sessionPermissionMode);
   const hostPhase = useStore(liveStore, (s) => s.hostPhase);
   const commands = useStore(liveStore, (s) => s.commands);
-  const effortLevels = useStore(liveStore, (s) => s.effortLevels);
+  const thinkingLevel = useStore(liveStore, (s) => s.thinkingLevel);
   const threadState = useStore(liveStore, (s) => (s.activeThreadId === null ? undefined : s.threads[s.activeThreadId]));
   const composerDraft = useStore(uiStore, (s) => s.composerDraft);
   const drafts = useStore(uiStore, (s) => s.drafts);
@@ -68,14 +69,14 @@ function ComposerRegion(): React.JSX.Element {
 
   const value = drafts[activeThreadId] ?? composerDraft;
   const generating = threadState?.streaming ?? false;
-  const agentsWorking = summarizeAgents(threadState?.agents ?? []).workingCount;
+  const agentsWorking = summarizeAgents(threadState?.agents ?? []).busyCount;
   const hostDown = hostPhase === null || hostPhase === 'failed';
-  const permissionMode: PermissionRules['mode'] | null = sessionRules === null ? null : sessionRules.rules.mode;
-  const permissionFollowsGlobal = sessionRules?.source !== 'thread';
+  // 权限模式（null = 读口未加载——parked 未发 worker 级查询，控件不渲染）
+  const permissionMode: PermMode | null = sessionPermissionMode === null ? null : normalizePermMode(sessionPermissionMode.mode);
 
   const selection = React.useMemo(
-    () => composerSelectionOf(models, activeStats === null ? {} : { [activeThreadId]: activeStats }, activeSession, effortLevels),
-    [models, activeStats, activeSession, effortLevels, activeThreadId],
+    () => composerSelectionOf(models, activeSession, thinkingLevel),
+    [models, activeSession, thinkingLevel],
   );
 
   const activeCwd = activeSession?.cwd ?? '';
@@ -247,17 +248,14 @@ function ComposerRegion(): React.JSX.Element {
             generating={generating}
             onStop={stopOrAbort}
             permissionMode={permissionMode}
-            permissionFollowsGlobal={permissionFollowsGlobal}
             onSelectPermissionMode={(mode) => void workspaceActions.setSessionPermissionMode(mode)}
-            onFollowPermissionGlobal={() => void workspaceActions.writeSessionRules(null)}
             agents={{ working: agentsWorking, onOpen: () => uiStore.getState().openAgentsPane() }}
             effort={{
               value: selection.effort,
               options: selection.effortOptions,
               onSelect: workspaceActions.selectEffort,
-              unavailableLabel: copy.composer.effortUnavailable,
             }}
-            usage={{ contextUsed: selection.contextUsed, stats: activeStats, label: copy.composer.contextUsage }}
+            usage={{ stats: activeStats, label: copy.composer.usageSummary }}
           />
         )}
       />

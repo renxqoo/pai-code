@@ -14,7 +14,7 @@ const zhipu: ProviderConfigView = {
   baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
   api: 'openai-completions',
   models: [{ id: 'glm-4.6', reasoning: true, vision: false }],
-  thinkingFormat: 'default',
+ 
   hasKey: true,
 };
 

@@ -79,7 +79,7 @@ function RuntimeWorkerTable({
       ) : visible.length === 0 ? (
         <p className="py-[28px] text-center text-[12px] text-muted-foreground">{copy.sidebar.noMatches}</p>
       ) : (
-        <table className="w-full min-w-[880px] border-collapse">
+        <table className="w-full min-w-[760px] border-collapse">
           <thead>
             <tr className="border-b border-border">
               <th className={cn(columnClass, 'min-w-[150px]')}>{copy.runtime.columnSession}</th>
@@ -87,8 +87,6 @@ function RuntimeWorkerTable({
               <th className={columnClass}>{copy.runtime.columnIdle}</th>
               <th className={columnClass}>{copy.runtime.columnModel}</th>
               <th className={cn(columnClass, 'text-right')}>{copy.runtime.columnQueue}</th>
-              <th className={cn(columnClass, 'text-right')}>{copy.runtime.columnSubagents}</th>
-              <th className={columnClass}>{copy.runtime.columnContext}</th>
               <th className={cn(columnClass, 'text-right')}>{copy.runtime.columnTokens}</th>
               <th className={cn(columnClass, 'text-right')}>{copy.runtime.columnMemory}</th>
               <th className={cn(columnClass, 'text-right')}>{copy.runtime.columnActions}</th>

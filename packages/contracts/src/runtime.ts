@@ -6,29 +6,27 @@ import { z } from 'zod';
 
 import { IdleRecycleMinutesSchema } from './settings';
 
-/** get_host_info 收窄（hub v0.6 形状；垃圾输入在 adapter 降级）。 */
+/** get_host_info 收窄（host-hub v1 形状；垃圾输入在 adapter 降级）。 */
 export const HostInfoViewSchema = z.object({
   version: z.string(),
-  piVersion: z.string(),
   bunVersion: z.string(),
   pid: z.number().int(),
   uptimeMs: z.number().int().nonnegative(),
   rssBytes: z.number().int().nonnegative(),
   threads: z.object({ live: z.number().int(), parked: z.number().int(), dead: z.number().int() }),
-  subagents: z.object({ running: z.number().int().nonnegative() }),
   limits: z.object({
     maxThreads: z.number().int().positive(),
     idleRetireMs: z.number().int().positive(),
     workerStaleMs: z.number().int().positive(),
     workerExitTimeoutMs: z.number().int().positive(),
-    maxSubagents: z.number().int().positive(),
+    rssRetireBytes: z.number().int().nonnegative(),
     bashTimeoutMs: z.number().int().nonnegative(),
   }),
-  backend: z.object({ id: z.string(), version: z.string(), capabilities: z.array(z.string()) }),
 });
 export type HostInfoView = z.infer<typeof HostInfoViewSchema>;
 
-/** thread/list 行收窄（worker 表：hub 是进程态真相）。 */
+/** thread/list 行收窄（worker 表：hub 是进程态真相；host-hub 无 subagents 计数字段——
+ *  在途徽标数据源 = agents/state 事件 / get_subagents）。 */
 export const WorkerRowViewSchema = z.object({
   threadId: z.string(),
   cwd: z.string(),
@@ -36,7 +34,6 @@ export const WorkerRowViewSchema = z.object({
   state: z.enum(['live', 'parked', 'dead']),
   isStreaming: z.boolean(),
   idleMs: z.number().int().nonnegative(),
-  subagents: z.number().int().nonnegative(),
   rssBytes: z.number().int().nullable(),
   keepalive: z.boolean(),
 });

@@ -155,7 +155,7 @@ test.each([
     { "content-type": "application/json" },
     { contents: [{ parts: [{ text: "ping" }] }] },
   ],
-])("buildProbeRequest %s：路径/鉴权/请求体按格式取值", (api, baseUrl, url, headers, body) => {
+])("buildProbeRequest %s：路径/鉴权/请求体按格式取值", (api: string, baseUrl: string, url: string, headers: Record<string, string>, body: unknown) => {
   const request = buildProbeRequest({ baseUrl, api, modelId: "glm-4.7", apiKey: "sk-test" });
   expect(request).not.toBeNull();
   expect(request?.url.href).toBe(url);
@@ -253,7 +253,7 @@ test("同 provider 不同模型不共享单飞（并发各发一次）；同 pro
 test.each([
   [401, "http_401"],
   [500, "http_500"],
-])("HTTP %d → %s", async (status, reason) => {
+])("HTTP %d → %s", async (status: number, reason: string) => {
   const h = makeHarness();
   h.respond(() => new Response("nope", { status }));
   expect(await createProviderProbe(h.deps).probe("glm")).toEqual({ ok: false, reason });

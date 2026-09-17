@@ -1,25 +1,25 @@
 import { describe, expect, test } from 'bun:test';
 
+import type { IpcMain, IpcMainInvokeEvent } from 'electron';
+
 import { registerIpcWindowActions } from '../window-actions-ipc';
 
 /** 文档语义的 ipcMain 替身：handle 登记表只受 removeHandler 影响（removeAllListeners 不清）。 */
 function makeIpcMain() {
-  const handlers = new Map<string, () => void>();
-  return {
-    handle(channel: string, fn: () => void): void {
+  const handlers = new Map<string, (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown>();
+  const ipcMain: Pick<IpcMain, 'handle' | 'removeHandler'> & { has(channel: string): boolean } = {
+    handle(channel, fn) {
       if (handlers.has(channel)) throw new Error(`Attempted to register a second handler for '${channel}'`);
       handlers.set(channel, fn);
     },
-    removeHandler(channel: string): void {
+    removeHandler(channel) {
       handlers.delete(channel);
     },
-    removeAllListeners(): void {
-      // EventEmitter 面：不影响 handler 登记表
-    },
-    has(channel: string): boolean {
+    has(channel) {
       return handlers.has(channel);
     },
   };
+  return ipcMain;
 }
 
 describe('registerIpcWindowActions', () => {

@@ -78,12 +78,12 @@ describe('会话活动时间语义（T5 §修复）', () => {
     runtime.applyStartOutcome('t1', '/w/app', '/w/app/sessions/t1.jsonl', '标题', 5_000);
     expect(runtime.registry.get('t1')?.updatedAt).toBe(5_000);
 
-    pushFrame({ type: 'event', threadId: 't1', event: { type: 'agent_start' } });
+    pushFrame({ type: 'event', threadId: 't1', name: 'turn/start', payload: { ts: Date.now() } });
     const startedAt = runtime.registry.get('t1')?.updatedAt ?? 0;
     expect(startedAt).toBeGreaterThan(5_000);
     expect(startedAt).toBe(runtime.sessions().find((session) => session.threadId === 't1')?.lastActivityAt);
 
-    pushFrame({ type: 'event', threadId: 't1', event: { type: 'agent_settled' } });
+    pushFrame({ type: 'event', threadId: 't1', name: 'settled', payload: { ok: true } });
     expect(runtime.registry.get('t1')?.updatedAt ?? 0).toBeGreaterThanOrEqual(startedAt);
     expect(runtime.sessions().find((session) => session.threadId === 't1')?.streaming).toBe(false);
   });
@@ -104,7 +104,7 @@ describe('会话活动时间语义（T5 §修复）', () => {
     await runtime.start();
     runtime.applyStartOutcome('t1', '/w/app', '/w/app/sessions/t1.jsonl', '标题', 5_000);
 
-    pushFrame({ type: 'event', threadId: 't1', event: { type: 'agent_settled' } });
+    pushFrame({ type: 'event', threadId: 't1', name: 'settled', payload: { ok: true } });
 
     expect(runtime.registry.get('t1')?.updatedAt).toBe(5_000);
   });

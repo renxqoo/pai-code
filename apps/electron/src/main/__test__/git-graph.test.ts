@@ -81,17 +81,17 @@ describe('createGitGraph', () => {
     expect(await plain.list('/w/plain')).toEqual({ ok: true, data: { isRepo: false, commits: [], truncated: false } });
 
     const empty = createGitGraph((args) => {
-      if (args[0] === 'log') return fail('fatal：当前分支还没有任何提交（非英文 locale 文案）');
-      if (args.includes('--verify')) return fail('', 1);
-      return ok('.git');
+      if (args[0] === 'log') return Promise.resolve(fail('fatal：当前分支还没有任何提交（非英文 locale 文案）'));
+      if (args.includes('--verify')) return Promise.resolve(fail('', 1));
+      return Promise.resolve(ok('.git'));
     });
     expect(await empty.list('/w/repo')).toEqual({ ok: true, data: { isRepo: true, commits: [], truncated: false } });
 
     // log 失败但 HEAD 存在（非空仓库的真实故障）：照实透传，不误判成空仓库
     const broken = createGitGraph((args) => {
-      if (args[0] === 'log') return fail('fatal: bad object HEAD');
-      if (args.includes('--verify')) return ok('a7f9c2a');
-      return ok('.git');
+      if (args[0] === 'log') return Promise.resolve(fail('fatal: bad object HEAD'));
+      if (args.includes('--verify')) return Promise.resolve(ok('a7f9c2a'));
+      return Promise.resolve(ok('.git'));
     });
     expect(await broken.list('/w/repo')).toEqual({ ok: false, reason: 'git_failed:fatal: bad object HEAD' });
   });

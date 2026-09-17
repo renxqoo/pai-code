@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import type { CommandView } from '@paiapp/contracts';
+import type { CommandView, GitBranchesView } from '@paiapp/contracts';
 
 import { initialThreadState } from '@/live/live-thread-state';
 import { store as liveStore } from '@/live/workspace-runtime';
@@ -26,9 +26,8 @@ function renderScreen(overrides: Partial<Parameters<typeof NewTaskScreen>[0]> = 
       trustedDefault={false}
       defaultModelFor={() => 'glm/glm-4.7'}
       modelOptions={['glm/glm-4.7', 'glm/glm-5.3']}
-      effortOptionsFor={() => ['Off', 'Low', 'High']}
       noModelsLabel={copy.composer.noModels}
-      globalPermissionMode="ask"
+      defaultPermissionMode="acceptEdits"
       onSearchFiles={() => Promise.resolve(null)}
       onListBranches={() => Promise.resolve({ ok: true, data: { isRepo: true, current: 'main', branches: ['main'], dirtyFiles: 0 } })}
       onListGraph={() => Promise.resolve({ ok: true, data: { isRepo: true, commits: [], truncated: false } })}
@@ -58,26 +57,21 @@ describe('NewTaskScreen', () => {
     expect(html).toContain(copy.composer.branchLoading);
   });
 
-  test('症状回归：新建页思考档默认态可选（跟随模型默认），用量环仍不渲染（无会话数据面）', () => {
+  test('症状回归：新建页思考档默认态可选（跟随缺省），用量入口仍不渲染（无会话数据面）', () => {
     const html = renderScreen();
-    // 思考档控件以「默认」态渲染——发消息前即可选择
+    // 思考档控件以「默认」态渲染——发消息前即可选择（四档菜单为弹层项，静态口径只验触发器）
+    expect(html).toContain('aria-label="默认"');
     expect(html).toContain(copy.composer.effortDefault);
-    expect(html).not.toContain(copy.composer.effortUnavailable);
-    // 用量环是会话面数据，不摆假控件
-    expect(html).not.toContain(copy.composer.contextUsage);
+    // 用量入口是会话面数据，不摆假控件
+    expect(html).not.toContain(copy.composer.usageSummary);
     // 附件与发送保留（可附图提交）
     expect(html).toContain(copy.composer.attach);
     expect(html).toContain(copy.composer.send);
   });
 
-  test('权限模式控件渲染全局模式（跟随全局 = 不可再点跟随项由菜单内呈现）', () => {
+  test('权限模式控件渲染 hub 缺省档（本地未选时展示并作为不干预基线）', () => {
     const html = renderScreen();
-    expect(html).toContain(copy.settings.permissionsModeAsk);
-  });
-
-  test('全局规则未加载（null）：不渲染权限控件', () => {
-    const html = renderScreen({ globalPermissionMode: null });
-    expect(html).not.toContain(copy.settings.permissionsModeAsk);
+    expect(html).toContain(copy.settings.permModeOptions.acceptEdits);
   });
 
   test('无预选目录：只渲染「选择工作区」入口，不渲染分支段（未选目录不是「分支不可用」）', () => {
@@ -101,7 +95,7 @@ describe('NewTaskScreen', () => {
 });
 
 describe('NewTaskScreen 分支切换锁（T36：与线程页同一把，目录上线程在跑即只读）', () => {
-  const REPO_VIEW = { isRepo: true, current: 'main', branches: ['dev', 'main'], dirtyFiles: 0 } as const;
+  const REPO_VIEW: GitBranchesView = { isRepo: true, current: 'main', branches: ['dev', 'main'], dirtyFiles: 0 };
 
   /** 客户端渲染装置：页面订阅 live store（锁判定）与分支视图（面板入口）。 */
   function screenProps(overrides: Partial<Parameters<typeof NewTaskScreen>[0]> = {}) {
@@ -112,11 +106,10 @@ describe('NewTaskScreen 分支切换锁（T36：与线程页同一把，目录�
       trustedDefault: false,
       defaultModelFor: () => 'glm/glm-4.7',
       modelOptions: ['glm/glm-4.7'],
-      effortOptionsFor: () => [] as readonly string[],
       noModelsLabel: copy.composer.noModels,
-      globalPermissionMode: 'ask' as const,
+      defaultPermissionMode: 'default' as const,
       onSearchFiles: () => Promise.resolve(null),
-      onListBranches: () => Promise.resolve({ ok: true as const, data: REPO_VIEW }),
+      onListBranches: () => Promise.resolve({ ok: true as const, data: { ...REPO_VIEW, branches: [...REPO_VIEW.branches] } }),
       onListGraph: () => Promise.resolve({ ok: true as const, data: { isRepo: true, commits: [], truncated: false } }),
       onCheckoutBranch: () => Promise.resolve({ ok: true as const, data: { branch: 'dev' } }),
       onPickDirectory: () => Promise.resolve(null),
@@ -173,7 +166,7 @@ describe('NewTaskScreen 分支切换锁（T36：与线程页同一把，目录�
     const props = screenProps({
       onListBranches: () => {
         calls += 1;
-        return Promise.resolve({ ok: true as const, data: REPO_VIEW });
+        return Promise.resolve({ ok: true as const, data: { ...REPO_VIEW, branches: [...REPO_VIEW.branches] } });
       },
     });
     const view = render(<NewTaskScreen {...props} />);

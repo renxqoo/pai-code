@@ -23,7 +23,7 @@ describe('workspace-fork', () => {
     jest.spyOn(workspaceActions, 'forkFromEntry').mockResolvedValue('new-thread');
     forkUserMessage('entry-1', '重发内容', [{ data: 'd', mimeType: 'image/png' }], true);
     await Promise.resolve();
-    expect(submit).toHaveBeenCalledWith('重发内容', [{ type: 'image', data: 'd', mimeType: 'image/png' }]);
+    expect(submit).toHaveBeenCalledWith('重发内容', [{ type: 'image', data: 'd', mediaType: 'image/png' }]);
     expect(uiStore.getState().drafts).toEqual({});
     expect(uiStore.getState().composerRestore).toBe(null);
   });

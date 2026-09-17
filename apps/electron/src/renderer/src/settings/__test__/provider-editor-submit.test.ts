@@ -4,7 +4,7 @@ import type { ProviderModel } from "@paiapp/contracts";
 import { buildProviderSubmit } from "../provider-editor";
 
 /**
- * 提交校验纯函数：trim 归一、必填判定、思考形态门控与 key 可选语义。
+ * 提交校验纯函数：trim 归一、必填判定与 key 可选语义。
  * 模型条目（含 contextWindow/maxTokens 参数）由模型弹窗产出，这里原样透传。
  * 交互链路（弹窗增改模型、按钮触发 submit、清除 key 两步确认）依赖真机走查。
  */
@@ -15,7 +15,6 @@ const base = {
   baseUrl: "https://api.z.ai/api/anthropic",
   api: "openai-completions",
   models: [] as ProviderModel[],
-  thinkingFormat: "default",
   apiKey: "",
 } as const;
 
@@ -30,7 +29,6 @@ describe("渠道编辑器提交校验", () => {
         baseUrl: "https://api.z.ai/api/anthropic",
         api: "openai-completions",
         models: [tuned],
-        thinkingFormat: "default",
       },
     });
   });
@@ -50,7 +48,6 @@ describe("渠道编辑器提交校验", () => {
         baseUrl: "https://api.z.ai",
         api: "anthropic-messages",
         models: [glm],
-        thinkingFormat: "default",
       },
     });
   });
@@ -72,18 +69,6 @@ describe("渠道编辑器提交校验", () => {
       ok: false,
       reason: "incomplete",
     });
-  });
-
-  test("思考形态只随 OpenAI 兼容格式透传，其余格式归 default", () => {
-    const openai = buildProviderSubmit({ ...base, models: [glm], thinkingFormat: "zai" });
-    expect(openai.ok && openai.input.thinkingFormat).toBe("zai");
-    const anthropic = buildProviderSubmit({
-      ...base,
-      api: "anthropic-messages",
-      models: [glm],
-      thinkingFormat: "zai",
-    });
-    expect(anthropic.ok && anthropic.input.thinkingFormat).toBe("default");
   });
 
   test("key 语义：留空省略字段（保持已存 key），有值则带上", () => {
