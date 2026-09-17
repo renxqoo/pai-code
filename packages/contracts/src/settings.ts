@@ -102,7 +102,7 @@ export const SettingsSchema = z
     archivedSessions: z.array(z.string()).default([]),
     /** 侧栏已移除（隐藏）的项目目录（cwd）；同目录新建任务即解除。 */
     hiddenProjects: z.array(z.string()).default([]),
-    /** worker 闲置自动回收时长（分钟；v0.13——spawn env PAI_IDLE_RETIRE_MS 注入 + 运行期 set_idle_retire_ms 同步）。 */
+    /** worker 闲置自动回收时长（分钟；spawn env HUB_IDLE_RETIRE_MS 注入 + 运行期 set_idle_retire_ms 同步）。 */
     idleRecycleMinutes: IdleRecycleMinutesSchema.default(5),
   })
   .strict();

@@ -142,8 +142,9 @@ export function createHostProcess(deps: HostProcessDeps): HostProcessPort {
     lastHeartbeatAt = spawnStartedAt;
     // 白名单继承：第三方渠道凭据（宿主 shell 的 OPENAI_API_KEY 等）不得透传，
     // 渠道真相只来自 buildEnv 注入的 $PAI_KEY_*（见 spawn-env 模块注释）。
-    const env: Record<string, string> = { ...hubSpawnEnv(process.env), ...config.buildEnv(), PI_CODING_AGENT_DIR: config.agentDir };
-    const proc = spawn(config.bunPath, [config.hubEntry], {
+    // hubEntry null = 直执行形态：bunPath 即自包含可执行（编译产物），无入口参数。
+    const env: Record<string, string> = { ...hubSpawnEnv(process.env), ...config.buildEnv(), HUB_AGENT_DIR: config.agentDir };
+    const proc = spawn(config.bunPath, config.hubEntry === null ? [] : [config.hubEntry], {
       cwd: config.cwd ?? process.cwd(),
       env,
       stdio: ['pipe', 'pipe', 'pipe'],

@@ -3,7 +3,7 @@ import { join } from 'node:path';
 /** userData 下的落盘布局（单一真相：全部路径从这里取）。 */
 export interface AppPaths {
   userDataDir: string;
-  /** pai-cli 配置目录（PI_CODING_AGENT_DIR：models.json/auth.json/sessions/规则）。 */
+  /** hub 配置目录（HUB_AGENT_DIR：models.json/credentials.json/sessions/hub-settings）。 */
   agentDir: string;
   /** 会话注册表（node:sqlite）。 */
   registryDb: string;

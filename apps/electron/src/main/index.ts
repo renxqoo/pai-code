@@ -47,7 +47,7 @@ void app.whenReady().then(async () => {
   let settingsRef: ReturnType<typeof createFileSettings> | null = null;
 
   /** 宿主路径解析：设置覆盖 > 环境变量（开发）> dev 同级探测 > 打包产物缺省（链在 hub-paths.ts）。 */
-  const resolveHubPathsForRuntime = (): { bunPath: string; hubEntry: string } | null => {
+  const resolveHubPathsForRuntime = (): { bunPath: string; hubEntry: string | null } | null => {
     const fromSettings = (() => {
       try {
         const hubDev = settingsRef?.get().hubDev;
@@ -63,8 +63,8 @@ void app.whenReady().then(async () => {
         ? { bunPath: process.env['PAI_BUN_PATH'] ?? 'bun', hubEntry: process.env['PAI_HUB_ENTRY'] }
         : null;
     const resources = process.resourcesPath ?? paths.userDataDir;
-    const packagedEntry = join(resources, 'pai-cli', 'cli.js');
-    const fromPackaged = existsSync(packagedEntry) ? { bunPath: join(resources, 'bun', 'bun'), hubEntry: packagedEntry } : null;
+    const packagedEntry = join(resources, 'host-hub', 'host-hub');
+    const fromPackaged = existsSync(packagedEntry) ? { bunPath: packagedEntry, hubEntry: null } : null;
     return resolveHubPaths({
       fromSettings,
       fromEnv,

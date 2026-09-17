@@ -35,7 +35,7 @@ Pai 是一个 macOS 上的 AI 干活助手：你用一句话说清要什么，�
 
 - [bun](https://bun.sh)（包管理、测试运行时、hub 运行时）
 - macOS（当前打包目标 mac arm64）
-- 真实运行需要 pi hub 检出：默认探测本仓库旁级 `../pi/app`（`dist/cli.js` 或 `src/cli.ts`），也可用环境变量 `PAI_HUB_ENTRY` / `PAI_BUN_PATH` 指定；无 hub 检出时，单测与 UI 开发走 testkit 的 fake-hub / mock Client
+- 真实运行需要 host-hub 检出（`/Users/wrr/work/my-agent`）：默认探测本仓库旁级 `../my-agent/packages/host-hub`（`src/host/cli.ts` 源码形态优先，`dist/host/cli.js` 兜底），也可用环境变量 `PAI_HUB_ENTRY` / `PAI_BUN_PATH` 指定；无 hub 检出时，单测与 UI 开发走 testkit 的 fake-hub / mock Client
 
 ## 快速开始
 
@@ -64,7 +64,7 @@ bun run ci        # 以上全部
 bun run --filter '@paiapp/electron' package   # mac arm64 冒烟包（未签名）
 ```
 
-打包流程先跑 `scripts/packaging/sync-resources.ts`，把 bun 二进制与 hub 入口拷入仓库根 `resources/`（打包态 extraResources 布局）；来源默认本机 bun 与旁级 `../pi/app` 构建产物，可用 `PAI_BUN_PATH` / `PAI_HUB_ENTRY` 覆盖。
+打包流程先跑 `scripts/packaging/sync-resources.ts`：拷贝 bun 二进制进 `resources/bun/`，并从旁级 `../my-agent` 的 host-hub 源码入口 `bun build --compile` 出单文件可执行进 `resources/host-hub/host-hub`（打包态直执行形态）；来源可用 `PAI_BUN_PATH` / `PAI_HUB_ENTRY` 覆盖。
 
 ## CI（GitHub Actions）
 

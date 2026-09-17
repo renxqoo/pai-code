@@ -5,8 +5,10 @@ import { dirname, join } from 'node:path'
 
 // pai 插件测试 harness：系统临时目录拼最小 workspace 树，
 // 用真实 oxlint + 本插件 lint 指定文件，断言完即清理；仓库内不落违规样本。
+// 经当前运行时（process.execPath）执行 oxlint 的 dist/cli.js——.bin shim 的
+// shebang 是 node，直接调 shim 会引入「PATH 必须有 node」的隐藏环境依赖。
 const pluginDir = join(import.meta.dirname, '..')
-const oxlintBin = join(pluginDir, '../../node_modules/.bin/oxlint')
+const oxlintCli = join(pluginDir, '../../node_modules/oxlint/dist/cli.js')
 
 export interface LintResult {
   exitCode: number | null
@@ -45,7 +47,7 @@ export function lintTree(files: Record<string, string>, lintTarget: string): Lin
         },
       }),
     )
-    const proc = spawnSync(oxlintBin, ['-c', '.oxlintrc.json', lintTarget], {
+    const proc = spawnSync(process.execPath, [oxlintCli, '-c', '.oxlintrc.json', lintTarget], {
       cwd: root,
       encoding: 'utf8',
     })

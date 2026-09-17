@@ -39,8 +39,8 @@ export interface PaiRuntimeDeps {
   paths: AppPaths;
   keyStore: ProviderKeyStore;
   providers: () => readonly ProviderConfig[];
-  hubPaths: () => { bunPath: string; hubEntry: string } | null;
-  /** 闲置回收档位（分钟）：spawn env 注入（PAI_IDLE_RETIRE_MS），档位真相在 settings。 */
+  hubPaths: () => { bunPath: string; hubEntry: string | null } | null;
+  /** 闲置回收档位（分钟）：spawn env 注入（HUB_IDLE_RETIRE_MS），档位真相在 settings。 */
   idleRecycleMinutes: () => IdleRecycleMinutes;
   logger: { log(message: string): void };
   /** 事件出口（装配层接 IPC 推送）。 */
@@ -287,7 +287,7 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
         // 档位随 spawn 生效（运行期变更经 set_idle_retire_ms 即时同步）
         buildEnv: () => ({
           ...writeModelsConfig(deps.paths.agentDir, deps.providers(), deps.keyStore).env,
-          PAI_IDLE_RETIRE_MS: String(deps.idleRecycleMinutes() * 60_000),
+          HUB_IDLE_RETIRE_MS: String(deps.idleRecycleMinutes() * 60_000),
         }),
       },
       onFrame: handleFrame,
@@ -313,7 +313,9 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
     defaultTitle: DEFAULT_TITLE,
     async start(): Promise<void> {
       const hub = deps.hubPaths();
-      if (hub === null || !existsSync(hub.hubEntry)) {
+      // 直执行形态（hubEntry null）校验 bunPath 本体；脚本形态校验入口文件
+      const entryPath = hub?.hubEntry ?? hub?.bunPath ?? null;
+      if (entryPath === null || !existsSync(entryPath)) {
         log('hub_entry_missing');
         throw new Error('hub_paths_unconfigured');
       }

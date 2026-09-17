@@ -1,13 +1,13 @@
 import type { HubFrame } from './hub-protocol';
 import type { PaiCommand } from './commands';
 
-/** pai-cli host 进程装配输入（apps/electron 组合根构造后注入）。 */
+/** hub host 进程装配输入（apps/electron 组合根构造后注入）。 */
 export interface HostRuntimeConfig {
-  /** 运行 pai-cli 的 bun 可执行文件。 */
+  /** 运行 hub 的 bun 可执行文件；直执行形态（hubEntry null）下 = hub 编译产物本体。 */
   bunPath: string;
-  /** pai-cli 入口（src/cli.ts 或构建产物 cli.js）。 */
-  hubEntry: string;
-  /** PI_CODING_AGENT_DIR：配置目录（models.json/auth.json/sessions）。 */
+  /** hub 入口脚本（源码 .ts 或产物 .js）；null = 直执行形态（spawn(bunPath, [])，bunPath 须为自包含可执行）。 */
+  hubEntry: string | null;
+  /** HUB_AGENT_DIR：配置目录（models.json/credentials.json/sessions）。 */
   agentDir: string;
   /** 每次 spawn 前解析的增量环境（provider key 注入；key 可变，故为函数）。 */
   buildEnv(): Record<string, string>;

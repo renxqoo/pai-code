@@ -13,42 +13,42 @@ const withFiles =
     new Set(paths).has(path);
 
 describe('hub-paths 解析链（设置 > env > dev 同级探测 > 打包产物）', () => {
-  test('症状回归：无 env 无 settings 时探测同级 pi 检出，dist 优先于 src', () => {
-    const [dist, src] = devHubEntryCandidates('/work/agent-app');
-    expect(dist).toBe('/work/pi/app/dist/cli.js');
-    expect(src).toBe('/work/pi/app/src/cli.ts');
+  test('症状回归：无 env 无 settings 时探测同级 my-agent 检出，src 优先于 dist', () => {
+    const [src, dist] = devHubEntryCandidates('/work/agent-app');
+    expect(src).toBe('/work/my-agent/packages/host-hub/src/host/cli.ts');
+    expect(dist).toBe('/work/my-agent/packages/host-hub/dist/host/cli.js');
     const resolved = resolveHubPaths({
       fromSettings: null,
       fromEnv: null,
       fromPackaged: null,
       devRepoRoot: '/work/agent-app',
       packaged: false,
-      exists: withFiles(dist, src),
-    });
-    expect(resolved).toEqual({ bunPath: 'bun', hubEntry: dist });
-  });
-
-  test('同级检出未构建（只有源码）时回落 src/cli.ts', () => {
-    const [, src] = devHubEntryCandidates('/work/agent-app');
-    const resolved = resolveHubPaths({
-      fromSettings: null,
-      fromEnv: null,
-      fromPackaged: null,
-      devRepoRoot: '/work/agent-app',
-      packaged: false,
-      exists: withFiles(src),
+      exists: withFiles(src, dist),
     });
     expect(resolved).toEqual({ bunPath: 'bun', hubEntry: src });
   });
 
+  test('同级检出不完整（只有 dist 产物）时回落 dist/host/cli.js', () => {
+    const [, dist] = devHubEntryCandidates('/work/agent-app');
+    const resolved = resolveHubPaths({
+      fromSettings: null,
+      fromEnv: null,
+      fromPackaged: null,
+      devRepoRoot: '/work/agent-app',
+      packaged: false,
+      exists: withFiles(dist),
+    });
+    expect(resolved).toEqual({ bunPath: 'bun', hubEntry: dist });
+  });
+
   test('设置覆盖与 env 均优先于探测', () => {
-    const [dist] = devHubEntryCandidates('/work/agent-app');
+    const [src] = devHubEntryCandidates('/work/agent-app');
     const deps = {
       fromEnv: { bunPath: 'bun', hubEntry: '/env/cli.ts' },
       fromPackaged: null,
       devRepoRoot: '/work/agent-app',
       packaged: false,
-      exists: withFiles(dist),
+      exists: withFiles(src),
     };
     expect(
       resolveHubPaths({ ...deps, fromSettings: { bunPath: '/custom/bun', hubEntry: '/settings/cli.js' } }),
@@ -56,14 +56,14 @@ describe('hub-paths 解析链（设置 > env > dev 同级探测 > 打包产物�
     expect(resolveHubPaths({ ...deps, fromSettings: null })).toEqual({ bunPath: 'bun', hubEntry: '/env/cli.ts' });
   });
 
-  test('打包态跳过探测（内嵌产物缺省）；devRepoRoot null 同样不探测', () => {
-    const [dist] = devHubEntryCandidates('/work/agent-app');
-    const packaged = { bunPath: '/res/bun/bun', hubEntry: '/res/pai-cli/cli.js' };
+  test('打包态跳过探测（内嵌直执行产物缺省）；devRepoRoot null 同样不探测', () => {
+    const [src] = devHubEntryCandidates('/work/agent-app');
+    const packaged: { bunPath: string; hubEntry: string | null } = { bunPath: '/res/host-hub/host-hub', hubEntry: null };
     expect(
-      resolveHubPaths({ fromSettings: null, fromEnv: null, fromPackaged: packaged, devRepoRoot: '/work/agent-app', packaged: true, exists: withFiles(dist) }),
+      resolveHubPaths({ fromSettings: null, fromEnv: null, fromPackaged: packaged, devRepoRoot: '/work/agent-app', packaged: true, exists: withFiles(src) }),
     ).toEqual(packaged);
     expect(
-      resolveHubPaths({ fromSettings: null, fromEnv: null, fromPackaged: packaged, devRepoRoot: null, packaged: false, exists: withFiles(dist) }),
+      resolveHubPaths({ fromSettings: null, fromEnv: null, fromPackaged: packaged, devRepoRoot: null, packaged: false, exists: withFiles(src) }),
     ).toEqual(packaged);
   });
 

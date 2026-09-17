@@ -5,8 +5,10 @@ import { join } from 'node:path'
 // ui 插件测试 harness：不落 fixtures 文件，每个用例在临时目录写入样本 .tsx
 // 与最小 lint 配置（绝对路径指回本插件），拉起仓库安装的真实 oxlint CLI
 // 断言诊断与退出码，结束后清理临时目录。
+// 经当前运行时（process.execPath）执行 oxlint 的 dist/cli.js——.bin shim 的
+// shebang 是 node，直接调 shim 会引入「PATH 必须有 node」的隐藏环境依赖。
 const pluginDir = join(import.meta.dirname, '..')
-const oxlintBin = join(pluginDir, '../../node_modules/.bin/oxlint')
+const oxlintCli = join(pluginDir, '../../node_modules/oxlint/dist/cli.js')
 
 export interface LintResult {
   exitCode: number | null
@@ -22,7 +24,7 @@ export async function lintSample(code: string): Promise<LintResult> {
     }
     writeFileSync(join(dir, 'sample.tsx'), code)
     writeFileSync(join(dir, 'oxlintrc.json'), JSON.stringify(config))
-    const proc = Bun.spawn([oxlintBin, '-c', 'oxlintrc.json', 'sample.tsx'], {
+    const proc = Bun.spawn([process.execPath, oxlintCli, '-c', 'oxlintrc.json', 'sample.tsx'], {
       cwd: dir,
       stdout: 'pipe',
       stderr: 'pipe',

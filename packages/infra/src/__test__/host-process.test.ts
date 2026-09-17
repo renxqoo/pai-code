@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from 'bun:test';
-import { mkdtempSync } from 'node:fs';
+import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -363,4 +363,20 @@ describe('createHostProcess（fake-host 集成）', () => {
     expect(log.slice(restartingAt + 1).filter((entry) => entry.kind === 'frame' && entry.type !== 'heartbeat')).toEqual([]);
     await host.dispose();
   }, 20_000);
+});
+
+describe('createHostProcess · 直执行形态（T38 hubEntry null = 编译产物无入口参数）', () => {
+  test('T38：hubEntry null → spawn(bunPath, []) 直接执行自包含可执行，心跳就绪', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pai-direct-exec-'));
+    const binary = join(dir, 'host-hub-bin');
+    writeFileSync(binary, '#!/bin/sh\nwhile true; do printf \'{"type":"heartbeat","rssBytes":1}\\n\'; sleep 1; done\n');
+    chmodSync(binary, 0o755);
+    const harness = makeHarness({
+      config: { bunPath: binary, hubEntry: null, agentDir, buildEnv: () => ({}) },
+    });
+    const host = launch(harness);
+    await waitFor(() => host.phase === 'ready', 8_000, 'direct-exec ready');
+    expect(harness.phases).toEqual(['starting', 'ready']);
+    await host.dispose();
+  });
 });

@@ -19,7 +19,7 @@ const e2eEnabled = process.env['PAI_E2E'] === '1';
 const glmKey = process.env['GLM_API_KEY'] ?? '';
 const glmModel = process.env['GLM_MODEL'] ?? '';
 const glmBaseUrl = (process.env['GLM_BASE_URL'] ?? '').replace(/\/chat\/completions$/, '');
-const hubEntry = process.env['PAI_HUB_ENTRY'] ?? '/Users/wrr/work/pi/app/dist/cli.js';
+const hubEntry = process.env['PAI_HUB_ENTRY'] ?? '/Users/wrr/work/my-agent/packages/host-hub/src/host/cli.ts';
 const bunPath = process.env['PAI_BUN_PATH'] ?? 'bun';
 
 const runnable = e2eEnabled && glmKey.length > 0 && glmModel.length > 0 && glmBaseUrl.length > 0;

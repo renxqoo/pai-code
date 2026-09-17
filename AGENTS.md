@@ -1,6 +1,6 @@
-# AGENTS.md — Pai（Electron + pi-hub 多 Agent 桌面应用）
+# AGENTS.md — Pai（Electron + host-hub 多 Agent 桌面应用）
 
-**pai**：monorepo（bun workspaces，scope `@paiapp/*`）。Electron 应用通过**单个 pi-hub 宿主进程**（独立仓库 `/Users/wrr/work/pi/app`，bun 运行）承载多对话 × 多 thread 的 AI Agent：hub 进程内用 pi SDK 跑 AgentSession，Pai 与它的全部交互只有 JSONL stdio 协议（心跳 1Hz、对话框 ui_request/ui_response、权限规则命令）。
+**pai**：monorepo（bun workspaces，scope `@paiapp/*`）。Electron 应用通过**单个 host-hub 宿主进程**（独立仓库 `/Users/wrr/work/my-agent/packages/host-hub`，bun 运行）承载多对话 × 多 thread 的 AI Agent：host 进程管线程表与模型目录，每活跃会话一个 worker 子进程（内裹 Agent 内核 + WAL 会话），Pai 与它的全部交互只有 JSONL stdio 协议（心跳 1Hz、confirm 对话框 ui_request/ui_response、settled 终态信号；协议规格真相源 = host-hub 仓库 `src/protocol/` 代码）。dev 形态 = bun 直跑 host-hub 源码入口；打包形态 = `bun build --compile` 单文件可执行（sync-resources 编译进 `resources/host-hub/`）。
 
 
 
