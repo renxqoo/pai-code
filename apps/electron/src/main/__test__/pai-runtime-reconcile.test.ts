@@ -9,7 +9,7 @@ import { createApiRoutes } from '../api-routes';
 import { createAgentDefinitionsStore } from '../agent-definitions-store';
 import { createFileSettings, type ProviderKeyStore } from '../file-settings';
 import { createPaiRuntime, type PaiRuntime } from '../pai-runtime';
-import { createRuntimeMonitor } from '../runtime-monitor/create-runtime-monitor';
+import { createRuntimeMonitor } from '@paiapp/infra';
 
 /**
  * 启动懒恢复回归（T16）：启动/host 重启只对账（list_saved 聚合），

@@ -9,7 +9,7 @@ import { createApiRoutes } from '../api-routes';
 import { createAgentDefinitionsStore } from '../agent-definitions-store';
 import { createFileSettings, type ProviderKeyStore } from '../file-settings';
 import { createPaiRuntime } from '../pai-runtime';
-import { createRuntimeMonitor } from '../runtime-monitor/create-runtime-monitor';
+import { createRuntimeMonitor } from '@paiapp/infra';
 
 /**
  * T29 运行状态 api 面：app/runtime 快照、档位写路径（settings + set_idle_retire_ms）、

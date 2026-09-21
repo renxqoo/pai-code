@@ -1,4 +1,4 @@
-import { createApiClient } from '@paiapp/api';
+import { createApiClient } from '@paiapp/api/client';
 import type { BridgeClient } from './client-invoke';
 import type { LiveStore } from './store';
 

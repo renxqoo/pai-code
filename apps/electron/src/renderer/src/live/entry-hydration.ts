@@ -1,4 +1,4 @@
-import { createApiClient } from '@paiapp/api';
+import { createApiClient } from '@paiapp/api/client';
 import type { PendingDialogView } from '@paiapp/contracts';
 
 import type { BridgeClient } from './client-invoke';

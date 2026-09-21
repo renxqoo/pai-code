@@ -7,7 +7,7 @@ import { createApiRoutes } from '../api-routes';
 import { createAgentDefinitionsStore } from '../agent-definitions-store';
 import { createFileSettings, type ProviderKeyStore } from '../file-settings';
 import { createPaiRuntime } from '../pai-runtime';
-import { createRuntimeMonitor } from '../runtime-monitor/create-runtime-monitor';
+import { createRuntimeMonitor } from '@paiapp/infra';
 
 /**
  * dialog/pickDirectory 路由回归（T12）：注入的目录选择器结果透传、

@@ -1,8 +1,9 @@
 import type { AgentDefinitionsPort, RuntimePort } from './ports';
 
 import type { ApiError, ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
-import { appError } from '../index';
-import type { AgentCommands, ThreadCommands } from '../index';
+import { appError } from '../errors';
+import type { AgentCommands } from '../commands/agents';
+import type { ThreadCommands } from '../commands/thread';
 
 
 /**

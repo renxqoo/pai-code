@@ -9,7 +9,7 @@ import { createApiRoutes } from '../api-routes';
 import { createAgentDefinitionsStore } from '../agent-definitions-store';
 import { createFileSettings, type ProviderKeyStore } from '../file-settings';
 import { createPaiRuntime } from '../pai-runtime';
-import { createRuntimeMonitor } from '../runtime-monitor/create-runtime-monitor';
+import { createRuntimeMonitor } from '@paiapp/infra';
 
 /**
  * 事件/响应单一全序的主进程侧结构测试（IPC 直发后无冲批钩子，全序由「emit 同步

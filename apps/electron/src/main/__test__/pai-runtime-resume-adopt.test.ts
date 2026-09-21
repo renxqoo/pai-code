@@ -9,7 +9,7 @@ import { createApiRoutes } from '../api-routes';
 import { createAgentDefinitionsStore } from '../agent-definitions-store';
 import { createFileSettings, type ProviderKeyStore } from '../file-settings';
 import { createPaiRuntime, type PaiRuntime } from '../pai-runtime';
-import { createRuntimeMonitor } from '../runtime-monitor/create-runtime-monitor';
+import { createRuntimeMonitor } from '@paiapp/infra';
 
 /**
  * resume 撞 already open 的收养回落回归：hub 表内已有该会话的表项（retire 后

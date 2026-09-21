@@ -4,8 +4,9 @@ import { randomUUID } from 'node:crypto';
 import { dirname as dirnamePath } from 'node:path';
 
 import { AGENT_FIELD_LINE, isValidAgentName, type AgentDefinition, type AgentScope } from '@paiapp/contracts';
+import { fileNameStemOf, isSafeFileNameStem, parseAgentDefinition, serializeAgentDefinition } from '@paiapp/api';
 
-import { agentDefinitionPath, fileNameStemOf, isSafeFileNameStem, parseAgentDefinition, serializeAgentDefinition } from './agent-definition-file';
+import { agentDefinitionPath } from './agent-definition-path';
 
 /**
  * 子 agent 定义文件面（project 级直写 + 两域枚举；x-harness 同格式热发现——写删即生效）：

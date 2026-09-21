@@ -54,6 +54,13 @@ export interface EventMapper {
   mapEvent(frame: { threadId: string; name: string; payload: Record<string, unknown>; agentName?: string }): UiEvent[];
 }
 
+/** session 域帧归属键（主会话谓词单一真相）：payload.session 为字符串即归属
+ *  threadId 的判定源；缺席/非字符串 = 无归属信息（由调用方各自语义处置）。 */
+export function payloadSessionOf(payload: Record<string, unknown>): string | undefined {
+  const session = payload['session'];
+  return typeof session === 'string' ? session : undefined;
+}
+
 export function createEventMapper(deps: EventMapDeps): EventMapper {
   const state: StreamState = { streams: new Map(), calls: new Map(), toolStreams: new Map(), counter: 0 };
 
@@ -64,8 +71,8 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
         return mapSubagent(state, threadId, name, payload, frame.agentName);
       }
       // 主会话谓词：session 域帧的 session 必须 === threadId（子会话 WAL 帧不进主时间线）
-      const session = payload['session'];
-      if (typeof session === 'string' && session !== threadId) return [];
+      const session = payloadSessionOf(payload);
+      if (session !== undefined && session !== threadId) return [];
       switch (name) {
         case 'turn/start':
           return [{ type: 'turnStarted', threadId, at: num(payload.time, deps.now()) }];

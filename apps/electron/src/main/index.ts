@@ -14,7 +14,7 @@ import { resolveHubPaths } from './hub-paths';
 import { resolveAppPaths, resolveUserDataDir } from './paths';
 import { createPaiRuntime } from './pai-runtime';
 import { createProviderKeyStore } from './provider-key-store';
-import { createRuntimeMonitor } from './runtime-monitor/create-runtime-monitor';
+import { createRuntimeMonitor } from '@paiapp/infra';
 import { writeDiagnosticsBundle } from './export-diagnostics';
 
 // 开启 Web 内容可访问性树（辅助技术 + 自动化验证都依赖它）

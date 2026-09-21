@@ -1,11 +1,11 @@
 import type { ApiError, ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
-import { appError } from '../index';
+import { appError } from '../errors';
+import type { GitBranches } from './git-branches';
+import type { GitGraph } from './git-graph';
 
-/** 宿主能力端口（结构满足即可——electron 注入实现） */
+/** 宿主能力端口（结构满足即可——electron 注入实现）；git/图谱端口直接用 verbs 内真型（同一事实一套接口） */
 interface FileReadPort { read(cwd: string, path: string): { ok: true; data: { content: string; truncated: boolean; size: number } } | { ok: false; error: ApiError }; }
 interface FileSearchPort { search(cwd: string, query: string): string[]; }
-interface GitPort { list(cwd: string): Promise<ApiOutcome<'git/branches'>>; checkout(cwd: string, branch: string, create: boolean): Promise<ApiOutcome<'git/checkout'>>; }
-interface GraphPort { list(cwd: string): Promise<ApiOutcome<'git/graph'>>; invalidate(cwd: string): void; }
 interface OpenLocationPort { open(cwd: string, target: string): Promise<ApiOutcome<'shell/open'>>; }
 
 /**
@@ -20,8 +20,8 @@ export type LocalRoutesDeps = {
   isKnownCwd: (cwd: string) => boolean;
   audit: (message: string) => void;
   fileSearch: FileSearchPort;
-  git: GitPort;
-  graph: GraphPort;
+  git: GitBranches;
+  graph: GitGraph;
   openLocation: OpenLocationPort;
   fileRead: FileReadPort;
 };

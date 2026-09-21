@@ -1,9 +1,9 @@
 
 
-import type { ApiError, ApiMethod, ApiOutcome, ApiParams, PreferencesView, ProviderConfigView, SkillView } from '@paiapp/contracts';
+import type { ApiError, ApiMethod, ApiOutcome, ApiParams, PreferencesView, ProviderConfig, ProviderConfigView, SkillView } from '@paiapp/contracts';
 import { isApiFormat, normalizeLegacyPermMode } from '@paiapp/contracts';
-import { appError } from '../index';
-import type { SettingsCommands } from '../index';
+import { appError } from '../errors';
+import type { SettingsCommands } from '../commands/settings';
 
 import { envVarNameForProvider } from './env-name';
 import { errorLogToken } from './error-log-token';
@@ -18,11 +18,11 @@ import { createProviderProbe } from './provider-probe';
 
 type Handler<M extends ApiMethod> = (params: ApiParams<M>) => Promise<ApiOutcome<M>>;
 
-/** 设置存储端口（verbs 消费面：providers CRUD + 偏好读写——真形用 contracts 视图） */
+/** 设置存储端口（verbs 消费面：providers CRUD + 偏好读写——provider 行用 contracts 真形） */
 interface SettingsStorePort {
-  listProviders(): Array<{ name: string; baseUrl: string; api: string; models: Array<{ id: string; reasoning: boolean; vision: boolean; contextWindow?: number; maxTokens?: number }> }>;
-  upsertProvider(input: unknown): Array<{ name: string; baseUrl: string; api: string; models: Array<{ id: string; reasoning: boolean; vision: boolean; contextWindow?: number; maxTokens?: number }> }>;
-  removeProvider(name: string): Array<{ name: string; baseUrl: string; api: string; models: Array<{ id: string; reasoning: boolean; vision: boolean; contextWindow?: number; maxTokens?: number }> }>;
+  listProviders(): ProviderConfig[];
+  upsertProvider(input: unknown): ProviderConfig[];
+  removeProvider(name: string): ProviderConfig[];
   get(): PreferencesView;
   patch(patch: Record<string, unknown>): unknown;
 }
@@ -205,4 +205,3 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
   };
 }
 
-export { API_FORMAT_IDS as HUB_API_FORMATS } from '@paiapp/contracts';

@@ -9,7 +9,7 @@ import { createApiRoutes } from "../api-routes";
 import { createAgentDefinitionsStore } from "../agent-definitions-store";
 import { createFileSettings, type ProviderKeyStore } from "../file-settings";
 import { createPaiRuntime } from "../pai-runtime";
-import { createRuntimeMonitor } from '../runtime-monitor/create-runtime-monitor';
+import { createRuntimeMonitor } from '@paiapp/infra';
 
 /**
  * session/fork 路由回归（fork 换轨语义；入参 seq = WAL 行号域）：

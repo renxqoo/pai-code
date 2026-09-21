@@ -1,4 +1,4 @@
-import { createApiClient } from '@paiapp/api';
+import { createApiClient } from '@paiapp/api/client';
 import type { AgentDefinition, CommandView, ImagePayload, PreferencesView, ProviderModel, SkillView, UiEvent } from '@paiapp/contracts';
 import { isSettableThinkingLevel } from '@paiapp/contracts';
 

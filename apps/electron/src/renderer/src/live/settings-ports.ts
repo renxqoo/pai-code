@@ -2,7 +2,7 @@ import type { PermMode } from '@paiapp/contracts';
 import { isSettableThinkingLevel } from '@paiapp/contracts';
 
 import { copyOfError } from '@/lib/error-text';
-import type { ApiClient } from '@paiapp/api';
+import type { ApiClient } from '@paiapp/api/client';
 import type { HubSettingsView, LiveStore } from './store';
 
 /**

@@ -2,3 +2,4 @@ export { createHostProcess, type HostProcessDeps, type HostProcessTiming } from 
 export { openRegistryStore } from './registry-store/open-registry-store';
 export { createSampleRing, type SampleRing } from './monitor/sample-ring';
 export { createSupervisionLog, type SupervisionLog } from './monitor/supervision-log';
+export { createRuntimeMonitor, type RuntimeMonitor, type RuntimeMonitorDeps } from './monitor/create-runtime-monitor';

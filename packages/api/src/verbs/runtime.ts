@@ -1,8 +1,11 @@
 import type { MonitorPort, RuntimePort } from './ports';
 
 import type { ApiError, ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
-import { appError, settle } from '../index';
-import type { SessionCommands, SettingsCommands, ThreadCommands } from '../index';
+import { appError } from '../errors';
+import { settle } from '../settle';
+import type { SessionCommands } from '../commands/session';
+import type { SettingsCommands } from '../commands/settings';
+import type { ThreadCommands } from '../commands/thread';
 
 import { errorLogToken } from './error-log-token';
 

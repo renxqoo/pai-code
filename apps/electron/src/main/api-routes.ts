@@ -24,7 +24,7 @@ import { errorLogToken } from '@paiapp/api';
 import { ApiSchemas, type ApiMethod, type ApiOutcome, type ApiParams, type ModelInfoView } from '@paiapp/contracts';
 
 import type { PaiRuntime } from './pai-runtime';
-import type { RuntimeMonitor } from './runtime-monitor/create-runtime-monitor';
+import type { RuntimeMonitor } from '@paiapp/infra';
 import { runtimeRoutes } from '@paiapp/api';
 import { threadOpsRoutes } from '@paiapp/api';
 import { appRoutes, bashRouteHandler, sessionRoutes } from '@paiapp/api';

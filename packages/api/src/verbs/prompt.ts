@@ -1,7 +1,8 @@
 import type { RuntimePort } from './ports';
 
 import type { ApiError, ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
-import { appError, type SessionCommands } from '../index';
+import { appError } from '../errors';
+import type { SessionCommands } from '../commands/session';
 
 import { compactInvocationOf } from './compact-lexing';
 

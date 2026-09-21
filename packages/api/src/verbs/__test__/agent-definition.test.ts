@@ -1,11 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 
-import { agentDefinitionPath, parseAgentDefinition, serializeAgentDefinition } from '../agent-definition-file';
+import { parseAgentDefinition, serializeAgentDefinition } from '../agent-definition';
 
 /**
  * 定义文件编解码回归：写侧 = host-hub renderAgentTypeMd 同构（无 name 字段——
  * name ≡ 文件主干、无引号标量、tools 流数组）；读侧宽容（引号/逗号串/尾注释）。
- * 序列化往返经 stem 回落取回 name。
+ * 序列化往返经 stem 回落取回 name。键位路径（node:path）在 apps/electron
+ * agent-definition-path.test.ts。
  */
 describe('agent 定义 md 编解码', () => {
   test('序列化 → 解析往返（hub 规范形态：无 name 字段 + 无引号标量 + tools 流数组）', () => {
@@ -77,10 +78,5 @@ describe('agent 定义 md 编解码', () => {
     // hub 允许任意字符串 name（pattern 校验只在写路径）
     const cjk = ['---', 'name: 搜索', 'description: 中文定义', '---', '正文', ''].join('\n');
     expect(parseAgentDefinition(cjk)?.name).toBe('搜索');
-  });
-
-  test('键位路径：user 固定 <home>/.x-harness/agents；project 固定 <项目>/.x-harness/agents', () => {
-    expect(agentDefinitionPath('/home/u', 'user', null, 'search')).toBe('/home/u/.x-harness/agents/search.md');
-    expect(agentDefinitionPath('/home/u', 'project', '/work/app', 'search')).toBe('/work/app/.x-harness/agents/search.md');
   });
 });

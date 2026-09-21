@@ -1,21 +1,20 @@
 import type { ApiError, ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
+import { appError } from '../errors';
 import {
-  appError,
   inflightView,
-  mapEntries,
   modelInfos,
   sessionStatsView,
   subagentSnapshotView,
   pendingDialogsView,
   threadStateView,
   thinkingLevelView,
-  type ModelCommands,
-  type PermissionCommands,
-  type SessionCommands,
-  type ThreadCommands,
-} from '../index';
-
-import type { savedSessions } from '../index';
+  type savedSessions,
+} from '../views/response-views';
+import { mapEntries } from '../views/entries-mapper';
+import type { ModelCommands } from '../commands/models';
+import type { PermissionCommands } from '../commands/permissions';
+import type { SessionCommands } from '../commands/session';
+import type { ThreadCommands } from '../commands/thread';
 import type { AuditPort, FailPort, RuntimePort } from './ports';
 
 import type { ModelInfoView } from '@paiapp/contracts';

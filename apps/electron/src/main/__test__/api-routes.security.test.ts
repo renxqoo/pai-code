@@ -10,7 +10,7 @@ import { createSettingsRoutes } from '@paiapp/api';
 import { createAgentDefinitionsStore } from "../agent-definitions-store";
 import { createFileSettings, type ProviderKeyStore } from "../file-settings";
 import { createPaiRuntime } from "../pai-runtime";
-import { createRuntimeMonitor } from '../runtime-monitor/create-runtime-monitor';
+import { createRuntimeMonitor } from '@paiapp/infra';
 
 /**
  * 路由安全面回归（对抗审查 C-S2/C-S8/C-S4）：

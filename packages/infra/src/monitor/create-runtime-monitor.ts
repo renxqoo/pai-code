@@ -9,7 +9,8 @@ import type {
   RuntimeSnapshotView,
   WorkerRowView,
 } from '@paiapp/contracts';
-import { createSampleRing, createSupervisionLog } from '@paiapp/infra';
+import { createSampleRing } from './sample-ring';
+import { createSupervisionLog } from './supervision-log';
 
 /**
  * 运行状态监控器（T29）：2s 单定时器轮询 host 本地观测面（thread/list +

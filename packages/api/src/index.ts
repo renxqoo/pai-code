@@ -53,6 +53,14 @@ export { envVarNameForProvider } from './verbs/env-name';
 export { autoTitleCandidateOf } from './verbs/auto-title';
 export { createGitBranches, classifyGitExecError, type GitBranches, type GitExec, type GitExecResult, type GitExecError } from './verbs/git-branches';
 export { createGitGraph, type GitGraph } from './verbs/git-graph';
+export {
+  parseAgentDefinition,
+  serializeAgentDefinition,
+  isSafeFileNameStem,
+  fileNameStemOf,
+  type AgentDefinitionFile,
+} from './verbs/agent-definition';
+export { serializeProvidersConfig } from './verbs/providers-config';
 export type { RuntimePort, MonitorPort, AgentDefinitionsPort, AuditPort, FailPort } from './verbs/ports';
 export { createApiClient, type ApiClient, type ApiClientTransport } from './client';
 export { TIMEOUTS } from './timeouts';
@@ -66,7 +74,7 @@ export type { HostCommands } from './commands/host';
 
 export { createFrameDecoder, classifyFrame, type FrameDecoder, type FrameDecoderOptions } from './events/frame-decoder';
 export { encodeCommand } from './events/command-encoder';
-export { createEventMapper, type EventMapDeps, type EventMapper } from './events/event-mapper';
+export { createEventMapper, payloadSessionOf, type EventMapDeps, type EventMapper } from './events/event-mapper';
 export { mapDialogRequest } from './views/dialog-mapper';
 export { mapEntries } from './views/entries-mapper';
 export {

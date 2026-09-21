@@ -1,7 +1,13 @@
 import type { AgentDefinitionsPort, RuntimePort } from './ports';
 
 import type { ApiError, ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
-import { appError, modelInfos, previewCommands, sessionCommands, settle, type AgentCommands, type HubApi, type ModelCommands, type savedSessions, type SessionCommands } from '../index';
+import { appError } from '../errors';
+import { settle } from '../settle';
+import { modelInfos, previewCommands, sessionCommands, type savedSessions } from '../views/response-views';
+import type { AgentCommands } from '../commands/agents';
+import type { ModelCommands } from '../commands/models';
+import type { SessionCommands } from '../commands/session';
+import type { HubApi } from '../index';
 
 import type { ModelInfoView, PreferencesView, ProviderConfigView, SkillView } from '@paiapp/contracts';
 

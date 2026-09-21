@@ -1,4 +1,4 @@
-import { createApiClient } from '@paiapp/api';
+import { createApiClient } from '@paiapp/api/client';
 
 import { createBridgeClient } from './client-invoke';
 import { createLiveController, type LiveController } from './live-controller';
