@@ -70,7 +70,7 @@ event 帧 `{type:"event", threadId, name, payload, agentName?}` 不变。**归�
 ## 2. DESIGN — 方向性裁决（方案轮审查后定稿）
 
 - **【D1】集成路径切换**：hub-paths dev 探测改 `../x-harness/apps/host-hub`（`src/host/cli.ts` > `dist/host/cli.js`）；sync-resources 编译源 = `<repoRoot>/../x-harness/apps/host-hub/src/host/cli.ts`（`PAI_HUB_ENTRY` 覆写不变）；spawn 直执行形态与 `resources/bun/bun` 保留。**存量集成测试（host-hub.integration.test.ts）的入口/env/装置换代整体归 W6**——该测试自带 hubPaths 注入，不随 hub-paths 联动；W1-W5 过渡期默认集成门继续跑 my-agent 形态（装置仍指向旧仓），W6 一次性换代并移除（过渡态如实声明，非兼容层——旧装置在 W6 被删）。
-- **【D2】providers.json 重写（app 仍是唯一目录写者）**：`writeModelsConfig` 重写为 x-harness catalog 形状 `{providers: [{name, protocol, baseUrl, apiKeyEnv: PAI_KEY_<NAME>, models: [{id, contextWindow?, maxTokens?, reasoning, input, cost?}], contextWindow?, maxOutputTokens?}]}`（不写 default/apiKey 字面量）。**模型级 `reasoning`/`input` 显式写布尔/数组（omit-when-false 惯例退役**——x-harness 缺省 reasoning=true、缺 input 拒图，省略即语义翻转）；baseUrl 写前形状校验（`http(s)://` 前缀，缺 scheme 整档案被剔且零告警）。app 内部 api 词表 `anthropic-messages|openai-completions` → `anthropic|openai`：ProviderConfig.api 直接换 + 存量 settings.json 读盘一次性归一迁移（写侧只产新词表）。三道写前校验保留 + baseUrl 形状（第④道）；预设键撞名拒——**前提显式**：app 是唯一写者 + 校验先于落盘 ⇒ 运行期 `source:"preset"` 派生集合永不被 app 自身写遮蔽（手改 providers.json 不属 app 契约；覆盖语义下被遮蔽预设 source 变 "custom" 是派生漏出的根因，前提成立则不可达）。
+- **【D2】providers.json 重写（app 仍是唯一目录写者）**：`writeModelsConfig` 重写为 x-harness catalog 形状 `{providers: [{name, protocol, baseUrl, apiKeyEnv: PAI_KEY_<NAME>, models: [{id, contextWindow?, maxTokens?, reasoning, input, cost?}], contextWindow?, maxOutputTokens?}]}`（不写 default/apiKey 字面量）。**模型级 `reasoning`/`input` 显式写布尔/数组（omit-when-false 惯例退役**——x-harness 缺省 reasoning=true、缺 input 拒图，省略即语义翻转）；baseUrl 写前形状校验（`http(s)://` 前缀，缺 scheme 整档案被剔且零告警）。app 内部 api 词表 `anthropic-messages|openai-completions` → `anthropic|openai`：ProviderConfig.api 直接换 + 存量 settings.json 读盘一次性归一迁移（写侧只产新词表）。写前校验两道保留（env 碰撞 / api 词表）+ baseUrl 形状（第③道）；~~预设键撞名拒~~ **实施轮用户裁决废除**：x-harness 撞名 = 整档覆盖（用户配置胜出）+ 消歧 custom 优先（x-harness ce8c344）——同名即覆盖、删渠道即恢复内置，app 无「预设挡人」面；保存不再依赖 host（目录只在 spawn 期读入）。
 - **【D3】事件面换代（UiEvent 语义面稳定 + 主会话谓词）**：渲染层 UiEvent 词表不动；adapter event-mapper 全表重写（§5.2，每行带主会话谓词）；**子会话 session 域帧（payload.session ≠ threadId）不进主时间线**——子代理面板消费实时域（agent/assistant-stream|tool-stream|spawned|finished|status，agentName/agentId 分流），其余子会话帧忽略。entries-mapper 按 SessionEventData 全集重写（HistoryItem 形状不变，水化天然只有主会话）。
 - **【D4】词表三跟随**：权限 4 档 → `plan|auto|full`（菜单 3 档，文案进 strings）；思考 4 档 → `off|low|medium|high|max`（菜单 5 档；unset 退役——无值态 = off/source off）；api 词表（D2）。用户可见变化如实进 strings，不做映射伪装。
 - **【D5】布局三变 + 旧会话不迁移**：sessionPath 词法 `transcript.jsonl` → `events.jsonl`（三处：response-views 重建、isHubSessionLayout + **id 词法镜像全词法**、resume/register 白名单）；models.json → providers.json（app 每次 spawn 重写；**孤儿 models.json 启动清扫删除**）；`.my-agent` → `.x-harness` 域。旧 my-agent 会话（transcript 布局）围栏词法拦 → 对账按非 hub 布局删行（现有路径自动覆盖）。挂账见 §7。
@@ -275,6 +275,23 @@ event 帧 `{type:"event", threadId, name, payload, agentName?}` 不变。**归�
 - **B-L5 裸 modelId 消歧 + provider? 死字段** → 采纳：§1.1 注 + W0 对拍项。
 - **A-L1 abort_bash 落穿非差异 / A-L2 fork seq 基数 / A-L3 -forkSeq / A-L4 忽略清单认领 / A-L5·B-L6 id 词法 / A-L6 dialog-mapper 可免 / A-L7 retryable / A-L8 ChildView 判别联合 / B-L3 子代理权限挂账 / B-L7 skills-section 文案** → 全部采纳：分别落 §5.1 差异表修正、§1.2 忽略清单、D5 全词法、§4.1（dialog-mapper 降为测试锚定）、§1.3、get_subagents 判别联合、§7 挂账、grep 清零口径。
 
+## 8b. 实施轮对抗审查处置记录（两路：契约对照 4H/5M/6L + 假绿 1H/6M/6L）
+
+- **E-H1**（messageFinal thinking 提取消解虚构 content 块形状——内核是顶层字段）→ 修复 + 夹具纠偏。
+- **E-H2**（entries-mapper 无 surfaceOp replace——压缩后历史双份）→ applySurfaceOp 区间折叠落地 + turn-end 判别穷举夹具；live 侧 compacted 归位，**区间即时裁剪挂账**（landed 无区间载荷）。
+- **E-H3**（tool-stream delta 被当快照替换）→ mapper 按 callId 累积 + result 冲净 + 回归。
+- **E-H4**（流缓冲不校验 WAL 步坐标——无文本步复用陈旧缓冲）→ messageFinal 以事件 (turn,step) 校验/重置。
+- **E-M1**（compact 直发静默丢附件）→ 携图本地硬拒（hub 同文案）。
+- **E-M2**（stopReason 词表杜撰 error/meta.error）→ 真词表 stop|max-tokens + interrupted→aborted。
+- **E-M3**（compacting:true 无产生源）→ command/run|done 主会话谓词拦截。
+- **E-M5**（outcome 判别丢失）→ endedWith + failed 详情行。
+- **E-M4/F-M1/M5**（compact 三元组/词形边界/delete 级联循环/register 处理器覆盖缺失）→ 全部补测；**thinking 能力拒面在 script 装置下不可达**（script-1 全档可过）挂账。
+- **F-H1**（覆盖率 lines 回退 0.04）→ 补覆盖后 **funcs 81.24 / lines 89.05**（基线 81.03/88.98 双升）。
+- **F-M3/M4/M6**（.my-agent 用户文案/孤儿清扫落点漂移/UiEvent「不动」表述）→ 文案与注释清理；清扫落点 writeModelsConfig（§4.1 同变）；D3/§5.2 表头措辞改「子代理域键位 agentId（形态变化，语义面稳定）」。
+- **F-L4/L6 杂项**（机器围栏/净增算术/pendingAsk 死域/frame-decoder 正例夹具）→ 夹具与死域清理；净增以实测 1742+1skip 为准；**集成门机器围栏挂账**（缺省绝对路径，无旁级检出机器静默 skip——T38 沿袭形态）。
+- **GLM 真门**（实施轮验证）：x-harness 消歧缺陷修复（ce8c344 custom 优先）后源码探针 settled ok:true；app 集成真门复验进行中（等待窗放宽 180s）。
+- **用户裁决（渠道保存报障）**：预设撞名拒废除（覆盖语义，见 D2 修订）；保存失败 reason 全链透传（formFailedReason 映射）。报障日志实证：09:48 api 旧词形（旧进程，读盘归一后消除）→ 12:17 起撞预设 glm（本次废除根治）。
+
 ## 9. 实施记录
 
 ### W2-W6（app，单原子提交 dd70a8a，87 文件）
@@ -296,3 +313,9 @@ event 帧 `{type:"event", threadId, name, payload, agentName?}` 不变。**归�
 - **编译形态冒烟实测过**：`bun build --compile` 单文件（64MB）直执行——get_host_info 应答、thread/start worker `/$bunfs/` 自 spawn、script provider 全事件旅程（agent/inbox/spliced insert→claim、user/message、turn/start、llm/chunk text-delta/usage/finish、assistant/message 权威终局、turn/end{reason 判别}、agent/status、settled{sendId:"p1",ok:true}）、stdin EOF exit 0。事件帧序实证与 §1.2 宣言一致。
 - 摸底产出：**thread/start `provider?` 实测被忽略**（松类型残留字段，装配面只认 modelId 三级消歧——app 侧停发，B-L5 关闭）；script-1 无 maxTokens（输出上限 DEFAULT_MAX_TOKENS 回落）+ worker 单例共享剧本游标——W6 编排约束成立。
 
+### W7 收口（6edc62e）
+
+- 实施轮两路审查处置全清单见 §8b；用户裁决两项落地（预设覆盖语义 + 保存可诊断）。
+- x-harness 侧收口配套：c180814（agents/remove 口径分叉 + homeDir 缝）、ce8c344（目录序 custom 优先——GLM 真门消歧缺陷根治）；real LLM 门 PASS（e2e:llm 全旅程）。
+- 四门：lint 0-0（622 文件）/ tsc 0 / build ✓ / test **1742 + 1 skip**（GLM opt-in；T38 基线 1700，净增 42）；覆盖率聚合 **funcs 81.24 / lines 89.05**（T38 基线 81.03/88.98，双升）。
+- 词表 grep 清零（§4 口径）复核通过。
