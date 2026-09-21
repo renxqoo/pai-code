@@ -233,6 +233,17 @@ relay 放 api-routes 本地（8 行组合器：`(call) => async (p) => settle(aw
 类型上强制「路由 params 形状 ≡ hub 入参」——不一致就写不成 relay，必须回到形态②显式
 映射，错配不可能静默溜过）。§2d 早期示例的逐字段展开是讲解形态，非生产形态。
 
+**两张协议的分层澄清（IPC 面 ≠ hub 面）**：`'session/start'` 是 app 私有 IPC 协议的方法名
+（renderer↔main），hub 那头是 `thread/start`——两张词表两次映射，**不合并**。packages/api
+收敛 hub 接口知识；app IPC 面（一半纯本地能力 shell/open、git/*，一半带业务）归
+contracts（ApiMethod 闭集 + zod 真相）+ api-routes（实现）。剩余的文本重复（方法名同时
+出现在 ApiSchemas 与 RouteTable 两张表）用 **defineRoutes 合表**收敛：每方法一处定义、
+key 只写一次（`'session/start': method(StartParamsSchema, startSession(deps))`，
+纯转发 `hubRelay((h) => h.thread.setKeepalive)`，本地能力同表同校验）；内置两条断言——
+① handler keys ≡ ApiSchemas keys 集合相等（登记未实现/实现未登记即测试红，替代现状
+运行时 unknown_method 才暴露）；② key 类型绑定 ApiMethod 闭集（拼错编译红）。方法名
+全文只余两处且各司其职：renderer 调用点（协议使用方）与 routes 定义点（协议实现方）。
+
 **圈1b · pai-runtime（原直连收编——单命令薄封装 + 编排留驻原地）**：
 
 ```ts
