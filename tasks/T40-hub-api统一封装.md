@@ -153,6 +153,102 @@ hub `get_host_info` 增加 `errorCodes: HUB_ERROR_CODES` 快照；app 启动期�
 - 自愈归属明写：unknown_thread 重锚在 **renderer**（需 activate/store），协议补偿
   （streaming_window→followUp）在 main——两分有语义依据。
 
+## 2d. 解剖：内部如何定义一个 API、外部如何实现
+
+以真实命令 `thread/set_keepalive` 走完全程（既有命令收编与全新命令定义同构，差异见末尾清单）。
+
+### 内部定义（packages/api，四个文件各一小步）
+
+**① 入参类型——从 contracts 判别联合抽取，零复制**（词表/字段都单一真相在 contracts）：
+
+```ts
+// commands/thread.ts
+type SetKeepaliveInput = Omit<Extract<PaiCommand, { type: 'thread/set_keepalive' }>, 'type'>;
+// = { threadId: string; keepalive: boolean }——hub 协议改字段这里编译红
+```
+
+**② 域接口声明 + 实现（一命令一档：超时档在此定，四档之一）**：
+
+```ts
+// commands/thread.ts
+export interface ThreadCommands {
+  // …既有 8 条
+  setKeepalive(input: SetKeepaliveInput): Promise<HubResult<null>>;   // 声明
+}
+export function createThreadCommands(send: Transport): ThreadCommands {
+  return {
+    // …既有 8 条
+    setKeepalive: (input) => send<null>({ type: 'thread/set_keepalive', ...input }, TIMEOUTS.default),
+  };   // send = transport 管线：超时→错误分类→onCall，全命令一致
+}
+```
+
+**③ 门面自动可用**——域对象已挂 `HubApi.thread`，无第四处登记；若命令有非平凡响应，
+在 `views/` 放收窄函数并在域方法内应用（外部永远拿视图类型）：
+
+```ts
+// 有视图的命令形态（如 get_entries）：
+getEntries: (input) => send<RawEntries>('get_entries'…).then(r =>
+  r.ok ? { ok: true, data: mapEntries(r.data) } : r),   // 收窄在域方法内完成
+```
+
+**④ 同目录单测（scriptHub 剧本注入，无进程）**：
+
+```ts
+// commands/__test__/thread.test.ts
+const hub = createHubApi({ request: scriptHub({
+  'thread/set_keepalive': { ok: false, error: { code: 'unknown_thread', message: 'Unknown threadId' } },
+}) });
+const r = await hub.thread.setKeepalive({ threadId: 't1', keepalive: true });
+expect(r).toEqual({ ok: false, error: { kind: 'unknown_thread' } });   // kind 解码被钉住
+```
+
+### 外部实现（三个圈各自的完整形态）
+
+**圈1a · api-routes（业务 + 一行调用 + kind 分派）**：
+
+```ts
+'session/setKeepalive': async (params) => {
+  const result = await hub.thread.setKeepalive({ threadId: params.threadId, keepalive: params.keepalive });
+  if (!result.ok) return fail(result.error);          // ApiError 判别联合直达渲染层
+  return { ok: true as const, data: null };
+},
+```
+
+**圈1b · pai-runtime（原直连收编——单命令薄封装 + 编排留驻原地）**：
+
+```ts
+// 收编前：let outcome = await host?.request({ type: 'thread/set_keepalive', … });
+// 收编后（register-then-retry 补偿链是 app 业务，一行不动地留驻）：
+const first = await hub.thread.setKeepalive({ threadId, keepalive });
+if (first.ok) return 'ok';
+const registered = await hub.thread.register({ sessionPath: row.sessionPath, trusted: … }); // 容忍 already_open
+const second = await hub.thread.setKeepalive({ threadId, keepalive });
+if (!second.ok) log(`keepalive_hub_apply_failed:${threadId}`);   // 「host 空窗不告警」语义保持
+```
+
+**圈2 · renderer（永不触 hub：invoke app 方法 → ApiError kind 查表）**：
+
+```ts
+// live-controller.ts（现状 result.error.kind === 'unknown_thread' 自愈等 kind 判定即此形态）
+const outcome = await client.invoke('session/setKeepalive', { threadId, keepalive });
+if (!outcome.ok) pushNotice(copyOf(outcome.error));    // COPY_BY_KIND 查表（Record 编译封闭）
+```
+
+**圈3 · 测试**：单测走 scriptHub（④）；api-routes 级走 fake port 注入（makeProgrammableHost
+退役为 request 腿，唯一假面分工见 §4）；集成门真 hub 旅程断言 kind。
+
+### 全新命令定义清单（x-harness 新增 `xxx/yyy` 时两侧共六处，漏改即红）
+
+| # | 仓 | 动作 | 拦截面 |
+|---|---|---|---|
+| 1 | x-harness | protocol/commands.ts 词表 + handler + 错误发射用 HUB_ERROR_CODES | 词表封闭断言 |
+| 2 | app contracts | HUB_COMMAND_TYPES 登记 + PaiCommand 联合成员 | CoversUnion 编译断言 |
+| 3 | app packages/api | 域文件一档（①②，必要时 views ③④） | typecheck（Extract 命中即类型就位） |
+| 4 | app api-routes | 方法 + zod ApiSchemas 注册 | ApiSchemas 自有属性判定 |
+| 5 | app renderer | 消费（若直达 UI） | kind 查表编译封闭 |
+| 6 | 双侧 | 集成门旅程 + 码表对拍 | 握手集合相等断言 |
+
 ## 3. 波次（v3 重切）
 
 - **W0+W1（原子，跨仓 runbook §2.5）**：x-harness 错误通道结构化（104 站点含四类非机械面 +
