@@ -1,17 +1,17 @@
 import { z } from 'zod';
 
+import type { ApiError } from './hub-errors';
 import { PermModeSchema } from './permissions';
 import { RuntimeSnapshotViewSchema } from './runtime';
-import { ProviderModelSchema } from './settings';
 import { InflightViewSchema, PendingDialogViewSchema, SubagentSnapshotViewSchema } from './inflight-views';
 import { DiffFileViewSchema, SessionViewSchema, SubagentSpawnViewSchema } from './ui-events';
-import { IdleRecycleMinutesSchema } from './settings';
+import { IdleRecycleMinutesSchema, ProviderModelSchema } from './settings';
 import { THINKING_LEVEL_ORDER } from './thinking-levels';
 
 /**
  * 渲染层 API 面：方法名用应用语义（渲染层不出现协议字面量）。
  * 主进程 api 服务按本表校验参数并翻译为 host-hub 命令；
- * 传输层统一应答 {ok:true,data} | {ok:false,reason}（ApiOutcome）。
+ * 传输层统一应答 {ok:true,data} | {ok:false,error}（ApiOutcome）。
  */
 
 // ---------------------------------------------------------------------------
@@ -622,5 +622,5 @@ export const API_METHODS = Object.keys(ApiSchemas) as readonly ApiMethod[];
 export type ApiParams<M extends ApiMethod> = z.infer<(typeof ApiSchemas)[M]['params']>;
 export type ApiData<M extends ApiMethod> = z.infer<(typeof ApiSchemas)[M]['result']>;
 
-/** 传输层统一应答形态（preload 返回值；主进程对 hub 失败做 reason 包装）。 */
-export type ApiOutcome<M extends ApiMethod> = { ok: true; data: ApiData<M> } | { ok: false; reason: string };
+/** 传输层统一应答形态（preload 返回值；失败为 ApiError 判别联合）。 */
+export type ApiOutcome<M extends ApiMethod> = { ok: true; data: ApiData<M> } | { ok: false; error: ApiError };

@@ -1,4 +1,5 @@
-import type { ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
+import type { ApiError, ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
+import { appError } from '@paiapp/api';
 
 import type { FileRead } from './file-read';
 import { searchProjectFiles } from './file-search';
@@ -24,7 +25,7 @@ export type LocalRoutesDeps = {
 };
 
 export function createLocalRoutes(deps: LocalRoutesDeps) {
-  const fail = (reason: string): Promise<{ ok: false; reason: string }> => Promise.resolve({ ok: false, reason });
+  const fail = (error: ApiError): Promise<{ ok: false; error: ApiError }> => Promise.resolve({ ok: false, error });
 
   const routes: {
     'file/search': Handler<'file/search'>;
@@ -36,25 +37,25 @@ export function createLocalRoutes(deps: LocalRoutesDeps) {
   } = {
     'file/search': (params) => {
       // 目录门禁：只允许扫描本应用已知会话目录（活跃会话 + 注册表），缩小枚举面（见 T23 挂账）
-      if (!deps.isKnownCwd(params.cwd)) return fail('cwd_forbidden');
+      if (!deps.isKnownCwd(params.cwd)) return fail(appError('cwd_forbidden'));
       return Promise.resolve({ ok: true as const, data: searchProjectFiles(params.cwd, params.query) });
     },
     'file/read': (params) => {
-      if (!deps.isKnownCwd(params.cwd)) return fail('cwd_forbidden');
+      if (!deps.isKnownCwd(params.cwd)) return fail(appError('cwd_forbidden'));
       return Promise.resolve(deps.fileRead.read(params.cwd, params.path));
     },
     'shell/open': (params) => {
-      if (!deps.isKnownCwd(params.cwd)) return fail('cwd_not_allowed');
+      if (!deps.isKnownCwd(params.cwd)) return fail(appError('cwd_not_allowed'));
       deps.audit(`shell_open:${params.target}:${params.cwd}`);
       return deps.openLocation.open(params.cwd, params.target);
     },
     'git/branches': (params) => {
-      if (!deps.isKnownCwd(params.cwd)) return fail('cwd_not_allowed');
+      if (!deps.isKnownCwd(params.cwd)) return fail(appError('cwd_not_allowed'));
       return deps.git.list(params.cwd);
     },
     'git/checkout': async (params) => {
       // 工作树是独占资源：门禁与串行都在主进程侧（渲染层只做按钮 busy 态）
-      if (!deps.isKnownCwd(params.cwd)) return fail('cwd_not_allowed');
+      if (!deps.isKnownCwd(params.cwd)) return fail(appError('cwd_not_allowed'));
       deps.audit(`git_checkout:${params.cwd}:${params.branch}:${params.create ? 'create' : 'switch'}`);
       const outcome = await deps.git.checkout(params.cwd, params.branch, params.create);
       // HEAD 已改写：丢弃图谱在途快照，紧随的图谱请求不再复用切换前数据
@@ -62,7 +63,7 @@ export function createLocalRoutes(deps: LocalRoutesDeps) {
       return outcome;
     },
     'git/graph': (params) => {
-      if (!deps.isKnownCwd(params.cwd)) return fail('cwd_not_allowed');
+      if (!deps.isKnownCwd(params.cwd)) return fail(appError('cwd_not_allowed'));
       return deps.graph.list(params.cwd);
     },
   };

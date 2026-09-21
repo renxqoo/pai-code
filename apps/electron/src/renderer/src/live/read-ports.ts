@@ -34,7 +34,7 @@ export function createReadPorts(client: BridgeClient): ReadPorts {
     if (outcome === null) return null;
     if (!outcome.ok) {
       // 「不支持该命令」才缓存（老 hub）；瞬态失败只本次跳过，下次重试
-      if (/unknown command|unsupported capability|unknown method/i.test(outcome.reason)) unavailable.add(method);
+      if (outcome.error.kind === 'unknown_command') unavailable.add(method);
       return null;
     }
     return pick(outcome.data);

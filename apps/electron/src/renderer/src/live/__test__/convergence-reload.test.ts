@@ -246,8 +246,8 @@ describe('重载收敛链（读序 + 降级，M2b）', () => {
     const persisted = { kind: 'assistant', id: 'seq-1', messageTs: 1, text: '已落盘', thinking: '', toolCalls: [], usage: null, stopReason: null, errorMessage: null, at: 2 };
     const client = makeClient((method) => {
       if (method === 'app/bootstrap') return { ok: true, data: bootstrapData(sessions) };
-      if (method === 'session/inflight') return { ok: false, reason: 'Unknown command: get_inflight' };
-      if (method === 'session/subagents' || method === 'session/pendingDialogs') return { ok: false, reason: 'Unknown command' };
+      if (method === 'session/inflight') return { ok: false, error: { kind: 'unknown_command', message: 'get_inflight' } };
+      if (method === 'session/subagents' || method === 'session/pendingDialogs') return { ok: false, error: { kind: 'unknown_command' } };
       if (method === 'session/entries') return { ok: true, data: { items: [persisted], cursor: 1 } };
       return { ok: true, data: null };
     });

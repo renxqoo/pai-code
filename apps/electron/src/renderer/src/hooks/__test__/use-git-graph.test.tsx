@@ -124,7 +124,7 @@ describe('useGitGraph', () => {
     const calls: string[] = [];
     const list: ListFn = (cwd) => {
       calls.push(cwd);
-      return Promise.resolve(calls.length === 1 ? { ok: false, reason: 'git_failed:x' } : { ok: true, data: VIEW });
+      return Promise.resolve(calls.length === 1 ? { ok: false, error: { kind: 'internal_error', message: 'git_failed:x' } } : { ok: true, data: VIEW });
     };
     const h = harness(list);
     h.mount({ cwd: '/w/a', enabled: true });

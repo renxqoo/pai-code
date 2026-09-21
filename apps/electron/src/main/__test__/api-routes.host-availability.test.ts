@@ -84,7 +84,7 @@ describe('api-routes host 可用性（host 未构建）', () => {
   test('症状回归：app/restartHost 在 host 未构建时给出 host_unavailable（可读原因）', async () => {
     const work = mkdtempSync(join(tmpdir(), 'pai-host-restart-'));
     const { routes } = makeRoutes(work);
-    const outcome = (await routes.invoke('app/restartHost', {})) as { ok: boolean; reason?: string };
-    expect(outcome).toEqual({ ok: false, reason: 'host_unavailable' });
+    const outcome = (await routes.invoke('app/restartHost', {})) as { ok: boolean; error?: { kind: string; face?: string } };
+    expect(outcome).toEqual({ ok: false, error: { kind: 'transient', face: 'host_unavailable' } });
   });
 });

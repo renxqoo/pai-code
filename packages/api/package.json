@@ -2,6 +2,10 @@
   "name": "@paiapp/api",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
-  "dependencies": { "@paiapp/contracts": "workspace:*", "@paiapp/core": "workspace:*", "@paiapp/infra": "workspace:*" }
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@paiapp/contracts": "workspace:*"
+  }
 }

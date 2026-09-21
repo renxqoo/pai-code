@@ -42,7 +42,7 @@ describe('Windows 终端链注入防护', () => {
   test('cwd 含 cmd 元字符 → open_failed:unsupported_cwd（不执行任何命令）', async () => {
     const { run, calls } = makeRun(() => OK);
     const location = createOpenLocation({ run, platform: 'win32' });
-    expect(await location.open('C:\\proj&calc', 'terminal')).toEqual({ ok: false, reason: 'open_failed:unsupported_cwd' });
+    expect(await location.open('C:\\proj&calc', 'terminal')).toEqual({ ok: false, error: { kind: 'invalid_params', message: 'open_failed:unsupported_cwd' } });
     expect(calls).toEqual([]);
   });
 
@@ -54,7 +54,7 @@ describe('Windows 终端链注入防护', () => {
       return OK;
     });
     const location = createOpenLocation({ run, platform: 'darwin', env: {} });
-    expect(await location.open('/tmp/p', 'editor')).toEqual({ ok: false, reason: 'editor_not_found' });
+    expect(await location.open('/tmp/p', 'editor')).toEqual({ ok: false, error: { kind: 'editor_not_found' } });
     codeAvailable = true;
     expect(await location.open('/tmp/p', 'editor')).toEqual({ ok: true, data: null });
     // 第二次 open 重新探测了 code --version（负缓存不存在）
@@ -87,14 +87,14 @@ describe('createOpenLocation 平台矩阵（fake run）', () => {
   test('win32 terminal：wt 失败回落 cmd；双双失败报 open_failed:exit', async () => {
     const { run, calls } = makeRun(() => ({ code: 1, kind: null }));
     const location = createOpenLocation({ run, platform: 'win32' });
-    expect(await location.open('C:\\p', 'terminal')).toEqual({ ok: false, reason: 'open_failed:exit' });
+    expect(await location.open('C:\\p', 'terminal')).toEqual({ ok: false, error: { kind: 'transient', face: 'command_failed', message: 'open_failed:exit' } });
     expect(calls).toEqual(['cmd /c start wt -d C:\\p', 'cmd /c start cmd /K cd /d C:\\p']);
   });
 
   test('linux terminal：逐候选探测，全失败 terminal_not_found', async () => {
     const { run, calls } = makeRun((_file, args) => (args[0] === '--workdir' ? 'next-candidate' : OK));
     const location = createOpenLocation({ run, platform: 'linux' });
-    expect(await location.open('/tmp/p', 'terminal')).toEqual({ ok: false, reason: 'terminal_not_found' });
+    expect(await location.open('/tmp/p', 'terminal')).toEqual({ ok: false, error: { kind: 'invalid_params', message: 'terminal_not_found' } });
     expect(calls).toEqual([
       'x-terminal-emulator --workdir /tmp/p',
       'gnome-terminal --workdir /tmp/p',
@@ -105,8 +105,8 @@ describe('createOpenLocation 平台矩阵（fake run）', () => {
   test('editor：code --version 探活后打开 cwd；探测结果缓存（第二次不再探）', async () => {
     const { run, calls } = makeRun((_file, args) => (args[0] === '--version' ? OK : { code: 1, kind: null }));
     const location = createOpenLocation({ run, platform: 'darwin', env: {} });
-    expect(await location.open('/tmp/p', 'editor')).toEqual({ ok: false, reason: 'open_failed:exit' });
-    expect(await location.open('/tmp/q', 'editor')).toEqual({ ok: false, reason: 'open_failed:exit' });
+    expect(await location.open('/tmp/p', 'editor')).toEqual({ ok: false, error: { kind: 'transient', face: 'command_failed', message: 'open_failed:exit' } });
+    expect(await location.open('/tmp/q', 'editor')).toEqual({ ok: false, error: { kind: 'transient', face: 'command_failed', message: 'open_failed:exit' } });
     expect(calls).toEqual([
       'code --version',
       'code /tmp/p',
@@ -123,7 +123,7 @@ describe('createOpenLocation 平台矩阵（fake run）', () => {
   test('editor：候选全探活失败且应用层也空 → editor_not_found（不静默换 finder）', async () => {
     const { run, calls } = makeRun((file, args) => (args[0] === '--version' || (file === 'open' && args[0] === '-a') ? { code: 127, kind: null } : OK));
     const location = createOpenLocation({ run, platform: 'darwin', env: { EDITOR: 'my-editor' } });
-    expect(await location.open('/tmp/p', 'editor')).toEqual({ ok: false, reason: 'editor_not_found' });
+    expect(await location.open('/tmp/p', 'editor')).toEqual({ ok: false, error: { kind: 'editor_not_found' } });
     expect(calls).toEqual([
       'code --version',
       'cursor --version',
@@ -164,8 +164,8 @@ describe('createOpenLocation 平台矩阵（fake run）', () => {
     let outcome = 0;
     const { run } = makeRun(() => (outcome === 0 ? { code: null, kind: 'timeout' } : { code: null, kind: 'spawn_failed' }));
     const location = createOpenLocation({ run, platform: 'darwin' });
-    expect(await location.open('/tmp/p', 'finder')).toEqual({ ok: false, reason: 'open_failed:timeout' });
+    expect(await location.open('/tmp/p', 'finder')).toEqual({ ok: false, error: { kind: 'transient', face: 'timeout', message: 'open_failed:timeout' } });
     outcome = 1;
-    expect(await location.open('/tmp/p', 'finder')).toEqual({ ok: false, reason: 'open_failed:spawn' });
+    expect(await location.open('/tmp/p', 'finder')).toEqual({ ok: false, error: { kind: 'transient', face: 'command_failed', message: 'open_failed:spawn' } });
   });
 });

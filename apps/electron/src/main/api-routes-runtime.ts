@@ -1,4 +1,7 @@
-import type { ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
+import type { ApiError, ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
+import { appError } from '@paiapp/api';
+
+import { errorLogToken } from './error-log-token';
 
 import type { RuntimeMonitor } from './runtime-monitor/create-runtime-monitor';
 import type { PaiRuntime } from './pai-runtime';
@@ -17,8 +20,8 @@ export interface RuntimeRoutesDeps {
   settings: FileSettings;
   /** 档位 hub 同步失败的落档钩子（装配层接监督日志 → 监控时间线）。 */
   onPolicySyncFailed?: (minutes: number, reason: string) => void;
-  command: (cmd: Parameters<PaiRuntime['host']['request']>[0], timeoutMs?: number) => Promise<{ ok: true; data: unknown } | { ok: false; reason: string }>;
-  fail: (reason: string) => { ok: false; reason: string };
+  command: (cmd: Parameters<PaiRuntime['host']['request']>[0], timeoutMs?: number) => Promise<{ ok: true; data: unknown } | { ok: false; error: ApiError }>;
+  fail: (error: ApiError) => { ok: false; error: ApiError };
   exportDiagnosticsBundle: () => string;
 }
 
@@ -36,31 +39,31 @@ export function runtimeRoutes(deps: RuntimeRoutesDeps): { [M in Extract<ApiMetho
       // 记监督事件（监控页时间线可见 effective 值滞后）
       deps.settings.patch({ idleRecycleMinutes: params.minutes });
       const outcome = await command({ type: 'set_idle_retire_ms', value: params.minutes * 60_000 });
-      if (!outcome.ok) deps.onPolicySyncFailed?.(params.minutes, outcome.reason);
+      if (!outcome.ok) deps.onPolicySyncFailed?.(params.minutes, errorLogToken(outcome.error));
       return { ok: true as const, data: { minutes: params.minutes } };
     },
     'app/exportDiagnostics': () => {
       try {
         return Promise.resolve({ ok: true as const, data: { directory: deps.exportDiagnosticsBundle() } });
       } catch {
-        return Promise.resolve(fail('export_failed') as ApiOutcome<'app/exportDiagnostics'>);
+        return Promise.resolve(fail(appError('export_failed')) as ApiOutcome<'app/exportDiagnostics'>);
       }
     },
     'session/retire': async (params) => {
       // 手动闲置收编：会话保留转 parked（视图经 thread_parked 事件回推折叠）
       const result = await command({ type: 'thread/retire', threadId: params.threadId });
-      return result.ok ? { ok: true as const, data: null } : fail(result.reason);
+      return result.ok ? { ok: true as const, data: null } : fail(result.error);
     },
     'session/forceRetire': async (params) => {
       // 强制回收：清队列 + 停止当前轮（两条容错——未在途时失败不阻断）+ 收编
       await command({ type: 'clear_queue', threadId: params.threadId });
       await command({ type: 'abort', threadId: params.threadId });
       const result = await command({ type: 'thread/retire', threadId: params.threadId });
-      return result.ok ? { ok: true as const, data: null } : fail(result.reason);
+      return result.ok ? { ok: true as const, data: null } : fail(result.error);
     },
     'session/setKeepalive': (params) => {
       const outcome = runtime.setSessionKeepalive(params.threadId, params.keepalive);
-      return Promise.resolve(outcome === 'ok' ? { ok: true as const, data: null } : fail('unknown_session'));
+      return Promise.resolve(outcome === 'ok' ? { ok: true as const, data: null } : fail(appError('unknown_session')));
     },
   };
 }

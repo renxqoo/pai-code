@@ -100,9 +100,9 @@ describe('app/setIdleRecycle 档位写路径', () => {
 
   test('词表外档位被 schema 拒绝', async () => {
     const { routes } = await makeRoutes();
-    const outcome = (await routes.invoke('app/setIdleRecycle', { minutes: 7 })) as { ok: boolean; reason?: string };
+    const outcome = (await routes.invoke('app/setIdleRecycle', { minutes: 7 })) as { ok: boolean; error?: { kind: string } };
     expect(outcome.ok).toBe(false);
-    expect(outcome.reason).toBe('invalid_params');
+    expect(outcome.error).toEqual({ kind: 'invalid_params' });
   });
 });
 
@@ -124,8 +124,8 @@ describe('回收命令面（命令序列契约）', () => {
 
   test('session/setKeepalive：未知会话 unknown_session；注册表会话 ok 且落库', async () => {
     const { routes, runtime } = await makeRoutes();
-    const ghost = (await routes.invoke('session/setKeepalive', { threadId: 'ghost', keepalive: true })) as { ok: boolean; reason?: string };
-    expect(ghost).toEqual({ ok: false, reason: 'unknown_session' });
+    const ghost = (await routes.invoke('session/setKeepalive', { threadId: 'ghost', keepalive: true })) as { ok: boolean; error?: { kind: string } };
+    expect(ghost).toEqual({ ok: false, error: { kind: 'unknown_session' } });
 
     runtime.applyStartOutcome('t1', '/w', '/w/s.jsonl', 'T', Date.now());
     const ok = (await routes.invoke('session/setKeepalive', { threadId: 't1', keepalive: true })) as { ok: boolean };

@@ -1,3 +1,5 @@
+import { isWireError } from '@paiapp/contracts';
+import type { HubErrorShape } from '@paiapp/contracts';
 import type { HubFrame } from '@paiapp/contracts';
 
 /**
@@ -43,7 +45,7 @@ export function classifyFrame(value: unknown): { frame: HubFrame } | { reason: s
 function classifyKnown(obj: Record<string, unknown>, type: string): { frame: HubFrame } | { reason: string } {
   switch (type) {
     case 'response':
-      return { frame: { type: 'response', id: optString(obj.id), command: reqString(obj.command), success: obj.success === true, data: obj.data, error: optString(obj.error) } };
+      return { frame: { type: 'response', id: optString(obj.id), command: reqString(obj.command), success: obj.success === true, data: obj.data, error: optError(obj.error) } };
     case 'event':
       return { frame: { type: 'event', threadId: reqString(obj.threadId), name: reqString(obj.name), payload: requirePayload(obj.payload), ...(obj.agentName !== undefined ? { agentName: reqString(obj.agentName) } : {}) } };
     case 'ui_request':
@@ -70,6 +72,13 @@ function reqString(value: unknown): string {
 
 function optString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
+}
+
+/** response 错误字段形状收窄：结构化对象守卫命中才透传；其余形态（串/垃圾）落
+ *  undefined——下游解码对 undefined 折 transient command_failed（两侧版本错配的
+ *  断档签名，见 T40 §2.5）。 */
+function optError(value: unknown): HubErrorShape | undefined {
+  return isWireError(value) ? value : undefined;
 }
 
 /** 事件载荷防线：非对象视为垃圾帧（下游映射器据此免于崩溃）。 */

@@ -2,6 +2,7 @@ import type { AgentDefinition, ApiOutcome, CommandView, IdleRecycleMinutes, Imag
 import { thinkingLevelOfLabel } from '@paiapp/contracts';
 
 import { writeClipboard } from '@/lib/write-clipboard';
+import { errorText } from '@/lib/error-text';
 import { copy } from '@/strings';
 import { entrySeqOf } from './entry-seq';
 import { parseModelKey, pickSessionModel } from './pick-session-model';
@@ -163,7 +164,8 @@ function defaultModelKey(cwd: string): string {
   return picked !== undefined ? `${picked.provider}/${picked.modelId}` : '';
 }
 
-/** 投递失败通知口径：宿主桥不可用不弹（横幅已显式呈现），恢复失败用专项文案。 */
+/** 投递失败通知口径：宿主桥不可用不弹（横幅已显式呈现），恢复失败用专项文案。
+ *  通道承载本地 token 与 hub error kind 字符串（W2 再定型为 ApiError）。 */
 function notifySubmitFailure(reason: string | null): void {
   if (reason === null || reason === 'bridge_unavailable') return;
   if (reason === 'resume_failed') {
@@ -175,12 +177,12 @@ function notifySubmitFailure(reason: string | null): void {
     pushNotice(copy.flow.noActiveSession);
     return;
   }
-  // hub 能力门/量限的友好文案（细节原文对用户无行动价值；其余 reason 原样透传）
-  if (reason.startsWith('invalid images: model does not accept images')) {
+  // hub 能力门/量限的友好文案（细节原文对用户无行动价值；其余 kind 原样透传）
+  if (reason === 'capability_images') {
     pushNotice(copy.flow.imagesDenied);
     return;
   }
-  if (reason.startsWith('too many images')) {
+  if (reason === 'images_too_many') {
     pushNotice(copy.flow.imagesTooMany);
     return;
   }
@@ -483,8 +485,8 @@ export function createWorkspaceActions(): WorkspaceActions {
       }
       const outcome = await controller.forkSession(activeThreadOf(), seq);
       if (!outcome.ok) {
-        // 流式中的 fork 被 hub 拒绝（thread is streaming）：停止前重试无意义，指引用户先停止
-        pushNotice(outcome.reason.includes('thread is streaming') ? copy.flow.forkStreaming : copy.flow.forkFailed);
+        // 流式中的 fork 被 hub 拒绝（streaming_window）：停止前重试无意义，指引用户先停止
+        pushNotice(outcome.reason === 'streaming_window' ? copy.flow.forkStreaming : copy.flow.forkFailed);
         return null;
       }
       return outcome.threadId;
@@ -500,7 +502,7 @@ export function createWorkspaceActions(): WorkspaceActions {
       if (cwd.length === 0) return;
       const outcome = await bridgeClient.invoke('shell/open', { cwd, target });
       if (!outcome.ok) {
-        pushNotice(outcome.reason === 'editor_not_found' ? copy.thread.openEditorMissing : copy.thread.openFailed(outcome.reason));
+        pushNotice(outcome.error.kind === 'editor_not_found' ? copy.thread.openEditorMissing : copy.thread.openFailed(errorText(outcome.error)));
       }
     },
     copyText: async (text) => {

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, jest, test } from 'bun:test';
 import { controller, store, workspaceActions } from '@/live/workspace-runtime';
 import { copy } from '@/strings';
 
-/** forkFromEntry 失败文案分派：流式拒绝（thread is streaming）走「先停止再分叉」，其余走通用失败。 */
+/** forkFromEntry 失败文案分派：流式拒绝（streaming_window）走「先停止再分叉」，其余走通用失败。 */
 
 afterEach(() => {
   store.getState().reset();
@@ -11,14 +11,14 @@ afterEach(() => {
 });
 
 describe('forkFromEntry 失败通知', () => {
-  test('hub 错误含 thread is streaming：forkStreaming 文案（提示先停止会话再分叉）', async () => {
-    jest.spyOn(controller, 'forkSession').mockResolvedValue({ ok: false, reason: 'fork rejected: thread is streaming' });
+  test('hub 流式拒绝（streaming_window）：forkStreaming 文案（提示先停止会话再分叉）', async () => {
+    jest.spyOn(controller, 'forkSession').mockResolvedValue({ ok: false, reason: 'streaming_window' });
     expect(await workspaceActions.forkFromEntry('seq-3')).toBeNull();
     expect(store.getState().notices.map((notice) => notice.text)).toEqual([copy.flow.forkStreaming]);
   });
 
   test('其他失败原因：通用 forkFailed 文案', async () => {
-    jest.spyOn(controller, 'forkSession').mockResolvedValue({ ok: false, reason: 'entry_not_found' });
+    jest.spyOn(controller, 'forkSession').mockResolvedValue({ ok: false, reason: 'cursor_stale' });
     expect(await workspaceActions.forkFromEntry('seq-3')).toBeNull();
     expect(store.getState().notices.map((notice) => notice.text)).toEqual([copy.flow.forkFailed]);
   });
@@ -32,19 +32,20 @@ describe('forkFromEntry 失败通知', () => {
 });
 
 describe('提交失败通知（D15：images 硬拒的友好文案）', () => {
-  test('hub 能力门拒绝（model does not accept images）→ imagesDenied 文案', async () => {
-    jest.spyOn(controller, 'submitDraft').mockResolvedValue('invalid images: model does not accept images');
-    expect(await workspaceActions.submitDraft('看图', [])).toBe('invalid images: model does not accept images');
+  test('hub 能力门拒绝（capability_images）→ imagesDenied 文案', async () => {
+    jest.spyOn(controller, 'submitDraft').mockResolvedValue('capability_images');
+    expect(await workspaceActions.submitDraft('看图', [])).toBe('capability_images');
     expect(store.getState().notices.map((notice) => notice.text)).toEqual([copy.flow.imagesDenied]);
   });
 
-  test('hub 量限拒绝（too many images）→ imagesTooMany 文案；其他 reason 原样透传', async () => {
-    jest.spyOn(controller, 'submitDraft').mockResolvedValueOnce('too many images (max 8)');
-    expect(await workspaceActions.submitDraft('图', [])).toBe('too many images (max 8)');
+  test('hub 量限拒绝（images_too_many）→ imagesTooMany 文案；其他 kind 原样透传', async () => {
+    // 症状回归：旧 startsWith('too many images') 是死 matcher（hub 实串/现 kind 均不命中）——kind 判定后量限文案恢复生效
+    jest.spyOn(controller, 'submitDraft').mockResolvedValueOnce('images_too_many');
+    expect(await workspaceActions.submitDraft('图', [])).toBe('images_too_many');
     expect(store.getState().notices.map((notice) => notice.text)).toEqual([copy.flow.imagesTooMany]);
-    jest.spyOn(controller, 'submitDraft').mockResolvedValueOnce('Unknown threadId');
-    expect(await workspaceActions.submitDraft('文', [])).toBe('Unknown threadId');
-    expect(store.getState().notices.at(-1)?.text).toBe(copy.flow.sendFailed('Unknown threadId'));
+    jest.spyOn(controller, 'submitDraft').mockResolvedValueOnce('unknown_thread');
+    expect(await workspaceActions.submitDraft('文', [])).toBe('unknown_thread');
+    expect(store.getState().notices.at(-1)?.text).toBe(copy.flow.sendFailed('unknown_thread'));
   });
 
   test('空舞台投递（no_active_session）→ noActiveSession 可行动文案，不透传 schema 密文', async () => {

@@ -69,7 +69,7 @@ function makeFakeCapabilities() {
   const openLocation: OpenLocation = {
     open: (cwd, target) => {
       opens.push(`${target}:${cwd}`);
-      return Promise.resolve(target === 'editor' ? { ok: false, reason: 'editor_not_found' } : { ok: true, data: null });
+      return Promise.resolve(target === 'editor' ? { ok: false, error: { kind: 'editor_not_found' } } : { ok: true, data: null });
     },
   };
   const fileRead: FileRead = {
@@ -112,21 +112,21 @@ describe('shell/open 与 file/read 路由', () => {
     const auditCount = audits.length;
     const openCount = fake.opens.length;
     const readCount = fake.reads.length;
-    expect(await routes.invoke('shell/open', { cwd: outside, target: 'terminal' })).toEqual({ ok: false, reason: 'cwd_not_allowed' });
-    expect(await routes.invoke('file/read', { cwd: outside, path: 'a.txt' })).toEqual({ ok: false, reason: 'cwd_forbidden' });
+    expect(await routes.invoke('shell/open', { cwd: outside, target: 'terminal' })).toEqual({ ok: false, error: { kind: 'cwd_not_allowed' } });
+    expect(await routes.invoke('file/read', { cwd: outside, path: 'a.txt' })).toEqual({ ok: false, error: { kind: 'cwd_forbidden' } });
     expect(fake.opens.length).toBe(openCount);
     expect(fake.reads.length).toBe(readCount);
     expect(audits.length).toBe(auditCount);
   });
 
-  test('失败 reason 原样透传（editor_not_found）', async () => {
+  test('失败 error 原样透传（editor_not_found）', async () => {
     const { routes, project } = made;
-    expect(await routes.invoke('shell/open', { cwd: project, target: 'editor' })).toEqual({ ok: false, reason: 'editor_not_found' });
+    expect(await routes.invoke('shell/open', { cwd: project, target: 'editor' })).toEqual({ ok: false, error: { kind: 'editor_not_found' } });
   });
 
   test('target 词表外 → invalid_params', async () => {
     const { routes, project } = made;
-    expect(await routes.invoke('shell/open', { cwd: project, target: 'browser' })).toEqual({ ok: false, reason: 'invalid_params' });
+    expect(await routes.invoke('shell/open', { cwd: project, target: 'browser' })).toEqual({ ok: false, error: { kind: 'invalid_params' } });
   });
 });
 

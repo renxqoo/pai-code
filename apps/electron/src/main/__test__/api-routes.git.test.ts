@@ -116,9 +116,9 @@ describe('git 路由（fake git 注入）', () => {
     const { git, calls } = makeFakeGit({ ok: true, data: { isRepo: false, current: null, branches: [], dirtyFiles: 0 } }, { ok: true, data: { branch: 'dev' } });
     const { graph, calls: graphCalls } = makeFakeGraph({ ok: true, data: { isRepo: true, commits: [], truncated: false } });
     const { routes, outside } = makeRoutes(work, git, graph);
-    expect(await routes.invoke('git/branches', { cwd: outside })).toEqual({ ok: false, reason: 'cwd_not_allowed' });
-    expect(await routes.invoke('git/checkout', { cwd: outside, branch: 'dev' })).toEqual({ ok: false, reason: 'cwd_not_allowed' });
-    expect(await routes.invoke('git/graph', { cwd: outside })).toEqual({ ok: false, reason: 'cwd_not_allowed' });
+    expect(await routes.invoke('git/branches', { cwd: outside })).toEqual({ ok: false, error: { kind: 'cwd_not_allowed' } });
+    expect(await routes.invoke('git/checkout', { cwd: outside, branch: 'dev' })).toEqual({ ok: false, error: { kind: 'cwd_not_allowed' } });
+    expect(await routes.invoke('git/graph', { cwd: outside })).toEqual({ ok: false, error: { kind: 'cwd_not_allowed' } });
     expect(calls).toEqual([]);
     expect(graphCalls).toEqual([]);
     rmSync(work, { recursive: true, force: true });
@@ -126,10 +126,10 @@ describe('git 路由（fake git 注入）', () => {
 
   test('git/checkout 成功透传 branch 并记 audit；失败原因（脏工作区）原样透传', async () => {
     const work = mkdtempSync(join(tmpdir(), 'pai-git-route-'));
-    const { git, calls } = makeFakeGit({ ok: true, data: { isRepo: true, current: 'main', branches: ['dev', 'main'], dirtyFiles: 0 } }, { ok: false, reason: 'dirty_worktree' });
+    const { git, calls } = makeFakeGit({ ok: true, data: { isRepo: true, current: 'main', branches: ['dev', 'main'], dirtyFiles: 0 } }, { ok: false, error: { kind: 'dirty_worktree' } });
     const { graph, invalidations } = makeFakeGraph({ ok: true, data: { isRepo: true, commits: [], truncated: false } });
     const { routes, audits, project } = makeRoutes(work, git, graph);
-    expect(await routes.invoke('git/checkout', { cwd: project, branch: 'dev' })).toEqual({ ok: false, reason: 'dirty_worktree' });
+    expect(await routes.invoke('git/checkout', { cwd: project, branch: 'dev' })).toEqual({ ok: false, error: { kind: 'dirty_worktree' } });
     expect(calls).toEqual([`checkout:${project}:dev:false`]);
     expect(audits).toContain(`git_checkout:${project}:dev:switch`);
     // 失败不变更 HEAD：图谱缓存不失效
@@ -139,9 +139,9 @@ describe('git 路由（fake git 注入）', () => {
 
   test('create=true 透传并记 create audit；git 不可用透传 git_unavailable', async () => {
     const work = mkdtempSync(join(tmpdir(), 'pai-git-route-'));
-    const { git, calls } = makeFakeGit({ ok: false, reason: 'git_unavailable' }, { ok: true, data: { branch: 'feat/x' } });
+    const { git, calls } = makeFakeGit({ ok: false, error: { kind: 'git_unavailable' } }, { ok: true, data: { branch: 'feat/x' } });
     const { routes, audits, project } = makeRoutes(work, git);
-    expect(await routes.invoke('git/branches', { cwd: project })).toEqual({ ok: false, reason: 'git_unavailable' });
+    expect(await routes.invoke('git/branches', { cwd: project })).toEqual({ ok: false, error: { kind: 'git_unavailable' } });
     expect(await routes.invoke('git/checkout', { cwd: project, branch: 'feat/x', create: true })).toEqual({
       ok: true,
       data: { branch: 'feat/x' },
@@ -204,7 +204,7 @@ describe('git 路由 × 真 git（隔离世界）', () => {
       data: { isRepo: true, current: 'main', branches: ['dev', 'main'], dirtyFiles: 0 },
     });
     // outside 不在白名单 → 门禁先拦（这是安全面，不是 git 面）
-    expect(await routes.invoke('git/branches', { cwd: outside })).toEqual({ ok: false, reason: 'cwd_not_allowed' });
+    expect(await routes.invoke('git/branches', { cwd: outside })).toEqual({ ok: false, error: { kind: 'cwd_not_allowed' } });
   });
 
   test('切换成功：当前分支真变为 dev；创建并检出后新分支出现', async () => {
@@ -221,7 +221,7 @@ describe('git 路由 × 真 git（隔离世界）', () => {
     // 同名再创建 → branch_exists（不静默覆盖）
     expect(await routes.invoke('git/checkout', { cwd: repo, branch: 'feat/new', create: true })).toEqual({
       ok: false,
-      reason: 'branch_exists',
+      error: { kind: 'branch_exists' },
     });
   });
 
@@ -239,15 +239,15 @@ describe('git 路由 × 真 git（隔离世界）', () => {
       expect(listed.data.branches).not.toContain('-f');
       expect(listed.data.branches).not.toContain('--detach');
     }
-    expect(await routes.invoke('git/checkout', { cwd: repo, branch: '--detach' })).toEqual({ ok: false, reason: 'invalid_branch' });
-    expect(await routes.invoke('git/checkout', { cwd: repo, branch: '-f' })).toEqual({ ok: false, reason: 'invalid_branch' });
+    expect(await routes.invoke('git/checkout', { cwd: repo, branch: '--detach' })).toEqual({ ok: false, error: { kind: 'invalid_branch' } });
+    expect(await routes.invoke('git/checkout', { cwd: repo, branch: '-f' })).toEqual({ ok: false, error: { kind: 'invalid_branch' } });
     expect(execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: repo }).toString().trim()).not.toBe('HEAD');
   });
 
   test('脏工作区拒绝切换：改动未被 checkout 丢掉（业务终态）', async () => {
     git('checkout', 'main');
     writeFileSync(join(repo, 'tracked.txt'), 'dirty\n');
-    expect(await routes.invoke('git/checkout', { cwd: repo, branch: 'dev' })).toEqual({ ok: false, reason: 'dirty_worktree' });
+    expect(await routes.invoke('git/checkout', { cwd: repo, branch: 'dev' })).toEqual({ ok: false, error: { kind: 'dirty_worktree' } });
     expect(execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: repo }).toString().trim()).toBe('main');
     // 收尾：恢复干净工作区（同一隔离世界内后续断言依赖）
     git('checkout', '--', 'tracked.txt');

@@ -24,7 +24,7 @@ export function createBridgeClient(bridge: PreloadBridgeShape | undefined): Brid
       return bridge !== undefined;
     },
     async invoke<M extends ApiMethod>(method: M, params: ApiParams<M>): Promise<ApiOutcome<M>> {
-      if (bridge === undefined) return { ok: false, reason: 'bridge_unavailable' };
+      if (bridge === undefined) return { ok: false, error: { kind: 'transient', face: 'bridge_unavailable' } };
       return (await bridge.invoke(method, params)) as ApiOutcome<M>;
     },
     subscribe(onEvent: (event: unknown) => void): () => void {

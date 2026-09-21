@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 
 import { ApiSchemas, type UiEvent } from '@paiapp/contracts';
+import { appError } from '@paiapp/api';
 
 import { createApiRoutes } from './api-routes';
 import { createAgentDefinitionsStore } from './agent-definitions-store';
@@ -235,13 +236,13 @@ void app.whenReady().then(async () => {
 
   ipcMain.handle('pai:invoke', (_event, payload: unknown) => {
     if (typeof payload !== 'object' || payload === null) {
-      return { ok: false, reason: 'invalid_payload' };
+      return { ok: false, error: appError('invalid_payload') };
     }
     const { method, params } = payload as { method?: unknown; params?: unknown };
     if (typeof method !== 'string' || !(method in ApiSchemas)) {
-      return { ok: false, reason: `unknown_method:${String(method)}` };
+      return { ok: false, error: appError('unknown_method', String(method)) };
     }
-    if (routes === null) return { ok: false, reason: 'host_unavailable' };
+    if (routes === null) return { ok: false, error: { kind: 'transient', face: 'host_unavailable' } };
     return routes.invoke(method, params ?? {});
   });
 

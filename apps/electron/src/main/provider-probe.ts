@@ -1,10 +1,12 @@
+import { appError, type ApiError } from '@paiapp/api';
+
 /**
  * provider 连接探活：主进程按渠道的 API 格式直发最小请求（1 token / ping 文本）。
  * 不经 hub、不落任何状态；key 只从 keyStore 取，只出现在请求头或 query，不进日志与错误信息。
  * 并发预算：同 provider 同模型单飞（复用在途 Promise）；全局在途上限 3，超出直接 busy；单次 10s 超时。
  */
 
-export type ProbeOutcome = { ok: true; latencyMs: number } | { ok: false; reason: string };
+export type ProbeOutcome = { ok: true; latencyMs: number } | { ok: false; error: ApiError };
 
 export interface ProviderProbeDeps {
   getProvider(
@@ -88,16 +90,16 @@ export function createProviderProbe(deps: ProviderProbeDeps) {
 
   const run = async (name: string, modelId: string | undefined): Promise<ProbeOutcome> => {
     const provider = deps.getProvider(name);
-    if (provider === undefined) return { ok: false, reason: "provider_not_found" };
-    if (provider.models.length === 0) return { ok: false, reason: "no_models" };
-    if (!supportsProbe(provider.api)) return { ok: false, reason: "unsupported_api" };
+    if (provider === undefined) return { ok: false, error: appError('invalid_params', 'provider_not_found') };
+    if (provider.models.length === 0) return { ok: false, error: appError('invalid_params', 'no_models') };
+    if (!supportsProbe(provider.api)) return { ok: false, error: appError('invalid_params', 'unsupported_api') };
     // 显式指定的模型必须已落渠道（编辑页未保存的模型探不到 key/baseUrl，先保存再测）
     if (modelId !== undefined && !provider.models.some((model) => model.id === modelId)) {
-      return { ok: false, reason: "model_not_in_channel" };
+      return { ok: false, error: appError('invalid_params', 'model_not_in_channel') };
     }
     const key = deps.getKey(name);
-    if (key === null) return { ok: false, reason: "key_missing" };
-    if (activeCount >= PROBE_MAX_CONCURRENT) return { ok: false, reason: "busy" };
+    if (key === null) return { ok: false, error: appError('invalid_params', 'key_missing') };
+    if (activeCount >= PROBE_MAX_CONCURRENT) return { ok: false, error: { kind: 'transient', face: 'busy' } };
 
     const target = buildProbeRequest({
       baseUrl: provider.baseUrl,
@@ -105,7 +107,7 @@ export function createProviderProbe(deps: ProviderProbeDeps) {
       modelId: modelId ?? provider.models[0]?.id ?? "",
       apiKey: key,
     });
-    if (target === null) return { ok: false, reason: "unsupported_api" };
+    if (target === null) return { ok: false, error: appError('invalid_params', 'unsupported_api') };
 
     activeCount += 1;
     const startedAt = Date.now();
@@ -118,13 +120,13 @@ export function createProviderProbe(deps: ProviderProbeDeps) {
       });
       // 成败两路径都排空响应体，避免错误响应占住连接池 socket
       await response.arrayBuffer().catch(() => undefined);
-      if (!response.ok) return { ok: false, reason: `http_${response.status}` };
+      if (!response.ok) return { ok: false, error: { kind: 'transient', face: 'command_failed', message: `http_${response.status}` } };
       return { ok: true, latencyMs: Date.now() - startedAt };
     } catch (error) {
       const errorName = error instanceof Error ? error.name : "";
       if (errorName === "TimeoutError" || errorName === "AbortError")
-        return { ok: false, reason: "timeout" };
-      return { ok: false, reason: "network_error" };
+        return { ok: false, error: { kind: 'transient', face: 'timeout' } };
+      return { ok: false, error: { kind: 'transient', face: 'command_failed', message: 'network_error' } };
     } finally {
       activeCount -= 1;
     }

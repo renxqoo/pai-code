@@ -1,12 +1,13 @@
-import type { ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
-
+import type { ApiError, ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
 import type { SessionRow } from '@paiapp/contracts';
+import { appError } from '@paiapp/api';
+
 import type { PaiRuntime } from './pai-runtime';
 
 /**
  * 会话恢复/纳管路由组（api-routes 的 resume/register 子集）：路径白名单、trusted
  * 补全、already-open 收养（thread/list 按 path 回落——T38 实施期缺陷的回归锁定）、
- * 删行正则族与元数据补齐。
+ * 删行 kind 族与元数据补齐。
  */
 
 type Handler<M extends ApiMethod> = (params: ApiParams<M>) => Promise<ApiOutcome<M>>;
@@ -15,9 +16,12 @@ type Command = Parameters<PaiRuntime['host']['request']>[0];
 
 type RegistryRow = SessionRow | null;
 
+/** 删行族：会话文件不可读/属旧布局/路径逃逸/状态冲突——占位不再反复失败（与对账同语义）。 */
+const VANISH_ERROR_KINDS: ReadonlySet<string> = new Set(['session_unreadable', 'io_failed', 'path_forbidden', 'state_conflict']);
+
 export function resumeRoutes(deps: {
-  command: (cmd: Command, timeoutMs?: number) => Promise<{ ok: true; data: unknown } | { ok: false; reason: string }>;
-  fail: (reason: string) => { ok: false; reason: string };
+  command: (cmd: Command, timeoutMs?: number) => Promise<{ ok: true; data: unknown } | { ok: false; error: ApiError }>;
+  fail: (error: ApiError) => { ok: false; error: ApiError };
   runtime: PaiRuntime;
   audit: (message: string) => void;
   insideSessionsRoot: (sessionPath: string) => boolean;
@@ -74,7 +78,7 @@ export function resumeRoutes(deps: {
   return {
     'session/resume': async (params) => {
       // 路径白名单：只允许恢复本应用 agentDir/sessions 下的会话文件（防被攻陷渲染层任意读）
-      if (!insideSessionsRoot(params.sessionPath)) return fail('session_path_forbidden');
+      if (!insideSessionsRoot(params.sessionPath)) return fail(appError('session_path_forbidden'));
       // hub 协议 resume 缺省 trusted=false：不传时按注册表记录补全（同文件重开保持既有信任态）
       const known = findRegistryRowByPath(params.sessionPath);
       const trusted = params.trusted ?? known?.trusted ?? false;
@@ -87,7 +91,7 @@ export function resumeRoutes(deps: {
         ...(params.thinkingLevel !== undefined ? { thinkingLevel: params.thinkingLevel } : {}),
       });
       if (!result.ok) {
-        if (/already open/.test(result.reason)) {
+        if (result.error.kind === 'already_open') {
           // hub 表内已有该会话的表项（retire 后 parked / 他方 live）——resume-by-path
           // 对占用路径按设计拒绝；唤醒语义 = 按 threadId 的驱动命令自动唤醒。
           // 从 thread/list 按 path 收养既有表项，恢复链路继续。
@@ -97,33 +101,32 @@ export function resumeRoutes(deps: {
           }
         }
         // 会话文件被删或属旧 pai 布局（hub 词法拒绝）：与对账同语义删行，
-        // 占位不再反复失败（hub 错误族：not found / no such / outside sessions dir /
-        // malformed layout / cannot resume）
-        if (known !== null && /not found|no such|outside sessions dir|malformed layout|cannot resume/i.test(result.reason)) {
+        // 占位不再反复失败（hub 错误族见 VANISH_ERROR_KINDS）
+        if (known !== null && VANISH_ERROR_KINDS.has(result.error.kind)) {
           runtime.removeSession(known.threadId);
         }
-        return fail(result.reason);
+        return fail(result.error);
       }
       const data = result.data as { threadId?: string; cwd?: string; sessionPath?: string | null };
       const threadId = data.threadId ?? '';
-      if (threadId.length === 0) return fail('malformed_response');
+      if (threadId.length === 0) return fail(appError('malformed_response'));
       return finishResume(threadId, data.cwd ?? known?.cwd ?? '', data.sessionPath ?? params.sessionPath, known);
     },
     'session/register': async (params) => {
       // 白名单/trusted 补全同 resume。纳管 ≠ 激活：视图保持 parked 占位零副作用；会话头
       // id 与注册表行分歧（外部改写怪态）不落表不换行，交水化失败面显式暴露
-      if (!insideSessionsRoot(params.sessionPath)) return fail('session_path_forbidden');
+      if (!insideSessionsRoot(params.sessionPath)) return fail(appError('session_path_forbidden'));
       const known = findRegistryRowByPath(params.sessionPath);
-      if (known === null) return fail('unknown_session');
+      if (known === null) return fail(appError('unknown_session'));
       if (known.trusted === true) audit(`session_trusted:register:${params.sessionPath}:true`);
       const result = await command({ type: 'thread/register', sessionPath: params.sessionPath, trusted: known.trusted ?? false });
       // 文件已删（对账之后失效）：与 resume 同语义删行，占位不再反复失败
-      if (!result.ok && /not found|no such|not readable|outside sessions dir|malformed layout|cannot resume/i.test(result.reason)) runtime.removeSession(known.threadId);
-      if (!result.ok) return fail(result.reason);
+      if (!result.ok && VANISH_ERROR_KINDS.has(result.error.kind)) runtime.removeSession(known.threadId);
+      if (!result.ok) return fail(result.error);
       const threadId = (result.data as { threadId?: string }).threadId ?? '';
-      if (threadId !== known.threadId) return fail('thread_id_mismatch');
+      if (threadId !== known.threadId) return fail(appError('thread_id_mismatch'));
       const existing = runtime.sessions().find((row) => row.threadId === known.threadId);
-      return existing === undefined ? fail('unknown_session') : { ok: true as const, data: existing };
+      return existing === undefined ? fail(appError('unknown_session')) : { ok: true as const, data: existing };
     },
   };
 }

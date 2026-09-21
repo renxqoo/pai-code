@@ -59,21 +59,21 @@ describe('createFileRead（真实 fs 隔离世界）', () => {
   });
 
   test('不存在 → not_found；目录 → invalid_path；cwd 缺失 → cwd_not_found', () => {
-    expect(reader.read(project, 'missing.ts')).toEqual({ ok: false, reason: 'not_found' });
-    expect(reader.read(project, 'src')).toEqual({ ok: false, reason: 'invalid_path' });
-    expect(reader.read(join(work, 'no-such-dir'), 'a.txt')).toEqual({ ok: false, reason: 'cwd_not_found' });
+    expect(reader.read(project, 'missing.ts')).toEqual({ ok: false, error: { kind: 'io_failed', message: 'not_found' } });
+    expect(reader.read(project, 'src')).toEqual({ ok: false, error: { kind: 'invalid_params', message: 'invalid_path' } });
+    expect(reader.read(join(work, 'no-such-dir'), 'a.txt')).toEqual({ ok: false, error: { kind: 'cwd_not_found' } });
   });
 
   test('符号链接逃逸 → path_forbidden', () => {
     mkdirSync(outside, { recursive: true });
     writeFileSync(join(outside, 'secret.txt'), 'outside\n');
     symlinkSync(join(outside, 'secret.txt'), join(project, 'leak.txt'));
-    expect(reader.read(project, 'leak.txt')).toEqual({ ok: false, reason: 'path_forbidden' });
+    expect(reader.read(project, 'leak.txt')).toEqual({ ok: false, error: { kind: 'path_forbidden', message: 'path_forbidden' } });
   });
 
   test('二进制 → binary_file', () => {
     writeFileSync(join(project, 'blob.bin'), Buffer.from([0x00, 0x01, 0x02]));
-    expect(reader.read(project, 'blob.bin')).toEqual({ ok: false, reason: 'binary_file' });
+    expect(reader.read(project, 'blob.bin')).toEqual({ ok: false, error: { kind: 'invalid_params', message: 'binary_file' } });
   });
 
   test('超过 2MiB 截断：size=真实值、truncated=true、内容=前 2MiB', () => {

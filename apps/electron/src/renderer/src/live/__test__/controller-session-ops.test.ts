@@ -1,13 +1,16 @@
 import { expect, test } from 'bun:test';
 
+import type { ApiError } from '@paiapp/contracts';
+
 import { createLiveController } from '../live-controller';
 import { createLiveStore } from '../store';
 import type { BridgeClient } from '../client-invoke';
 import { copy } from '@/strings';
+import { errorText } from '@/lib/error-text';
 
 /** 会话级操作（compact / rename / thinking）的命令透传与失败原因表驱动回归。 */
 
-type Outcome = { ok: true; data: unknown } | { ok: false; reason: string };
+type Outcome = { ok: true; data: unknown } | { ok: false; error: ApiError };
 
 function makeClient(
   results: Record<string, Outcome>,
@@ -40,7 +43,7 @@ test('renameSession 成功返回 true 并发送 trim 后的名字', async () => 
 });
 
 test('renameSession 失败返回 false（不发通知，通知由 hook 层负责）', async () => {
-  const client = makeClient({ 'session/setName': { ok: false, reason: 'not_found' } });
+  const client = makeClient({ 'session/setName': { ok: false, error: { kind: 'unknown_thread' } } });
   const controller = createLiveController(client, createLiveStore());
   expect(await controller.renameSession('t1', 'x')).toBe(false);
 });
@@ -170,17 +173,18 @@ test('selectThinking 词表外值：本地拒绝不发命令，thinkingInvalid �
   expect(store.getState().notices.map((notice) => notice.text)).toEqual([copy.flow.thinkingInvalid]);
 });
 
-test('症状回归「思考档被 hub 拒绝但 UI 无反馈」：失败 reason 进通知条（thinkingRejected）', async () => {
-  const client = makeClient({ 'session/setThinking': { ok: false, reason: 'level not supported by model' } });
+test('症状回归「思考档被 hub 拒绝但 UI 无反馈」：失败 errorText 进通知条（thinkingRejected）', async () => {
+  const failure: ApiError = { kind: 'capability_thinking', message: 'level not supported by model' };
+  const client = makeClient({ 'session/setThinking': { ok: false, error: failure } });
   const store = createLiveStore();
   await createLiveController(client, store).selectThinking('t1', 'high');
-  expect(store.getState().notices.map((notice) => notice.text)).toEqual([copy.flow.thinkingRejected('level not supported by model')]);
+  expect(store.getState().notices.map((notice) => notice.text)).toEqual([copy.flow.thinkingRejected(errorText(failure))]);
 });
 
 test('forkSession 失败带原因不切会话（hub 拒绝原因交上层文案分派）', async () => {
-  const client = makeClient({ 'session/fork': { ok: false, reason: 'thread is streaming' } });
+  const client = makeClient({ 'session/fork': { ok: false, error: { kind: 'streaming_window', message: 'thread is streaming' } } });
   const store = createLiveStore();
-  expect(await createLiveController(client, store).forkSession('t1', 9)).toEqual({ ok: false, reason: 'thread is streaming' });
+  expect(await createLiveController(client, store).forkSession('t1', 9)).toEqual({ ok: false, reason: 'streaming_window' });
   expect(store.getState().activeThreadId).toBeNull();
 });
 
@@ -204,11 +208,12 @@ test('症状回归「思考档未应用：invalid_params」：空舞台（无活
 });
 
 test('selectModel hub 拒绝：模型未切换通知（选择未生效可见，与思考档同型）', async () => {
-  const client = makeClient({ 'session/setModel': { ok: false, reason: 'unknown model' } });
+  const failure: ApiError = { kind: 'model_unavailable', message: 'unknown model' };
+  const client = makeClient({ 'session/setModel': { ok: false, error: failure } });
   const store = createLiveStore();
   await createLiveController(client, store).selectModel('t1', 'glm', 'glm-4.7');
   expect(client.calls).toContainEqual({ method: 'session/setModel', params: { threadId: 't1', provider: 'glm', modelId: 'glm-4.7' } });
-  expect(store.getState().notices.map((notice) => notice.text)).toEqual([copy.flow.modelRejected('unknown model')]);
+  expect(store.getState().notices.map((notice) => notice.text)).toEqual([copy.flow.modelRejected(errorText(failure))]);
 });
 
 test('selectModel 成功：命令透传、无通知', async () => {
@@ -249,9 +254,9 @@ function seedLiveSession(threadId: string, sessionPath: string | null): ReturnTy
   return store;
 }
 
-test('症状回归「消息未发送（Unknown threadId）」：僵尸视图自愈——按会话文件强制重锚后以新 id 重投一次', async () => {
+test('症状回归「消息未发送（unknown_thread）」：僵尸视图自愈——按会话文件强制重锚后以新 id 重投一次', async () => {
   const client = makeZombieClient(
-    [{ ok: false, reason: 'Unknown threadId' }, { ok: true, data: null }],
+    [{ ok: false, error: { kind: 'unknown_thread', message: 'Unknown threadId' } }, { ok: true, data: null }],
     { ok: true, data: { threadId: 't2' } },
   );
   const store = seedLiveSession('t1', '/s/t1/events.jsonl');
@@ -262,14 +267,14 @@ test('症状回归「消息未发送（Unknown threadId）」：僵尸视图自�
   expect(store.getState().activeThreadId).toBe('t2');
 });
 
-test('自愈重锚失败/无会话文件：按原 reason 上抛（不无限重试、不发无用 resume）', async () => {
-  const failedResume = makeZombieClient([{ ok: false, reason: 'Unknown threadId' }], { ok: false, reason: 'resume busy' });
+test('自愈重锚失败/无会话文件：按原 kind 上抛（不无限重试、不发无用 resume）', async () => {
+  const failedResume = makeZombieClient([{ ok: false, error: { kind: 'unknown_thread', message: 'Unknown threadId' } }], { ok: false, error: { kind: 'transient', face: 'busy' } });
   const failedStore = seedLiveSession('t1', '/s/t1/events.jsonl');
-  expect(await createLiveController(failedResume, failedStore).submitDraft('t1', '你好')).toBe('Unknown threadId');
+  expect(await createLiveController(failedResume, failedStore).submitDraft('t1', '你好')).toBe('unknown_thread');
   expect(failedResume.calls.filter((call) => call.method === 'session/prompt')).toHaveLength(1);
 
-  const noPath = makeZombieClient([{ ok: false, reason: 'Unknown threadId' }], { ok: true, data: { threadId: 't2' } });
+  const noPath = makeZombieClient([{ ok: false, error: { kind: 'unknown_thread', message: 'Unknown threadId' } }], { ok: true, data: { threadId: 't2' } });
   const noPathStore = seedLiveSession('t1', null);
-  expect(await createLiveController(noPath, noPathStore).submitDraft('t1', '你好')).toBe('Unknown threadId');
+  expect(await createLiveController(noPath, noPathStore).submitDraft('t1', '你好')).toBe('unknown_thread');
   expect(noPath.calls.some((call) => call.method === 'session/resume')).toBe(false);
 });

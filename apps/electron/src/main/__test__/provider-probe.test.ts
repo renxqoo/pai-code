@@ -90,9 +90,9 @@ function makeHarness() {
 test("未知 provider → provider_not_found；缺 key → key_missing；空模型 → no_models（不发请求）", async () => {
   const h = makeHarness();
   const probe = createProviderProbe(h.deps);
-  expect(await probe.probe("ghost")).toEqual({ ok: false, reason: "provider_not_found" });
-  expect(await probe.probe("nokey")).toEqual({ ok: false, reason: "key_missing" });
-  expect(await probe.probe("nomodels")).toEqual({ ok: false, reason: "no_models" });
+  expect(await probe.probe("ghost")).toEqual({ ok: false, error: { kind: "invalid_params", message: "provider_not_found" } });
+  expect(await probe.probe("nokey")).toEqual({ ok: false, error: { kind: "invalid_params", message: "key_missing" } });
+  expect(await probe.probe("nomodels")).toEqual({ ok: false, error: { kind: "invalid_params", message: "no_models" } });
   expect(h.calls).toEqual([]);
 });
 
@@ -100,7 +100,7 @@ test("非词表 API 格式 → unsupported_api（不发请求，不假装连通�
   const h = makeHarness();
   expect(await createProviderProbe(h.deps).probe("private")).toEqual({
     ok: false,
-    reason: "unsupported_api",
+    error: { kind: "invalid_params", message: "unsupported_api" },
   });
   expect(h.calls).toEqual([]);
   expect(supportsProbe("pi-messages")).toBe(false);
@@ -186,7 +186,7 @@ test("指定模型不在渠道模型清单 → model_not_in_channel（不发请�
   const h = makeHarness();
   expect(await createProviderProbe(h.deps).probe("multi", "unsaved-m")).toEqual({
     ok: false,
-    reason: "model_not_in_channel",
+    error: { kind: "invalid_params", message: "model_not_in_channel" },
   });
   expect(h.calls).toEqual([]);
 });
@@ -221,10 +221,10 @@ test("同 provider 不同模型不共享单飞（并发各发一次）；同 pro
 test.each([
   [401, "http_401"],
   [500, "http_500"],
-])("HTTP %d → %s", async (status: number, reason: string) => {
+])("HTTP %d → %s", async (status: number, token: string) => {
   const h = makeHarness();
   h.respond(() => new Response("nope", { status }));
-  expect(await createProviderProbe(h.deps).probe("glm")).toEqual({ ok: false, reason });
+  expect(await createProviderProbe(h.deps).probe("glm")).toEqual({ ok: false, error: { kind: "transient", face: "command_failed", message: token } });
 });
 
 test("网络异常 → network_error；超时类异常 → timeout", async () => {
@@ -234,7 +234,7 @@ test("网络异常 → network_error；超时类异常 → timeout", async () =>
   });
   expect(await createProviderProbe(network.deps).probe("glm")).toEqual({
     ok: false,
-    reason: "network_error",
+    error: { kind: "transient", face: "command_failed", message: "network_error" },
   });
 
   const timedOut = makeHarness();
@@ -245,7 +245,7 @@ test("网络异常 → network_error；超时类异常 → timeout", async () =>
   });
   expect(await createProviderProbe(timedOut.deps).probe("glm")).toEqual({
     ok: false,
-    reason: "timeout",
+    error: { kind: "transient", face: "timeout" },
   });
 });
 
@@ -313,7 +313,7 @@ test("全局在途上限 3：第 4 个不同 provider 直接 busy", async () => 
   h.addProvider("d");
   const probe = createProviderProbe(h.deps);
   const pending = [probe.probe("a"), probe.probe("b"), probe.probe("c")];
-  expect(await probe.probe("d")).toEqual({ ok: false, reason: "busy" });
+  expect(await probe.probe("d")).toEqual({ ok: false, error: { kind: "transient", face: "busy" } });
   for (const release of releases) release();
   const outcomes = await Promise.all(pending);
   expect(outcomes.every((outcome) => outcome.ok)).toBe(true);

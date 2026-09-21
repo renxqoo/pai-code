@@ -1,8 +1,10 @@
-import type { ApiMethod, ApiOutcome, ApiParams, ProviderConfigView, SkillView } from '@paiapp/contracts';
+import type { ApiError, ApiMethod, ApiOutcome, ApiParams, ProviderConfigView, SkillView } from '@paiapp/contracts';
 import { isApiFormat, normalizeLegacyPermMode } from '@paiapp/contracts';
+import { appError } from '@paiapp/api';
 
 import { HUB_API_FORMATS, envVarNameForProvider } from './models-config';
 import { createProviderProbe } from './provider-probe';
+import { errorLogToken } from './error-log-token';
 import type { createFileSettings, ProviderKeyStore } from './file-settings';
 
 /**
@@ -23,7 +25,7 @@ export type SettingsCommand = (
     | { type: 'settings/get' }
     | { type: 'settings/set'; key: string; value: unknown }
     | { type: 'get_models' },
-) => Promise<{ ok: true; data: unknown } | { ok: false; reason: string }>;
+) => Promise<{ ok: true; data: unknown } | { ok: false; error: ApiError }>;
 
 export type SettingsRoutesDeps = {
   settings: FileSettings;
@@ -37,9 +39,9 @@ export type SettingsRoutesDeps = {
 };
 
 export function createSettingsRoutes(deps: SettingsRoutesDeps) {
-  const failLogged = (reason: string): Promise<{ ok: false; reason: string }> => {
-    deps.onReject?.(`provider_route_rejected:${reason}`);
-    return Promise.resolve({ ok: false, reason });
+  const failLogged = (error: ApiError): Promise<{ ok: false; error: ApiError }> => {
+    deps.onReject?.(`provider_route_rejected:${errorLogToken(error)}`);
+    return Promise.resolve({ ok: false, error });
   };
   const fail = failLogged;
 
@@ -104,7 +106,7 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
     'skills/list': async () => ({ ok: true as const, data: await skillsList() }),
     'skills/setEnabled': async (params) => {
       const result = await deps.command({ type: 'skills/set_enabled', name: params.name, enabled: params.enabled });
-      if (!result.ok) return fail(result.reason);
+      if (!result.ok) return fail(result.error);
       return { ok: true as const, data: await skillsList() };
     },
     'provider/upsert': async (params) => {
@@ -113,12 +115,12 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
       const collides = deps.settings
         .listProviders()
         .some((provider) => provider.name !== params.name && envVarNameForProvider(provider.name) === envName);
-      if (collides) return failLogged('provider_name_conflict');
+      if (collides) return failLogged(appError('invalid_params', 'provider_name_conflict'));
       // api 词表校验（providers.json protocol 同源：词表外语形写盘会被目录剔除降级）
-      if (!isApiFormat(params.api)) return failLogged('provider_api_unsupported');
+      if (!isApiFormat(params.api)) return failLogged(appError('invalid_params', 'provider_api_unsupported'));
       // baseUrl 形状校验（无 scheme 的档案被目录整档剔除且零告警——写前显式拒绝）
       if (!params.baseUrl.startsWith('http://') && !params.baseUrl.startsWith('https://')) {
-        return failLogged('provider_baseurl_invalid');
+        return failLogged(appError('invalid_params', 'provider_baseurl_invalid'));
       }
       // 同名内置预设 = 用户覆盖（x-harness 整档覆盖语义 + 消歧 custom 优先）：用户
       // 配置胜出、删渠道即恢复内置——不再拒名（T39 实施轮用户裁决：app 无「预设挡人」面）
@@ -141,11 +143,11 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
       const outcome = await probe.probe(params.name, params.modelId);
       return outcome.ok
         ? { ok: true as const, data: { latencyMs: outcome.latencyMs } }
-        : fail(outcome.reason);
+        : fail(outcome.error);
     },
     'app/hubSettings': async () => {
       const result = await deps.command({ type: 'settings/get' });
-      if (!result.ok) return fail(result.reason);
+      if (!result.ok) return fail(result.error);
       const values = (result.data as { values?: Record<string, unknown> }).values ?? {};
       const mode = values['permission.defaultMode'];
       const thinking = values['thinking.default'];
@@ -170,7 +172,7 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
           key: 'permission.defaultMode',
           value: params.permissionDefaultMode,
         });
-        if (!result.ok) return fail(result.reason);
+        if (!result.ok) return fail(result.error);
       }
       if (params.thinkingDefault !== undefined && params.thinkingDefault !== null) {
         const result = await deps.command({
@@ -178,7 +180,7 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
           key: 'thinking.default',
           value: params.thinkingDefault,
         });
-        if (!result.ok) return fail(result.reason);
+        if (!result.ok) return fail(result.error);
       }
       return { ok: true as const, data: null };
     },

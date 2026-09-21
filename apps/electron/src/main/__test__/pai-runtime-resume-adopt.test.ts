@@ -110,7 +110,7 @@ describe('session/resume 撞 already open（parked 懒恢复回落）', () => {
     const work = mkdtempSync(join(tmpdir(), 'pai-resume-adopt-'));
     const sessionPath = sessionFileOf(work, 'a');
     const { runtime, routes, sent, events } = makeRoutes(work, (cmd) => {
-      if (cmd.type === 'thread/resume') return { ok: false, error: 'Session already open: t1' };
+      if (cmd.type === 'thread/resume') return { ok: false, error: { code: 'already_open', message: 'Session already open: t1' } };
       if (cmd.type === 'thread/list') {
         // hub 表内既有表项（retire 后 parked）：顶层数组形状
         return { ok: true, data: [{ threadId: 't1', cwd: '/w/proj', sessionPath, state: 'parked' }] };
@@ -139,7 +139,7 @@ describe('session/resume 撞 already open（parked 懒恢复回落）', () => {
     const work = mkdtempSync(join(tmpdir(), 'pai-resume-adopt-reid-'));
     const sessionPath = sessionFileOf(work, 'a');
     const { runtime, routes, events } = makeRoutes(work, (cmd) => {
-      if (cmd.type === 'thread/resume') return { ok: false, error: 'Session already open: t9' };
+      if (cmd.type === 'thread/resume') return { ok: false, error: { code: 'already_open', message: 'Session already open: t9' } };
       if (cmd.type === 'thread/list') {
         return { ok: true, data: [{ threadId: 't9', cwd: '/w/proj', sessionPath, state: 'parked' }] };
       }
@@ -163,16 +163,16 @@ describe('session/resume 撞 already open（parked 懒恢复回落）', () => {
     const work = mkdtempSync(join(tmpdir(), 'pai-resume-adopt-miss-'));
     const sessionPath = sessionFileOf(work, 'a');
     const { runtime, routes } = makeRoutes(work, (cmd) => {
-      if (cmd.type === 'thread/resume') return { ok: false, error: 'Session already open: t-other' };
+      if (cmd.type === 'thread/resume') return { ok: false, error: { code: 'already_open', message: 'Session already open: t-other' } };
       if (cmd.type === 'thread/list') return { ok: true, data: [{ threadId: 't-other', cwd: '/w', sessionPath: '/elsewhere.jsonl', state: 'live' }] };
       return { ok: true, data: {} };
     });
     await runtime.start();
     seedRow(runtime, { threadId: 't1', sessionPath, cwd: '/w/proj', title: '休眠会话' });
 
-    const outcome = (await routes.invoke('session/resume', { sessionPath })) as { ok: boolean; reason?: string };
+    const outcome = (await routes.invoke('session/resume', { sessionPath })) as { ok: boolean; error?: { kind: string; message?: string } };
 
-    expect(outcome).toEqual({ ok: false, reason: 'Session already open: t-other' });
+    expect(outcome).toEqual({ ok: false, error: { kind: 'already_open', message: 'Session already open: t-other' } });
     // 行保留（占位可重试）
     expect(runtime.registry.get('t1')?.sessionPath).toBe(sessionPath);
   });

@@ -2,6 +2,7 @@ import type { AgentDefinition, CommandView, ImagePayload, PreferencesView, Provi
 import { isSettableThinkingLevel } from '@paiapp/contracts';
 
 import { copy } from '@/strings';
+import { errorText } from '@/lib/error-text';
 import { queuedDrafts } from '@/composer/queued-drafts';
 import type { BridgeClient } from './client-invoke';
 import { createRuntimeController } from './runtime-controller';
@@ -213,11 +214,11 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       try {
         outcome = await client.invoke('app/bootstrap', {});
       } catch {
-        outcome = { ok: false, reason: 'bootstrap_crashed' };
+        outcome = { ok: false, error: { kind: 'bootstrap_crashed' } };
       }
       if (disposed) return;
       if (outcome !== null && !outcome.ok) {
-        store.getState().bootstrapFailed(outcome.reason);
+        store.getState().bootstrapFailed(errorText(outcome.error));
         return;
       }
       if (outcome === null) return;
@@ -266,10 +267,11 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
           ...withImages,
         });
       let outcome = await send(liveId);
-      if (!outcome.ok && outcome.reason === 'Unknown threadId') {
+      if (!outcome.ok && outcome.error.kind === 'unknown_thread') {
         // 僵尸视图自愈：视图 live 而 hub 线程表已忘掉该 id（host 代际切换窗口/换轨
-        // 在飞残留——「Unknown threadId」正是内核为陈旧 id 设计的结算信号）。
-        // 会话文件是持久真相：按路径强制重锚一次再投递；仍败按原 reason 上抛
+        // 在飞残留——unknown_thread 正是内核为陈旧 id 设计的结算信号；fork 换轨的
+        // thread_superseded 不触发自愈——防复活 fork 前状态）。
+        // 会话文件是持久真相：按路径强制重锚一次再投递；仍败按原 error 上抛
         const session = store.getState().sessions[liveId] ?? store.getState().sessions[threadId];
         const reanchored = session?.sessionPath != null ? await forceResume(session.sessionPath) : null;
         if (reanchored !== null) {
@@ -277,7 +279,9 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
           outcome = await send(reanchored);
         }
       }
-      return outcome.ok ? null : outcome.reason;
+      // 本地 reason token（empty_message/no_active_session/resume_failed）与 hub 失败
+      // 的 kind 字符串共用本通道（W2 再定型为 ApiError 判别联合）
+      return outcome.ok ? null : outcome.error.kind;
     },
     async stopActiveTurn(threadId: string): Promise<void> {
       // 空舞台守卫：无目标会话即无在飞轮次——停止天然幂等，静默返回
@@ -296,7 +300,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
           ? { thinkingLevel: input.thinkingLevel }
           : {}),
       });
-      if (!outcome.ok) return { ok: false, reason: outcome.reason };
+      if (!outcome.ok) return { ok: false, reason: errorText(outcome.error) };
       const { threadId } = outcome.data;
       activate(threadId);
       await hydrateFull(threadId).catch(() => undefined);
@@ -377,8 +381,8 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
         return;
       }
       const outcome = await client.invoke('session/setModel', { threadId, provider, modelId });
-      // hub 拒绝（如模型不在目录）：用户选择未生效，reason 通报（与思考档同型）
-      if (!outcome.ok) store.getState().pushNotice(copy.flow.modelRejected(outcome.reason));
+      // hub 拒绝（如模型不在目录）：用户选择未生效，errorText 通报（与思考档同型）
+      if (!outcome.ok) store.getState().pushNotice(copy.flow.modelRejected(errorText(outcome.error)));
     },
     async selectThinking(threadId: string, level: string): Promise<void> {
       // 空舞台守卫：无活跃会话时菜单仍可见，点击必须得到可行动反馈而非 schema 密文
@@ -392,15 +396,15 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
         return;
       }
       const outcome = await client.invoke('session/setThinking', { threadId, level });
-      // hub 拒绝（如模型不支持该档位）：用户选择未生效，reason 通报
-      if (!outcome.ok) store.getState().pushNotice(copy.flow.thinkingRejected(outcome.reason));
+      // hub 拒绝（如模型不支持该档位）：用户选择未生效，errorText 通报
+      if (!outcome.ok) store.getState().pushNotice(copy.flow.thinkingRejected(errorText(outcome.error)));
     },
     ...settingsPorts,
     async steerSubagent(threadId: string, agentId: string, message: string): Promise<string | null> {
       const text = message.trim();
       if (text.length === 0) return 'empty_message';
       const outcome = await client.invoke('subagent/steer', { threadId, agentId, message: text });
-      return outcome.ok ? null : outcome.reason;
+      return outcome.ok ? null : outcome.error.kind;
     },
     restartHost(): void {
       void client.invoke('app/restartHost', {}).then(() => undefined);
@@ -411,13 +415,13 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     },
     async upsertAgentDefinition(definition: AgentDefinition, previous: { name: string; scope: 'user' | 'project'; project: string | null } | null): Promise<string | null> {
       const outcome = await client.invoke('agent/upsert', { definition, previous });
-      if (!outcome.ok) return outcome.reason;
+      if (!outcome.ok) return errorText(outcome.error);
       await refreshAgentDefinitions();
       return null;
     },
     async removeAgentDefinition(key: { name: string; scope: 'user' | 'project'; project: string | null }): Promise<string | null> {
       const outcome = await client.invoke('agent/remove', key);
-      if (!outcome.ok) return outcome.reason;
+      if (!outcome.ok) return errorText(outcome.error);
       await refreshAgentDefinitions();
       return null;
     },
@@ -432,7 +436,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     },
     async setSkillEnabled(name: string, enabled: boolean): Promise<{ ok: true; data: SkillView[] } | { ok: false; reason: string }> {
       const outcome = await client.invoke('skills/setEnabled', { name, enabled });
-      if (!outcome.ok) return { ok: false, reason: outcome.reason };
+      if (!outcome.ok) return { ok: false, reason: errorText(outcome.error) };
       store.setState({ skills: outcome.data });
       return { ok: true, data: outcome.data };
     },
@@ -491,7 +495,8 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
         await rebuildFromTranscript(threadId, cursorBefore, {
           liveTurnPresent: () => store.getState().threads[threadId]?.streaming === true,
         }).catch(() => undefined);
-        return outcome.ok ? null : outcome.reason;
+        // 直执行失败上抛 kind 字符串（本地 token empty_command/no_active_session 同通道，W2 再定型）
+        return outcome.ok ? null : outcome.error.kind;
       } catch {
         store.getState().bashSettled(threadId);
         return 'bridge_unavailable';
@@ -507,7 +512,8 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     },
     async forkSession(threadId: string, seq: number): Promise<{ ok: true; threadId: string } | { ok: false; reason: string }> {
       const outcome = await client.invoke('session/fork', { threadId, seq, position: 'before' });
-      if (!outcome.ok) return { ok: false, reason: outcome.reason };
+      // kind 字符串通道：消费方按 kind 判定文案分支（forkStreaming ← streaming_window）
+      if (!outcome.ok) return { ok: false, reason: outcome.error.kind };
       // fork 是原地换轨：旧 id 已失效且不再有事件，运行面镜像就地终态
       store.getState().parkThread(threadId);
       activate(outcome.data.threadId);
@@ -520,7 +526,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     checkoutGitBranch: (cwd: string, branch: string, create: boolean) => checkoutGitBranch(client, cwd, branch, create),
     async upsertProvider(input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; apiKey?: string }): Promise<string | null> {
       const outcome = await client.invoke('provider/upsert', input);
-      if (!outcome.ok) return outcome.reason;
+      if (!outcome.ok) return errorText(outcome.error);
       store.setState({ providers: outcome.data });
       const models = await client.invoke('model/list', {});
       if (models.ok) store.setState({ models: models.data });
@@ -528,7 +534,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     },
     async removeProvider(name: string): Promise<string | null> {
       const outcome = await client.invoke('provider/remove', { name });
-      if (!outcome.ok) return outcome.reason;
+      if (!outcome.ok) return errorText(outcome.error);
       store.setState({ providers: outcome.data });
       const models = await client.invoke('model/list', {});
       if (models.ok) store.setState({ models: models.data });
@@ -542,7 +548,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     },
     async testProvider(name: string, modelId: string | undefined): Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }> {
       const outcome = await client.invoke('provider/test', modelId === undefined ? { name } : { name, modelId });
-      return outcome.ok ? { ok: true, latencyMs: outcome.data.latencyMs } : { ok: false, reason: outcome.reason };
+      return outcome.ok ? { ok: true, latencyMs: outcome.data.latencyMs } : { ok: false, reason: errorText(outcome.error) };
     },
     async refreshStats(threadId: string): Promise<void> {
       const outcome = await client.invoke('session/stats', { threadId });

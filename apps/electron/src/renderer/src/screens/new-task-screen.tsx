@@ -20,6 +20,7 @@ import { useGitBranches } from '@/hooks/use-git-branches';
 import { useGitGraph } from '@/hooks/use-git-graph';
 import { greetingKeyOf } from '@/lib/greeting';
 import { baseNameOf } from '@/lib/project-dirs';
+import { errorText } from '@/lib/error-text';
 import { greetingTexts, quickTaskItems } from '@/screens/new-task-view-model';
 import { CONVERSATION_COLUMN_CLASS } from '@/thread/conversation-column';
 import { copy } from '@/strings';
@@ -178,7 +179,7 @@ function NewTaskScreen({
         busyRef.current = false;
         setCheckingOut(false);
         if (!outcome.ok) {
-          onNotify(copy.branch.failed(outcome.reason));
+          onNotify(copy.branch.failed(errorText(outcome.error)));
           return;
         }
         branches.refresh();
@@ -201,7 +202,7 @@ function NewTaskScreen({
         busyRef.current = false;
         setCheckingOut(false);
         if (!outcome.ok) {
-          setBranchError(copy.branch.failed(outcome.reason));
+          setBranchError(copy.branch.failed(errorText(outcome.error)));
           return;
         }
         setDialog(null);

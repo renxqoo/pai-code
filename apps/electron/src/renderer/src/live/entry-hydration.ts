@@ -193,7 +193,7 @@ export function createReadonlyHydration(input: {
     }
     const registered = await client.invoke('session/register', { sessionPath: session.sessionPath });
     if (isDisposed()) return;
-    if (!registered.ok && /not readable|thread_id_mismatch/.test(registered.reason)) {
+    if (!registered.ok && (registered.error.kind === 'session_unreadable' || registered.error.kind === 'thread_id_mismatch')) {
       const liveId = await resumeByPath(session.sessionPath);
       if (isDisposed()) return;
       if (liveId !== null) {

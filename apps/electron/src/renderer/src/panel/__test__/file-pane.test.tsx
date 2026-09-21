@@ -26,10 +26,15 @@ describe('isMarkdownPath / fileLanguageOf', () => {
 
 describe('filePaneErrorText', () => {
   const texts = copy.panel.file.errors;
-  test('词表内命中；未知 reason 走通用读取失败', () => {
-    expect(filePaneErrorText('not_found', texts)).toBe(texts.not_found);
-    expect(filePaneErrorText('binary_file', texts)).toBe(texts.binary_file);
-    expect(filePaneErrorText('cwd_not_allowed', texts)).toBe(texts.read_failed);
+  test('kind 分派命中；同 kind 内按原 token 细分；未知 kind 走通用读取失败', () => {
+    expect(filePaneErrorText({ kind: 'io_failed', message: 'not_found' }, texts)).toBe(texts.notFound);
+    expect(filePaneErrorText({ kind: 'io_failed', message: 'read_failed' }, texts)).toBe(texts.readFailed);
+    expect(filePaneErrorText({ kind: 'invalid_params', message: 'binary_file' }, texts)).toBe(texts.binary);
+    expect(filePaneErrorText({ kind: 'invalid_params', message: 'invalid_path' }, texts)).toBe(texts.invalidParams);
+    expect(filePaneErrorText({ kind: 'path_forbidden', message: 'path_forbidden' }, texts)).toBe(texts.pathForbidden);
+    expect(filePaneErrorText({ kind: 'cwd_forbidden' }, texts)).toBe(texts.cwdForbidden);
+    expect(filePaneErrorText({ kind: 'cwd_not_found' }, texts)).toBe(texts.cwdNotFound);
+    expect(filePaneErrorText({ kind: 'transient', face: 'busy' }, texts)).toBe(texts.readFailed);
   });
 });
 
@@ -39,7 +44,7 @@ function render(cwd: string, path: string, read: (cwd: string, path: string) => 
 
 describe('FilePane 静态渲染（读取前 loading 态）', () => {
   test('路径常显 + loading 文案；Markdown 文件带预览/源码切换', () => {
-    const pending = () => Promise.resolve({ ok: false as const, reason: 'not_found' });
+    const pending = () => Promise.resolve({ ok: false as const, error: { kind: 'io_failed' as const, message: 'not_found' } });
     const html = render('/w', 'docs/readme.md', pending);
     expect(html).toContain('docs/readme.md');
     expect(html).toContain(copy.panel.file.loading);

@@ -532,13 +532,13 @@ describe('api-routes 对抗审查修复面（T16 M3）', () => {
     const work = mkdtempSync(join(tmpdir(), 'pai-resume-notfound-'));
     const sessionPath = sessionFileOf(work, 'gone');
     const { runtime, routes, events } = makeRoutes(work, (cmd) => {
-      if (cmd.type === 'thread/resume') return { ok: false, error: 'Session file not found' };
+      if (cmd.type === 'thread/resume') return { ok: false, error: { code: 'session_unreadable', message: 'Session file not found' } };
       return { ok: true, data: {} };
     });
     await runtime.start();
     seedRow(runtime, { threadId: 't1', sessionPath, cwd: '/w/proj', title: '已删' });
 
-    const outcome = (await routes.invoke('session/resume', { sessionPath })) as { ok: boolean; reason?: string };
+    const outcome = (await routes.invoke('session/resume', { sessionPath })) as { ok: boolean; error?: { kind: string } };
 
     expect(outcome.ok).toBe(false);
     flushEvents(runtime);

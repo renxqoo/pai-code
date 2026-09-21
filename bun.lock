@@ -66,8 +66,6 @@
       "name": "@paiapp/api",
       "dependencies": {
         "@paiapp/contracts": "workspace:*",
-        "@paiapp/core": "workspace:*",
-        "@paiapp/infra": "workspace:*",
       },
     },
     "packages/contracts": {

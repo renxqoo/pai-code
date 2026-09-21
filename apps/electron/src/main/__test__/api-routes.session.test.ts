@@ -108,19 +108,19 @@ describe('session/prompt 受理窗口竞态（症状：streaming 中发消息偶
     expect(promptOutcome.ok).toBe(false);
     const startOutcome = (await routes.invoke('session/start', { cwd: '/tmp' })) as { ok: boolean };
     expect(startOutcome.ok).toBe(false);
-    expect(rejectLog).toEqual(['session_prompt_rejected:t1:no dial', 'session_start_rejected:no dial']);
+    expect(rejectLog).toEqual(['session_prompt_rejected:t1:transient:command_failed:no dial', 'session_start_rejected:transient:command_failed:no dial']);
   });
 
   test("症状回归：'streamingBehavior required' 恰一次自动降级重试（补 followUp），重试成功不上抛", async () => {
     const { routes, sent } = await makeRoutes((command, index) => {
       if (command.type === 'prompt') {
         // 首答按 hub 受理窗口判定拒绝；降级重试（followUp）放行
-        if (index === 0) return { ok: false, error: 'streamingBehavior required' };
+        if (index === 0) return { ok: false, error: { code: 'streaming_window', message: 'streamingBehavior required' } };
         return { ok: true, data: null };
       }
       return { ok: true, data: {} };
     });
-    const outcome = (await routes.invoke('session/prompt', { threadId: 't1', message: '继续' })) as { ok: boolean; reason?: string };
+    const outcome = (await routes.invoke('session/prompt', { threadId: 't1', message: '继续' })) as { ok: boolean; error?: { kind: string; message?: string } };
     expect(outcome).toEqual({ ok: true, data: null });
     const prompts = sent.filter((command) => command.type === 'prompt');
     expect(prompts.length).toBe(2);
@@ -129,31 +129,31 @@ describe('session/prompt 受理窗口竞态（症状：streaming 中发消息偶
     expect(prompts[1]).toMatchObject({ type: 'prompt', threadId: 't1', message: '继续', streamingBehavior: 'followUp' });
   });
 
-  test('重试仍败 → 上抛 hub reason（不无限重试）', async () => {
+  test('重试仍败 → 上抛 hub error（不无限重试）', async () => {
     const { routes, sent } = await makeRoutes((command) => {
-      if (command.type === 'prompt') return { ok: false, error: 'streamingBehavior required' };
+      if (command.type === 'prompt') return { ok: false, error: { code: 'streaming_window', message: 'streamingBehavior required' } };
       return { ok: true, data: {} };
     });
-    const outcome = (await routes.invoke('session/prompt', { threadId: 't1', message: '继续' })) as { ok: boolean; reason?: string };
-    expect(outcome).toEqual({ ok: false, reason: 'streamingBehavior required' });
+    const outcome = (await routes.invoke('session/prompt', { threadId: 't1', message: '继续' })) as { ok: boolean; error?: { kind: string; message?: string } };
+    expect(outcome).toEqual({ ok: false, error: { kind: 'streaming_window', message: 'streamingBehavior required' } });
     expect(sent.filter((command) => command.type === 'prompt').length).toBe(2);
   });
 
   test('显式 streamingBehavior 不重试（用户已裁决 steer/followUp）；其他失败不触发重试', async () => {
     const explicit = await makeRoutes((command) => {
-      if (command.type === 'prompt') return { ok: false, error: 'streamingBehavior required' };
+      if (command.type === 'prompt') return { ok: false, error: { code: 'streaming_window', message: 'streamingBehavior required' } };
       return { ok: true, data: {} };
     });
-    const steered = (await explicit.routes.invoke('session/prompt', { threadId: 't1', message: '改需求', streamingBehavior: 'steer' })) as { ok: boolean; reason?: string };
-    expect(steered).toEqual({ ok: false, reason: 'streamingBehavior required' });
+    const steered = (await explicit.routes.invoke('session/prompt', { threadId: 't1', message: '改需求', streamingBehavior: 'steer' })) as { ok: boolean; error?: { kind: string; message?: string } };
+    expect(steered).toEqual({ ok: false, error: { kind: 'streaming_window', message: 'streamingBehavior required' } });
     expect(explicit.sent.filter((command) => command.type === 'prompt').length).toBe(1);
 
     const other = await makeRoutes((command) => {
-      if (command.type === 'prompt') return { ok: false, error: 'Unknown threadId' };
+      if (command.type === 'prompt') return { ok: false, error: { code: 'unknown_thread', message: 'Unknown threadId' } };
       return { ok: true, data: {} };
     });
-    const unknown = (await other.routes.invoke('session/prompt', { threadId: 't1', message: '继续' })) as { ok: boolean; reason?: string };
-    expect(unknown).toEqual({ ok: false, reason: 'Unknown threadId' });
+    const unknown = (await other.routes.invoke('session/prompt', { threadId: 't1', message: '继续' })) as { ok: boolean; error?: { kind: string; message?: string } };
+    expect(unknown).toEqual({ ok: false, error: { kind: 'unknown_thread', message: 'Unknown threadId' } });
     expect(other.sent.filter((command) => command.type === 'prompt').length).toBe(1);
   });
 });
@@ -164,7 +164,7 @@ describe('session/entries 游标域（症状：分支切换后增量窗口 stale
     const { routes, sent } = await makeRoutes((command, index) => {
       if (command.type === 'get_entries') {
         // 带游标的首次请求失效；兜底全量请求（index=1）成功
-        if (index === 0) return { ok: false, error: 'invalid since cursor: 9' };
+        if (index === 0) return { ok: false, error: { code: 'cursor_stale', message: 'invalid since cursor: 9' } };
         return { ok: true, data: full };
       }
       return { ok: true, data: {} };
@@ -184,11 +184,11 @@ describe('session/entries 游标域（症状：分支切换后增量窗口 stale
 
   test("瞬态失败（busy/timeout）不叠全量兜底（再 30s 只会放大压力）", async () => {
     const { routes, sent } = await makeRoutes((command) => {
-      if (command.type === 'get_entries') return { ok: false, error: 'hub busy' };
+      if (command.type === 'get_entries') return { ok: false, error: 'busy' };
       return { ok: true, data: {} };
     });
-    const outcome = (await routes.invoke('session/entries', { threadId: 't1', since: 5 })) as { ok: boolean; reason?: string };
-    expect(outcome).toEqual({ ok: false, reason: 'hub busy' });
+    const outcome = (await routes.invoke('session/entries', { threadId: 't1', since: 5 })) as { ok: boolean; error?: { kind: string; message?: string } };
+    expect(outcome).toEqual({ ok: false, error: { kind: 'transient', face: 'busy' } });
     expect(sent.filter((command) => command.type === 'get_entries').length).toBe(1);
   });
 });
@@ -196,8 +196,8 @@ describe('session/entries 游标域（症状：分支切换后增量窗口 stale
 describe('session 命令契约面', () => {
   test('setThinking：词表外档位 invalid_params（四档词表），合法档透传 set_thinking_level', async () => {
     const { routes, sent } = await makeRoutes(() => ({ ok: true, data: {} }));
-    const bad = (await routes.invoke('session/setThinking', { threadId: 't1', level: 'ultra' })) as { ok: boolean; reason?: string };
-    expect(bad).toEqual({ ok: false, reason: 'invalid_params' });
+    const bad = (await routes.invoke('session/setThinking', { threadId: 't1', level: 'ultra' })) as { ok: boolean; error?: { kind: string; message?: string } };
+    expect(bad).toEqual({ ok: false, error: { kind: 'invalid_params' } });
     const ok = (await routes.invoke('session/setThinking', { threadId: 't1', level: 'medium' })) as { ok: boolean };
     expect(ok.ok).toBe(true);
     expect(sent.find((command) => command.type === 'set_thinking_level')).toMatchObject({ type: 'set_thinking_level', threadId: 't1', level: 'medium' });
@@ -276,7 +276,7 @@ describe('session/delete 级联收敛（removed 集驱动注册表行移除）',
     // seed：模拟已恢复的注册表行（removeSession/registry 依赖 runtime 真表）
     runtime.applyStartOutcome('main-thread', '/w', sessionPath, null, 1, false);
     runtime.applyStartOutcome('child-thread', '/w', join(dir, 'child-thread', 'events.jsonl'), null, 1, false);
-    const deleted = (await routes.invoke('session/delete', { sessionPath })) as { ok: boolean; reason?: string; data: { removed: string[] } };
+    const deleted = (await routes.invoke('session/delete', { sessionPath })) as { ok: boolean; data: { removed: string[] } };
     expect(deleted.ok).toBe(true);
     expect(deleted.data.removed).toEqual(['main-thread', 'child-thread']);
     expect(runtime.registry.get('main-thread')).toBeNull();
@@ -304,8 +304,8 @@ describe('/compact 直发成功三元组（D7：词形命中→compact 命令→
       threadId: 't1',
       message: '/compact',
       images: [{ type: 'image', data: 'aGk=', mediaType: 'image/png' }],
-    })) as { ok: boolean; reason?: string };
-    expect(withImage).toEqual({ ok: false, reason: 'invalid images: compact does not accept images' });
+    })) as { ok: boolean; error?: { kind: string; message?: string } };
+    expect(withImage).toEqual({ ok: false, error: { kind: 'compact_images_rejected' } });
     expect(sent.filter((command) => command.type === 'compact').length).toBe(1);
   });
 });
@@ -315,15 +315,15 @@ describe('session/register 主进程处理器（白名单/trusted 审计/删行�
     const { routes, runtime, agentDir, sent } = await makeRoutes((command) =>
       command.type === 'thread/register' ? { ok: true, data: { threadId: command.threadId === 'mismatch-thread' ? 'other-id' : 'main-thread' } } : { ok: true, data: {} },
     );
-    const outside = (await routes.invoke('session/register', { sessionPath: '/etc/passwd' })) as { ok: boolean; reason?: string };
-    expect(outside.reason).toBe('session_path_forbidden');
+    const outside = (await routes.invoke('session/register', { sessionPath: '/etc/passwd' })) as { ok: boolean; error?: { kind: string; message?: string } };
+    expect(outside.error).toEqual({ kind: 'session_path_forbidden' });
     const dir = join(agentDir, 'sessions', 'main-thread');
     mkdirSync(dir, { recursive: true });
     const sessionPath = join(dir, 'events.jsonl');
     writeFileSync(sessionPath, '{}');
     // 注册表无行 → unknown_session（纳管前须先有行——对账/水化链先行）
-    const noRow = (await routes.invoke('session/register', { sessionPath })) as { ok: boolean; reason?: string };
-    expect(noRow.reason).toBe('unknown_session');
+    const noRow = (await routes.invoke('session/register', { sessionPath })) as { ok: boolean; error?: { kind: string; message?: string } };
+    expect(noRow.error).toEqual({ kind: 'unknown_session' });
     runtime.applyStartOutcome('main-thread', '/w', sessionPath, null, 1, true);
     const ok = (await routes.invoke('session/register', { sessionPath })) as { ok: boolean };
     expect(ok.ok).toBe(true);
@@ -334,8 +334,8 @@ describe('session/register 主进程处理器（白名单/trusted 审计/删行�
     const mismatchPath = join(dir2, 'events.jsonl');
     writeFileSync(mismatchPath, '{}');
     runtime.applyStartOutcome('mismatch-thread', '/w', mismatchPath, null, 1, false);
-    const mismatch = (await routes.invoke('session/register', { sessionPath: mismatchPath })) as { ok: boolean; reason?: string };
-    expect(mismatch.reason).toBe('thread_id_mismatch');
+    const mismatch = (await routes.invoke('session/register', { sessionPath: mismatchPath })) as { ok: boolean; error?: { kind: string; message?: string } };
+    expect(mismatch.error).toEqual({ kind: 'thread_id_mismatch' });
   });
 });
 

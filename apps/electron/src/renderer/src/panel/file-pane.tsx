@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { RotateCw } from 'lucide-react';
 
-import type { ApiData, ApiOutcome } from '@paiapp/contracts';
+import type { ApiData, ApiError, ApiOutcome } from '@paiapp/contracts';
 import { IconButton, SegmentedControl } from '@paiapp/ui';
 
 import { copy } from '@/strings';
@@ -16,7 +16,7 @@ type FilePaneProps = {
 
 type FilePhase =
   | { kind: 'loading' }
-  | { kind: 'error'; reason: string }
+  | { kind: 'error'; error: ApiError }
   | { kind: 'content'; result: ApiData<'file/read'> };
 
 /** Markdown 文件（预览/源码切换的数据面）。 */
@@ -30,9 +30,34 @@ export function fileLanguageOf(path: string): string {
   return extension.toLowerCase();
 }
 
-/** file/read 失败 reason → 用户文案（词表封闭，未知 reason 走通用读取失败）。 */
-export function filePaneErrorText(reason: string, texts: Record<string, string> & { read_failed: string }): string {
-  return texts[reason] ?? texts.read_failed;
+/** file/read 失败文案表（kind 分派；同 kind 内保留原 token 细分的两条）。 */
+export interface FilePaneErrorTexts {
+  invalidParams: string;
+  notFound: string;
+  binary: string;
+  pathForbidden: string;
+  cwdForbidden: string;
+  cwdNotFound: string;
+  readFailed: string;
+}
+
+/** file/read 失败 error → 用户文案（kind 分派；invalid_params/io_failed 内按原
+ *  token 细分，未知 kind 走通用读取失败）。 */
+export function filePaneErrorText(error: ApiError, texts: FilePaneErrorTexts): string {
+  switch (error.kind) {
+    case 'invalid_params':
+      return error.message === 'binary_file' ? texts.binary : texts.invalidParams;
+    case 'io_failed':
+      return error.message === 'not_found' ? texts.notFound : texts.readFailed;
+    case 'path_forbidden':
+      return texts.pathForbidden;
+    case 'cwd_forbidden':
+      return texts.cwdForbidden;
+    case 'cwd_not_found':
+      return texts.cwdNotFound;
+    default:
+      return texts.readFailed;
+  }
 }
 
 /**
@@ -52,7 +77,7 @@ function FilePane({ cwd, path, readProjectFile }: FilePaneProps) {
     let disposed = false;
     void readProjectFile(cwd, path).then((outcome) => {
       if (disposed) return;
-      setPhase(outcome.ok ? { kind: 'content', result: outcome.data } : { kind: 'error', reason: outcome.reason });
+      setPhase(outcome.ok ? { kind: 'content', result: outcome.data } : { kind: 'error', error: outcome.error });
     });
     return () => {
       disposed = true;
@@ -95,7 +120,7 @@ function FilePane({ cwd, path, readProjectFile }: FilePaneProps) {
       </div>
       {phase.kind === 'error' ? (
         <div className="flex flex-1 items-center justify-center px-[14px] pb-[10px]">
-          <p className="text-[12px] leading-[19px] text-muted-foreground/80">{filePaneErrorText(phase.reason, copy.panel.file.errors)}</p>
+          <p className="text-[12px] leading-[19px] text-muted-foreground/80">{filePaneErrorText(phase.error, copy.panel.file.errors)}</p>
         </div>
       ) : phase.kind === 'loading' ? (
         <div className="flex flex-1 items-center justify-center px-[14px] pb-[10px]">

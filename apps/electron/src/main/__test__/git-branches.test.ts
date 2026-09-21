@@ -77,14 +77,14 @@ describe('mapGitFailure', () => {
     ['未知分支', "error: pathspec 'nope' did not match any file(s) known to git", 'unknown_branch'],
     ['脏工作区', 'error: Your local changes to the following files would be overwritten by checkout:', 'dirty_worktree'],
     ['提示提交改动', 'Please commit your changes or stash them before you switch branches.', 'dirty_worktree'],
-  ])('%s → %s', (_name: string, stderr: string, reason: string) => {
-    expect(mapGitFailure(stderr)).toBe(reason);
+  ])('%s → %s', (_name: string, stderr: string, kind: string) => {
+    expect(mapGitFailure(stderr)).toEqual({ kind });
   });
 
-  test('未识别错误带首行摘要，空输出退化为 git_failed:unknown', () => {
-    expect(mapGitFailure('fatal: unable to read tree\nmore')).toBe('git_failed:fatal: unable to read tree');
-    expect(mapGitFailure('')).toBe('git_failed:unknown');
-    expect(mapGitFailure('   \n  ')).toBe('git_failed:unknown');
+  test('未识别错误带首行摘要（internal_error + message 保真），空输出退化为 git_failed:unknown', () => {
+    expect(mapGitFailure('fatal: unable to read tree\nmore')).toEqual({ kind: 'internal_error', message: 'git_failed:fatal: unable to read tree' });
+    expect(mapGitFailure('')).toEqual({ kind: 'internal_error', message: 'git_failed:unknown' });
+    expect(mapGitFailure('   \n  ')).toEqual({ kind: 'internal_error', message: 'git_failed:unknown' });
   });
 });
 
@@ -146,15 +146,15 @@ describe('list', () => {
     expect(outcome).toEqual({ ok: true, data: { isRepo: true, current: null, branches: ['main'], dirtyFiles: 0 } });
   });
 
-  test('git 缺失（启动失败）→ git_unavailable；超时/输出超限各有独立 reason', async () => {
+  test('git 缺失（启动失败）→ git_unavailable；超时/输出超限各有独立形态（transient face + message 保真）', async () => {
     const missing = makeExec([{ match: 'rev-parse', result: proc('spawn_failed') }]);
-    expect(await createGitBranches(missing.exec).list('/w/repo')).toEqual({ ok: false, reason: 'git_unavailable' });
+    expect(await createGitBranches(missing.exec).list('/w/repo')).toEqual({ ok: false, error: { kind: 'git_unavailable' } });
 
     const timedOut = makeExec([{ match: 'rev-parse', result: proc('timeout') }]);
-    expect(await createGitBranches(timedOut.exec).list('/w/repo')).toEqual({ ok: false, reason: 'git_failed:timeout' });
+    expect(await createGitBranches(timedOut.exec).list('/w/repo')).toEqual({ ok: false, error: { kind: 'transient', face: 'timeout', message: 'git_failed:timeout' } });
 
     const tooLarge = makeExec([{ match: 'rev-parse', result: ok('.git') }, { match: 'for-each-ref', result: proc('output_too_large') }]);
-    expect(await createGitBranches(tooLarge.exec).list('/w/repo')).toEqual({ ok: false, reason: 'git_failed:output_too_large' });
+    expect(await createGitBranches(tooLarge.exec).list('/w/repo')).toEqual({ ok: false, error: { kind: 'transient', face: 'command_failed', message: 'git_failed:output_too_large' } });
   });
 
   test('执行中途的进程级异常（for-each-ref 超时）也归到 timeout，不误报 git_unavailable', async () => {
@@ -162,21 +162,21 @@ describe('list', () => {
       { match: 'rev-parse --git-dir', result: ok('.git') },
       { match: 'for-each-ref', result: proc('timeout') },
     ]);
-    expect(await createGitBranches(exec).list('/w/repo')).toEqual({ ok: false, reason: 'git_failed:timeout' });
+    expect(await createGitBranches(exec).list('/w/repo')).toEqual({ ok: false, error: { kind: 'transient', face: 'timeout', message: 'git_failed:timeout' } });
   });
 
   test('非仓库以外的探测失败照实透传', async () => {
     const { exec } = makeExec([{ match: 'rev-parse', result: fail('fatal: detected dubious ownership in repository') }]);
     expect(await createGitBranches(exec).list('/w/repo')).toEqual({
       ok: false,
-      reason: 'git_failed:fatal: detected dubious ownership in repository',
+      error: { kind: 'internal_error', message: 'git_failed:fatal: detected dubious ownership in repository' },
     });
   });
 
   test('默认执行器：工作目录不存在 → cwd_not_found（不误报成 git 不在 PATH）', async () => {
     const gone = join(mkdtempSync(join(tmpdir(), 'pai-git-gone-')), 'inner');
     rmSync(gone, { recursive: true, force: true });
-    expect(await createGitBranches().list(gone)).toEqual({ ok: false, reason: 'cwd_not_found' });
+    expect(await createGitBranches().list(gone)).toEqual({ ok: false, error: { kind: 'cwd_not_found' } });
   });
 
   test('同 cwd 并发请求在途复用（只探测一次）', async () => {
@@ -225,7 +225,7 @@ describe('checkout', () => {
       { match: 'symbolic-ref', result: ok('main\n') },
       { match: 'status --porcelain', result: ok(' M src/a.ts\n') },
     ]);
-    expect(await createGitBranches(exec).checkout('/w/repo', 'dev', false)).toEqual({ ok: false, reason: 'dirty_worktree' });
+    expect(await createGitBranches(exec).checkout('/w/repo', 'dev', false)).toEqual({ ok: false, error: { kind: 'dirty_worktree' } });
   });
 
   test('未知分支拒绝，不执行 checkout', async () => {
@@ -233,7 +233,7 @@ describe('checkout', () => {
       { match: 'rev-parse --git-dir', result: ok('.git') },
       { match: 'for-each-ref', result: ok('main\n') },
     ]);
-    expect(await createGitBranches(exec).checkout('/w/repo', 'nope', false)).toEqual({ ok: false, reason: 'unknown_branch' });
+    expect(await createGitBranches(exec).checkout('/w/repo', 'nope', false)).toEqual({ ok: false, error: { kind: 'unknown_branch' } });
     expect(calls.some((call) => call.includes('checkout'))).toBe(false);
   });
 
@@ -242,7 +242,7 @@ describe('checkout', () => {
       { match: 'rev-parse --git-dir', result: ok('.git') },
       { match: 'for-each-ref', result: ok('main\n') },
     ]);
-    expect(await createGitBranches(dup.exec).checkout('/w/repo', 'main', true)).toEqual({ ok: false, reason: 'branch_exists' });
+    expect(await createGitBranches(dup.exec).checkout('/w/repo', 'main', true)).toEqual({ ok: false, error: { kind: 'branch_exists' } });
 
     const created = makeExec([
       { match: 'rev-parse --git-dir', result: ok('.git') },
@@ -261,7 +261,7 @@ describe('checkout', () => {
     const missing = makeExec([{ match: 'rev-parse', result: proc('spawn_failed') }]);
     expect(await createGitBranches(missing.exec).checkout('/w/repo', 'dev', false)).toEqual({
       ok: false,
-      reason: 'git_unavailable',
+      error: { kind: 'git_unavailable' },
     });
 
     const failed = makeExec([
@@ -273,7 +273,7 @@ describe('checkout', () => {
     ]);
     expect(await createGitBranches(failed.exec).checkout('/w/repo', 'dev', false)).toEqual({
       ok: false,
-      reason: 'dirty_worktree',
+      error: { kind: 'dirty_worktree' },
     });
   });
 
@@ -282,9 +282,9 @@ describe('checkout', () => {
       { match: 'rev-parse --git-dir', result: ok('.git') },
       { match: 'for-each-ref', result: ok('main\n') },
     ]);
-    expect(await createGitBranches(exec).checkout('/w/repo', '--detach', false)).toEqual({ ok: false, reason: 'invalid_branch' });
-    expect(await createGitBranches(exec).checkout('/w/repo', '-f', false)).toEqual({ ok: false, reason: 'invalid_branch' });
-    expect(await createGitBranches(exec).checkout('/w/repo', 'bad name', true)).toEqual({ ok: false, reason: 'invalid_branch' });
+    expect(await createGitBranches(exec).checkout('/w/repo', '--detach', false)).toEqual({ ok: false, error: { kind: 'invalid_branch' } });
+    expect(await createGitBranches(exec).checkout('/w/repo', '-f', false)).toEqual({ ok: false, error: { kind: 'invalid_branch' } });
+    expect(await createGitBranches(exec).checkout('/w/repo', 'bad name', true)).toEqual({ ok: false, error: { kind: 'invalid_branch' } });
     expect(calls).toEqual([]);
   });
 

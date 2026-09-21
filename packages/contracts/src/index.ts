@@ -1,4 +1,5 @@
 export * from './hub-protocol';
+export * from './hub-errors';
 export * from './ui-events';
 export * from './commands';
 export * from './api';

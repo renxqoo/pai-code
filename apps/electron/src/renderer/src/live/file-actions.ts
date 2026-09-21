@@ -7,8 +7,8 @@ import type { BridgeClient } from './client-invoke';
  * 路径白名单（file-read.ts），本层只做空 cwd 早退与结果透传。
  */
 
-/** 读取项目文件文本（超 2MiB 截断并标记；失败 reason 交调用方转文案）。 */
+/** 读取项目文件文本（超 2MiB 截断并标记；失败 error 交调用方转文案）。 */
 export async function readProjectFile(client: BridgeClient, cwd: string, path: string): Promise<ApiOutcome<'file/read'>> {
-  if (cwd.length === 0 || path.length === 0) return { ok: false, reason: 'invalid_path' };
+  if (cwd.length === 0 || path.length === 0) return { ok: false, error: { kind: 'invalid_params', message: 'invalid_path' } };
   return client.invoke('file/read', { cwd, path });
 }

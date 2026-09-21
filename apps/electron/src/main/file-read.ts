@@ -1,15 +1,18 @@
 import { closeSync, openSync, readSync, realpathSync, statSync } from 'node:fs';
 import { join as joinPaths, sep as pathSep } from 'node:path';
 
+import { appError, type ApiError } from '@paiapp/api';
+
 /**
  * 项目文件只读面（代码查看器/Markdown 预览数据源）：相对路径 + 点前缀段拒绝
  * （与 file/search 枚举面一致）、realpath 归一后必须仍在 cwd 之下（防符号链接
  * 逃逸）、二进制嗅探（前 8KiB 含 NUL）、读取上限 2MiB（超限按上限限长读取并
- * 标记截断，size 回真实字节数）。全部失败走判别联合 reason，垃圾输入降级不抛异常。
+ * 标记截断，size 回真实字节数）。全部失败走判别联合 ApiError（原 token 入
+ * message 保真），垃圾输入降级不抛异常。
  */
 
 export type FileReadResult = { content: string; truncated: boolean; size: number };
-export type FileReadOutcome = { ok: true; data: FileReadResult } | { ok: false; reason: string };
+export type FileReadOutcome = { ok: true; data: FileReadResult } | { ok: false; error: ApiError };
 
 /** 读取上限：超出部分不读（内存上界 = 2MiB），渲染层据 truncated 提示。 */
 const MAX_READ_BYTES = 2 * 1024 * 1024;
@@ -76,22 +79,22 @@ export function createFileRead(deps: FileReadDeps = {}) {
   };
 
   const read = (cwd: string, path: string): FileReadOutcome => {
-    if (!isReadableRelativePath(path)) return { ok: false, reason: 'invalid_path' };
+    if (!isReadableRelativePath(path)) return { ok: false, error: appError('invalid_params', 'invalid_path') };
     let rootReal: string;
     try {
       rootReal = fs.realpathSync(cwd);
     } catch {
-      return { ok: false, reason: 'cwd_not_found' };
+      return { ok: false, error: appError('cwd_not_found') };
     }
     let targetReal: string;
     try {
       targetReal = fs.realpathSync(joinPaths(rootReal, path));
     } catch {
       // 路径中某段不存在（realpath 对缺失段抛错）；目录已归一，缺的就是文件本体
-      return { ok: false, reason: 'not_found' };
+      return { ok: false, error: { kind: 'io_failed', message: 'not_found' } };
     }
     if (targetReal !== rootReal && !targetReal.startsWith(`${rootReal}${pathSep}`)) {
-      return { ok: false, reason: 'path_forbidden' };
+      return { ok: false, error: { kind: 'path_forbidden', message: 'path_forbidden' } };
     }
     let size: number;
     let isFile: boolean;
@@ -100,16 +103,16 @@ export function createFileRead(deps: FileReadDeps = {}) {
       size = stats.size;
       isFile = stats.isFile();
     } catch {
-      return { ok: false, reason: 'not_found' };
+      return { ok: false, error: { kind: 'io_failed', message: 'not_found' } };
     }
-    if (!isFile) return { ok: false, reason: 'invalid_path' };
+    if (!isFile) return { ok: false, error: appError('invalid_params', 'invalid_path') };
     let bytes: Buffer;
     try {
       bytes = readUpTo(targetReal, Math.min(size, MAX_READ_BYTES));
     } catch {
-      return { ok: false, reason: 'read_failed' };
+      return { ok: false, error: { kind: 'io_failed', message: 'read_failed' } };
     }
-    if (looksBinary(bytes)) return { ok: false, reason: 'binary_file' };
+    if (looksBinary(bytes)) return { ok: false, error: appError('invalid_params', 'binary_file') };
     return { ok: true, data: { content: bytes.toString('utf8'), truncated: size > MAX_READ_BYTES, size } };
   };
 

@@ -237,9 +237,10 @@ describe('app API 全接口 × 真 x-harness host-hub（script 默认门）', ()
     const subagents = (await h.invoke('session/subagents', { threadId })) as { ok: boolean; data: { subagents: unknown[] } };
     expect(subagents.ok).toBe(true);
     expect(subagents.data.subagents).toEqual([]);
-    const steer = (await h.invoke('subagent/steer', { threadId, agentId: 'agent-00000000', message: 'hi' })) as { ok: boolean; reason?: string };
+    const steer = (await h.invoke('subagent/steer', { threadId, agentId: 'agent-00000000', message: 'hi' })) as { ok: boolean; error?: { kind: string; message?: string } };
     expect(steer.ok).toBe(false);
-    expect(steer.reason).toContain('not available');
+    expect(steer.error?.kind).toBe('invalid_input');
+    expect(steer.error?.message).toContain('not available');
 
     // --- setName → WAL session/meta ---
     const renamed = await h.invoke('session/setName', { threadId, name: '集成旅程' });
@@ -308,9 +309,11 @@ describe('app API 全接口 × 真 x-harness host-hub（script 默认门）', ()
     expect(existsSync(agentFile)).toBe(false);
 
     // --- /compact 直发（D7）：词形命中 → compact 命令 → 新会话上下文太小错误面透传 ---
-    const compacted = (await h.invoke('session/prompt', { threadId, message: '/compact keep the goals' })) as { ok: boolean; reason?: string };
+    const compacted = (await h.invoke('session/prompt', { threadId, message: '/compact keep the goals' })) as { ok: boolean; error?: { kind: string; message?: string } };
     expect(compacted.ok).toBe(false);
-    expect(compacted.reason).toBe('context too small to compact');
+    // compaction 词表内层穿透：compact_rejected + 原文 message
+    expect(compacted.error?.kind).toBe('compact_rejected');
+    expect(compacted.error?.message).toBe('context too small to compact');
 
     // --- fork：seq 域（0 基）→ 新会话 + fork 落存储 ---
     const fork = (await h.invoke('session/fork', { threadId, seq: cursor, position: 'at' })) as { ok: boolean; data: { threadId: string; sessionPath: string } };

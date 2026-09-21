@@ -179,7 +179,7 @@ describe('写路径兜底（T16 遗产 + T27 收窄）', () => {
   });
 
   test('submitDraft 于 parked 会话：resume 失败返回 resume_failed 且不发 prompt', async () => {
-    const client = makeClient((method) => (method === 'session/resume' ? { ok: false, reason: 'timeout' } : { ok: true, data: null }));
+    const client = makeClient((method) => (method === 'session/resume' ? { ok: false, error: { kind: 'transient', face: 'timeout' } } : { ok: true, data: null }));
     const store = bootStore([sessionView('t1', 'parked', '/w/s/t1.jsonl')]);
     const controller = createLiveController(client, store);
 
@@ -400,7 +400,7 @@ describe('History 打开与占位收敛', () => {
   });
 
   test('未知路径 → 直接 resume；失败返回 false 并通知', async () => {
-    const client = makeClient((method) => (method === 'session/resume' ? { ok: false, reason: 'session_not_found' } : { ok: true, data: null }));
+    const client = makeClient((method) => (method === 'session/resume' ? { ok: false, error: { kind: 'session_unreadable' } } : { ok: true, data: null }));
     const store = createLiveStore();
     const controller = createLiveController(client, store);
 

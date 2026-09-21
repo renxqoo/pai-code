@@ -13,7 +13,7 @@ import { createRuntimeMonitor } from '../runtime-monitor/create-runtime-monitor'
 
 /**
  * session/fork 路由回归（fork 换轨语义；入参 seq = WAL 行号域）：
- * - hub 拒绝（流式中等）→ reason 透传，原会话行不被覆盖、不落 parked；
+ * - hub 拒绝（流式中等）→ error 透传，原会话行不被覆盖、不落 parked；
  * - previousThreadId 对不上请求 = 坏形状拒绝（防 ABA）；
  * - 成功后旧 threadId 转 parked（hub 已移除该 id，文件保留可懒恢复），
  *   新会话 cwd/标题从被分叉会话继承（响应不带这两个字段）。
@@ -29,7 +29,7 @@ const keyStore: ProviderKeyStore = {
 type ForkResponse = Record<string, unknown>;
 
 /** 可编程 fake host：按命令类型回放预置响应。 */
-function fakeHost(responses: { fork?: ForkResponse | { error: string }; state?: Record<string, unknown> }): { port: HostProcessPort; sent: PaiCommand[] } {
+function fakeHost(responses: { fork?: ForkResponse | { error: { code: string; message: string } }; state?: Record<string, unknown> }): { port: HostProcessPort; sent: PaiCommand[] } {
   const sent: PaiCommand[] = [];
   const port: HostProcessPort = {
     request: (command: PaiCommand): Promise<HostCommandOutcome> => {
@@ -37,7 +37,7 @@ function fakeHost(responses: { fork?: ForkResponse | { error: string }; state?: 
       if (command.type === 'fork') {
         const fork = responses.fork;
         if (fork === undefined) return Promise.resolve({ ok: false, error: 'fork failed' });
-        if ('error' in fork && typeof fork.error === 'string') return Promise.resolve({ ok: false, error: fork.error });
+        if ('error' in fork && typeof fork.error !== 'undefined' && !('threadId' in fork)) return Promise.resolve({ ok: false, error: fork.error });
         return Promise.resolve({ ok: true, data: fork });
       }
       if (command.type === 'get_state') {
@@ -115,12 +115,12 @@ async function makeRoutes(responses: Parameters<typeof fakeHost>[0]) {
 const forkParams = { threadId: "t-old", seq: 3, position: "before" } as const;
 
 describe("session/fork 路由（fork 换轨语义）", () => {
-  test("hub 拒绝（流式中）：reason 透传且原会话行不被覆盖", async () => {
+  test("hub 拒绝（流式中）：error 透传且原会话行不被覆盖", async () => {
     const { routes, runtime } = await makeRoutes({
-      fork: { error: "thread is streaming, abort first" },
+      fork: { error: { code: "streaming_window", message: "thread is streaming, abort first" } },
     });
-    const outcome = (await routes.invoke("session/fork", forkParams)) as { ok: boolean; reason?: string };
-    expect(outcome).toEqual({ ok: false, reason: "thread is streaming, abort first" });
+    const outcome = (await routes.invoke("session/fork", forkParams)) as { ok: boolean; error?: { kind: string; message?: string } };
+    expect(outcome).toEqual({ ok: false, error: { kind: "streaming_window", message: "thread is streaming, abort first" } });
     const old = runtime.sessions().find((session) => session.threadId === "t-old");
     expect(old?.cwd).toBe("/w/proj");
     expect(old?.title).toBe("原标题");
@@ -131,8 +131,8 @@ describe("session/fork 路由（fork 换轨语义）", () => {
     const { routes } = await makeRoutes({
       fork: { threadId: "t-new", previousThreadId: "t-someone-else", sessionPath: "/a.jsonl" },
     });
-    const outcome = (await routes.invoke("session/fork", forkParams)) as { ok: boolean; reason?: string };
-    expect(outcome).toEqual({ ok: false, reason: "malformed_response" });
+    const outcome = (await routes.invoke("session/fork", forkParams)) as { ok: boolean; error?: { kind: string } };
+    expect(outcome).toEqual({ ok: false, error: { kind: "malformed_response" } });
   });
 
   test("命令透传：seq/position 原样进 fork 命令（WAL 行号域）", async () => {
@@ -152,7 +152,7 @@ describe("session/fork 路由（fork 换轨语义）", () => {
     runtime.touchSession("t-old", { streaming: true });
     const outcome = (await routes.invoke("session/fork", forkParams)) as
       | { ok: true; data: { threadId: string; cwd: string; title: string; state: string; sessionPath: string | null } }
-      | { ok: false; reason: string };
+      | { ok: false; error: { kind: string; message?: string } };
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
     expect(outcome.data.threadId).toBe("t-new");

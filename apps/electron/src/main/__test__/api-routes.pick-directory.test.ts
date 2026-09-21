@@ -84,8 +84,8 @@ describe('api-routes dialog/pickDirectory（T12 新会话目录选择）', () =>
 
   test('注入面异常 → dialog_unavailable（不沿 IPC reject）', async () => {
     const routes = makeRoutes(() => Promise.reject(new Error('boom')));
-    const outcome = (await routes.invoke('dialog/pickDirectory', {})) as { ok: boolean; reason?: string };
-    expect(outcome).toEqual({ ok: false, reason: 'dialog_unavailable' });
+    const outcome = (await routes.invoke('dialog/pickDirectory', {})) as { ok: boolean; error?: { kind: string } };
+    expect(outcome).toEqual({ ok: false, error: { kind: 'dialog_unavailable' } });
   });
 
   test('对抗审查补：schema 负路径——空 defaultPath / 未知键 → invalid_params（不触注入面）', async () => {
@@ -94,10 +94,10 @@ describe('api-routes dialog/pickDirectory（T12 新会话目录选择）', () =>
       calls += 1;
       return Promise.resolve('/w/picked');
     });
-    const empty = (await routes.invoke('dialog/pickDirectory', { defaultPath: '' })) as { ok: boolean; reason?: string };
-    expect(empty).toEqual({ ok: false, reason: 'invalid_params' });
-    const unknown = (await routes.invoke('dialog/pickDirectory', { nope: 1 })) as { ok: boolean; reason?: string };
-    expect(unknown).toEqual({ ok: false, reason: 'invalid_params' });
+    const empty = (await routes.invoke('dialog/pickDirectory', { defaultPath: '' })) as { ok: boolean; error?: { kind: string } };
+    expect(empty).toEqual({ ok: false, error: { kind: 'invalid_params' } });
+    const unknown = (await routes.invoke('dialog/pickDirectory', { nope: 1 })) as { ok: boolean; error?: { kind: string } };
+    expect(unknown).toEqual({ ok: false, error: { kind: 'invalid_params' } });
     expect(calls).toBe(0);
   });
 });

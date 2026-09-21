@@ -1,6 +1,7 @@
 import type { GitGraphCommit, GitGraphView } from '@paiapp/contracts';
+import type { ApiError } from '@paiapp/api';
 
-import { failureReason, mapGitFailure, runGit, type GitExec } from './git-branches';
+import { failureError, mapGitFailure, runGit, type GitExec } from './git-branches';
 
 /**
  * 本地 git 图谱读口（T36）：topo 序提交 + parents（渲染层算泳道几何）+ 本地分支装饰。
@@ -8,7 +9,7 @@ import { failureReason, mapGitFailure, runGit, type GitExec } from './git-branch
  * 「HEAD, main」，tag/remote 装饰不进图谱。只读不参与 checkout 串行链；同 cwd 在途单飞。
  */
 
-export type GitGraphOutcome = { ok: true; data: GitGraphView } | { ok: false; reason: string };
+export type GitGraphOutcome = { ok: true; data: GitGraphView } | { ok: false; error: ApiError };
 
 /** 展示上限：渲染层按此量级直渲染 DOM（无虚拟滚动，见 T36 并发预算）。 */
 const GRAPH_COMMIT_LIMIT = 500;
@@ -81,21 +82,22 @@ export function createGitGraph(run: GitExec = runGit): GitGraph {
 
   const readGraph = async (cwd: string): Promise<GitGraphOutcome> => {
     const probe = await run(['rev-parse', '--git-dir'], cwd);
-    if (probe.error !== null) return { ok: false, reason: failureReason(probe) };
+    if (probe.error !== null) return { ok: false, error: failureError(probe) };
     if (probe.code !== 0) {
-      if (mapGitFailure(probe.stderr) === 'not_a_repo') return okGraph({ isRepo: false, commits: [], truncated: false });
-      return { ok: false, reason: mapGitFailure(probe.stderr) };
+      const failure = mapGitFailure(probe.stderr);
+      if (failure.kind === 'not_a_repo') return okGraph({ isRepo: false, commits: [], truncated: false });
+      return { ok: false, error: failure };
     }
     const log = await run(GRAPH_LOG_ARGS, cwd);
-    if (log.error !== null) return { ok: false, reason: failureReason(log) };
+    if (log.error !== null) return { ok: false, error: failureError(log) };
     if (log.code !== 0) {
       // 空仓库（刚 init 未提交）是正常形态：空列表而非报错。判定不用 stderr 文案
       // （git 消息随用户 locale 本地化），用 rev-parse 验证 HEAD 是否存在——空仓库
       // 无 HEAD 可解析，非空仓库 log 失败则照实透传
       const head = await run(['rev-parse', '-q', '--verify', 'HEAD'], cwd);
-      if (head.error !== null) return { ok: false, reason: failureReason(head) };
-      if (head.code !== 0) return okGraph({ isRepo: true, commits: [], truncated: false });
-      return { ok: false, reason: mapGitFailure(log.stderr) };
+      if (head.error !== null) return { ok: false, error: failureError(head) };
+      if (head.code === 0) return { ok: false, error: mapGitFailure(log.stderr) };
+      return okGraph({ isRepo: true, commits: [], truncated: false });
     }
     // 截断按原始记录数判定：parse 跳过畸形记录后条数变小，不能反过来丢失截断提示
     const truncated = countGraphRecords(log.stdout) > GRAPH_COMMIT_LIMIT;

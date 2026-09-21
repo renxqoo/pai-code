@@ -21,13 +21,15 @@ export interface ImagePayload {
 // Frames (stdout <- host-hub)
 // ============================================================================
 
+import type { HubErrorShape } from './hub-errors';
+
 export interface ResponseFrame {
   type: 'response';
   id?: string;
   command: string;
   success: boolean;
   data?: unknown;
-  error?: string;
+  error?: HubErrorShape;
 }
 
 /** 事件帧：payload 展开（无 event 嵌套）；agentName 仅子代理中继时存在。

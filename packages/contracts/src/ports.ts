@@ -1,3 +1,4 @@
+import type { HubErrorShape } from './hub-errors';
 import type { HubFrame } from './hub-protocol';
 import type { PaiCommand } from './commands';
 
@@ -15,10 +16,13 @@ export interface HostRuntimeConfig {
   cwd?: string;
 }
 
-/** host 命令应答（response 帧的收窄形态；pending 关联由实现负责）。 */
+/** host 命令应答（response 帧的收窄形态；pending 关联由实现负责）。error 双形状：
+ *  对象 = hub 结构化错误通道（HubErrorShape）；string = infra 自产失败
+ *  （timeout/busy/host_not_running/host_restarting/host_failed/host_disposed/
+ *  write_failed/command_failed）——transport 解码层统一折成 ApiError。 */
 export type HostCommandOutcome =
   | { ok: true; data: unknown }
-  | { ok: false; error: string };
+  | { ok: false; error: string | HubErrorShape };
 
 /** host 进程相位（监督状态机的对外投影）。 */
 export type HostPhase = 'starting' | 'ready' | 'restarting' | 'failed';

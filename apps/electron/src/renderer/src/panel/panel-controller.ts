@@ -1,3 +1,5 @@
+import type { ApiOutcome } from '@paiapp/contracts';
+
 import { readProjectFile } from '@/live/file-actions';
 import { bridgeClient, store as liveStore } from '@/live/workspace-runtime';
 import { fileTab, openPanel } from '@/panel/panel-state';
@@ -15,10 +17,7 @@ export function openFileTab(path: string): void {
   uiStore.setState((state) => ({ panel: openPanel(state.panel, fileTab(cwd, path)) }));
 }
 
-export function readFile(
-  cwd: string,
-  path: string,
-): Promise<{ ok: true; data: { content: string; truncated: boolean; size: number } } | { ok: false; reason: string }> {
+export function readFile(cwd: string, path: string): Promise<ApiOutcome<'file/read'>> {
   return readProjectFile(bridgeClient, cwd, path);
 }
 

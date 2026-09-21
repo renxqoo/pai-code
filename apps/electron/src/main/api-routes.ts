@@ -21,8 +21,11 @@ import { createOpenLocation, type OpenLocation } from './open-location';
 import { createLocalRoutes } from './api-routes-local';
 import { compactInvocationOf } from './compact-lexing';
 import { createSettingsRoutes } from './api-routes-settings';
+import { errorLogToken } from './error-log-token';
 import type { AgentDefinitionsStore } from './agent-definitions-store';
 import { THINKING_LEVEL_ORDER, type ThinkingLevel } from '@paiapp/contracts';
+import type { ApiError } from '@paiapp/contracts';
+import { appError, decodeApiError } from '@paiapp/api';
 import { ApiSchemas, type ApiMethod, type ApiOutcome, type ApiParams, type ModelInfoView } from '@paiapp/contracts';
 
 import type { PaiRuntime } from './pai-runtime';
@@ -35,7 +38,7 @@ import type { ProviderKeyStore } from './file-settings';
 
 /**
  * 渲染层 invoke 路由：zod 校验 → 翻译为 host-hub 命令 → 响应收窄为视图。
- * 全部错误以 {ok:false,reason} 返回（中性英文）；协议字面量只在本文件与 adapter 出现。
+ * 全部错误以 {ok:false,error:ApiError} 返回（kind 判别联合）；协议字面量只在本文件与 adapter 出现。
  */
 
 type FileSettings = ReturnType<typeof createFileSettings>;
@@ -92,7 +95,7 @@ type Outcome<M extends ApiMethod> = Promise<ApiOutcome<M>>;
 export function createApiRoutes(deps: ApiRouteDeps) {
   const { runtime } = deps;
 
-  const fail = (reason: string): { ok: false; reason: string } => ({ ok: false, reason });
+  const fail = (error: ApiError): { ok: false; error: ApiError } => ({ ok: false, error });
 
   /** 会话文件白名单：resolve 后必须位于 sessionsRoot 之下（真实路径优先；缺失段
    *  逐级上溯到存在的祖先做 realpath 归一——删除后的会话目录幂等重删不得因归一
@@ -131,13 +134,14 @@ export function createApiRoutes(deps: ApiRouteDeps) {
   const command = async (
     cmd: Parameters<PaiRuntime['host']['request']>[0],
     timeoutMs?: number,
-  ): Promise<{ ok: true; data: unknown } | { ok: false; reason: string }> => {
+  ): Promise<{ ok: true; data: unknown } | { ok: false; error: ApiError }> => {
     try {
       const outcome = await runtime.host.request(cmd, timeoutMs);
-      return outcome.ok ? { ok: true, data: outcome.data } : fail(outcome.error);
+      // 双形状解码单点：hub 结构化对象按码表/兜底族；infra 自产串按 transient 面
+      return outcome.ok ? { ok: true, data: outcome.data } : fail(decodeApiError(outcome.error));
     } catch {
       // host 未启动/装配失败走 outcome 而非异常（渲染层据此进降级 UI）
-      return fail('host_unavailable');
+      return fail({ kind: 'transient', face: 'host_unavailable' });
     }
   };
 
@@ -224,7 +228,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     settings: deps.settings,
     keyStore: deps.keyStore,
     restartHost: restartHostForProviders,
-    command: command as Parameters<typeof createSettingsRoutes>[0]['command'],
+    command,
     ...(deps.onRouteRejected !== undefined ? { onReject: deps.onRouteRejected } : {}),
   });
   const { providersView, preferencesView, skillsList } = settings;
@@ -272,19 +276,19 @@ export function createApiRoutes(deps: ApiRouteDeps) {
         ...(params.thinkingLevel !== undefined ? { thinkingLevel: params.thinkingLevel } : {}),
       });
       if (!result.ok) {
-        deps.onRouteRejected?.(`session_start_rejected:${result.reason}`);
-        return fail(result.reason);
+        deps.onRouteRejected?.(`session_start_rejected:${errorLogToken(result.error)}`);
+        return fail(result.error);
       }
       const data = result.data as { threadId?: string; cwd?: string; sessionPath?: string | null };
       const threadId = data.threadId ?? '';
-      if (threadId.length === 0) return fail('malformed_response');
+      if (threadId.length === 0) return fail(appError('malformed_response'));
       const view = runtime.applyStartOutcome(threadId, data.cwd ?? params.cwd, data.sessionPath ?? null, runtime.defaultTitle, Date.now(), params.trusted ?? false);
       fillSessionMeta(threadId);
       return { ok: true as const, data: view };
     },
     'session/stop': async (params) => {
       const result = await command({ type: 'thread/stop', threadId: params.threadId });
-      if (!result.ok) return fail(result.reason);
+      if (!result.ok) return fail(result.error);
       // remove=false：内部重开链（trusted 重载/技能开关）只摘视图，注册表行是随后 resume 的 title/trusted 补全源
       if (params.remove) runtime.removeSession(params.threadId);
       else runtime.detachSession(params.threadId);
@@ -298,14 +302,14 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       // 词表/同 data 三元组——app 不依赖 hub 拦截面行为对齐；响应即终态，长超时）
       const invocation = compactInvocationOf(params.message);
       if (invocation !== undefined) {
-        // 携图命中命令 = hub 硬拒（invalid images: compact does not accept images）——
+        // 携图命中命令 = hub 硬拒（compact 不接受图片）——
         // 直发路径本地同口径先拒，附件不被静默丢弃
-        if ((params.images?.length ?? 0) > 0) return fail('invalid images: compact does not accept images');
+        if ((params.images?.length ?? 0) > 0) return fail(appError('compact_images_rejected'));
         const result = await command(
           { type: 'compact', threadId: params.threadId, customInstructions: invocation.customInstructions },
           COMPACT_REQUEST_TIMEOUT_MS,
         );
-        if (!result.ok) return fail(result.reason);
+        if (!result.ok) return fail(result.error);
         void runtime.autoTitleOnPrompt(params.threadId, params.message).catch(() => undefined);
         const raw = (result.data ?? {}) as Record<string, unknown>;
         const compactResult =
@@ -328,12 +332,12 @@ export function createApiRoutes(deps: ApiRouteDeps) {
           PROMPT_REQUEST_TIMEOUT_MS,
         );
       let result = await send();
-      if (!result.ok && params.streamingBehavior === undefined && /streamingBehavior required/.test(result.reason)) {
+      if (!result.ok && params.streamingBehavior === undefined && result.error.kind === 'streaming_window') {
         result = await send('followUp');
       }
       if (!result.ok) {
-        deps.onRouteRejected?.(`session_prompt_rejected:${params.threadId}:${result.reason}`);
-        return fail(result.reason);
+        deps.onRouteRejected?.(`session_prompt_rejected:${params.threadId}:${errorLogToken(result.error)}`);
+        return fail(result.error);
       }
       void runtime.autoTitleOnPrompt(params.threadId, params.message).catch(() => undefined);
       return { ok: true as const, data: null };
@@ -342,42 +346,42 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       // Esc/停止语义 = 清队列 + 停止当前轮（客户端约定）
       await command({ type: 'clear_queue', threadId: params.threadId });
       const result = await command({ type: 'abort', threadId: params.threadId });
-      return result.ok ? { ok: true as const, data: null } : fail(result.reason);
+      return result.ok ? { ok: true as const, data: null } : fail(result.error);
     },
     'session/entries': async (params) => {
       const result = await command({ type: 'get_entries', threadId: params.threadId, since: params.since });
-      // 全量兜底只认游标失效（分支变化/重恢复；hub 文案 `invalid since cursor: <seq>`）：
+      // 全量兜底只认游标失效（分支变化/重恢复；hub 码 cursor_stale）：
       // busy/timeout 等瞬态再叠一次全量拉取只会放大压力（30s 超时后再 30s）
-      if (!result.ok && params.since !== undefined && /invalid since cursor/.test(result.reason)) {
+      if (!result.ok && params.since !== undefined && result.error.kind === 'cursor_stale') {
         const full = await command({ type: 'get_entries', threadId: params.threadId });
-        if (!full.ok) return fail(full.reason);
+        if (!full.ok) return fail(full.error);
         return { ok: true as const, data: mapEntries(full.data) };
       }
-      if (!result.ok) return fail(result.reason);
+      if (!result.ok) return fail(result.error);
       return { ok: true as const, data: mapEntries(result.data) };
     },
     'session/inflight': async (params) => {
       const result = await command({ type: 'get_inflight', threadId: params.threadId });
-      return result.ok ? { ok: true as const, data: inflightView(result.data) } : fail(result.reason);
+      return result.ok ? { ok: true as const, data: inflightView(result.data) } : fail(result.error);
     },
     'session/subagents': async (params) => {
       const result = await command({ type: 'get_subagents', threadId: params.threadId });
-      return result.ok ? { ok: true as const, data: { subagents: subagentSnapshotView(result.data) } } : fail(result.reason);
+      return result.ok ? { ok: true as const, data: { subagents: subagentSnapshotView(result.data) } } : fail(result.error);
     },
     'session/pendingDialogs': async (params) => {
       const result = await command({ type: 'get_pending_dialogs', threadId: params.threadId });
-      return result.ok ? { ok: true as const, data: { dialogs: pendingDialogsView(result.data) } } : fail(result.reason);
+      return result.ok ? { ok: true as const, data: { dialogs: pendingDialogsView(result.data) } } : fail(result.error);
     },
     'session/state': async (params) => {
       const result = await command({ type: 'get_state', threadId: params.threadId });
-      if (!result.ok) return fail(result.reason);
+      if (!result.ok) return fail(result.error);
       const view = threadStateView(result.data);
       runtime.touchSession(params.threadId, { model: view.model === null ? null : `${view.model.provider}/${view.model.model}` });
       return { ok: true as const, data: view };
     },
     'session/stats': async (params) => {
       const result = await command({ type: 'get_session_stats', threadId: params.threadId });
-      return result.ok ? { ok: true as const, data: sessionStatsView(result.data) } : fail(result.reason);
+      return result.ok ? { ok: true as const, data: sessionStatsView(result.data) } : fail(result.error);
     },
     'session/setName': async (params) => {
       // parked 占位未进 host（setName 必回 Unknown threadId）：标题直接落注册表，
@@ -388,31 +392,31 @@ export function createApiRoutes(deps: ApiRouteDeps) {
         return { ok: true as const, data: null };
       }
       const result = await command({ type: 'set_session_name', threadId: params.threadId, name: params.name });
-      if (!result.ok) return fail(result.reason);
+      if (!result.ok) return fail(result.error);
       runtime.renameSession(params.threadId, params.name);
       return { ok: true as const, data: null };
     },
     'session/setModel': async (params) => {
       const result = await command({ type: 'set_model', threadId: params.threadId, provider: params.provider, modelId: params.modelId });
-      if (!result.ok) return fail(result.reason);
+      if (!result.ok) return fail(result.error);
       runtime.touchSession(params.threadId, { model: `${params.provider}/${params.modelId}` });
       return { ok: true as const, data: null };
     },
     'session/setThinking': async (params) => {
       const level = parseThinkingLevel(params.level);
-      if (level === null) return fail('invalid_params');
+      if (level === null) return fail(appError('invalid_params'));
       const result = await command({ type: 'set_thinking_level', threadId: params.threadId, level });
-      if (!result.ok) return fail(result.reason);
+      if (!result.ok) return fail(result.error);
       runtime.touchSession(params.threadId, { thinkingLevel: level });
       return { ok: true as const, data: null };
     },
     'session/thinkingLevels': async (params) => {
       const result = await command({ type: 'get_thinking_level', threadId: params.threadId });
-      return result.ok ? { ok: true as const, data: thinkingLevelView(result.data) } : fail(result.reason);
+      return result.ok ? { ok: true as const, data: thinkingLevelView(result.data) } : fail(result.error);
     },
     'model/list': async () => {
       const result = await command({ type: 'get_models' });
-      return result.ok ? { ok: true as const, data: channelModels(modelInfos(result.data)) } : fail(result.reason);
+      return result.ok ? { ok: true as const, data: channelModels(modelInfos(result.data)) } : fail(result.error);
     },
     'dialog/respond': async (params) => {
       // 任何情况下都必答（晚到/未知 id 由 host 静默忽略并 ack）；权限应答落审计日志
@@ -420,15 +424,15 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       const cancelled = params.payload['cancelled'] === true;
       deps.audit(`dialog_respond:${params.requestId}:${cancelled ? 'cancelled' : confirmed ? 'confirmed' : 'value'}`);
       const result = await command({ type: 'ui_response', requestId: params.requestId, payload: params.payload });
-      return result.ok ? { ok: true as const, data: null } : fail(result.reason);
+      return result.ok ? { ok: true as const, data: null } : fail(result.error);
     },
     'subagent/steer': async (params) => {
       const result = await command({ type: 'subagent/steer', threadId: params.threadId, agentId: params.agentId, message: params.message });
-      return result.ok ? { ok: true as const, data: null } : fail(result.reason);
+      return result.ok ? { ok: true as const, data: null } : fail(result.error);
     },
     'command/list': async (params) => {
       const result = await command({ type: 'get_commands', threadId: params.threadId });
-      return result.ok ? { ok: true as const, data: sessionCommands(result.data) } : fail(result.reason);
+      return result.ok ? { ok: true as const, data: sessionCommands(result.data) } : fail(result.error);
     },
     'command/preview': async () => {
       const enabled = (await skillsList()).filter((skill) => skill.enabled);
@@ -440,11 +444,11 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     },
     'session/fork': async (params) => {
       const result = await command({ type: 'fork', threadId: params.threadId, seq: params.seq, position: params.position });
-      if (!result.ok) return fail(result.reason);
+      if (!result.ok) return fail(result.error);
       const data = result.data as { threadId?: string; previousThreadId?: string; sessionPath?: string | null };
       const threadId = data.threadId ?? '';
       // previousThreadId 必须就是被分叉的会话：换轨响应对不上请求即坏形状（防 ABA）
-      if (threadId.length === 0 || data.previousThreadId !== params.threadId) return fail('malformed_response');
+      if (threadId.length === 0 || data.previousThreadId !== params.threadId) return fail(appError('malformed_response'));
       // 响应不带 cwd/标题：从被分叉会话继承（项目分组与侧栏语义跟原会话走）
       const source = runtime.sessions().find((session) => session.threadId === params.threadId);
       // fork 是原地换轨：旧 id 已从 hub 移除（会话文件保留、可懒恢复），旧行转 parked
@@ -454,7 +458,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       return { ok: true as const, data: view };
     },
     'session/reveal': (params) => {
-      if (!insideSessionsRoot(params.sessionPath)) return Promise.resolve(fail('session_path_forbidden'));
+      if (!insideSessionsRoot(params.sessionPath)) return Promise.resolve(fail(appError('session_path_forbidden')));
       deps.revealPath(params.sessionPath);
       return Promise.resolve({ ok: true as const, data: null });
     },
@@ -462,16 +466,16 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       deps
         .pickDirectory(params.defaultPath ?? null)
         .then((directory) => ({ ok: true as const, data: directory }))
-        .catch(() => fail('dialog_unavailable')),
+        .catch(() => fail(appError('dialog_unavailable'))),
     'session/clearQueue': async (params) => {
       const result = await command({ type: 'clear_queue', threadId: params.threadId });
-      return result.ok ? { ok: true as const, data: null } : fail(result.reason);
+      return result.ok ? { ok: true as const, data: null } : fail(result.error);
     },
     'session/bash': async (params) => {
       deps.audit(`bash_run:${params.threadId}`);
       // hub bash 完成才回包（墙钟上限 24h）：30s 缺省超时会误报仍在执行的命令
       const result = await command({ type: 'bash', threadId: params.threadId, command: params.command }, 24 * 60 * 60 * 1_000);
-      if (!result.ok) return fail(result.reason);
+      if (!result.ok) return fail(result.error);
       const data = result.data as { output?: unknown; exitCode?: unknown; cancelled?: unknown; truncated?: unknown; fullOutputPath?: unknown };
       return {
         ok: true as const,
@@ -487,11 +491,11 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     'session/abortBash': async (params) => {
       // 全量中止语义（D13：bash 执行 id = 命令关联 id，app 侧不可定向指定）
       const result = await command({ type: 'abort_bash', threadId: params.threadId });
-      return result.ok ? { ok: true as const, data: null } : fail(result.reason);
+      return result.ok ? { ok: true as const, data: null } : fail(result.error);
     },
     'permission/mode': async (params) => {
       const result = await command({ type: 'permission/get_mode', threadId: params.threadId });
-      if (!result.ok) return fail(result.reason);
+      if (!result.ok) return fail(result.error);
       const data = result.data as { mode?: unknown; source?: unknown };
       const source = data.source;
       return {
@@ -505,13 +509,13 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     'permission/setMode': (params) => {
       deps.audit(`permission_mode:${params.threadId}:${params.mode}`);
       return command({ type: 'permission/set_mode', threadId: params.threadId, mode: params.mode }).then((result) =>
-        result.ok ? { ok: true as const, data: null } : fail(result.reason),
+        result.ok ? { ok: true as const, data: null } : fail(result.error),
       );
     },
         ...runtimeRoutes({ runtime, monitor: deps.monitor, settings: deps.settings, command, fail, onPolicySyncFailed: deps.onPolicySyncFailed, exportDiagnosticsBundle: deps.exportDiagnosticsBundle }),
     'app/restartHost': () => {
       deps.audit('restart_host:manual');
-      if (runtime.hostPhase() === null) return Promise.resolve(fail('host_unavailable'));
+      if (runtime.hostPhase() === null) return Promise.resolve(fail({ kind: 'transient', face: 'host_unavailable' }));
       void runtime.host.restart('manual').catch(() => undefined);
       return Promise.resolve({ ok: true as const, data: null });
     },
@@ -533,23 +537,23 @@ export function createApiRoutes(deps: ApiRouteDeps) {
   return {
     async invoke(method: string, params: unknown): Promise<unknown> {
       // 自有属性判定：原型链键（toString/__proto__）不得命中 schema（误报 invalid_params）
-      if (!Object.prototype.hasOwnProperty.call(ApiSchemas, method)) return fail(`unknown_method:${method}`);
+      if (!Object.prototype.hasOwnProperty.call(ApiSchemas, method)) return fail(appError('unknown_method', method));
       const schema = ApiSchemas[method as ApiMethod];
-      if (schema === undefined) return fail(`unknown_method:${method}`);
+      if (schema === undefined) return fail(appError('unknown_method', method));
       let parsed: unknown;
       try {
         parsed = schema.params.parse(params);
       } catch {
-        return fail('invalid_params');
+        return fail(appError('invalid_params'));
       }
       let outcome: unknown;
       try {
         const handler = routes[method as ApiMethod];
-        if (handler === undefined) return fail(`unknown_method:${method}`);
+        if (handler === undefined) return fail(appError('unknown_method', method));
         outcome = await handler(parsed as never);
       } catch {
         // 路由实现内未捕获的异常（磁盘错/装配面）统一收窄，不沿 IPC reject 到渲染层
-        outcome = fail('internal_error');
+        outcome = fail(appError('internal_error'));
       }
       return outcome;
     },

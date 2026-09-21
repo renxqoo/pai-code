@@ -3,6 +3,9 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { createEventMapper, mapDialogRequest, savedSessions, toSessionView } from '@paiapp/adapter';
+import { decodeApiError } from '@paiapp/api';
+
+import { errorLogToken } from './error-log-token';
 import { autoTitleCandidateOf } from './auto-title';
 import {
   openRegistryStore,
@@ -282,7 +285,7 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
       const outcome = await active.request({ type: 'thread/list_saved', cwd });
       if (!outcome.ok) {
         // 暂态列举失败不得删行（丢恢复依据）；行保留为占位，真实缺失由 resume 失败显式暴露
-        log(`list_saved_failed:${cwd}:${outcome.error}`);
+        log(`list_saved_failed:${cwd}:${errorLogToken(decodeApiError(outcome.error))}`);
         continue;
       }
       listedCwds.add(cwd);
@@ -455,7 +458,7 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
     },
     async assertKeepalive(threadId: string): Promise<void> {
       const outcome = await this.host.request({ type: 'thread/set_keepalive', threadId, keepalive: true });
-      if (!outcome.ok) log(`keepalive_assert_failed:${threadId}:${outcome.error}`);
+      if (!outcome.ok) log(`keepalive_assert_failed:${threadId}:${errorLogToken(decodeApiError(outcome.error))}`);
     },
     reconcileWorkerStates(rows: readonly { threadId: string; state: 'live' | 'parked' | 'dead' }[]): void {
       // 只折叠 hub 报告为非 live 且内存仍 live 的会话（帧丢失兜底）；不广播

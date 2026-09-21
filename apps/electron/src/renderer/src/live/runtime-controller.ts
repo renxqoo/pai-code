@@ -4,7 +4,7 @@ import type { BridgeClient } from './client-invoke';
 
 /**
  * 运行状态方法族（T29）：快照轮询 / 诊断日志 / 回收三命令 / 档位 / 诊断包导出。
- * 从 live-controller 拆出（一动词一文件）；成功返回数据或 null，失败返回原因。
+ * 从 live-controller 拆出（一动词一文件）；成功返回数据或 null，失败返回 error kind。
  */
 
 export interface RuntimeController {
@@ -37,15 +37,15 @@ export function createRuntimeController(client: BridgeClient): RuntimeController
     },
     async retireSession(threadId: string): Promise<string | null> {
       const outcome = await client.invoke('session/retire', { threadId });
-      return outcome.ok ? null : outcome.reason;
+      return outcome.ok ? null : outcome.error.kind;
     },
     async forceRetireSession(threadId: string): Promise<string | null> {
       const outcome = await client.invoke('session/forceRetire', { threadId });
-      return outcome.ok ? null : outcome.reason;
+      return outcome.ok ? null : outcome.error.kind;
     },
     async setKeepalive(threadId: string, keepalive: boolean): Promise<string | null> {
       const outcome = await client.invoke('session/setKeepalive', { threadId, keepalive });
-      return outcome.ok ? null : outcome.reason;
+      return outcome.ok ? null : outcome.error.kind;
     },
     async setIdleRecycle(minutes: IdleRecycleMinutes): Promise<IdleRecycleMinutes | null> {
       const outcome = await client.invoke('app/setIdleRecycle', { minutes });

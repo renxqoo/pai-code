@@ -5,7 +5,7 @@ import type { GitExec, GitExecResult } from '../git-branches';
 
 /**
  * git 图谱读口（T36）：纯函数解析（NUL/记录分隔/装饰/parents）+ fake 执行器驱动的
- * 行为（非仓库/空仓库降级、上限截断、单飞与失效、进程级异常 reason）。
+ * 行为（非仓库/空仓库降级、上限截断、单飞与失效、进程级异常 error）。
  */
 
 const ok = (stdout: string): GitExecResult => ({ code: 0, stdout, stderr: '', error: null });
@@ -93,7 +93,7 @@ describe('createGitGraph', () => {
       if (args.includes('--verify')) return Promise.resolve(ok('a7f9c2a'));
       return Promise.resolve(ok('.git'));
     });
-    expect(await broken.list('/w/repo')).toEqual({ ok: false, reason: 'git_failed:fatal: bad object HEAD' });
+    expect(await broken.list('/w/repo')).toEqual({ ok: false, error: { kind: 'internal_error', message: 'git_failed:fatal: bad object HEAD' } });
   });
 
   test('正常仓库解析 + 上限 500 截断（多取 1 条判 truncated）', async () => {
@@ -128,17 +128,17 @@ describe('createGitGraph', () => {
     expect(outcome.data.truncated).toBe(true);
   });
 
-  test('进程级异常与探测失败 reason 透传', async () => {
+  test('进程级异常与探测失败 error 透传', async () => {
     const missing = createGitGraph((args) => Promise.resolve(args[0] === 'rev-parse' ? proc('spawn_failed') : ok('')));
-    expect(await missing.list('/w/repo')).toEqual({ ok: false, reason: 'git_unavailable' });
+    expect(await missing.list('/w/repo')).toEqual({ ok: false, error: { kind: 'git_unavailable' } });
 
     const timedOut = createGitGraph((args) => Promise.resolve(args[0] === 'rev-parse' ? ok('.git') : proc('timeout')));
-    expect(await timedOut.list('/w/repo')).toEqual({ ok: false, reason: 'git_failed:timeout' });
+    expect(await timedOut.list('/w/repo')).toEqual({ ok: false, error: { kind: 'transient', face: 'timeout', message: 'git_failed:timeout' } });
 
     const dubious = createGitGraph((args) =>
       Promise.resolve(args[0] === 'rev-parse' ? fail('fatal: detected dubious ownership in repository') : ok('')),
     );
-    expect(await dubious.list('/w/repo')).toEqual({ ok: false, reason: 'git_failed:fatal: detected dubious ownership in repository' });
+    expect(await dubious.list('/w/repo')).toEqual({ ok: false, error: { kind: 'internal_error', message: 'git_failed:fatal: detected dubious ownership in repository' } });
   });
 
   test('同 cwd 在途单飞（只探测一次）', async () => {

@@ -172,7 +172,7 @@ test('症状回归：新建任务页输入 / 无命令面板——fetchCommandPr
     invoke: (method) => {
       if (method !== 'command/preview') return Promise.resolve({ ok: true, data: null } as never);
       return fail
-        ? Promise.resolve({ ok: false, reason: 'hub_unavailable' } as never)
+        ? Promise.resolve({ ok: false, error: { kind: 'transient', face: 'host_unavailable' } } as never)
         : Promise.resolve({
             ok: true,
             data: [{ name: 'skill:rxopen-hot', description: '查热搜', source: 'skill' }],

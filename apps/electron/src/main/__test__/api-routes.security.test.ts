@@ -104,22 +104,22 @@ describe("api-routes 安全面（C-S2/C-S8/C-S4）", () => {
 
     const evil = (await routes.invoke("session/resume", {
       sessionPath: join(outside, "evil.jsonl"),
-    })) as { ok: boolean; reason?: string };
-    expect(evil).toEqual({ ok: false, reason: "session_path_forbidden" });
+    })) as { ok: boolean; error?: { kind: string; message?: string } };
+    expect(evil).toEqual({ ok: false, error: { kind: "session_path_forbidden" } });
 
     const traversal = (await routes.invoke("session/resume", {
       sessionPath: `${agentDir}/sessions/../../outside/evil.jsonl`,
-    })) as { ok: boolean; reason?: string };
-    expect(traversal).toEqual({ ok: false, reason: "session_path_forbidden" });
+    })) as { ok: boolean; error?: { kind: string; message?: string } };
+    expect(traversal).toEqual({ ok: false, error: { kind: "session_path_forbidden" } });
 
     // 白名单内：到达 host（此处 host 不可用 → host_unavailable，证明未被白名单拦截）
     const inside = (await routes.invoke("session/resume", {
       sessionPath: join(agentDir, "sessions", "ok.jsonl"),
     })) as {
       ok: boolean;
-      reason?: string;
+      error?: { kind: string; face?: string };
     };
-    expect(inside).toEqual({ ok: false, reason: "host_unavailable" });
+    expect(inside).toEqual({ ok: false, error: { kind: "transient", face: "host_unavailable" } });
   });
 
   test("C-S8：provider 名 sanitize 碰撞拒绝（a-b 与 a_b 同映射 PAI_KEY_A_B）", async () => {
@@ -137,8 +137,8 @@ describe("api-routes 安全面（C-S2/C-S8/C-S4）", () => {
       baseUrl: "https://b.example.com",
       api: "openai",
       models: [{ id: "m", reasoning: false, vision: false }],
-    })) as { ok: boolean; reason?: string };
-    expect(collide).toEqual({ ok: false, reason: "provider_name_conflict" });
+    })) as { ok: boolean; error?: { kind: string; message?: string } };
+    expect(collide).toEqual({ ok: false, error: { kind: "invalid_params", message: "provider_name_conflict" } });
     // 同名更新自身合法
     const self = (await routes.invoke("provider/upsert", {
       name: "a-b",
@@ -157,15 +157,15 @@ describe("api-routes 安全面（C-S2/C-S8/C-S4）", () => {
       baseUrl: "https://x.example.com",
       api: "openai",
       models: [{ id: "m", reasoning: false, vision: false }],
-    })) as { ok: boolean; reason?: string };
+    })) as { ok: boolean; error?: { kind: string; message?: string } };
     expect(preset.ok).toBe(true);
     const badApi = (await routes.invoke("provider/upsert", {
       name: "custom",
       baseUrl: "https://x.example.com",
       api: "pi-messages",
       models: [{ id: "m", reasoning: false, vision: false }],
-    })) as { ok: boolean; reason?: string };
-    expect(badApi).toEqual({ ok: false, reason: "provider_api_unsupported" });
+    })) as { ok: boolean; error?: { kind: string; message?: string } };
+    expect(badApi).toEqual({ ok: false, error: { kind: "invalid_params", message: "provider_api_unsupported" } });
   });
 
   test("C-S4：host 未启动时 provider/upsert 照常落盘（目录只在 spawn 期读入——保存不依赖 host）；bootstrap 全走 outcome 不 reject；remove 照常", async () => {
@@ -178,7 +178,7 @@ describe("api-routes 安全面（C-S2/C-S8/C-S4）", () => {
       models: [
         { id: "m", reasoning: false, vision: false, contextWindow: 200000, maxTokens: 8192 },
       ],
-    })) as { ok: boolean; reason?: string };
+    })) as { ok: boolean; error?: { kind: string; message?: string } };
     expect(upserted.ok).toBe(true);
     const bootstrap = (await routes.invoke("app/bootstrap", {})) as { ok: boolean; data: unknown };
     expect(bootstrap.ok).toBe(true);
@@ -244,8 +244,8 @@ describe("api-routes 权限模式与 hub 设置（hub 命令面）", () => {
       mode: "auto",
     });
     expect(audits).toContain("permission_mode:t1:auto");
-    const bad = (await routes.invoke("permission/setMode", { threadId: "t1", mode: "yolo" })) as { ok: boolean; reason?: string };
-    expect(bad).toEqual({ ok: false, reason: "invalid_params" });
+    const bad = (await routes.invoke("permission/setMode", { threadId: "t1", mode: "yolo" })) as { ok: boolean; error?: { kind: string; message?: string } };
+    expect(bad).toEqual({ ok: false, error: { kind: "invalid_params" } });
   });
 
   test("app/hubSettings：settings/get values 收窄（未设置键 → null）", async () => {
@@ -291,17 +291,17 @@ describe("api-routes 门禁（第三波审查补：file/search 与 reveal）", (
 
     const forbidden = (await routes.invoke("file/search", { cwd: "/etc", query: "" })) as {
       ok: boolean;
-      reason?: string;
+      error?: { kind: string };
     };
     expect(forbidden.ok).toBe(false);
-    expect(forbidden.reason).toBe("cwd_forbidden");
+    expect(forbidden.error).toEqual({ kind: "cwd_forbidden" });
 
     const escape = (await routes.invoke("file/search", {
       cwd: `${agentDir}/../..`,
       query: "",
-    })) as { ok: boolean; reason?: string };
+    })) as { ok: boolean; error?: { kind: string; message?: string } };
     expect(escape.ok).toBe(false);
-    expect(escape.reason).toBe("cwd_forbidden");
+    expect(escape.error).toEqual({ kind: "cwd_forbidden" });
   });
 
   test("session/reveal：白名单外路径拒绝，目录内放行", async () => {
@@ -342,10 +342,10 @@ describe("api-routes 门禁（第三波审查补：file/search 与 reveal）", (
     });
     const outside = (await routes.invoke("session/reveal", { sessionPath: "/etc/passwd" })) as {
       ok: boolean;
-      reason?: string;
+      error?: { kind: string };
     };
     expect(outside.ok).toBe(false);
-    expect(outside.reason).toBe("session_path_forbidden");
+    expect(outside.error).toEqual({ kind: "session_path_forbidden" });
     const inside = (await routes.invoke("session/reveal", { sessionPath: sessionFile })) as {
       ok: boolean;
     };
@@ -383,8 +383,8 @@ describe("api-routes agent 定义面（T20）", () => {
     const rejected = (await routes.invoke("agent/upsert", {
       definition: { ...definition, scope: "project", project: "/nowhere" },
       previous: null,
-    })) as { ok: boolean; reason?: string };
-    expect(rejected).toEqual({ ok: false, reason: "invalid_project" });
+    })) as { ok: boolean; error?: { kind: string; message?: string } };
+    expect(rejected).toEqual({ ok: false, error: { kind: "invalid_params", message: "invalid_project" } });
     const removed = (await routes.invoke("agent/remove", {
       name: "search",
       scope: "user",
@@ -401,29 +401,27 @@ describe("api-routes 收敛读口门禁（T35 对抗审查补：新方法必须�
     const work = mkdtempSync(join(tmpdir(), "pai-sec-inflight-"));
     const { routes } = await makeRoutes(work);
     for (const method of ["session/inflight", "session/subagents", "session/pendingDialogs"] as const) {
-      const bad = (await routes.invoke(method, {})) as { ok: boolean; reason?: string };
-      expect({ method, bad }).toEqual({ method, bad: { ok: false, reason: "invalid_params" } });
+      const bad = (await routes.invoke(method, {})) as { ok: boolean; error?: { kind: string; message?: string } };
+      expect({ method, bad }).toEqual({ method, bad: { ok: false, error: { kind: "invalid_params" } } });
       // 合法参数：本装置无 host → host_unavailable（证明未被门禁误拦，且确实透传到 host 命令）
-      const ok = (await routes.invoke(method, { threadId: "t1" })) as { ok: boolean; reason?: string };
-      expect({ method, ok }).toEqual({ method, ok: { ok: false, reason: "host_unavailable" } });
+      const ok = (await routes.invoke(method, { threadId: "t1" })) as { ok: boolean; error?: { kind: string; message?: string } };
+      expect({ method, ok }).toEqual({ method, ok: { ok: false, error: { kind: "transient", face: "host_unavailable" } } });
     }
   });
 
   test("未注册方法 → unknown_method（白名单按 ApiSchemas 单一驱动）", async () => {
     const work = mkdtempSync(join(tmpdir(), "pai-sec-unknown-"));
     const { routes } = await makeRoutes(work);
-    const out = (await routes.invoke("session/nope" as never, {})) as { ok: boolean; reason?: string };
-    expect(out.ok).toBe(false);
-    expect(out.reason).toContain("unknown_method");
+    const out = (await routes.invoke("session/nope" as never, {})) as { ok: boolean; error?: { kind: string; message?: string } };
+    expect(out).toEqual({ ok: false, error: { kind: "unknown_method", message: "session/nope" } });
   });
 
   test("退役方法不在白名单：permission/read|write → unknown_method", async () => {
     const work = mkdtempSync(join(tmpdir(), "pai-sec-retired-"));
     const { routes } = await makeRoutes(work);
     for (const method of ["permission/read", "permission/write"] as const) {
-      const out = (await routes.invoke(method as never, {})) as { ok: boolean; reason?: string };
-      expect(out.ok).toBe(false);
-      expect(out.reason).toContain("unknown_method");
+      const out = (await routes.invoke(method as never, {})) as { ok: boolean; error?: { kind: string; message?: string } };
+      expect(out).toEqual({ ok: false, error: { kind: "unknown_method", message: method } });
     }
   });
 });

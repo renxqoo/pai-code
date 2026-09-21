@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 
 import type { GitBranchesView } from '@paiapp/contracts';
+import { appError, type ApiError } from '@paiapp/api';
 
 /**
  * 本地 git 分支能力（新建任务页项目/分支选择）：只读分支列表 + 切换/创建并检出。
@@ -22,13 +23,13 @@ export type GitExecResult = {
 
 export type GitExec = (args: readonly string[], cwd: string) => Promise<GitExecResult>
 
-export type GitBranchesOutcome = { ok: true; data: GitBranchesView } | { ok: false; reason: string }
-export type GitCheckoutOutcome = { ok: true; data: { branch: string } } | { ok: false; reason: string }
+export type GitBranchesOutcome = { ok: true; data: GitBranchesView } | { ok: false; error: ApiError }
+export type GitCheckoutOutcome = { ok: true; data: { branch: string } } | { ok: false; error: ApiError }
 
 const GIT_TIMEOUT_MS = 5000;
 /** 单条命令输出上限（分支列表/状态在正常仓库远小于此）。 */
 const GIT_MAX_BUFFER = 1 << 20;
-/** 错误摘要长度上限（透传给渲染层的 reason 不做无界透传）。 */
+/** 错误摘要长度上限（透传给渲染层的 message 不做无界透传）。 */
 const ERROR_SUMMARY_LIMIT = 200;
 /**
  * 隔离仓库自带的可执行面：仓库本地 config 的 hooks 与 fsmonitor 都指向可执行文件，
@@ -112,27 +113,28 @@ export function parseDirtyCount(stdout: string): number {
   return stdout.split('\n').filter((line) => line.trim().length > 0).length;
 }
 
-/** git 报错 → 契约 reason（未识别一律 git_failed:<摘要>，不吞错）。 */
-export function mapGitFailure(stderr: string): string {
+/** git 报错 → AppError（git 族闭集成员 1:1；未识别一律 internal_error 带
+ *  `git_failed:<摘要>` message，不吞错）。 */
+export function mapGitFailure(stderr: string): ApiError {
   const text = stderr.toLowerCase();
-  if (text.includes('not a git repository')) return 'not_a_repo';
-  if (text.includes('already exists')) return 'branch_exists';
+  if (text.includes('not a git repository')) return appError('not_a_repo');
+  if (text.includes('already exists')) return appError('branch_exists');
   if (text.includes('did not match any file') || text.includes('unknown revision') || text.includes('did not match any known')) {
-    return 'unknown_branch';
+    return appError('unknown_branch');
   }
   if (text.includes('local changes') || text.includes('would be overwritten') || text.includes('please commit your changes')) {
-    return 'dirty_worktree';
+    return appError('dirty_worktree');
   }
   const summary = firstLine(stderr);
-  return summary.length > 0 ? `git_failed:${summary}` : 'git_failed:unknown';
+  return appError('internal_error', summary.length > 0 ? `git_failed:${summary}` : 'git_failed:unknown');
 }
 
-/** 执行结果 → 失败 reason：进程级异常优先于 stderr 分类（超时不是「git 不在 PATH」）。git 读口族共用。 */
-export function failureReason(result: GitExecResult): string {
-  if (result.error === 'timeout') return 'git_failed:timeout';
-  if (result.error === 'output_too_large') return 'git_failed:output_too_large';
-  if (result.error === 'cwd_missing') return 'cwd_not_found';
-  if (result.error === 'spawn_failed') return 'git_unavailable';
+/** 执行结果 → 失败 AppError：进程级异常优先于 stderr 分类（超时不是「git 不在 PATH」）。git 读口族共用。 */
+export function failureError(result: GitExecResult): ApiError {
+  if (result.error === 'timeout') return { kind: 'transient', face: 'timeout', message: 'git_failed:timeout' };
+  if (result.error === 'output_too_large') return { kind: 'transient', face: 'command_failed', message: 'git_failed:output_too_large' };
+  if (result.error === 'cwd_missing') return appError('cwd_not_found');
+  if (result.error === 'spawn_failed') return appError('git_unavailable');
   return mapGitFailure(result.stderr);
 }
 
@@ -148,21 +150,22 @@ export function createGitBranches(run: GitExec = runGit): GitBranches {
 
   const readBranches = async (cwd: string): Promise<GitBranchesOutcome> => {
     const probe = await run(['rev-parse', '--git-dir'], cwd);
-    if (probe.error !== null) return { ok: false, reason: failureReason(probe) };
+    if (probe.error !== null) return { ok: false, error: failureError(probe) };
     if (probe.code !== 0) {
       // 非仓库是正常形态（新建任务页允许选任意目录）：降级为空列表，其余报错照实透传
-      if (mapGitFailure(probe.stderr) === 'not_a_repo') return okBranches({ isRepo: false, current: null, branches: [], dirtyFiles: 0 });
-      return { ok: false, reason: mapGitFailure(probe.stderr) };
+      const failure = mapGitFailure(probe.stderr);
+      if (failure.kind === 'not_a_repo') return okBranches({ isRepo: false, current: null, branches: [], dirtyFiles: 0 });
+      return { ok: false, error: failure };
     }
     const refs = await run(['for-each-ref', '--format=%(refname:short)', 'refs/heads'], cwd);
-    if (refs.error !== null) return { ok: false, reason: failureReason(refs) };
-    if (refs.code !== 0) return { ok: false, reason: mapGitFailure(refs.stderr) };
+    if (refs.error !== null) return { ok: false, error: failureError(refs) };
+    if (refs.code !== 0) return { ok: false, error: mapGitFailure(refs.stderr) };
     const head = await run(['symbolic-ref', '--short', '-q', 'HEAD'], cwd);
-    if (head.error !== null) return { ok: false, reason: failureReason(head) };
+    if (head.error !== null) return { ok: false, error: failureError(head) };
     const current = head.code === 0 ? head.stdout.trim() : '';
     const status = await run(['status', '--porcelain', '--untracked-files=no'], cwd);
-    if (status.error !== null) return { ok: false, reason: failureReason(status) };
-    if (status.code !== 0) return { ok: false, reason: mapGitFailure(status.stderr) };
+    if (status.error !== null) return { ok: false, error: failureError(status) };
+    if (status.code !== 0) return { ok: false, error: mapGitFailure(status.stderr) };
     return okBranches({
       isRepo: true,
       current: current.length > 0 ? current : null,
@@ -173,21 +176,21 @@ export function createGitBranches(run: GitExec = runGit): GitBranches {
 
   const switchBranch = async (cwd: string, branch: string, create: boolean): Promise<GitCheckoutOutcome> => {
     // 选项形/非法 ref 名先于 git 拦住：`git checkout --detach` 这类会「成功」改变 HEAD
-    if (!isValidBranchName(branch)) return { ok: false, reason: 'invalid_branch' };
+    if (!isValidBranchName(branch)) return { ok: false, error: appError('invalid_branch') };
 
     const probe = await run(['rev-parse', '--git-dir'], cwd);
-    if (probe.error !== null) return { ok: false, reason: failureReason(probe) };
-    if (probe.code !== 0) return { ok: false, reason: mapGitFailure(probe.stderr) };
+    if (probe.error !== null) return { ok: false, error: failureError(probe) };
+    if (probe.code !== 0) return { ok: false, error: mapGitFailure(probe.stderr) };
 
     const refs = await run(['for-each-ref', '--format=%(refname:short)', 'refs/heads'], cwd);
-    if (refs.error !== null) return { ok: false, reason: failureReason(refs) };
-    if (refs.code !== 0) return { ok: false, reason: mapGitFailure(refs.stderr) };
+    if (refs.error !== null) return { ok: false, error: failureError(refs) };
+    if (refs.code !== 0) return { ok: false, error: mapGitFailure(refs.stderr) };
     const existing = parseBranchList(refs.stdout);
-    if (create && existing.includes(branch)) return { ok: false, reason: 'branch_exists' };
-    if (!create && !existing.includes(branch)) return { ok: false, reason: 'unknown_branch' };
+    if (create && existing.includes(branch)) return { ok: false, error: appError('branch_exists') };
+    if (!create && !existing.includes(branch)) return { ok: false, error: appError('unknown_branch') };
 
     const head = await run(['symbolic-ref', '--short', '-q', 'HEAD'], cwd);
-    if (head.error !== null) return { ok: false, reason: failureReason(head) };
+    if (head.error !== null) return { ok: false, error: failureError(head) };
     const current = head.code === 0 ? head.stdout.trim() : '';
     if (!create && current === branch) return { ok: true, data: { branch } };
 
@@ -195,14 +198,14 @@ export function createGitBranches(run: GitExec = runGit): GitBranches {
     // （新建分支不改工作树，脏树允许——未跟踪文件的覆盖冲突由 git 自身报错）
     if (!create) {
       const status = await run(['status', '--porcelain', '--untracked-files=no'], cwd);
-      if (status.error !== null) return { ok: false, reason: failureReason(status) };
-      if (status.code !== 0) return { ok: false, reason: mapGitFailure(status.stderr) };
-      if (status.stdout.trim().length > 0) return { ok: false, reason: 'dirty_worktree' };
+      if (status.error !== null) return { ok: false, error: failureError(status) };
+      if (status.code !== 0) return { ok: false, error: mapGitFailure(status.stderr) };
+      if (status.stdout.trim().length > 0) return { ok: false, error: appError('dirty_worktree') };
     }
 
     const checkout = await run(create ? ['checkout', '-b', branch] : ['checkout', branch], cwd);
-    if (checkout.error !== null) return { ok: false, reason: failureReason(checkout) };
-    if (checkout.code !== 0) return { ok: false, reason: mapGitFailure(checkout.stderr) };
+    if (checkout.error !== null) return { ok: false, error: failureError(checkout) };
+    if (checkout.code !== 0) return { ok: false, error: mapGitFailure(checkout.stderr) };
     return { ok: true, data: { branch } };
   };
 

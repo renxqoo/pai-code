@@ -1,14 +1,16 @@
 import { execFile } from 'node:child_process';
 
+import { appError, type ApiError } from '@paiapp/api';
+
 /**
  * 在系统工具中打开已知项目目录（顶栏项目菜单的执行面）：
  * finder = 文件管理器、terminal = 终端、editor = 编辑器 CLI。
  * 全部 execFile 无 shell、超时、输出上限；编辑器命令探测结果进程内缓存。
- * 失败走判别联合 reason（editor_not_found/terminal_not_found 不静默换目标）。
+ * 失败走判别联合 AppError（editor_not_found 不静默换目标）。
  */
 
 export type OpenTarget = 'finder' | 'terminal' | 'editor';
-export type OpenOutcome = { ok: true; data: null } | { ok: false; reason: string };
+export type OpenOutcome = { ok: true; data: null } | { ok: false; error: ApiError };
 
 /** 单命令执行结果：code=null 表示进程未正常退出（error 见 kind）。 */
 export type RunResult = { code: number | null; kind: RunErrorKind | null };
@@ -78,12 +80,11 @@ export type OpenLocationDeps = {
   env?: { VISUAL?: string | undefined; EDITOR?: string | undefined };
 };
 
-const failureReason = (kind: RunErrorKind): string =>
+/** 子进程执行异常 → ApiError（超时是瞬态；spawn/退出码失败带原 token 入 message 不丢）。 */
+const failureOf = (kind: RunErrorKind): ApiError =>
   kind === 'timeout'
-    ? 'open_failed:timeout'
-    : kind === 'output_too_large'
-      ? 'open_failed:output_too_large'
-      : 'open_failed:spawn';
+    ? { kind: 'transient', face: 'timeout', message: 'open_failed:timeout' }
+    : { kind: 'transient', face: 'command_failed', message: kind === 'output_too_large' ? 'open_failed:output_too_large' : 'open_failed:spawn' };
 
 export function createOpenLocation(deps: OpenLocationDeps = {}) {
   const run = deps.run ?? runExec;
@@ -97,7 +98,7 @@ export function createOpenLocation(deps: OpenLocationDeps = {}) {
   const ok = (): OpenOutcome => ({ ok: true, data: null });
   const fail = (result: RunResult): OpenOutcome => ({
     ok: false,
-    reason: result.kind === null ? 'open_failed:exit' : failureReason(result.kind),
+    error: result.kind === null ? { kind: 'transient', face: 'command_failed', message: 'open_failed:exit' } : failureOf(result.kind),
   });
 
   const openFinder = async (cwd: string): Promise<OpenOutcome> => {
@@ -120,7 +121,7 @@ export function createOpenLocation(deps: OpenLocationDeps = {}) {
     }
     if (platform === 'win32') {
       // cmd 链的注入面：元字符目录名直接拒绝（不支持而非冒险执行）
-      if (!isSafeWindowsCwd(cwd)) return { ok: false, reason: 'open_failed:unsupported_cwd' };
+      if (!isSafeWindowsCwd(cwd)) return { ok: false, error: appError('invalid_params', 'open_failed:unsupported_cwd') };
       const wt = await run('cmd', ['/c', 'start', 'wt', '-d', cwd]);
       if (wt.code === 0 && wt.kind === null) return ok();
       const fallback = await run('cmd', ['/c', 'start', 'cmd', '/K', `cd /d ${cwd}`]);
@@ -130,7 +131,7 @@ export function createOpenLocation(deps: OpenLocationDeps = {}) {
       const result = await run(terminal, ['--workdir', cwd]);
       if (result.code === 0 && result.kind === null) return ok();
     }
-    return { ok: false, reason: 'terminal_not_found' };
+    return { ok: false, error: appError('invalid_params', 'terminal_not_found') };
   };
 
   /** 编辑器命令解析：候选逐一 --version 探活（退出码 0 即可用），结果缓存。 */
@@ -167,7 +168,7 @@ export function createOpenLocation(deps: OpenLocationDeps = {}) {
         if (result.code === 0 && result.kind === null) return ok();
       }
     }
-    return cliFailure ?? { ok: false, reason: 'editor_not_found' };
+    return cliFailure ?? { ok: false, error: appError('editor_not_found') };
   };
 
   const open = async (cwd: string, target: OpenTarget): Promise<OpenOutcome> => {
