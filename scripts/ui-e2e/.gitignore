@@ -1,0 +1,4 @@
+# 端到端驾驶产物：截图 / 隔离 userData / 命令追踪（每次运行重建，不入库）
+shot/
+.userdata/
+hub-trace.log

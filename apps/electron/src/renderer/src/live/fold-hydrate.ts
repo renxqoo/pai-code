@@ -123,7 +123,8 @@ export function foldHydrate(state: LiveThreadState, action: HydrateAction): Live
           }
         }
       }
-      return { ...state, items, cursor: action.cursor, seenIds: capSeenIds(new Set(action.items.map((item) => item.id))), liveTurnId: null, liveMessageId: null, hydrateFailed: false };
+      // messageTurns 随重建清空：live 轮 id 按 (时间戳,长度) 生成可复用，陈旧归属会误杀后续合法 messageFinal
+      return { ...state, items, cursor: action.cursor, seenIds: capSeenIds(new Set(action.items.map((item) => item.id))), liveTurnId: null, liveMessageId: null, messageTurns: {}, hydrateFailed: false };
     }
     case 'hydrate/failed':
       return { ...state, hydrateFailed: true };

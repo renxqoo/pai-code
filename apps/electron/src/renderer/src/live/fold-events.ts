@@ -3,7 +3,7 @@ import type { ThreadItem, ToolCallModel, TurnBlock } from '@/thread/thread-model
 
 import { onSubagentEvent } from './fold-subagents';
 import { mergeDiffFile } from './hydrate-items';
-import { capSeenIds, noteCallStart, omitCallStart, type LiveThreadState } from './live-thread-state';
+import { capSeenIds, noteCallStart, noteMessageTurn, omitCallStart, type LiveThreadState } from './live-thread-state';
 import { beginLiveTurn, claimAnonymousBlocks, clip, ensureLiveTurn, findTurn, insertBeforeLiveTurn, updateTurn } from './turn-ops';
 
 
@@ -42,9 +42,15 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
         items: insertBeforeLiveTurn(state.items, message, state.liveTurnId),
       };
     }
-    case 'messageStarted':
+    case 'messageStarted': {
       // 重试成功后模型继续出消息：清除重试提示；新消息开始即旧思考段让位
-      return clearThinkingStream(ensureLiveTurn({ ...state, liveMessageId: event.messageId, retrying: null }, now));
+      const started = ensureLiveTurn({ ...state, liveMessageId: event.messageId, retrying: null }, now);
+      // 登记消息归属轮：迟到的 messageFinal（错序/重放）不得把旧轮权威内容补进新轮
+      // （ensureLiveTurn 后必有 live 轮；null 分支仅类型层防御——无轮即无归属可登记）
+      const ownerTurnId = started.liveTurnId;
+      if (ownerTurnId === null) return clearThinkingStream(started);
+      return clearThinkingStream({ ...started, messageTurns: noteMessageTurn(started.messageTurns, event.messageId, ownerTurnId) });
+    }
     case 'textDelta':
       return appendDelta(state, resolveMessageId(state, event.messageId), 'text', event.delta, now);
     case 'thinkingDelta':
@@ -253,6 +259,10 @@ function onMessageFinal(
   state: LiveThreadState,
   event: Extract<UiEvent, { type: 'messageFinal' }>,
 ): LiveThreadState {
+  // 跨轮守卫：该消息曾登记过归属轮且不属当前 live 轮（错序/重放的迟到权威快照）
+  // → 丢弃——补进新轮会把旧轮正文拼接成双份/错位
+  const owner = state.messageTurns[event.message.id];
+  if (owner !== undefined && owner !== state.liveTurnId) return state;
   const turn = findTurn(state, state.liveTurnId);
   if (turn === null) return state;
   return updateTurn(state, turn.id, (current) => {
@@ -330,6 +340,10 @@ function clearThinkingStream(state: LiveThreadState): LiveThreadState {
 function mapLiveCall(state: LiveThreadState, callId: string, patch: (call: ToolCallModel) => ToolCallModel): LiveThreadState {
   const turn = findTurn(state, state.liveTurnId);
   if (turn === null) return state;
+  // 未见过该 callId（孤儿 update/end）：返回原引用（真 no-op）——渲染层 memo 以
+  // 引用为键，无谓重建会触发整轮重渲
+  const seen = turn.blocks.some((block) => block.kind === 'tools' && block.calls.some((call) => call.id === callId));
+  if (!seen) return state;
   return updateTurn(state, turn.id, (current) => ({
     ...current,
     blocks: current.blocks.map((block) =>

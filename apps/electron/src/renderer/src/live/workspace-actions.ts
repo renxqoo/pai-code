@@ -3,6 +3,7 @@ import { thinkingLevelOfLabel } from '@paiapp/contracts';
 
 import { writeClipboard } from '@/lib/write-clipboard';
 import { copyOfError } from '@/lib/error-text';
+import type { TransientFace } from '@paiapp/contracts';
 import { copy } from '@/strings';
 import { entrySeqOf } from './entry-seq';
 import { parseModelKey, pickSessionModel } from './pick-session-model';
@@ -189,8 +190,26 @@ function notifySubmitFailure(reason: string | null): void {
     pushNotice(copy.flow.bashNoImages);
     return;
   }
+  // transient faces（宿主代际切换窗口/超时/忙）：按 face 出精准文案
+  // （「宿主未就绪，请稍后重试」等），不走 sendFailed 原文透传
+  if (TRANSIENT_FACE_TOKENS.has(reason)) {
+    pushNotice(copyOfError({ kind: 'transient', face: reason as TransientFace }));
+    return;
+  }
   pushNotice(copy.flow.sendFailed(reason));
 }
+
+/** transient face 全集（submitDraft 失败的 face token 面；集合守卫先行，窄化 cast 安全）。 */
+const TRANSIENT_FACE_TOKENS = new Set<string>([
+  'host_unavailable',
+  'host_restarting',
+  'host_failed',
+  'host_not_running',
+  'host_disposed',
+  'timeout',
+  'busy',
+  'write_failed',
+]);
 
 export function createWorkspaceActions(): WorkspaceActions {
   /** 建会话的共用路径（新会话入口与新建任务页首条提交）：失败推通知条，成功解除项目隐藏。 */

@@ -30,6 +30,8 @@ export type LiveThreadState = {
   liveMessageId: string | null;
   /** 工具调用到达时刻（durationMs 客户端观测值）。 */
   callStarts: Readonly<Record<string, number>>;
+  /** messageId → 所属轮（messageStarted 时登记）：迟到 messageFinal 的跨轮污染守卫。 */
+  messageTurns: Readonly<Record<string, string>>;
   queue: QueueState;
   streaming: boolean;
   compacting: boolean;
@@ -63,6 +65,7 @@ export const initialThreadState: LiveThreadState = {
   inflightToolOutputs: [],
   liveMessageId: null,
   callStarts: {},
+  messageTurns: {},
   queue: { steering: [], followUp: [] },
   streaming: false,
   compacting: false,
@@ -116,6 +119,20 @@ export function noteCallStart(table: Readonly<Record<string, number>>, callId: s
   if (keys.length <= CALL_STARTS_LIMIT) return merged;
   const keep = new Set(keys.slice(keys.length - Math.floor(CALL_STARTS_LIMIT / 2)));
   const next: Record<string, number> = {};
+  for (const key of keys) {
+    const value = merged[key];
+    if (keep.has(key) && value !== undefined) next[key] = value;
+  }
+  return next;
+}
+
+/** 消息归属轮写入：与 callStarts 同款封顶（超限保留最新一半）。 */
+export function noteMessageTurn(table: Readonly<Record<string, string>>, messageId: string, turnId: string): Readonly<Record<string, string>> {
+  const merged = { ...table, [messageId]: turnId };
+  const keys = Object.keys(merged);
+  if (keys.length <= CALL_STARTS_LIMIT) return merged;
+  const keep = new Set(keys.slice(keys.length - Math.floor(CALL_STARTS_LIMIT / 2)));
+  const next: Record<string, string> = {};
   for (const key of keys) {
     const value = merged[key];
     if (keep.has(key) && value !== undefined) next[key] = value;

@@ -263,8 +263,10 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
         ...(images === undefined || images.length === 0 ? {} : { images: [...images] }),
       });
       if (!outcome.ok) {
-        // 桥不可用（浏览器直开无 preload）本地 token 化：横幅已显式呈现，不叠通知
-        if (outcome.error.kind === 'transient' && outcome.error.face === 'bridge_unavailable') return 'bridge_unavailable';
+        // transient 失败回 face（bridge_unavailable/host_*/timeout/busy）：face 比 kind
+        // 更可行动——通知层按 face 出「宿主未就绪请重试」级精准文案而非泛化 transient；
+        // bridge_unavailable 沿用同口径（横幅已显式呈现，通知层不再叠加）
+        if (outcome.error.kind === 'transient') return outcome.error.face;
         return outcome.error.kind;
       }
       // 直执行（`! ` 分支）的 [bash] 结果条目无事件终态帧（hub bash 只推增量）：

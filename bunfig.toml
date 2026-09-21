@@ -1,2 +1,5 @@
 [test]
 coverage = true
+# 端到端驾驶装置（假 hub + CDP 驾驶脚本）：测试基础设施而非产品代码，
+# 不计入覆盖率分母（由 scripts/ui-e2e 断言与视觉判读验证）
+coveragePathIgnorePatterns = ["scripts/ui-e2e/**"]
