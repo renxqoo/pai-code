@@ -2,7 +2,6 @@ import * as React from 'react';
 import { useStore } from 'zustand';
 
 import { ComposerRegion } from '@/composer/composer-region';
-import { DialogLayer } from '@/dialogs/dialog-layer';
 import { navigation } from '@/screens/workspace-navigation';
 import { TitleBarLeft } from '@/layout/title-bar-left';
 import { WindowCaptionButtons } from '@/layout/window-caption-buttons';
@@ -66,8 +65,6 @@ function WorkspaceMain(): React.JSX.Element {
   const observeComposerLayer = useObservedHeight<HTMLDivElement>(publishComposerInset);
   /** Usage 总览页（I2；侧栏 footer 入口）——开合在 ui store，条目 UsageScreen 自取 */
   const usagePanel = useUsagePanel();
-  const dialogs = useStore(liveStore, (s) => s.dialogs);
-  const dialogCount = dialogs.length;
   const notices = useStore(liveStore, (s) => s.notices);
 
   const usageOpen = usagePanel.usageOpen;
@@ -105,7 +102,6 @@ function WorkspaceMain(): React.JSX.Element {
 
   /** ⌘N/⌘K/⌘P 门控矩阵单一真相在 hotkey-gating 纯函数（表驱动用例钉住）。 */
   const { hotkeysEnabled, paletteHotkeyEnabled } = hotkeyGating({
-    dialogCount,
     paletteOpen,
     newTaskOpen,
     usageOpen,
@@ -125,8 +121,8 @@ function WorkspaceMain(): React.JSX.Element {
   );
 
   useEscDismiss({
-    /** 本地浮层也算对话框：浮层自行消费 Esc，全局链不穿透关闭整页 */
-    dialogCount: dialogCount + (newTaskDialogOpen ? 1 : 0),
+    /** 新建任务页本地浮层自行消费 Esc（hub confirm 内联条非模态，不参与 Esc 链） */
+    localDialogOpen: newTaskDialogOpen,
     paletteOpen,
     onPaletteClose: closePalette,
     panelOpen: useStore(uiStore, (s) => s.panel.activeId !== null),
@@ -187,11 +183,6 @@ function WorkspaceMain(): React.JSX.Element {
         }}
       />
       <NoticeStrip notices={notices} onDismiss={workspaceActions.dismissNotice} />
-      <DialogLayer
-        dialogs={dialogs}
-        onRespond={workspaceActions.respondDialog}
-        onCancel={workspaceActions.cancelDialog}
-      />
     </div>
   );
 }

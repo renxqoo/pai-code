@@ -20,6 +20,8 @@ import { PromptCard, type ComposerAttachment } from '@/composer/prompt-card';
 import { PromptContextBar } from '@/composer/prompt-context-bar';
 import { PromptInputArea } from '@/composer/prompt-input-area';
 import { QueuedMessageCard } from '@/composer/queued-message-card';
+import { ConfirmRequestBar } from '@/composer/confirm-request-bar';
+import { dialogsOfThread } from '@/dialogs/dialogs-of-thread';
 import { BranchPanel } from '@/composer/branch-panel';
 import { branchSegmentOf } from '@/composer/branch-segment';
 import { branchSwitchLocked } from '@/composer/branch-switch-lock';
@@ -62,6 +64,8 @@ function ComposerRegion(): React.JSX.Element {
   const branchRevision = useStore(uiStore, (s) => s.branchRevision);
   /** 排队中消息（hub 队列镜像：queueChanged 事件折叠的 followUp 文本；事件时差内为空态） */
   const queuedMessages = threadState?.queue.followUp ?? EMPTY_QUEUED;
+  /** 待答 confirm（只呈现发起会话的——内联确认条随输入卡走，切会话自然不在场） */
+  const pendingDialogs = useStore(liveStore, (s) => dialogsOfThread(s.dialogs, s.activeThreadId));
 
   const value = drafts[activeThreadId] ?? composerDraft;
   const generating = threadState?.streaming ?? false;
@@ -210,9 +214,22 @@ function ComposerRegion(): React.JSX.Element {
         restore={composerRestore}
         canSubmit={value.trim().length > 0}
         queued={
-          queuedMessages.length === 0
+          pendingDialogs.length === 0 && queuedMessages.length === 0
             ? undefined
-            : queuedMessages.map((text, index) => <QueuedMessageCard key={`${index}:${text}`} text={text} />)
+            : [
+                ...(pendingDialogs[0] !== undefined
+                  ? [
+                      <ConfirmRequestBar
+                        key={pendingDialogs[0].requestId}
+                        dialog={pendingDialogs[0]}
+                        remaining={pendingDialogs.length - 1}
+                        onRespond={workspaceActions.respondDialog}
+                        onCancel={workspaceActions.cancelDialog}
+                      />,
+                    ]
+                  : []),
+                ...queuedMessages.map((text, index) => <QueuedMessageCard key={`${index}:${text}`} text={text} />),
+              ]
         }
         input={
           <PromptInputArea

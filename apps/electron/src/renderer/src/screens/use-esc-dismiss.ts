@@ -10,11 +10,11 @@ import { uiStore } from '@/ui/ui-store';
 
 /** ui store 拥有的覆盖层开合（含停止确认条）在本 hook 内自订阅自派发（引用恒定的模块动作）；
  * 其余裁决输入（hub 对话框/命令面板/右侧面板/线程运行面）仍由调用方喂。 */
-const { closeSidebarSearch, closeSettings, closeUsage, closeNewTask, setConfirmStop } = uiStore.getState();
+const { closeSidebarSearch, closeSettings, closeUsage, closeNewTask, setConfirmStop, setNewTaskDialogOpen } = uiStore.getState();
 
 type UseEscDismissInput = {
-  /** 对话框总数（hub 对话框 + 新建任务页内浮层：浮层自行消费 Esc，不穿透关闭整页）。 */
-  dialogCount: number;
+  /** 新建任务页内本地浮层开着（浮层自行消费 Esc，不穿透关闭整页）。 */
+  localDialogOpen: boolean;
   paletteOpen: boolean;
   onPaletteClose: () => void;
   /** 右侧面板容器有任一 tab（整组收起）。 */
@@ -27,7 +27,7 @@ type UseEscDismissInput = {
 /** Esc 键全局分发（语义裁决在 escActionFor 注册表，本 hook 只做动作映射）。
  * 裁决输入与分发函数全量进依赖：actions 稳定化后本 effect 不再每渲染重挂，漏依赖即闭包陈旧。 */
 export function useEscDismiss(input: UseEscDismissInput): void {
-  const { dialogCount, paletteOpen, panelOpen } = input;
+  const { localDialogOpen, paletteOpen, panelOpen } = input;
   const { abortBash, stopActiveTurn, onPaletteClose, onPanelClose } = input;
   /** 运行面标量订阅（threads[tid] 布尔——批内不变即不重渲；Esc 输入不再依赖渲染帧 props） */
   const bashRunning = useStore(liveStore, (s) => (s.activeThreadId === null ? false : s.threads[s.activeThreadId]?.bashRunning === true));
@@ -43,8 +43,11 @@ export function useEscDismiss(input: UseEscDismissInput): void {
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') return;
-      const action = escActionFor({ dialogCount, paletteOpen, sidebarSearchOpen, usageOpen, projectFilesOpen, newTaskOpen, settingsOpen, panelOpen, bashRunning, confirmStop, generating, agentsActive });
+      const action = escActionFor({ localDialogOpen, paletteOpen, sidebarSearchOpen, usageOpen, projectFilesOpen, newTaskOpen, settingsOpen, panelOpen, bashRunning, confirmStop, generating, agentsActive });
       switch (action.kind) {
+        case 'close-local-dialog':
+          setNewTaskDialogOpen(false);
+          break;
         case 'close-palette':
           onPaletteClose();
           break;
@@ -85,5 +88,5 @@ export function useEscDismiss(input: UseEscDismissInput): void {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [dialogCount, paletteOpen, sidebarSearchOpen, usageOpen, projectFilesOpen, newTaskOpen, settingsOpen, panelOpen, bashRunning, confirmStop, generating, agentsActive, abortBash, stopActiveTurn, onPaletteClose, onPanelClose]);
+  }, [localDialogOpen, paletteOpen, sidebarSearchOpen, usageOpen, projectFilesOpen, newTaskOpen, settingsOpen, panelOpen, bashRunning, confirmStop, generating, agentsActive, abortBash, stopActiveTurn, onPaletteClose, onPanelClose]);
 }

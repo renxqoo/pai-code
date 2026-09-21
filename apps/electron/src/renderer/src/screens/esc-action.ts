@@ -17,13 +17,16 @@ export type EscAction =
   | { kind: 'close-settings' }
   | { kind: 'close-panel' }
   | { kind: 'close-sidebar-search' }
+  | { kind: 'close-local-dialog' }
   | { kind: 'abort-bash' }
   | { kind: 'stop-turn' }
   | { kind: 'ask-confirm-stop' }
   | { kind: 'execute-confirmed-stop' };
 
 export type EscState = {
-  dialogCount: number;
+  /** 新建任务页内本地浮层开着（浮层自行消费 Esc，不穿透关闭整页）。hub confirm
+   *  待答为输入区内联条（非模态），不参与 Esc 链。 */
+  localDialogOpen: boolean;
   /** 命令面板开着（⌘P 浮层；模态对话框仍优先于它）。 */
   paletteOpen: boolean;
   /** 侧栏搜索可见且展开（侧栏未收起、无更高层覆盖时由调用方算出）：内联层，覆盖层全部收起后才轮到它。 */
@@ -51,9 +54,9 @@ export type EscLayer = {
   readonly action: EscAction;
 };
 
-/** 覆盖层收起注册表：注册序即 Esc 收起序——对话框 → 命令面板 → 整页覆盖（用量/新建任务/设置）→ 侧栏内嵌层（文件面板先于搜索）→ 右侧面板容器。 */
+/** 覆盖层收起注册表：注册序即 Esc 收起序——本地浮层 → 命令面板 → 整页覆盖（用量/新建任务/设置）→ 侧栏内嵌层（文件面板先于搜索）→ 右侧面板容器。 */
 export const escLayers: readonly EscLayer[] = [
-  { id: 'dialogs', isOpen: (state) => state.dialogCount > 0, action: { kind: 'dismiss-dialogs' } },
+  { id: 'local-dialog', isOpen: (state) => state.localDialogOpen, action: { kind: 'close-local-dialog' } },
   { id: 'palette', isOpen: (state) => state.paletteOpen, action: { kind: 'close-palette' } },
   { id: 'usage', isOpen: (state) => state.usageOpen, action: { kind: 'close-usage' } },
   { id: 'new-task', isOpen: (state) => state.newTaskOpen, action: { kind: 'close-new-task' } },

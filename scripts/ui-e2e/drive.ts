@@ -14,9 +14,12 @@ const CDP_PORT = 9333;
 
 function prepareUserData(): void {
   rmSync(USER_DATA, { recursive: true, force: true });
-  // 会话根 = agentDir/sessions（HUB_AGENT_DIR 布局，与 pai-runtime sessionsRoot 同构）
-  mkdirSync(join(USER_DATA, 'agent', 'sessions', 's1'), { recursive: true });
-  writeFileSync(join(USER_DATA, 'agent', 'sessions', 's1', 'events.jsonl'), '');
+  // 会话根 = agentDir/sessions（HUB_AGENT_DIR 布局，与 pai-runtime sessionsRoot 同构）；
+  // s1/s2 双会话——弹窗隔离验收需要跨会话切换
+  for (const id of ['s1', 's2']) {
+    mkdirSync(join(USER_DATA, 'agent', 'sessions', id), { recursive: true });
+    writeFileSync(join(USER_DATA, 'agent', 'sessions', id, 'events.jsonl'), '');
+  }
   writeFileSync(
     join(USER_DATA, 'settings.json'),
     `${JSON.stringify(
@@ -41,9 +44,9 @@ function prepareUserData(): void {
       threadId TEXT PRIMARY KEY, sessionPath TEXT, cwd TEXT NOT NULL, title TEXT NOT NULL,
       trusted INTEGER, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL,
       keepalive INTEGER NOT NULL DEFAULT 0)`);
-  db
-    .prepare('INSERT INTO sessions (threadId, sessionPath, cwd, title, trusted, createdAt, updatedAt, keepalive) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-    .run('s1', join(USER_DATA, 'agent', 'sessions', 's1', 'events.jsonl'), '/tmp/ui-e2e-ws', 'E2E 会话 s1', 1, Date.now(), Date.now(), 0);
+  const insert = db.prepare('INSERT INTO sessions (threadId, sessionPath, cwd, title, trusted, createdAt, updatedAt, keepalive) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+  insert.run('s1', join(USER_DATA, 'agent', 'sessions', 's1', 'events.jsonl'), '/tmp/ui-e2e-ws', 'E2E 会话 s1', 1, Date.now(), Date.now(), 0);
+  insert.run('s2', join(USER_DATA, 'agent', 'sessions', 's2', 'events.jsonl'), '/tmp/ui-e2e-ws', 'E2E 会话 s2', 1, Date.now(), Date.now(), 0);
   db.close();
 }
 
@@ -312,6 +315,71 @@ async function main(): Promise<void> {
     await waitFor(cdp, `document.body.textContent.includes('total 8')`, 10_000, 'reloaded tool output detail');
     console.log('[assert ✓] reloaded turns rebuild thinking + tool rows + output from WAL');
     await cdp.screenshot(join(SHOT_DIR, '06-after-reload.png'));
+
+    // 7) 弹窗跨会话隔离：s1 触发 confirm 弹窗 → 切 s2 弹窗不得在场 → 切回 s1 恢复
+    //    → 拒绝应答回传 hub。侧栏行点击按行级前缀匹配（容器文本含全部行，会误中）
+    const CLICK_ROW_JS = `(needle) => {
+      // 最内层含标题的元素（无子元素再含标题）：命中标题 span/行本身，冒泡到行处理器
+      const candidates = [...document.querySelectorAll('button, li, div, a, span')]
+        .filter((el) => {
+          const text = el.textContent ?? '';
+          return text.includes(needle) && [...el.children].every((child) => !(child.textContent ?? '').includes(needle));
+        });
+      const hit = candidates.at(0);
+      if (hit === undefined) return 'no-candidate';
+      hit.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      return \`clicked:<\${hit.tagName}>\`;
+    }`;
+    if (!(await cdp.eval<boolean>(`(${TYPE_JS})('请求确认的删除操作')`))) throw new Error('type dialog probe failed');
+    await sleep(150);
+    if (!(await cdp.eval<boolean>(SEND_JS))) throw new Error('enter dialog probe failed');
+    await waitFor(cdp, `document.body.innerText.includes('需要确认') && document.body.innerText.includes('rm -rf /tmp/ui-e2e-probe')`, 20_000, 'confirm bar visible in s1');
+    // 内联条形态：无全局模态遮罩；确认条在输入卡内（textarea 的前邻区域）
+    await assertEval(cdp, `[...document.querySelectorAll('.fixed.inset-0')].length === 0`, 'no global modal overlay');
+    await cdp.screenshot(join(SHOT_DIR, '07-confirm-bar-in-s1.png'));
+    const clickS2 = await cdp.eval<string>(`(${CLICK_ROW_JS})('E2E 会话 s2')`);
+    if (typeof clickS2 !== 'string' || !clickS2.startsWith('clicked:')) throw new Error(`click s2 row failed: ${String(clickS2)}`);
+    console.log(`[s2] ${clickS2}`);
+    await sleep(1_200);
+    const switchDiag = await cdp.eval<string>(`JSON.stringify({
+      hasConfirm: document.body.innerText.includes('需要确认'),
+      overlays: [...document.querySelectorAll('.fixed.inset-0')].length,
+      turns: document.querySelectorAll('[data-turn-id]').length,
+      stage: (() => { const el = document.querySelector('main, [class*=stage], section'); return el === null ? null : (el.textContent ?? '').slice(0, 100); })(),
+      head: document.body.innerText.slice(0, 300),
+    })`);
+    console.log('[switch-diag]', switchDiag);
+    await cdp.screenshot(join(SHOT_DIR, '08-dialog-hidden-in-s2.png'));
+    await sleep(600);
+    // 核心断言：s2 界面无 s1 的确认条（随输入卡走，切会话自然不在场）
+    await assertEval(cdp, `!document.body.innerText.includes('需要确认') && !document.body.innerText.includes('rm -rf /tmp/ui-e2e-probe')`, 's2 view free of s1 confirm bar');
+    await cdp.screenshot(join(SHOT_DIR, '08-confirm-hidden-in-s2.png'));
+    const clickS1 = await cdp.eval<string>(`(${CLICK_ROW_JS})('E2E 会话 s1')`);
+    if (typeof clickS1 !== 'string' || !clickS1.startsWith('clicked:')) throw new Error(`click s1 row failed: ${String(clickS1)}`);
+    console.log(`[s1] ${clickS1}`);
+    await waitFor(cdp, `document.body.innerText.includes('需要确认') && document.body.innerText.includes('rm -rf /tmp/ui-e2e-probe')`, 10_000, 'confirm bar restored in s1');
+    console.log('[assert ✓] confirm bar restored when switching back to owning session');
+    // 拒绝应答：弹窗消失 + ui_response 回传 hub
+    const denyOk = await cdp.eval<boolean>(`(() => {
+      const button = [...document.querySelectorAll('button')].find((el) => (el.textContent ?? '').trim() === '拒绝');
+      if (button === undefined) return false;
+      button.click();
+      return true;
+    })()`);
+    if (!denyOk) throw new Error('deny button click failed');
+    await waitFor(cdp, `!document.body.innerText.includes('需要确认')`, 10_000, 'confirm bar closed after deny');
+    console.log('[assert ✓] deny closes confirm bar');
+    // 应答确实回传 hub（ui_response 命令入 trace）
+    await waitFor(
+      cdp,
+      'true',
+      3_000,
+      'noop', // trace 是文件侧事实，等一拍后由主进程断言
+    ).catch(() => undefined);
+    const trace = await Bun.file(resolve(import.meta.dir, 'hub-trace.log')).text();
+    if (!trace.includes('"type":"ui_response"')) throw new Error('ui_response not delivered to hub');
+    console.log('[assert ✓] deny response delivered to hub (ui_response)');
+    await cdp.screenshot(join(SHOT_DIR, '09-confirm-answered.png'));
 
     console.log('[done] all scenarios captured');
   } finally {

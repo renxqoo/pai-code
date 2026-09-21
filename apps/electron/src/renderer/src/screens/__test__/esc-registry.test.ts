@@ -9,7 +9,7 @@ import { escActionFor, escLayers, type EscState } from '../esc-action';
 
 function base(overrides: Partial<EscState> = {}): EscState {
   return {
-    dialogCount: 0,
+    localDialogOpen: false,
     paletteOpen: false,
     sidebarSearchOpen: false,
     usageOpen: false,
@@ -27,7 +27,7 @@ function base(overrides: Partial<EscState> = {}): EscState {
 
 /** 各层 isOpen 对应的 EscState 开关位（表驱动种子）。 */
 const layerSwitches: Readonly<Record<string, Partial<EscState>>> = {
-  dialogs: { dialogCount: 1 },
+  'local-dialog': { localDialogOpen: true },
   palette: { paletteOpen: true },
   usage: { usageOpen: true },
   'new-task': { newTaskOpen: true },
@@ -42,7 +42,7 @@ describe('escLayers 注册表', () => {
     const kinds = escLayers.map((layer) => layer.action.kind);
     expect(new Set(kinds).size).toBe(escLayers.length); // 无重复
     expect(kinds).toEqual([
-      'dismiss-dialogs',
+      'close-local-dialog',
       'close-palette',
       'close-usage',
       'close-new-task',

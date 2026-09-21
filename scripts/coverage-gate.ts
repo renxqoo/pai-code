@@ -10,8 +10,8 @@ import { resolve } from "node:path";
 const ROOT = resolve(import.meta.dir, "..");
 
 /** 只升不降基线（funcs/lines，%）。抬升规矩：新实测高于基线时，把基线提到新值。 */
-const FUNC_FLOOR = 82.62;
-const LINE_FLOOR = 90.00;
+const FUNC_FLOOR = 82.89;
+const LINE_FLOOR = 90.45;
 
 const proc = Bun.spawnSync(["bun", "test"], { cwd: ROOT, stdout: "pipe", stderr: "pipe", env: process.env });
 const output = proc.stdout.toString() + proc.stderr.toString();

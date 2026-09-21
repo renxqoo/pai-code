@@ -101,6 +101,20 @@ async function runTurn(thread: ThreadState, echoText: string): Promise<void> {
   emit(thread, 'tool/result', { turn, step, callId, name: 'bash', content: 'total 8\nsrc  out  package.json\ndone', isError: false });
   await sleep(BEAT);
 
+  // 弹窗剧本：消息含「请求确认」→ 工具后推 ui_request（confirm），弹窗停留待答
+  // （轮照常结算——隔离验收只关心呈现归属，不关心 hub 侧挂起语义）
+  if (echoText.includes('请求确认')) {
+    out({
+      type: 'ui_request',
+      requestId: `req-${turn}`,
+      threadId: thread.threadId,
+      method: 'confirm',
+      tool: 'Bash',
+      summary: 'rm -rf /tmp/ui-e2e-probe',
+    });
+    await sleep(BEAT);
+  }
+
   const finalText = `收到「${echoText}」，工具输出已核对：目录含 src/out/package.json。本轮结论 ${turn} 号。`;
   const finalThinking = '用户问的是队列与消息渲染，我先检查渲染管线';
   // tool_use 块字段与真内核对齐：callId/name/input（input 为 JSON 字符串）
