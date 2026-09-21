@@ -1,6 +1,6 @@
 # T39 — my-agent host-hub → x-harness host-hub 后端切换
 
-> 状态：定稿（方案轮对抗审查两路 6H/13M/15L 合并去重逐条处置，见 §8）
+> 状态：实施中（W0/W1/W2-W6 已交付；W7 收口审查进行中）
 > 状态流转：草稿 → 定稿（对抗审查清零）→ 实施中 → 已核销（验收清单全勾）
 > 迁移源：后端进程 `/Users/wrr/work/my-agent/packages/host-hub`（T38 产物，55 命令）→ `/Users/wrr/work/x-harness/apps/host-hub`（下称 x-harness hub，56 命令）
 > 本文档为三件套合一：§1-3 = DESIGN（契约基线），§4 = IMPLEMENTATION（裁决表与实施顺序），§5-7 = MIGRATION（对照、矩阵、回滚），§8-9 = 审查与实施记录。
@@ -276,6 +276,17 @@ event 帧 `{type:"event", threadId, name, payload, agentName?}` 不变。**归�
 - **A-L1 abort_bash 落穿非差异 / A-L2 fork seq 基数 / A-L3 -forkSeq / A-L4 忽略清单认领 / A-L5·B-L6 id 词法 / A-L6 dialog-mapper 可免 / A-L7 retryable / A-L8 ChildView 判别联合 / B-L3 子代理权限挂账 / B-L7 skills-section 文案** → 全部采纳：分别落 §5.1 差异表修正、§1.2 忽略清单、D5 全词法、§4.1（dialog-mapper 降为测试锚定）、§1.3、get_subagents 判别联合、§7 挂账、grep 清零口径。
 
 ## 9. 实施记录
+
+### W2-W6（app，单原子提交 dd70a8a，87 文件）
+
+- contracts：56 词表/事件词表全换代/词表三变（+归一迁移器）/SubagentSnapshotView/stats/CommandView；PAI 发送子集 +compact+delete+agents。
+- adapter：event-mapper 全表（主会话谓词/(turn,step) 步边界/WAL 权威终局/callId 记忆）；entries-mapper 全集（tool/call 双向合并）；工具名换代（agent_spawn/write）；response-views 新形状。
+- 主进程：providers.json 档案制（显式 reasoning/input + baseUrl 第④道 + 孤儿清扫）；/compact 直发；session/delete + 白名单逐级上溯修复（**实施期真缺陷**：删除后目录幂等重删被 realpath 归一失败误拒）；agents user 级命令化 + project 直写新格式 + 枚举可见性前置；api-routes 拆两文件（行数门禁）。
+- 渲染层：agentId 键面板 + work + 状态词表 + 菜单 3/5 档 + D15 images 硬拒文案（回归 2 例）。
+- 集成门：x-harness + script provider 全接口/子代理（work wire 实证）/生命周期（delete 级联+幂等）三旅程；GLM opt-in 保留。
+- **实施期抓出的 hub 侧真缺陷（x-harness c180814 修复）**：agents/remove 与 create 口径分叉（user 级同名 builtin 遮蔽可建不可删）——集成门全接口旅程抓出；配套 homeDir 注入缝（测试直写真实 HOME 的卫生缺陷）。
+- 实施期波次修订：域切片波在集成门（全协议活体断言）存在下不成立——W2-W6 合并单原子序列（§4.2 已同变，T38 bb39fb8 同模式）。
+- 四门：lint 0-0（621 文件）/ tsc 0 / build ✓ / test **1721 + 1 skip**（GLM opt-in；T38 基线 1699+1，净增 22）；词表 grep 清零（残留在归一器/负例断言/注释豁免内）。
 
 ### W0（已提交 x-harness 41199f2）
 
