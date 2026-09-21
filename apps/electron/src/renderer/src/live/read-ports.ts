@@ -1,3 +1,4 @@
+import { createApiClient } from '@paiapp/api';
 import type { InflightView, PendingDialogView, SubagentSnapshotView, ThreadStateView } from '@paiapp/contracts';
 
 import type { BridgeClient } from './client-invoke';
@@ -23,6 +24,7 @@ export interface ReadPorts {
 }
 
 export function createReadPorts(client: BridgeClient): ReadPorts {
+  const api = createApiClient(client);
   const unavailable = new Set<string>();
   const readPort = async <T>(
     method: 'session/inflight' | 'session/subagents' | 'session/pendingDialogs',
@@ -46,7 +48,7 @@ export function createReadPorts(client: BridgeClient): ReadPorts {
     pendingDialogs: (threadId) =>
       readPort<PendingDialogView[]>('session/pendingDialogs', threadId, (data) => listOf<PendingDialogView>(data, 'dialogs')),
     async threadState(threadId) {
-      const outcome = await client.invoke('session/state', { threadId }).catch(() => null);
+      const outcome = await api.session.state({ threadId }).catch(() => null);
       return outcome?.ok === true ? (outcome.data as ThreadStateView) : null;
     },
     invalidate() {

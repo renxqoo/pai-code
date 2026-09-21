@@ -1,8 +1,9 @@
+import type { RuntimePort } from './ports';
+
 import type { ApiError, ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
-import { appError, type SessionCommands } from '@paiapp/api';
+import { appError, type SessionCommands } from '../index';
 
 import { compactInvocationOf } from './compact-lexing';
-import type { PaiRuntime } from './pai-runtime';
 
 /**
  * 发送管线（session/prompt 主进程侧实现）：三分支（`! ` 直执行 → bash 命令链 /
@@ -19,7 +20,7 @@ type SendOutcome<T> = { ok: true; data: T } | { ok: false; error: ApiError };
 export function promptRoutes(deps: {
   sessionCommands: () => SessionCommands;
   fail: (error: ApiError) => { ok: false; error: ApiError };
-  runtime: PaiRuntime;
+  runtime: RuntimePort;
   /** bash 分支复用的 session/bash 路由处理器（audit/长超时档/结果收窄同一实现）。 */
   bashRoute: Handler<'session/bash'>;
   /** resume 通路晚绑定：resume 路由组挂载在路由表字面量之后（依赖 fillSessionMeta）。 */

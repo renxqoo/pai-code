@@ -4,39 +4,29 @@ import { basename as baseName, dirname as dirnamePath, join as joinPaths, resolv
 import {
   appError,
   createHubApi,
-  inflightView,
-  mapEntries,
-  modelInfos,
-  pendingDialogsView,
-  previewCommands,
   savedSessions,
-  sessionCommands,
-  sessionStatsView,
-  settle,
-  subagentSnapshotView,
-  threadStateView,
-  thinkingLevelView,
   type HubApi,
-  type HubResult,
 } from '@paiapp/api';
 import { createFileRead, type FileRead } from './file-read';
+import { searchProjectFiles } from './file-search';
+import { createProviderProbe } from './provider-probe';
 import { createGitBranches, type GitBranches } from './git-branches';
 import { createGitGraph, type GitGraph } from './git-graph';
 import { createOpenLocation, type OpenLocation } from './open-location';
-import { createLocalRoutes } from './api-routes-local';
-import { createSettingsRoutes } from './api-routes-settings';
-import { promptRoutes } from './api-routes-prompt';
+import { createLocalRoutes } from '@paiapp/api';
+import { createSettingsRoutes } from '@paiapp/api';
+import { promptRoutes } from '@paiapp/api';
 import type { AgentDefinitionsStore } from './agent-definitions-store';
-import { THINKING_LEVEL_ORDER, type ThinkingLevel } from '@paiapp/contracts';
 import type { ApiError } from '@paiapp/contracts';
-import { errorLogToken } from './error-log-token';
+import { errorLogToken } from '@paiapp/api';
 import { ApiSchemas, type ApiMethod, type ApiOutcome, type ApiParams, type ModelInfoView } from '@paiapp/contracts';
 
 import type { PaiRuntime } from './pai-runtime';
 import type { RuntimeMonitor } from './runtime-monitor/create-runtime-monitor';
-import { runtimeRoutes } from './api-routes-runtime';
-import { threadOpsRoutes } from './api-routes-thread-ops';
-import { resumeRoutes } from './api-routes-resume';
+import { runtimeRoutes } from '@paiapp/api';
+import { threadOpsRoutes } from '@paiapp/api';
+import { appRoutes, bashRouteHandler, sessionRoutes } from '@paiapp/api';
+import { resumeRoutes } from '@paiapp/api';
 import type { createFileSettings } from './file-settings';
 import type { ProviderKeyStore } from './file-settings';
 
@@ -160,12 +150,6 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     }
   };
 
-  /** 纯转发路由组合器：zod 校验后直通 hub 域方法（路由 params 形状 ≡ hub 入参——
-   *  类型不合即写不成 relay，必须回到显式映射，错配不可能静默溜过）。 */
-  function relay<I, T>(pick: (api: HubApi) => (input: I) => Promise<HubResult<T>>) {
-    return async (params: I) => settle(await pick(hub())(params));
-  }
-
   /** 按会话文件路径找注册表行（resume 缺省 trusted 的补全源）。 */
   const findRegistryRowByPath = (sessionPath: string) => runtime.registry.list().find((row) => row.sessionPath === sessionPath) ?? null;
 
@@ -239,9 +223,22 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     }
   };
 
-  const localRoutes = createLocalRoutes({ isKnownCwd, audit: deps.audit, git, graph, openLocation, fileRead });
+  const localRoutes = createLocalRoutes({
+    isKnownCwd,
+    audit: deps.audit,
+    fileSearch: { search: searchProjectFiles },
+    git,
+    graph,
+    openLocation,
+    fileRead,
+  });
+  const providerProbe = createProviderProbe({
+    getProvider: (name) => deps.settings.listProviders().find((provider) => provider.name === name),
+    getKey: (name) => deps.keyStore.getKey(name),
+  });
   const settings = createSettingsRoutes({
     settings: deps.settings,
+    probeProvider: (name, modelId) => providerProbe.probe(name, modelId),
     keyStore: deps.keyStore,
     restartHost: restartHostForProviders,
     settingsCommands: () => hub().settings,
@@ -251,29 +248,14 @@ export function createApiRoutes(deps: ApiRouteDeps) {
 
   type RouteTable = { [M in ApiMethod]?: (params: ApiParams<M>) => Outcome<M> };
 
-  /** 直执行 bash 路由处理器（表外命名：session/prompt 的 `! ` 分支复用同一实现——
-   *  audit/24h 长命档/结果收窄不得分叉）。 */
-  const bashRoute = async (params: ApiParams<'session/bash'>): Promise<ApiOutcome<'session/bash'>> => {
-    deps.audit(`bash_run:${params.threadId}`);
-    // hub bash 完成才回包（bash 域方法 24h 长命档）：30s 缺省超时会误报仍在执行的命令
-    const result = await hub().session.bash({ threadId: params.threadId, command: params.command });
-    if (!result.ok) return fail(result.error);
-    const data = result.data as { output?: unknown; exitCode?: unknown; cancelled?: unknown; truncated?: unknown; fullOutputPath?: unknown };
-    return {
-      ok: true as const,
-      data: {
-        output: typeof data.output === 'string' ? data.output : '',
-        exitCode: typeof data.exitCode === 'number' ? data.exitCode : 0,
-        cancelled: data.cancelled === true,
-        truncated: data.truncated === true,
-        fullOutputPath: typeof data.fullOutputPath === 'string' ? data.fullOutputPath : null,
-      },
-    };
-  };
-
   /** 渠道真相域过滤（纯函数见模块级 channelScopedModels）：model/list 与 bootstrap 同口径。 */
   const channelModels = (models: readonly ModelInfoView[]): ModelInfoView[] =>
     channelScopedModels(models, new Set(deps.settings.listProviders().map((provider) => provider.name)));
+
+  /** start/resume 后补齐模型与思考档信息（失败不打断主流程）。 */
+  const fillSessionMeta = (threadId: string): void => {
+    void routes['session/state']?.({ threadId }).catch(() => undefined);
+  };
 
   const routes: RouteTable = {
     ...localRoutes,
@@ -285,233 +267,60 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       runtime,
       rootDeps: { audit: deps.audit, agentDefinitions: deps.agentDefinitions, knownCwds, insideSessionsRoot },
     }),
-    'app/bootstrap': async () => {
-      const [saved, models] = await Promise.all([savedAcrossCwds(), hub().models.getModels()]);
-      const outcome = {
-        sessions: runtime.sessions(),
-        saved,
-        models: models.ok ? channelModels(modelInfos(models.data)) : [],
-        providers: providersView(),
-        preferences: preferencesView(),
-        hostPhase: runtime.hostPhase(),
-      };
-      // 先冲缓冲再开门：开门后新事件直发，若先开门，await 窗口内的新事件会
-      // 插队到更旧的缓冲事件之前（sessionUpdated 旧覆新）
-      runtime.emitBuffered();
-      runtime.markBootstrapped();
-      return { ok: true as const, data: outcome };
-    },
-    'session/start': async (params) => {
-      if (params.trusted !== undefined) deps.audit(`session_trusted:start:${params.cwd}:${params.trusted}`);
-      const result = await hub().thread.start({
-        cwd: params.cwd,
-        modelId: params.modelId,
-        trusted: params.trusted,
-        ...(params.permissionMode !== undefined ? { permissionMode: params.permissionMode } : {}),
-        ...(params.thinkingLevel !== undefined ? { thinkingLevel: params.thinkingLevel } : {}),
-      });
-      if (!result.ok) return fail(result.error);
-      const data = result.data as { threadId?: string; cwd?: string; sessionPath?: string | null };
-      const threadId = data.threadId ?? '';
-      if (threadId.length === 0) return fail(appError('malformed_response'));
-      const view = runtime.applyStartOutcome(threadId, data.cwd ?? params.cwd, data.sessionPath ?? null, runtime.defaultTitle, Date.now(), params.trusted ?? false);
-      fillSessionMeta(threadId);
-      return { ok: true as const, data: view };
-    },
-    'session/stop': async (params) => {
-      const result = await hub().thread.stop({ threadId: params.threadId });
-      if (!result.ok) return fail(result.error);
-      // remove=false：内部重开链（trusted 重载/技能开关）只摘视图，注册表行是随后 resume 的 title/trusted 补全源
-      if (params.remove) runtime.removeSession(params.threadId);
-      else runtime.detachSession(params.threadId);
-      return { ok: true as const, data: null };
-    },
-    'session/listSaved': async (params) => {
-      return { ok: true as const, data: await savedAcrossCwds(params.cwd) };
-    },
+    // app 域（bootstrap/restartHost/dialog/command/agent 定义管理面）独立模块
+    ...appRoutes({
+      hub,
+      modelCommands: () => hub().models,
+      sessionCommands: () => hub().session,
+      agentCommands: () => hub().agents,
+      fail,
+      runtime,
+      audit: deps.audit,
+      pickDirectory: deps.pickDirectory,
+      agentDefinitions: deps.agentDefinitions,
+      knownCwds,
+      savedAcrossCwds,
+      channelModels,
+      providersView,
+      preferencesView,
+      skillsList,
+    }),
+    // 会话域（生命周期/读面/写面/模型目录/权限模式）独立模块
+    ...sessionRoutes({
+      sessionCommands: () => hub().session,
+      threadCommands: () => hub().thread,
+      modelCommands: () => hub().models,
+      permissionCommands: () => hub().permissions,
+      fail,
+      runtime,
+      audit: deps.audit,
+      savedAcrossCwds,
+      channelModels,
+      insideSessionsRoot,
+      revealPath: deps.revealPath,
+      fillSessionMeta,
+    }),
     // 发送管线（`! ` 路由/空舞台守卫/懒唤醒/unknown_thread 自愈）独立模块；
     // resume 通路经表晚绑定（resume 组挂载在本表字面量之后，调用期解引用）
     ...promptRoutes({
       sessionCommands: () => hub().session,
       fail,
       runtime,
-      bashRoute,
+      bashRoute: bashRouteHandler({ sessionCommands: () => hub().session, fail, audit: deps.audit }),
       resumeRoute: () => routes['session/resume'],
     }),
-    'session/abort': async (params) => {
-      // Esc/停止语义 = 清队列 + 停止当前轮（客户端约定）
-      await hub().session.clearQueue({ threadId: params.threadId });
-      const result = await hub().session.abort({ threadId: params.threadId });
-      return result.ok ? { ok: true as const, data: null } : fail(result.error);
-    },
-    'session/entries': async (params) => {
-      const result = await hub().session.getEntries({ threadId: params.threadId, ...(params.since !== undefined ? { since: params.since } : {}) });
-      // 全量兜底只认游标失效（分支变化/重恢复；hub 码 cursor_stale）：
-      // busy/timeout 等瞬态再叠一次全量拉取只会放大压力（30s 超时后再 30s）
-      if (!result.ok && params.since !== undefined && result.error.kind === 'cursor_stale') {
-        const full = await hub().session.getEntries({ threadId: params.threadId });
-        if (!full.ok) return fail(full.error);
-        return { ok: true as const, data: mapEntries(full.data) };
-      }
-      if (!result.ok) return fail(result.error);
-      return { ok: true as const, data: mapEntries(result.data) };
-    },
-    'session/inflight': async (params) => {
-      const result = await hub().session.getInflight({ threadId: params.threadId });
-      return result.ok ? { ok: true as const, data: inflightView(result.data) } : fail(result.error);
-    },
-    'session/subagents': async (params) => {
-      const result = await hub().session.getSubagents({ threadId: params.threadId });
-      return result.ok ? { ok: true as const, data: { subagents: subagentSnapshotView(result.data) } } : fail(result.error);
-    },
-    'session/pendingDialogs': async (params) => {
-      const result = await hub().session.getPendingDialogs({ threadId: params.threadId });
-      return result.ok ? { ok: true as const, data: { dialogs: pendingDialogsView(result.data) } } : fail(result.error);
-    },
-    'session/state': async (params) => {
-      const result = await hub().session.getState({ threadId: params.threadId });
-      if (!result.ok) return fail(result.error);
-      const view = threadStateView(result.data);
-      runtime.touchSession(params.threadId, { model: view.model === null ? null : `${view.model.provider}/${view.model.model}` });
-      return { ok: true as const, data: view };
-    },
-    'session/stats': async (params) => {
-      const result = await hub().session.getSessionStats({ threadId: params.threadId });
-      return result.ok ? { ok: true as const, data: sessionStatsView(result.data) } : fail(result.error);
-    },
-    'session/setName': async (params) => {
-      // parked 占位未进 host（setName 必回 Unknown threadId）：标题直接落注册表，
-      // resume 路由按注册表行保留；hub 会话文件名待下次 live 重命名同步
-      const parked = runtime.sessions().find((session) => session.threadId === params.threadId && session.state === 'parked') !== undefined;
-      if (parked) {
-        runtime.renameSession(params.threadId, params.name);
-        return { ok: true as const, data: null };
-      }
-      const result = await hub().session.setSessionName({ threadId: params.threadId, name: params.name });
-      if (!result.ok) return fail(result.error);
-      runtime.renameSession(params.threadId, params.name);
-      return { ok: true as const, data: null };
-    },
-    'session/setModel': async (params) => {
-      const result = await hub().models.setModel({ threadId: params.threadId, provider: params.provider, modelId: params.modelId });
-      if (!result.ok) return fail(result.error);
-      runtime.touchSession(params.threadId, { model: `${params.provider}/${params.modelId}` });
-      return { ok: true as const, data: null };
-    },
-    'session/setThinking': async (params) => {
-      const level = parseThinkingLevel(params.level);
-      if (level === null) return fail(appError('invalid_params'));
-      const result = await hub().models.setThinkingLevel({ threadId: params.threadId, level });
-      if (!result.ok) return fail(result.error);
-      runtime.touchSession(params.threadId, { thinkingLevel: level });
-      return { ok: true as const, data: null };
-    },
-    'session/thinkingLevels': async (params) => {
-      const result = await hub().models.getThinkingLevel({ threadId: params.threadId });
-      return result.ok ? { ok: true as const, data: thinkingLevelView(result.data) } : fail(result.error);
-    },
-    'model/list': async () => {
-      const result = await hub().models.getModels();
-      return result.ok ? { ok: true as const, data: channelModels(modelInfos(result.data)) } : fail(result.error);
-    },
-    'dialog/respond': async (params) => {
-      // 任何情况下都必答（晚到/未知 id 由 host 静默忽略并 ack）；权限应答落审计日志
-      const confirmed = params.payload['confirmed'] === true;
-      const cancelled = params.payload['cancelled'] === true;
-      deps.audit(`dialog_respond:${params.requestId}:${cancelled ? 'cancelled' : confirmed ? 'confirmed' : 'value'}`);
-      const result = await hub().agents.respondDialog({ requestId: params.requestId, payload: params.payload });
-      return result.ok ? { ok: true as const, data: null } : fail(result.error);
-    },
-    'subagent/steer': relay((api) => (input) => api.agents.steer(input)),
-    'command/list': async (params) => {
-      const result = await hub().session.getCommands({ threadId: params.threadId });
-      return result.ok ? { ok: true as const, data: sessionCommands(result.data) } : fail(result.error);
-    },
-    'command/preview': async () => {
-      const enabled = (await skillsList()).filter((skill) => skill.enabled);
-      return { ok: true as const, data: previewCommands(enabled) };
-    },
-    'agent/definitions': () => {
-      // 管理面走主进程文件面（不经 hub：需要 systemPrompt 原文与全部已知项目的定义）
-      return Promise.resolve({ ok: true as const, data: deps.agentDefinitions.list(knownCwds()) });
-    },
-    'session/fork': async (params) => {
-      const result = await hub().session.fork({ threadId: params.threadId, seq: params.seq, position: params.position });
-      if (!result.ok) return fail(result.error);
-      const data = result.data as { threadId?: string; previousThreadId?: string; sessionPath?: string | null };
-      const threadId = data.threadId ?? '';
-      // previousThreadId 必须就是被分叉的会话：换轨响应对不上请求即坏形状（防 ABA）
-      if (threadId.length === 0 || data.previousThreadId !== params.threadId) return fail(appError('malformed_response'));
-      // 响应不带 cwd/标题：从被分叉会话继承（项目分组与侧栏语义跟原会话走）
-      const source = runtime.sessions().find((session) => session.threadId === params.threadId);
-      // fork 是原地换轨：旧 id 已从 hub 移除（会话文件保留、可懒恢复），旧行转 parked
-      runtime.parkSession(params.threadId);
-      const view = runtime.applyStartOutcome(threadId, source?.cwd ?? '', data.sessionPath ?? null, source?.title ?? runtime.defaultTitle, Date.now());
-      fillSessionMeta(threadId);
-      return { ok: true as const, data: view };
-    },
-    'session/reveal': (params) => {
-      if (!insideSessionsRoot(params.sessionPath)) return Promise.resolve(fail(appError('session_path_forbidden')));
-      deps.revealPath(params.sessionPath);
-      return Promise.resolve({ ok: true as const, data: null });
-    },
-    'dialog/pickDirectory': (params) =>
-      deps
-        .pickDirectory(params.defaultPath ?? null)
-        .then((directory) => ({ ok: true as const, data: directory }))
-        .catch(() => fail(appError('dialog_unavailable'))),
-    'session/clearQueue': async (params) => {
-      // clear_queue 响应携带被清队列文本快照（hub 先取后清）——路由契约是 null，载荷不透传
-      const result = await hub().session.clearQueue({ threadId: params.threadId });
-      return result.ok ? { ok: true as const, data: null } : fail(result.error);
-    },
-    'session/bash': bashRoute,
-    // 全量中止语义（D13：bash 执行 id = 命令关联 id，app 侧不可定向指定）
-    'session/abortBash': relay((api) => (input) => api.session.abortBash(input)),
-    'permission/mode': async (params) => {
-      const result = await hub().permissions.getMode({ threadId: params.threadId });
-      if (!result.ok) return fail(result.error);
-      const data = result.data as { mode?: unknown; source?: unknown };
-      const source = data.source;
-      return {
-        ok: true as const,
-        data: {
-          mode: typeof data.mode === 'string' ? data.mode : '',
-          source: source === 'session' || source === 'project' || source === 'user' || source === 'default' ? source : 'default',
-        },
-      };
-    },
-    'permission/setMode': (params) => {
-      deps.audit(`permission_mode:${params.threadId}:${params.mode}`);
-      return hub()
-        .permissions.setMode({ threadId: params.threadId, mode: params.mode })
-        .then((result) => (result.ok ? { ok: true as const, data: null } : fail(result.error)));
-    },
-        ...runtimeRoutes({
-          runtime,
-          monitor: deps.monitor,
-          settings: deps.settings,
-          settingsCommands: () => hub().settings,
-          threadCommands: () => hub().thread,
-          sessionCommands: () => hub().session,
-          fail,
-          onPolicySyncFailed: deps.onPolicySyncFailed,
-          exportDiagnosticsBundle: deps.exportDiagnosticsBundle,
-        }),
-    'app/restartHost': () => {
-      deps.audit('restart_host:manual');
-      if (runtime.hostPhase() === null) return Promise.resolve(fail({ kind: 'transient', face: 'host_unavailable' }));
-      void runtime.host.restart('manual').catch(() => undefined);
-      return Promise.resolve({ ok: true as const, data: null });
-    },
-  };
-
-  /** start/resume 后补齐模型与思考档信息（失败不打断主流程）。 */
-  const fillSessionMeta = (threadId: string): void => {
-    void routes['session/state']?.({ threadId }).catch(() => undefined);
-  };
-
-  const resume = resumeRoutes({
+    ...runtimeRoutes({
+      runtime,
+      monitor: deps.monitor,
+      settings: deps.settings,
+      settingsCommands: () => hub().settings,
+      threadCommands: () => hub().thread,
+      sessionCommands: () => hub().session,
+      fail,
+      onPolicySyncFailed: deps.onPolicySyncFailed,
+      exportDiagnosticsBundle: deps.exportDiagnosticsBundle,
+    }),
+  };  const resume = resumeRoutes({
     threadCommands: () => hub().thread,
     fail,
     runtime,
@@ -524,9 +333,6 @@ export function createApiRoutes(deps: ApiRouteDeps) {
   // 挂载在表字面量之后：resume 组依赖 fillSessionMeta，而它引用本表（调用期解引用，安全）
   Object.assign(routes, resume);
 
-  function parseThinkingLevel(level: string): ThinkingLevel | null {
-    return (THINKING_LEVEL_ORDER as readonly string[]).includes(level) ? (level as ThinkingLevel) : null;
-  }
 
   return {
     async invoke(method: string, params: unknown): Promise<unknown> {

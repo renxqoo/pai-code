@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { compactInvocationOf, interceptsCompact } from '../compact-lexing';
+import { compactInvocationOf, interceptsCompact } from '@paiapp/api';
 
 /** /compact 词形镜像（x-harness COMMAND_LEXER 同构）：命中提取行余部为 customInstructions；
  *  边界词形（// 前缀/大小写/前瞻/前后空白）不命中。 */

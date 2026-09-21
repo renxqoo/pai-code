@@ -17,10 +17,8 @@ interface ProvidersFile {
   providers: Array<Record<string, unknown>>;
 }
 
-export function envVarNameForProvider(providerName: string): string {
-  const sanitized = providerName.replace(/[^A-Za-z0-9_]/g, "_").toUpperCase();
-  return `PAI_KEY_${sanitized}`;
-}
+import { envVarNameForProvider } from '@paiapp/api';
+export { envVarNameForProvider };
 
 /** providers.json 的 protocol 词表（x-harness catalog 同源）。 */
 export const HUB_API_FORMATS = API_FORMAT_IDS;

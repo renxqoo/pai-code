@@ -3,7 +3,7 @@ import { useStore } from 'zustand';
 
 import { panelSwitchOutcome, type PanelArchive } from '@/panel/panel-state';
 import { connectSessionUiPrune } from '@/live/ui-state-prune';
-import { bridgeClient, controller, store } from '@/live/workspace-runtime';
+import { apiClient, controller, store } from '@/live/workspace-runtime';
 import { uiStore } from '@/ui/ui-store';
 
 /**
@@ -56,7 +56,7 @@ export function useWorkspaceRuntime(): void {
     // 思考档位随会话拉取（get_thinking_level {level,source}；同上判活）
     void controller.readThinkingLevel(activeThreadId).catch(() => undefined);
     // 斜杠命令目录随会话拉取（thread 级；同上判活；builtin 内置命令也由 hub 下发）
-    void bridgeClient.invoke('command/list', { threadId: activeThreadId }).then((outcome) => {
+    void apiClient.command.list({ threadId: activeThreadId }).then((outcome) => {
       if (store.getState().activeThreadId !== activeThreadId) return;
       if (outcome.ok) store.setState({ commands: outcome.data });
     });

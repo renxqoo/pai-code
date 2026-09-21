@@ -6,7 +6,7 @@ import { copyOfError } from '@/lib/error-text';
 import { copy } from '@/strings';
 import { entrySeqOf } from './entry-seq';
 import { parseModelKey, pickSessionModel } from './pick-session-model';
-import { bridgeClient, controller, store } from './workspace-runtime';
+import { apiClient, controller, store } from './workspace-runtime';
 import { statsTargetsOf } from './stats-targets';
 
 /**
@@ -426,7 +426,7 @@ export function createWorkspaceActions(): WorkspaceActions {
     abortBash: () => void controller.abortBash(activeThreadOf()),
     revealSession: (sessionPath) => void controller.revealSession(sessionPath),
     pickDirectory: async (defaultPath) => {
-      const outcome = await bridgeClient.invoke('dialog/pickDirectory', defaultPath !== null ? { defaultPath } : {});
+      const outcome = await apiClient.dialog.pickDirectory(defaultPath !== null ? { defaultPath } : {});
       if (!outcome.ok) {
         // 失败与取消区分：取消静默，失败要给用户反馈（通知条层级高于弹窗）
         pushNotice(copy.newTask.pickFailed);
@@ -441,7 +441,7 @@ export function createWorkspaceActions(): WorkspaceActions {
         if (next === null) pushNotice(copy.settings.preferenceSaveFailed);
       });
     },
-    listProjectFiles: (cwd) => bridgeClient.invoke('file/search', { cwd, query: '' }).then((outcome) => {
+    listProjectFiles: (cwd) => apiClient.files.search({ cwd, query: '' }).then((outcome) => {
       if (!outcome.ok) return null;
       return outcome.data;
     }),
@@ -499,7 +499,7 @@ export function createWorkspaceActions(): WorkspaceActions {
     },
     openInSystem: async (cwd, target) => {
       if (cwd.length === 0) return;
-      const outcome = await bridgeClient.invoke('shell/open', { cwd, target });
+      const outcome = await apiClient.app.openShell({ cwd, target });
       if (!outcome.ok) {
         // editor_not_found 有更强的独立指引（不套「打开失败」外壳）；其余查表文案进外壳
         pushNotice(outcome.error.kind === 'editor_not_found' ? copy.thread.openEditorMissing : copy.thread.openFailed(copyOfError(outcome.error)));

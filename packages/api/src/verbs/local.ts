@@ -1,11 +1,14 @@
-import type { ApiError, ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
-import { appError } from '@paiapp/api';
+import type { RuntimePort } from './ports';
 
-import type { FileRead } from './file-read';
-import { searchProjectFiles } from './file-search';
-import type { GitBranches } from './git-branches';
-import type { GitGraph } from './git-graph';
-import type { OpenLocation } from './open-location';
+import type { ApiError, ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
+import { appError } from '../index';
+
+/** 宿主能力端口（结构满足即可——electron 注入实现） */
+interface FileReadPort { read(cwd: string, path: string): { ok: true; data: { content: string; truncated: boolean; size: number } } | { ok: false; error: ApiError }; }
+interface FileSearchPort { search(cwd: string, query: string): string[]; }
+interface GitPort { list(cwd: string): Promise<ApiOutcome<'git/branches'>>; checkout(cwd: string, branch: string, create: boolean): Promise<ApiOutcome<'git/checkout'>>; }
+interface GraphPort { list(cwd: string): Promise<ApiOutcome<'git/graph'>>; invalidate(cwd: string): void; }
+interface OpenLocationPort { open(cwd: string, target: string): Promise<ApiOutcome<'shell/open'>>; }
 
 /**
  * 本地文件/shell/git 路由组（api-routes 的本地能力子集）：共用语汇是
@@ -18,10 +21,11 @@ type Handler<M extends ApiMethod> = (params: ApiParams<M>) => Promise<ApiOutcome
 export type LocalRoutesDeps = {
   isKnownCwd: (cwd: string) => boolean;
   audit: (message: string) => void;
-  git: GitBranches;
-  graph: GitGraph;
-  openLocation: OpenLocation;
-  fileRead: FileRead;
+  fileSearch: FileSearchPort;
+  git: GitPort;
+  graph: GraphPort;
+  openLocation: OpenLocationPort;
+  fileRead: FileReadPort;
 };
 
 export function createLocalRoutes(deps: LocalRoutesDeps) {
@@ -38,7 +42,7 @@ export function createLocalRoutes(deps: LocalRoutesDeps) {
     'file/search': (params) => {
       // 目录门禁：只允许扫描本应用已知会话目录（活跃会话 + 注册表），缩小枚举面（见 T23 挂账）
       if (!deps.isKnownCwd(params.cwd)) return fail(appError('cwd_forbidden'));
-      return Promise.resolve({ ok: true as const, data: searchProjectFiles(params.cwd, params.query) });
+      return Promise.resolve({ ok: true as const, data: deps.fileSearch.search(params.cwd, params.query) });
     },
     'file/read': (params) => {
       if (!deps.isKnownCwd(params.cwd)) return fail(appError('cwd_forbidden'));

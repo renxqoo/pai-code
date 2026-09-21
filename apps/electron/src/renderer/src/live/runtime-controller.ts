@@ -1,3 +1,4 @@
+import { createApiClient } from '@paiapp/api';
 import type { IdleRecycleMinutes, RuntimeSnapshotView } from '@paiapp/contracts';
 
 import type { BridgeClient } from './client-invoke';
@@ -25,34 +26,35 @@ export interface RuntimeController {
 }
 
 export function createRuntimeController(client: BridgeClient): RuntimeController {
+  const api = createApiClient(client);
   return {
     async fetchRuntimeSnapshot(): Promise<RuntimeSnapshotView | null> {
-      const outcome = await client.invoke('app/runtime', {});
+      const outcome = await api.app.runtime({});
       return outcome.ok ? outcome.data : null;
     },
     async fetchDiagnosticLog(): Promise<string | null> {
-      const outcome = await client.invoke('app/diagnosticLog', {});
+      const outcome = await api.app.diagnosticLog({});
       // 传输层形状防御：data 异形降级空尾部（监控面不因垃圾载荷抛错）
       return outcome.ok ? (outcome.data?.stderrTail ?? '') : null;
     },
     async retireSession(threadId: string): Promise<string | null> {
-      const outcome = await client.invoke('session/retire', { threadId });
+      const outcome = await api.session.retire({ threadId });
       return outcome.ok ? null : outcome.error.kind;
     },
     async forceRetireSession(threadId: string): Promise<string | null> {
-      const outcome = await client.invoke('session/forceRetire', { threadId });
+      const outcome = await api.session.forceRetire({ threadId });
       return outcome.ok ? null : outcome.error.kind;
     },
     async setKeepalive(threadId: string, keepalive: boolean): Promise<string | null> {
-      const outcome = await client.invoke('session/setKeepalive', { threadId, keepalive });
+      const outcome = await api.session.setKeepalive({ threadId, keepalive });
       return outcome.ok ? null : outcome.error.kind;
     },
     async setIdleRecycle(minutes: IdleRecycleMinutes): Promise<IdleRecycleMinutes | null> {
-      const outcome = await client.invoke('app/setIdleRecycle', { minutes });
+      const outcome = await api.app.setIdleRecycle({ minutes });
       return outcome.ok ? outcome.data?.minutes ?? null : null;
     },
     async exportDiagnostics(): Promise<string | null> {
-      const outcome = await client.invoke('app/exportDiagnostics', {});
+      const outcome = await api.app.exportDiagnostics({});
       return outcome.ok ? outcome.data?.directory ?? null : null;
     },
   };

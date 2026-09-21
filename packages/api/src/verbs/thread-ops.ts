@@ -1,9 +1,9 @@
-import type { ApiError, ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
-import { appError } from '@paiapp/api';
-import type { AgentCommands, ThreadCommands } from '@paiapp/api';
+import type { AgentDefinitionsPort, RuntimePort } from './ports';
 
-import type { PaiRuntime } from './pai-runtime';
-import type { AgentDefinitionsStore } from './agent-definitions-store';
+import type { ApiError, ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
+import { appError } from '../index';
+import type { AgentCommands, ThreadCommands } from '../index';
+
 
 /**
  * 线程域写操作路由组（api-routes 的会话级子集）：agent 定义 user 级 CRUD 的 hub
@@ -25,8 +25,8 @@ export function threadOpsRoutes(deps: {
   agentCommands: () => AgentCommands;
   threadCommands: () => ThreadCommands;
   fail: (error: ApiError) => { ok: false; error: ApiError };
-  runtime: PaiRuntime;
-  rootDeps: { audit: (message: string) => void; agentDefinitions: AgentDefinitionsStore; knownCwds: () => string[]; insideSessionsRoot: (sessionPath: string) => boolean };
+  runtime: RuntimePort;
+  rootDeps: { audit: (message: string) => void; agentDefinitions: AgentDefinitionsPort; knownCwds: () => string[]; insideSessionsRoot: (sessionPath: string) => boolean };
 }): {
   'agent/upsert': Handler<'agent/upsert'>;
   'agent/remove': Handler<'agent/remove'>;

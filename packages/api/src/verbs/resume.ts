@@ -1,9 +1,10 @@
-import type { ApiError, ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
-import type { SessionRow } from '@paiapp/contracts';
-import { appError } from '@paiapp/api';
-import type { ThreadCommands } from '@paiapp/api';
+import type { RuntimePort } from './ports';
 
-import type { PaiRuntime } from './pai-runtime';
+import type { ApiError, ApiMethod, ApiOutcome, ApiParams, SessionView } from '@paiapp/contracts';
+import type { SessionRow } from '@paiapp/contracts';
+import { appError } from '../index';
+import type { ThreadCommands } from '../index';
+
 
 /**
  * 会话恢复/纳管路由组（api-routes 的 resume/register 子集）：路径白名单、trusted
@@ -13,18 +14,16 @@ import type { PaiRuntime } from './pai-runtime';
 
 type Handler<M extends ApiMethod> = (params: ApiParams<M>) => Promise<ApiOutcome<M>>;
 
-type RegistryRow = SessionRow | null;
-
 /** 删行族：会话文件不可读/属旧布局/路径逃逸/状态冲突——占位不再反复失败（与对账同语义）。 */
 const VANISH_ERROR_KINDS: ReadonlySet<string> = new Set(['session_unreadable', 'io_failed', 'path_forbidden', 'state_conflict']);
 
 export function resumeRoutes(deps: {
   threadCommands: () => ThreadCommands;
   fail: (error: ApiError) => { ok: false; error: ApiError };
-  runtime: PaiRuntime;
+  runtime: RuntimePort;
   audit: (message: string) => void;
   insideSessionsRoot: (sessionPath: string) => boolean;
-  findRegistryRowByPath: (sessionPath: string) => RegistryRow;
+  findRegistryRowByPath: (sessionPath: string) => SessionRow | null;
   fileMtimeMs: (path: string) => number | null;
   fillSessionMeta: (threadId: string) => void;
 }): {
@@ -56,7 +55,7 @@ export function resumeRoutes(deps: {
     cwd: string,
     sessionPath: string,
     known: ReturnType<typeof findRegistryRowByPath>,
-  ): { ok: true; data: ReturnType<PaiRuntime["applyStartOutcome"]> } => {
+  ): { ok: true; data: SessionView } => {
     // threadId 只信响应；标题沿用注册表行（占位视图/既有命名的延续，不回退默认标题）
     // 恢复不是会话活动：活动时间 = max(注册表行, 会话文件 mtime)——await 窗口内到达的
     // turn 事件可能已推进行/文件（帧同步派发先于本续体），不得用过期快照写回旧值；

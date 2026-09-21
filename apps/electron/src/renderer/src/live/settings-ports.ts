@@ -2,7 +2,7 @@ import type { PermMode } from '@paiapp/contracts';
 import { isSettableThinkingLevel } from '@paiapp/contracts';
 
 import { copyOfError } from '@/lib/error-text';
-import type { BridgeClient } from './client-invoke';
+import type { ApiClient } from '@paiapp/api';
 import type { HubSettingsView, LiveStore } from './store';
 
 /**
@@ -12,11 +12,11 @@ import type { HubSettingsView, LiveStore } from './store';
  * （下游菜单依赖引用，防刷新循环击穿交互）。
  */
 export interface SettingsPortsDeps {
-  readonly client: BridgeClient;
+  readonly api: ApiClient;
   readonly store: LiveStore;
 }
 
-export function createSettingsPorts({ client, store }: SettingsPortsDeps) {
+export function createSettingsPorts({ api, store }: SettingsPortsDeps) {
   /** hub 缺省真相更新后刷新活跃会话的生效视图（权限模式随 hub settings 变化的回读）。 */
   const refreshActivePermissionMode = async (): Promise<void> => {
     const active = store.getState().activeThreadId;
@@ -26,14 +26,14 @@ export function createSettingsPorts({ client, store }: SettingsPortsDeps) {
 
   /** 只拉 hub 用户级缺省（app/hubSettings；新任务页权限控件与设置页共用的数据源）。 */
   const readHubSettingsIntoStore = async (): Promise<HubSettingsView | null> => {
-    const outcome = await client.invoke('app/hubSettings', {});
+    const outcome = await api.app.hubSettings({});
     if (!outcome.ok) return null;
     store.setState({ hubSettings: outcome.data });
     return outcome.data;
   };
 
   async function refreshSaved(): Promise<void> {
-    const outcome = await client.invoke('session/listSaved', {});
+    const outcome = await api.session.listSaved({});
     if (outcome.ok) {
       // saved 列表直接进 store（避免与 bootstrap 动作耦合）
       store.setState({ saved: outcome.data });
@@ -41,12 +41,12 @@ export function createSettingsPorts({ client, store }: SettingsPortsDeps) {
   }
 
   async function refreshModels(): Promise<void> {
-    const outcome = await client.invoke('model/list', {});
+    const outcome = await api.models.list({});
     if (outcome.ok) store.setState({ models: outcome.data });
   }
 
   async function readSessionPermissionMode(threadId: string): Promise<{ mode: string; source: 'session' | 'project' | 'user' | 'default' } | null> {
-    const outcome = await client.invoke('permission/mode', { threadId });
+    const outcome = await api.permission.mode({ threadId });
     if (!outcome.ok) return null;
     // 判活：请求在途期间活跃会话已切换则丢弃（防旧会话模式覆盖新会话视图；与目录刷新同型）
     if (store.getState().activeThreadId !== threadId) return null;
@@ -73,7 +73,7 @@ export function createSettingsPorts({ client, store }: SettingsPortsDeps) {
       // null = 不修改该键（「未设置」在 hub 侧无协议表达，settings/set 无删除语义）——
       // undefined 与 null 同为跳过，全空补丁直接成功不发命令
       if (patch.permissionDefaultMode == null && patch.thinkingDefault == null) return null;
-      const outcome = await client.invoke('app/setHubSettings', {
+      const outcome = await api.app.setHubSettings({
         ...(patch.permissionDefaultMode != null ? { permissionDefaultMode: patch.permissionDefaultMode } : {}),
         ...(patch.thinkingDefault != null ? { thinkingDefault: patch.thinkingDefault } : {}),
       });
@@ -85,11 +85,11 @@ export function createSettingsPorts({ client, store }: SettingsPortsDeps) {
     },
     readSessionPermissionMode,
     async setSessionPermissionMode(threadId: string, mode: PermMode): Promise<string | null> {
-      const outcome = await client.invoke('permission/setMode', { threadId, mode });
+      const outcome = await api.permission.setMode({ threadId, mode });
       return outcome.ok ? null : copyOfError(outcome.error);
     },
     async readThinkingLevel(threadId: string): Promise<{ level: string; source: 'session' | 'project' | 'user' | 'off' } | null> {
-      const outcome = await client.invoke('session/thinkingLevels', { threadId });
+      const outcome = await api.session.thinkingLevels({ threadId });
       if (!outcome.ok) return null;
       if (store.getState().activeThreadId !== threadId) return null;
       store.setState({ thinkingLevel: outcome.data });

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import type { HostCommandOutcome, HostPhase, HostProcessPort, HubFrame, PaiCommand } from "@paiapp/contracts";
 
 import { createApiRoutes } from "../api-routes";
-import { createSettingsRoutes } from "../api-routes-settings";
+import { createSettingsRoutes } from '@paiapp/api';
 import { createAgentDefinitionsStore } from "../agent-definitions-store";
 import { createFileSettings, type ProviderKeyStore } from "../file-settings";
 import { createPaiRuntime } from "../pai-runtime";

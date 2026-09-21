@@ -1,12 +1,12 @@
-import type { ApiError, ApiMethod, ApiOutcome, ApiParams, ProviderConfigView, SkillView } from '@paiapp/contracts';
-import { isApiFormat, normalizeLegacyPermMode } from '@paiapp/contracts';
-import { appError } from '@paiapp/api';
-import type { SettingsCommands } from '@paiapp/api';
 
-import { HUB_API_FORMATS, envVarNameForProvider } from './models-config';
-import { createProviderProbe } from './provider-probe';
+
+import type { ApiError, ApiMethod, ApiOutcome, ApiParams, PreferencesView, ProviderConfigView, SkillView } from '@paiapp/contracts';
+import { isApiFormat, normalizeLegacyPermMode } from '@paiapp/contracts';
+import { appError } from '../index';
+import type { SettingsCommands } from '../index';
+
+import { envVarNameForProvider } from './env-name';
 import { errorLogToken } from './error-log-token';
-import type { createFileSettings, ProviderKeyStore } from './file-settings';
 
 /**
  * 设置与目录路由组（api-routes 的本地配置子集）：providers/技能目录/hub 设置/偏好写。
@@ -17,11 +17,21 @@ import type { createFileSettings, ProviderKeyStore } from './file-settings';
 
 type Handler<M extends ApiMethod> = (params: ApiParams<M>) => Promise<ApiOutcome<M>>;
 
-type FileSettings = ReturnType<typeof createFileSettings>;
+/** 设置存储端口（verbs 消费面：providers CRUD + 偏好读写——真形用 contracts 视图） */
+interface SettingsStorePort {
+  listProviders(): Array<{ name: string; baseUrl: string; api: string; models: Array<{ id: string; reasoning: boolean; vision: boolean; contextWindow?: number; maxTokens?: number }> }>;
+  upsertProvider(input: unknown): Array<{ name: string; baseUrl: string; api: string; models: Array<{ id: string; reasoning: boolean; vision: boolean; contextWindow?: number; maxTokens?: number }> }>;
+  removeProvider(name: string): Array<{ name: string; baseUrl: string; api: string; models: Array<{ id: string; reasoning: boolean; vision: boolean; contextWindow?: number; maxTokens?: number }> }>;
+  get(): PreferencesView;
+  patch(patch: Record<string, unknown>): unknown;
+}
+interface KeyStorePort { getKey(name: string): string | null; }
 
 export type SettingsRoutesDeps = {
-  settings: FileSettings;
-  keyStore: ProviderKeyStore;
+  settings: SettingsStorePort;
+  keyStore: KeyStorePort;
+  /** 探活注入位（实现持宿主 HTTP 面；getProvider/getKey 由装配闭包） */
+  probeProvider: (name: string, modelId?: string) => Promise<{ ok: true; latencyMs: number } | { ok: false; error: ApiError }>;
   /** provider 配置变更后重启 host（providers.json 只在启动期读入）。 */
   restartHost: () => Promise<void>;
   /** hub settings 域 accessor（惰性：路由构造早于 runtime.start；host 未启动时各路由显式降级）。 */
@@ -79,11 +89,8 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
     return out;
   };
 
-  /** 连接探活（主进程直发，不经 hub；key 不进日志）。 */
-  const probe = createProviderProbe({
-    getProvider: (name) => deps.settings.listProviders().find((provider) => provider.name === name),
-    getKey: (name) => deps.keyStore.getKey(name),
-  });
+  // 连接探活（宿主能力——HTTP 直发不经 hub；装配层注入实现，key 不进日志）
+  const probe = deps.probeProvider;
 
   const routes: {
     'skills/list': Handler<'skills/list'>;
@@ -132,7 +139,7 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
       return { ok: true as const, data: providersView() };
     },
     'provider/test': async (params) => {
-      const outcome = await probe.probe(params.name, params.modelId);
+      const outcome = await probe(params.name, params.modelId);
       return outcome.ok
         ? { ok: true as const, data: { latencyMs: outcome.latencyMs } }
         : fail(outcome.error);
@@ -175,7 +182,7 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
       return { ok: true as const, data: null };
     },
     'app/setPreference': (params) => {
-      const patch: Parameters<FileSettings['patch']>[0] = {};
+      const patch: Parameters<SettingsStorePort['patch']>[0] = {};
       if (params.defaultModel !== undefined) patch.defaultModel = params.defaultModel;
       if (params.onboarded !== undefined) patch.onboarded = params.onboarded;
       if (params.projectModels !== undefined) patch.projectModels = { ...params.projectModels };
@@ -196,4 +203,4 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
   };
 }
 
-export { HUB_API_FORMATS };
+export { API_FORMAT_IDS as HUB_API_FORMATS } from '@paiapp/contracts';

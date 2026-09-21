@@ -1,24 +1,23 @@
+import type { MonitorPort, RuntimePort } from './ports';
+
 import type { ApiError, ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
-import { appError, settle } from '@paiapp/api';
-import type { SessionCommands, SettingsCommands, ThreadCommands } from '@paiapp/api';
+import { appError, settle } from '../index';
+import type { SessionCommands, SettingsCommands, ThreadCommands } from '../index';
 
 import { errorLogToken } from './error-log-token';
 
-import type { RuntimeMonitor } from './runtime-monitor/create-runtime-monitor';
-import type { PaiRuntime } from './pai-runtime';
-import type { createFileSettings } from './file-settings';
+/** 设置面端口（patch 按使用面） */
+interface SettingsPatchPort { patch(patch: Record<string, unknown>): void; get(): { idleRecycleMinutes?: number }; }
 
 /**
  * T29 运行状态路由族（app/runtime / 档位 / 回收三命令 / 诊断包）：
  * 从 api-routes 的 RouteTable 拆出（一动词一文件）；域 accessor 与 fail 由主表注入。
  */
 
-type FileSettings = ReturnType<typeof createFileSettings>;
-
 export interface RuntimeRoutesDeps {
-  runtime: PaiRuntime;
-  monitor: RuntimeMonitor;
-  settings: FileSettings;
+  runtime: RuntimePort;
+  monitor: MonitorPort;
+  settings: SettingsPatchPort;
   /** 档位 hub 同步失败的落档钩子（装配层接监督日志 → 监控时间线）。 */
   onPolicySyncFailed?: (minutes: number, reason: string) => void;
   /** hub 域 accessor（惰性：路由构造早于 runtime.start；host 未启动时各路由显式降级）。 */

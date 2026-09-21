@@ -1,3 +1,4 @@
+import { createApiClient } from '@paiapp/api';
 import type { PendingDialogView } from '@paiapp/contracts';
 
 import type { BridgeClient } from './client-invoke';
@@ -18,12 +19,13 @@ export function createEntryHydration(input: {
   isDisposed: () => boolean;
 }) {
   const { client, store, reconciling, isDisposed } = input;
+  const api = createApiClient(client);
 
   const fetchEntries = async (threadId: string, since: number | null, dropLiveTurn: boolean): Promise<void> => {
     if (reconciling.has(`${threadId}:${dropLiveTurn}`)) return;
     reconciling.add(`${threadId}:${dropLiveTurn}`);
     try {
-      const outcome = await client.invoke('session/entries', { threadId, since: since ?? undefined });
+      const outcome = await api.session.entries({ threadId, since: since ?? undefined });
       if (isDisposed()) return;
       if (!outcome.ok) {
         // 游标失效由主进程兜底全量重拉；此处失败则标记（settle 后保留装饰态）
@@ -49,7 +51,7 @@ export function createEntryHydration(input: {
     since: number | null = null,
     opts: { liveTurnPresent?: () => boolean; staleGuard?: () => boolean } = {},
   ): Promise<void> => {
-    const outcome = await client.invoke('session/entries', { threadId, since: since ?? undefined });
+    const outcome = await api.session.entries({ threadId, since: since ?? undefined });
 
     if (isDisposed()) return;
     if (opts.staleGuard?.()) return;
@@ -71,7 +73,7 @@ export function createEntryHydration(input: {
   };
 
   const hydrateFull = async (threadId: string): Promise<void> => {
-    const outcome = await client.invoke('session/entries', { threadId });
+    const outcome = await api.session.entries({ threadId });
     if (isDisposed()) return;
     if (!outcome.ok) {
       store.getState().hydrate(threadId, { kind: 'hydrate/failed' });
@@ -103,13 +105,14 @@ export function createReadonlyHydration(input: {
   onInflightApplied: (threadId: string, bashRunning: boolean) => void;
 }) {
   const { client, store, ports, resumeByPath, activate, isDisposed, onDialogsHydrated, onInflightApplied } = input;
+  const api = createApiClient(client);
   const hydrating = new Map<string, Promise<void>>();
 
   /** 条目拉取：视图落在原 threadId（换轨后拉取目标为 resume 响应 id）。
    * mode=reconcile 用于 live 会话冷启动——整表 initial 会重置 thread 状态，
    * 抹掉重载后已折叠的流式增量；reconcile 只把未见过的前缀插到 live 轮之前。 */
   const pull = async (threadId: string, targetId: string, mode: 'initial' | 'reconcile' = 'initial'): Promise<void> => {
-    const outcome = await client.invoke('session/entries', { threadId: targetId });
+    const outcome = await api.session.entries({ threadId: targetId });
     if (isDisposed()) return;
     if (!outcome.ok) {
       store.getState().hydrate(threadId, { kind: 'hydrate/failed' });
@@ -191,7 +194,7 @@ export function createReadonlyHydration(input: {
       await pull(threadId, threadId, 'initial');
       return;
     }
-    const registered = await client.invoke('session/register', { sessionPath: session.sessionPath });
+    const registered = await api.session.register({ sessionPath: session.sessionPath });
     if (isDisposed()) return;
     if (!registered.ok && (registered.error.kind === 'session_unreadable' || registered.error.kind === 'thread_id_mismatch')) {
       const liveId = await resumeByPath(session.sessionPath);
@@ -211,7 +214,7 @@ export function createReadonlyHydration(input: {
     await pull(threadId, threadId);
     // 直读 get_state 补 model 元数据（主进程 touchSession 落视图 + 推送；
     // 失败静默——注册表 model 缺省时控件本地推导兜底）
-    void client.invoke('session/state', { threadId }).catch(() => undefined);
+    void api.session.state({ threadId }).catch(() => undefined);
   };
 
   return {

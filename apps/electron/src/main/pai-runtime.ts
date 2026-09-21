@@ -11,7 +11,7 @@ import {
   type HubApi,
 } from '@paiapp/api';
 
-import { errorLogToken } from './error-log-token';
+import { errorLogToken } from '@paiapp/api';
 import { autoTitleCandidateOf } from './auto-title';
 import {
   openRegistryStore,

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { errorLogToken } from '../error-log-token';
+import { errorLogToken } from '@paiapp/api';
 
 describe('errorLogToken', () => {
   test('kind 为干；message 取首行截断拼接', () => {

@@ -1,3 +1,4 @@
+import { createApiClient } from '@paiapp/api';
 import type { AgentDefinition, CommandView, ImagePayload, PreferencesView, ProviderModel, SkillView, UiEvent } from '@paiapp/contracts';
 import { isSettableThinkingLevel } from '@paiapp/contracts';
 
@@ -38,7 +39,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
   const now = (): number => Date.now();
 
   const refreshAgentDefinitions = async (): Promise<void> => {
-    const outcome = await client.invoke('agent/definitions', {});
+    const outcome = await api.agents.definitions({});
 
     if (outcome.ok) store.setState({ agentDefinitions: outcome.data });
   };
@@ -52,6 +53,8 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
   });
 
   /** 懒恢复机制（在途去重/乐观登记）独立模块。 */
+  // UI→api 直调门面：transport = 既有桥（IPC 方法字符串只存在于 @paiapp/api client.ts）
+  const api = createApiClient(client);
   const lazy = createLazyResume(client, store);
   const { resumeByPath, ensureLiveSession, activate } = lazy;
 
@@ -59,7 +62,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
   const ports = createReadPorts(client);
 
   /** 配置面读写口（目录刷新/hub 缺省/会话级权限与思考档读口——单一职责模块）。 */
-  const settingsPorts = createSettingsPorts({ client, store });
+  const settingsPorts = createSettingsPorts({ api, store });
 
   /** 直执行 bash 的收尾探测（协议无终态帧 → 输出静默后读口确认收尾；仍在跑时有界重排）。
    *  声明须先于 readonlyHydration（后者注入 ports）。 */
@@ -211,7 +214,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       });
       let outcome: Awaited<ReturnType<typeof client.invoke<'app/bootstrap'>>> | null = null;
       try {
-        outcome = await client.invoke('app/bootstrap', {});
+        outcome = await api.app.bootstrap({});
       } catch {
         outcome = { ok: false, error: { kind: 'bootstrap_crashed' } };
       }
@@ -247,7 +250,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       // 发送管线（`! ` 路由/空舞台守卫/懒唤醒/unknown_thread 自愈/streaming_window
       // 降级）整体居主进程 session/prompt 路由——这里只投递。投递裁决交给 hub 的
       // 原子语义（prompt+streamingBehavior）：空闲立即发送、流式中入队轮末自动消费。
-      const outcome = await client.invoke('session/prompt', {
+      const outcome = await api.session.prompt({
         threadId,
         message: text,
         streamingBehavior: mode === 'steer' ? 'steer' : 'followUp',
@@ -268,11 +271,11 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       // 空舞台守卫：无目标会话即无在飞轮次——停止天然幂等，静默返回
       if (threadId.length === 0) return;
       store.getState().stopIntent(threadId);
-      await client.invoke('session/abort', { threadId });
+      await api.session.abort({ threadId });
     },
     async createSession(input: CreateSessionInput): Promise<CreateSessionOutcome> {
       // 权限模式与思考档是 session/start 的原生参数（hub 建线程即生效，无后置应用窗口）
-      const outcome = await client.invoke('session/start', {
+      const outcome = await api.thread.start({
         cwd: input.cwd,
         modelId: input.model?.modelId,
         trusted: input.trusted,
@@ -319,7 +322,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       await ensureLiveSession(threadId).catch(() => undefined);
       // 记住重开前是否活跃：resume 成功后仅在该会话原本活跃时跟随切换（用户在途切换别会话时不劫持）
       const wasActive = store.getState().activeThreadId === threadId;
-      const stop = await client.invoke('session/stop', { threadId, remove: false });
+      const stop = await api.thread.stop({ threadId, remove: false });
       if (!stop.ok) return false;
       lazy.discardResumed(sessionPath);
       const liveId = await resumeByPath(sessionPath, trusted);
@@ -336,22 +339,22 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     async closeSession(threadId: string): Promise<void> {
       // 用户关闭：stop(dispose) + 注册表删行（remove 路由语义）
       const sessionPath = store.getState().sessions[threadId]?.sessionPath ?? null;
-      await client.invoke('session/stop', { threadId, remove: true });
+      await api.thread.stop({ threadId, remove: true });
       if (sessionPath !== null) lazy.discardResumed(sessionPath);
     },
     async renameSession(threadId: string, name: string): Promise<boolean> {
       const trimmed = name.trim();
       if (trimmed.length === 0) return false;
-      const outcome = await client.invoke('session/setName', { threadId, name: trimmed });
+      const outcome = await api.session.setName({ threadId, name: trimmed });
       return outcome.ok;
     },
     async respondDialog(requestId: string, payload: Record<string, unknown>): Promise<void> {
       settleDialog(requestId);
-      await client.invoke('dialog/respond', { requestId, payload }).catch(() => undefined);
+      await api.dialog.respond({ requestId, payload }).catch(() => undefined);
     },
     async cancelDialog(requestId: string): Promise<void> {
       settleDialog(requestId);
-      await client.invoke('dialog/respond', { requestId, payload: { cancelled: true } }).catch(() => undefined);
+      await api.dialog.respond({ requestId, payload: { cancelled: true } }).catch(() => undefined);
     },
     async selectModel(threadId: string, provider: string, modelId: string): Promise<void> {
       // 空舞台守卫：无活跃会话时菜单仍可见，点击必须得到可行动反馈而非 schema 密文
@@ -359,7 +362,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
         store.getState().pushNotice(copy.flow.noActiveSession);
         return;
       }
-      const outcome = await client.invoke('session/setModel', { threadId, provider, modelId });
+      const outcome = await api.session.setModel({ threadId, provider, modelId });
       // hub 拒绝（如模型不在目录）：用户选择未生效，查表文案通报（与思考档同型）
       if (!outcome.ok) store.getState().pushNotice(copy.flow.modelRejected(copyOfError(outcome.error)));
     },
@@ -374,7 +377,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
         store.getState().pushNotice(copy.flow.thinkingInvalid);
         return;
       }
-      const outcome = await client.invoke('session/setThinking', { threadId, level });
+      const outcome = await api.session.setThinking({ threadId, level });
       // hub 拒绝（如模型不支持该档位）：用户选择未生效，查表文案通报
       if (!outcome.ok) store.getState().pushNotice(copy.flow.thinkingRejected(copyOfError(outcome.error)));
     },
@@ -382,39 +385,39 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     async steerSubagent(threadId: string, agentId: string, message: string): Promise<string | null> {
       const text = message.trim();
       if (text.length === 0) return 'empty_message';
-      const outcome = await client.invoke('subagent/steer', { threadId, agentId, message: text });
+      const outcome = await api.session.steer({ threadId, agentId, message: text });
       return outcome.ok ? null : outcome.error.kind;
     },
     restartHost(): void {
-      void client.invoke('app/restartHost', {}).then(() => undefined);
+      void api.app.restartHost({}).then(() => undefined);
     },
     runtime: createRuntimeController(client),
     async refreshAgentDefinitions(): Promise<void> {
       await refreshAgentDefinitions();
     },
     async upsertAgentDefinition(definition: AgentDefinition, previous: { name: string; scope: 'user' | 'project'; project: string | null } | null): Promise<string | null> {
-      const outcome = await client.invoke('agent/upsert', { definition, previous });
+      const outcome = await api.agents.upsert({ definition, previous });
       if (!outcome.ok) return copyOfError(outcome.error);
       await refreshAgentDefinitions();
       return null;
     },
     async removeAgentDefinition(key: { name: string; scope: 'user' | 'project'; project: string | null }): Promise<string | null> {
-      const outcome = await client.invoke('agent/remove', key);
+      const outcome = await api.agents.remove(key);
       if (!outcome.ok) return copyOfError(outcome.error);
       await refreshAgentDefinitions();
       return null;
     },
     async refreshSkills(): Promise<void> {
-      const outcome = await client.invoke('skills/list', {});
+      const outcome = await api.skills.list({});
       if (outcome.ok) store.setState({ skills: outcome.data });
     },
     /** 预会话命令目录（新建任务页 `/` 补全数据源；失败空目录降级）。 */
     async fetchCommandPreview(): Promise<CommandView[]> {
-      const outcome = await client.invoke('command/preview', {});
+      const outcome = await api.command.preview({});
       return outcome.ok ? outcome.data : [];
     },
     async setSkillEnabled(name: string, enabled: boolean): Promise<{ ok: true; data: SkillView[] } | { ok: false; reason: string }> {
-      const outcome = await client.invoke('skills/setEnabled', { name, enabled });
+      const outcome = await api.skills.setEnabled({ name, enabled });
       if (!outcome.ok) return { ok: false, reason: copyOfError(outcome.error) };
       store.setState({ skills: outcome.data });
       return { ok: true, data: outcome.data };
@@ -443,7 +446,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       const sessionPath = store.getState().sessions[threadId]?.sessionPath ?? null;
       if (sessionPath === null || sessionPath.length === 0) return false;
       const wasActive = store.getState().activeThreadId === threadId;
-      const stop = await client.invoke('session/stop', { threadId, remove: false });
+      const stop = await api.thread.stop({ threadId, remove: false });
       if (!stop.ok) return false;
       lazy.discardResumed(sessionPath);
       const liveId = await resumeByPath(sessionPath);
@@ -466,7 +469,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       try {
         // invoke reject（桥断连等）同样必须落 bashSettled：executing 永真会使
         // 消息流尾部永久 loading 且 1Hz 走表定时器永不停
-        const outcome = await client.invoke('session/bash', { threadId, command: text });
+        const outcome = await api.session.bash({ threadId, command: text });
         bashProbe.clear(threadId);
         store.getState().bashSettled(threadId);
         // bash 与模型轮并发（流式中直执行）时在途内容未落盘：重建一律降级为
@@ -484,13 +487,13 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     async abortBash(threadId: string): Promise<void> {
       // 空舞台守卫：无目标会话即无在跑命令——中止天然幂等，静默返回
       if (threadId.length === 0) return;
-      await client.invoke('session/abortBash', { threadId });
+      await api.session.abortBash({ threadId });
     },
     async revealSession(sessionPath: string): Promise<void> {
-      await client.invoke('session/reveal', { sessionPath });
+      await api.session.reveal({ sessionPath });
     },
     async forkSession(threadId: string, seq: number): Promise<{ ok: true; threadId: string } | { ok: false; reason: string }> {
-      const outcome = await client.invoke('session/fork', { threadId, seq, position: 'before' });
+      const outcome = await api.thread.fork({ threadId, seq, position: 'before' });
       // kind 字符串通道：消费方按 kind 判定文案分支（forkStreaming ← streaming_window）
       if (!outcome.ok) return { ok: false, reason: outcome.error.kind };
       // fork 是原地换轨：旧 id 已失效且不再有事件，运行面镜像就地终态
@@ -504,33 +507,33 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     listGitGraph: (cwd: string) => listGitGraph(client, cwd),
     checkoutGitBranch: (cwd: string, branch: string, create: boolean) => checkoutGitBranch(client, cwd, branch, create),
     async upsertProvider(input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; apiKey?: string }): Promise<string | null> {
-      const outcome = await client.invoke('provider/upsert', input);
+      const outcome = await api.provider.upsert(input);
       if (!outcome.ok) return copyOfError(outcome.error);
       store.setState({ providers: outcome.data });
-      const models = await client.invoke('model/list', {});
+      const models = await api.models.list({});
       if (models.ok) store.setState({ models: models.data });
       return null;
     },
     async removeProvider(name: string): Promise<string | null> {
-      const outcome = await client.invoke('provider/remove', { name });
+      const outcome = await api.provider.remove({ name });
       if (!outcome.ok) return copyOfError(outcome.error);
       store.setState({ providers: outcome.data });
-      const models = await client.invoke('model/list', {});
+      const models = await api.models.list({});
       if (models.ok) store.setState({ models: models.data });
       return null;
     },
     async updatePreferences(patch: { defaultModel?: string | null; onboarded?: boolean; projectModels?: Record<string, string>; pinnedSessions?: string[]; trustedDefault?: boolean; hiddenProjects?: string[]; archivedSessions?: string[]; hubDev?: { bunPath: string | null; hubEntry: string | null } }): Promise<PreferencesView | null> {
-      const outcome = await client.invoke('app/setPreference', patch);
+      const outcome = await api.app.setPreference(patch);
       if (!outcome.ok) return null;
       store.setState({ preferences: outcome.data });
       return outcome.data;
     },
     async testProvider(name: string, modelId: string | undefined): Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }> {
-      const outcome = await client.invoke('provider/test', modelId === undefined ? { name } : { name, modelId });
+      const outcome = await api.provider.test(modelId === undefined ? { name } : { name, modelId });
       return outcome.ok ? { ok: true, latencyMs: outcome.data.latencyMs } : { ok: false, reason: copyOfError(outcome.error) };
     },
     async refreshStats(threadId: string): Promise<void> {
-      const outcome = await client.invoke('session/stats', { threadId });
+      const outcome = await api.session.stats({ threadId });
       if (outcome.ok) store.getState().updateStats(threadId, outcome.data);
     },
     ensureHydrated: (threadId: string, options?: { force?: boolean }) => readonlyHydration.ensureHydrated(threadId, options),

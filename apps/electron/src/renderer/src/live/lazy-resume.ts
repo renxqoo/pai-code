@@ -1,3 +1,4 @@
+import { createApiClient } from '@paiapp/api';
 import type { BridgeClient } from './client-invoke';
 import type { LiveStore } from './store';
 
@@ -24,6 +25,7 @@ export interface LazyResume {
 }
 
 export function createLazyResume(client: BridgeClient, store: LiveStore): LazyResume {
+  const api = createApiClient(client);
   /** 在途登记：sessionPath -> resume（hub 对同文件重复 resume 回 failure，必须去重）。 */
   const waking = new Map<string, { promise: Promise<string | null>; trusted: boolean | undefined }>();
 
@@ -34,8 +36,8 @@ export function createLazyResume(client: BridgeClient, store: LiveStore): LazyRe
   const resumedByPath = new Map<string, string>();
 
   const attemptResume = (sessionPath: string, trusted?: boolean): Promise<string | null> => {
-    const promise = client
-      .invoke('session/resume', { sessionPath, trusted })
+    const promise = api
+      .thread.resume({ sessionPath, trusted })
       .then((outcome) => {
         if (!outcome.ok) return null;
         resumedByPath.set(sessionPath, outcome.data.threadId);
