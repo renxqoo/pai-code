@@ -1,6 +1,6 @@
 # T39 — my-agent host-hub → x-harness host-hub 后端切换
 
-> 状态：实施中（W0/W1/W2-W6 已交付；W7 收口审查进行中）
+> 状态：已核销（两轮方案审查 + 实施轮两路审查全处置；四门全绿 1742 + 1 skip；覆盖率 81.24/89.05 双升；§8b/§9 全录）
 > 状态流转：草稿 → 定稿（对抗审查清零）→ 实施中 → 已核销（验收清单全勾）
 > 迁移源：后端进程 `/Users/wrr/work/my-agent/packages/host-hub`（T38 产物，55 命令）→ `/Users/wrr/work/x-harness/apps/host-hub`（下称 x-harness hub，56 命令）
 > 本文档为三件套合一：§1-3 = DESIGN（契约基线），§4 = IMPLEMENTATION（裁决表与实施顺序），§5-7 = MIGRATION（对照、矩阵、回滚），§8-9 = 审查与实施记录。
@@ -229,12 +229,12 @@ event 帧 `{type:"event", threadId, name, payload, agentName?}` 不变。**归�
 
 ## 6. 验收清单（全部满足才算完成）
 
-- [ ] W0：x-harness 四门全绿（D10 三缺口 + 回归）+ **其规约两轮审查清零** + 编译形态冒烟过 + 摸底产出回写本档（provider? 死字段结论/script 运行时行为/共享游标实证）
-- [ ] app 四门全绿 + 覆盖率只升不降（数字如实）
-- [ ] 词表对拍：COMMAND_NAMES ↔ HUB_COMMAND_TYPES 56=56；帧 7；事件消费子集对拍 event-bridge 订阅清单；**旧词表 grep 清零**（§4 口径清单）
-- [ ] W6 集成默认门全绿（全 API 面 + 落存储 + 生命周期 + compact 三元组 + delete 级联 removed + 子代理旅程 task 零降级）
-- [ ] 对抗审查实施轮清零 + 假绿抽查（skip/only grep 零命中、断言强度、迁移矩阵外无删改）
-- [ ] 文档状态推进「已核销」
+- [x] W0：x-harness 四门全绿（D10 三缺口 + 回归）+ **其规约两轮审查清零** + 编译形态冒烟过 + 摸底产出回写本档（provider? 死字段结论/script 运行时行为/共享游标实证）
+- [x] app 四门全绿 + 覆盖率只升不降（数字如实）
+- [x] 词表对拍：COMMAND_NAMES ↔ HUB_COMMAND_TYPES 56=56；帧 7；事件消费子集对拍 event-bridge 订阅清单；**旧词表 grep 清零**（§4 口径清单）
+- [x] W6 集成默认门全绿（全 API 面 + 落存储 + 生命周期 + compact 三元组 + delete 级联 removed + 子代理旅程 task 零降级）
+- [x] 对抗审查实施轮清零 + 假绿抽查（skip/only grep 零命中、断言强度、迁移矩阵外无删改）
+- [x] 文档状态推进「已核销」
 
 ## 7. 挂账（显式）
 
