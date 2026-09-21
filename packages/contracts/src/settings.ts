@@ -5,27 +5,27 @@ import { z } from "zod";
  * provider 的 apiKey 只存主进程（safeStorage 加密落盘），任何 API 响应不回传。
  */
 
-/** 自定义模型条目：id + 能力声明（reasoning=false 的模型思考档只有 Off；vision=false 时 host-hub 按纯文本模型剥图）。 */
+/** 自定义模型条目：id + 能力声明（reasoning=false 思考档建议 Off；vision=true 写 providers.json 的 input ["text","image"]——false 时 hub 能力门对携图 prompt 硬拒）。 */
 export const ProviderModelSchema = z
   .object({
     id: z.string().min(1),
-    /** host-hub models.json 的模型级 reasoning 能力（决定思考档位可选的提示面）。 */
+    /** providers.json 的模型级 reasoning 能力（决定思考档位可选的提示面）。 */
     reasoning: z.boolean(),
-    /** host-hub models.json 的模型级 input 模态（true → ["text","image"]；自建多模态模型必须声明，否则发送时图片被剥成占位文本）。 */
+    /** providers.json 的模型级 input 模态声明（true → ["text","image"]；自建多模态模型必须声明，否则 hub 能力门拒图）。 */
     vision: z.boolean().default(false),
-    /** host-hub models.json 的模型级 contextWindow（compaction 触发阈值；缺省回落 hub 默认）。 */
+    /** providers.json 的模型级 contextWindow（compaction 触发阈值；缺省回落 hub 默认）。 */
     contextWindow: z.number().int().positive().optional(),
-    /** host-hub models.json 的模型级 maxTokens（单次输出上限；缺省回落 hub 默认）。 */
+    /** providers.json 的模型级 maxTokens（单次输出上限；缺省回落 hub 默认）。 */
     maxTokens: z.number().int().positive().optional(),
   })
   .strict();
 export type ProviderModel = z.infer<typeof ProviderModelSchema>;
 
 /**
- * API 格式词表（host-hub models/add 校验同源：api ∈ {anthropic-messages, openai-completions}）。
- * 词表外格式 host-hub 不接受（写入即被目录剔除降级）。
+ * API 协议词表（host-hub providers.json 的 protocol 字段同源：anthropic | openai）。
+ * 词表外协议 hub 目录不接受（写入即被剔除降级）。
  */
-export const ApiFormatSchema = z.enum(["anthropic-messages", "openai-completions"]);
+export const ApiFormatSchema = z.enum(["anthropic", "openai"]);
 export type ApiFormat = z.infer<typeof ApiFormatSchema>;
 
 /** 词表顺序即 UI 选项顺序（文案由 strings 提供）。 */
@@ -36,12 +36,20 @@ export function isApiFormat(value: string): value is ApiFormat {
   return (API_FORMAT_IDS as readonly string[]).includes(value);
 }
 
+/** 旧协议词形读盘归一（anthropic-messages→anthropic、openai-completions/responses→openai；
+ *  写侧只产新词表——归一是数据迁移非兼容层；词表外语形保持原样交 UI 回退显示）。 */
+export function normalizeLegacyApiFormat(value: string): string {
+  if (value === "anthropic-messages") return "anthropic";
+  if (value === "openai-completions" || value === "openai-responses") return "openai";
+  return value;
+}
+
 export const ProviderConfigSchema = z
   .object({
-    /** models.json 的 provider 键（= host-hub 目录 providerId/set_model 寻址键；撞 hub 预设键会被写前校验拒绝）。 */
+    /** providers.json 的档案名（= host-hub 目录 providerId/set_model 寻址键；撞 hub 预设键会被写前校验拒绝）。 */
     name: z.string().min(1),
     baseUrl: z.string().min(1),
-    /** host-hub models.json 的 api 字段。持久化面保持宽松：磁盘上手写形态不得因 UI 词表收窄被判非法而整表降级丢配置。 */
+    /** providers.json 的 protocol 字段。持久化面保持宽松：磁盘上手写形态不得因 UI 词表收窄被判非法而整表降级丢配置。 */
     api: z.string().min(1),
     models: z.array(ProviderModelSchema).min(1),
   })
@@ -104,11 +112,13 @@ function migrateSettings(raw: unknown): unknown {
   return { ...record, providers: providers.map(migrateProvider) };
 }
 
-/** provider 级退役字段剥离（thinkingFormat——写侧不再产出；读旧盘丢弃归一）。 */
+/** provider 级退役字段剥离（thinkingFormat——写侧不再产出；读旧盘丢弃归一）+
+ *  旧协议词形归一（anthropic-messages 等 → anthropic|openai）。 */
 function migrateProvider(provider: unknown): unknown {
   if (typeof provider !== "object" || provider === null || Array.isArray(provider)) return provider;
   const { thinkingFormat: _retired, ...rest } = provider as Record<string, unknown> & { thinkingFormat?: unknown };
   void _retired;
+  if (typeof rest["api"] === "string") rest["api"] = normalizeLegacyApiFormat(rest["api"]);
   const models = rest["models"];
   if (!Array.isArray(models)) return rest;
   return {

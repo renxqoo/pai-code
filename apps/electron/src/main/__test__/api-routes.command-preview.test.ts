@@ -88,8 +88,8 @@ describe('api-routes command/preview（新建任务页预构命令目录）', ()
   test('症状回归：新建任务页输入 / 无命令面板——启用技能以 skill: 条目下发预构目录', async () => {
     const routes = await makeRoutes({
       skills: [
-        { name: 'rxopen-hot', source: 'skill-user', disabled: false },
-        { name: 'rx-stock', source: 'skill-user', disabled: false },
+        { name: 'rxopen-hot', source: 'user', disabled: false },
+        { name: 'rx-stock', source: 'user', disabled: false },
       ],
     });
     const outcome = (await routes.invoke('command/preview', {})) as {
@@ -106,8 +106,8 @@ describe('api-routes command/preview（新建任务页预构命令目录）', ()
   test('禁用技能不进目录（hub skills.disabled 名单过滤后仅启用项）', async () => {
     const routes = await makeRoutes({
       skills: [
-        { name: 'rxopen-hot', source: 'skill-user', disabled: true },
-        { name: 'rx-stock', source: 'skill-user', disabled: false },
+        { name: 'rxopen-hot', source: 'user', disabled: true },
+        { name: 'rx-stock', source: 'user', disabled: false },
       ],
     });
     const outcome = (await routes.invoke('command/preview', {})) as {

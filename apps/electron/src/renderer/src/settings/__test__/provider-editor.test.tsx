@@ -15,7 +15,7 @@ const noop = (): void => undefined;
 const claude: ProviderConfigView = {
   name: 'claude',
   baseUrl: 'https://api.anthropic.com',
-  api: 'anthropic-messages',
+  api: 'anthropic',
   models: [{ id: 'claude-sonnet-4', reasoning: true, vision: true }],
   hasKey: true,
 };
@@ -26,7 +26,7 @@ describe('渠道编辑器渲染冒烟', () => {
     expect(html).toContain(copy.settings.providerFieldName);
     expect(html).toContain(copy.settings.providerFieldBaseUrl);
     expect(html).toContain(copy.settings.providerFieldApi);
-    expect(html).toContain(copy.settings.apiFormatOptions['openai-completions']);
+    expect(html).toContain(copy.settings.apiFormatOptions['openai']);
     expect(html).toContain(copy.settings.providerFieldKey);
     expect(html).toContain(copy.settings.providerModelsLabel);
     expect(html).toContain(copy.settings.providerModelsEmpty);
@@ -41,7 +41,7 @@ describe('渠道编辑器渲染冒烟', () => {
     expect(html).toContain('value="claude"');
     expect(html).toContain('value="https://api.anthropic.com"');
     expect(html).toContain('disabled=""');
-    expect(html).toContain(copy.settings.apiFormatOptions['anthropic-messages']);
+    expect(html).toContain(copy.settings.apiFormatOptions['anthropic']);
     expect(html).toContain(copy.settings.keyPresent);
     expect(html).toContain(copy.settings.providerKeyClear);
     expect(html).toContain('claude-sonnet-4');

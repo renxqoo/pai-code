@@ -1,95 +1,116 @@
 /**
- * host-hub event 帧事件词表与载荷（内核域 + agents 域 + worker 合成域；从
- * hub-protocol 拆出保持行数预算）。规格真相源 = host-hub 仓库 event-bridge 与
- * 各发射点实现。
+ * host-hub event 帧事件词表与载荷（x-harness 词表：session 域 WAL 镜像 + 实时域 +
+ * worker 合成域）。规格真相源 = x-harness 仓库 worker/event-bridge 订阅清单与各
+ * tokens 定义。归属判定：session 域帧 payload 带 session（主会话谓词 =
+ * payload.session === threadId，等价帧级 agentName 缺席）；子归属帧另带 agentName
+ * （=agentId）。app 只消费 HUB_EVENT_NAMES 子集，其余事件名一律忽略（前向兼容）。
  */
 
 // ============================================================================
-// Event 帧事件词表与载荷（host-hub 内核域 + agents 域 + worker 合成域）
+// Event 帧事件词表与载荷（x-harness session 域 + 实时域 + worker 合成域）
 // ============================================================================
 
-/** assistant/stream 增量（payload.type 判别；done = 步终局）。 */
-export type StreamDelta =
-  | { type: 'start' }
-  | { type: 'thinking_start' }
-  | { type: 'thinking'; text: string }
-  | { type: 'thinking_end' }
-  | { type: 'text_start' }
-  | { type: 'text'; text: string }
-  | { type: 'text_end' }
-  | { type: 'tool_use_start'; id: string; name: string }
-  | { type: 'tool_use_input'; id: string; inputDelta: string }
-  | { type: 'tool_use_end'; id: string }
-  | { type: 'usage'; usage: { inputTokens: number; outputTokens: number; totalTokens: number } }
-  | { type: 'done'; stopReason: 'stop' | 'length' | 'tool_use' | 'error' | 'aborted'; usage: { inputTokens: number; outputTokens: number; totalTokens: number }; provider?: string; model?: string }
-  | { type: 'error'; error: { code: string; message: string; retryable: boolean } };
+/** llm/chunk 载荷（仅主会话外发；替代旧 assistant/stream——无 per-message start 帧，
+ *  messageStarted 边界 = (turn, step) 对变化）。 */
+export type LlmChunk =
+  | { type: 'text-delta'; text: string }
+  | { type: 'thinking-delta'; text: string }
+  | { type: 'tool-call-delta'; callId?: string; name?: string; argumentsDelta?: string }
+  | { type: 'usage'; usage: { input: number; output: number; totalTokens: number } }
+  | { type: 'finish'; finish: { kind: 'stop' | 'max-tokens' | 'error'; message?: string; code?: string } };
 
-/** app 消费的事件名词表（host-hub 还会发 hook/error、request/start、step/*、plugin/*——一律忽略）。 */
+/** session 域壳（WAL 镜像统一包裹；session = 所属会话 id——主会话谓词判据）。 */
+export interface SessionEnvelope {
+  seq: number;
+  time: number;
+  session: string;
+}
+
+/** turn/end reason 判别联合（settled ok 语义已由 hub 归一，app 透传展示）。 */
+export type TurnEndReason =
+  | { kind: 'completed' }
+  | { kind: 'aborted'; cause?: string }
+  | { kind: 'blocked'; reason?: string }
+  | { kind: 'error'; message: string; code?: string }
+  | { kind: 'max-tokens' }
+  | { kind: 'interrupted' };
+
+/** agent/inbox/spliced 载荷（判别联合——队列结构信号，触发拉 get_state）。 */
+export type InboxSplice =
+  | { op: 'insert'; target: string; entries: unknown[] }
+  | { op: 'claim'; target: string; turn: number; claimed: number[] }
+  | { op: 'clear'; reason: string };
+
+/** agent/spawned|finished 载荷（键 agentId；spawned 的 work = 任务摘要，复活发射可能缺席）。 */
+export interface AgentSpawnedEvent {
+  parent: string;
+  agentId: string;
+  sessionId: string;
+  type: string;
+  depth: number;
+  work?: string;
+}
+
+export interface AgentFinishedEvent {
+  parent: string;
+  agentId: string;
+  sessionId: string;
+  outcome: 'completed' | 'stopped' | 'failed';
+  detail: string;
+  summary?: string;
+}
+
+/** agent/assistant-stream 帧（子代理模型增量；帧带 agentName 归属）。 */
+export interface AgentStreamFrame {
+  session: string;
+  turn: number;
+  step: number;
+  frame: { phase: 'start' | 'chunk' | 'end'; kind: 'text' | 'thinking'; text: string };
+}
+
+/** app 消费的事件名词表（x-harness 还会发 request/*、system/message、
+ *  assistant/attempt、session/*、todo/snapshot、command/run|done、autocompact/*、
+ *  compaction/served-window|diagnostic、agent/error、step/start|end——一律忽略）。 */
 export type HubEventName =
-  | 'assistant/stream'
-  | 'tool/start'
-  | 'tool/result'
-  | 'tool/progress'
   | 'turn/start'
   | 'turn/end'
-  | 'settled'
-  | 'inbox/spliced'
-  | 'compaction'
+  | 'user/message'
+  | 'assistant/message'
+  | 'tool/call'
+  | 'tool/result'
   | 'llm/retry'
-  | 'permission/decision'
-  | 'agents/spawned'
-  | 'agents/state'
-  | 'agents/terminal'
-  | 'agents/evicted'
-  | 'agents/user-injected'
-  | 'agents/permission-ask'
-  | 'agents/idle'
+  | 'agent/inbox/spliced'
+  | 'llm/chunk'
+  | 'agent/assistant-stream'
+  | 'agent/tool-stream'
+  | 'agent/status'
+  | 'agent/spawned'
+  | 'agent/finished'
+  | 'compaction/landed'
+  | 'permission/decided'
+  | 'settled'
   | 'bash_execution_update';
 
 export const HUB_EVENT_NAMES = [
-  'assistant/stream',
-  'tool/start',
-  'tool/result',
-  'tool/progress',
   'turn/start',
   'turn/end',
-  'settled',
-  'inbox/spliced',
-  'compaction',
+  'user/message',
+  'assistant/message',
+  'tool/call',
+  'tool/result',
   'llm/retry',
-  'permission/decision',
-  'agents/spawned',
-  'agents/state',
-  'agents/terminal',
-  'agents/evicted',
-  'agents/user-injected',
-  'agents/permission-ask',
-  'agents/idle',
+  'agent/inbox/spliced',
+  'llm/chunk',
+  'agent/assistant-stream',
+  'agent/tool-stream',
+  'agent/status',
+  'agent/spawned',
+  'agent/finished',
+  'compaction/landed',
+  'permission/decided',
+  'settled',
   'bash_execution_update',
 ] as const;
-
-/** agents/* 事件载荷（七事件同构身份字段：agentId/agentName/runId）。 */
-export interface AgentsEventPayload {
-  agentId: string;
-  agentName: string;
-  runId?: number;
-  /** agents/spawned 专属。 */
-  sessionId?: string;
-  agentType?: string;
-  /** agents/state 专属。 */
-  from?: 'busy' | 'idle';
-  to?: 'busy' | 'idle';
-  /** agents/terminal 专属（中断路径无 usage）。 */
-  status?: string;
-  usage?: { inputTokens: number; outputTokens: number; totalTokens: number };
-  /** agents/evicted 专属。 */
-  reason?: 'lru' | 'replaced';
-  /** agents/user-injected 专属。 */
-  summary?: string;
-  /** agents/permission-ask 专属。 */
-  askId?: string;
-  toolName?: string;
-}
 
 // 编译期封闭断言：事件词表与类型联合双向绑定（漂移即编译失败）。
 type CoversUnion<T, U extends T> = [T] extends [U] ? unknown : never;

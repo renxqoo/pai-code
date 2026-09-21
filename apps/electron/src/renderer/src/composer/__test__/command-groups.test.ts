@@ -11,13 +11,13 @@ const cmd = (name: string, source: CommandView['source'], description: string | 
 
 describe('slashCommandGroups 斜杠命令分组', () => {
   test('三源混排：命令组在前技能组在后，条目 id 带 source 前缀，描述透传', () => {
-    const groups = slashCommandGroups([cmd('goal', 'plugin', 'g'), cmd('deploy', 'plugin'), cmd('skill:writer', 'skill')], {
+    const groups = slashCommandGroups([cmd('goal', 'command', 'g'), cmd('deploy', 'command'), cmd('skill:writer', 'skill')], {
       commandTitle: '命令',
       skillTitle: '技能',
     });
     expect(groups.map((group) => group.id)).toEqual(['commands', 'skills']);
     expect(groups[0]?.title).toBe('命令');
-    expect(groups[0]?.items.map((item) => item.id)).toEqual(['plugin:goal', 'plugin:deploy']);
+    expect(groups[0]?.items.map((item) => item.id)).toEqual(['command:goal', 'command:deploy']);
     expect(groups[0]?.items[0]?.description).toBe('g');
     expect(groups[1]?.title).toBe('技能');
     // 技能命令的 name 自带 skill: 前缀，id 前缀叠加只为保唯一（不对外展示）
@@ -31,10 +31,10 @@ describe('slashCommandGroups 斜杠命令分组', () => {
 
   test('内置命令（builtin 源）归命令组：与插件命令同组并列', () => {
     const groups = slashCommandGroups(
-      [cmd('compact', 'builtin', 'Manually compact the session context'), cmd('goal', 'plugin'), cmd('skill:writer', 'skill')],
+      [cmd('compact', 'command', 'Compact the conversation history'), cmd('goal', 'command'), cmd('skill:writer', 'skill')],
       { commandTitle: '命令', skillTitle: '技能' },
     );
-    expect(groups[0]?.items.map((item) => item.id)).toEqual(['builtin:compact', 'plugin:goal']);
+    expect(groups[0]?.items.map((item) => item.id)).toEqual(['command:compact', 'command:goal']);
   });
 
   test('空目录：无组返回', () => {

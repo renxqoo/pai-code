@@ -143,7 +143,7 @@ describe('foldEvents · 工具块按消息归块', () => {
     const turn = liveTurn(s);
     if (turn?.kind !== 'turn') throw new Error('expected turn');
     expect(turn.turn.blocks.map((block) => block.kind)).toEqual(['tools', 'thinking']);
-    expect(s.agents.map((agent) => agent.id)).toEqual(['Explore']);
+    expect(s.agents.map((agent) => agent.id)).toEqual(['s1']);
   });
 
   test('settle 终态化残留 running 调用（auto-retry 弃置的半成品不再走表）', () => {

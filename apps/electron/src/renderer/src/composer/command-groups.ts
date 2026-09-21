@@ -19,7 +19,7 @@ export function slashCommandGroups(
       .filter((command) => sources.includes(command.source))
       .map((command) => ({ id: `${command.source}:${command.name}`, label: command.name, description: command.description }));
   return [
-    { id: 'commands', title: titles.commandTitle, items: toItems(['plugin', 'builtin']) },
+    { id: 'commands', title: titles.commandTitle, items: toItems(['command']) },
     { id: 'skills', title: titles.skillTitle, items: toItems(['skill']) },
   ].filter((group) => group.items.length > 0);
 }

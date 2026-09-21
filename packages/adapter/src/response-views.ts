@@ -50,9 +50,9 @@ export function threadStateView(data: unknown): ThreadStateView {
   const d = recordOf(data);
   const model = recordOf(d.model);
   const provider = str(model.provider);
-  const modelId = str(model.modelId);
+  const modelName = str(model.model);
   return {
-    model: provider.length > 0 && modelId.length > 0 ? { provider, modelId } : null,
+    model: provider.length > 0 && modelName.length > 0 ? { provider, model: modelName } : null,
     isStreaming: d.isStreaming === true,
     isCompacting: d.isCompacting === true,
     sessionName: optStr(d.sessionName) ?? null,
@@ -139,24 +139,24 @@ function bashView(value: unknown): { id: string; command: string; startedAt: num
   };
 }
 
-/** get_subagents → 视图（垃圾条目丢弃；空列表即空形态）。 */
+/** get_subagents → 视图（ChildView 判别：仅 subagent 行；local-session 行丢弃；垃圾条目丢弃）。 */
 export function subagentSnapshotView(data: unknown): SubagentSnapshotView[] {
   const list = recordOf(data)['subagents'];
   if (!Array.isArray(list)) return [];
   const out: SubagentSnapshotView[] = [];
   for (const item of list) {
     const entry = recordOf(item);
+    if (entry.kind !== 'subagent') continue;
     const agentId = str(entry.agentId);
-    if (agentId.length === 0) continue;
+    const agentType = str(entry.type);
+    if (agentId.length === 0 || agentType.length === 0) continue;
     const status = str(entry.status);
     out.push({
       agentId,
-      agentName: str(entry.agentName),
-      work: str(entry.work),
-      status: status === 'busy' || status === 'idle' || status === 'on-disk' ? status : 'idle',
-      runId: num(entry.runId, 0),
-      sessionId: str(entry.sessionId),
-      ...(str(entry.agentType).length > 0 ? { agentType: str(entry.agentType) } : {}),
+      agentType,
+      ...(str(entry.sessionId).length > 0 ? { sessionId: str(entry.sessionId) } : {}),
+      ...(str(entry.work).length > 0 ? { work: str(entry.work) } : {}),
+      status: status === 'running' || status === 'idle' || status === 'stopped' ? status : 'idle',
     });
   }
   return out;
@@ -184,7 +184,7 @@ export function pendingDialogsView(data: unknown): PendingDialogView[] {
 
 /**
  * thread/list_saved 响应 → 已存会话视图。summary 无 sessionPath——按布局契约
- * `<sessionsRoot>/<id>/transcript.jsonl` 重建（布局是 host-hub 协议事实）。
+ * `<sessionsRoot>/<id>/events.jsonl` 重建（布局是 x-harness 协议事实）。
  */
 export function savedSessions(data: unknown, sessionsRoot: string): SavedSessionView[] {
   const sessions = recordOf(data)['sessions'];
@@ -196,7 +196,7 @@ export function savedSessions(data: unknown, sessionsRoot: string): SavedSession
     if (id.length === 0) continue;
     const title = str(s.title);
     out.push({
-      sessionPath: `${sessionsRoot}/${id}/transcript.jsonl`,
+      sessionPath: `${sessionsRoot}/${id}/events.jsonl`,
       sessionId: id,
       cwd: str(s.cwd),
       name: title.length > 0 ? title : null,
@@ -230,18 +230,19 @@ export function sessionStatsView(data: unknown): SessionStatsView {
     userMessages: num(d.userMessages, 0),
     assistantMessages: num(d.assistantMessages, 0),
     toolCalls: num(d.toolCalls, 0),
+    toolResults: num(d.toolResults, 0),
     tokens: { input: num(tokens.input, 0), output: num(tokens.output, 0), total: num(tokens.total, 0) },
-    cost: num(d.cost, 0),
+    cost: num(tokens.cost, 0),
   };
 }
 
-/** get_thinking_level 响应 → 视图（level=unset 表示各级未设置）。 */
+/** get_thinking_level 响应 → 视图（无值态归一 off/source off）。 */
 export function thinkingLevelView(data: unknown): ThinkingLevelView {
   const d = recordOf(data);
   const source = str(d.source);
   return {
     level: str(d.level),
-    source: source === 'session' || source === 'project' || source === 'user' || source === 'unset' ? source : 'unset',
+    source: source === 'session' || source === 'project' || source === 'user' ? source : 'off',
   };
 }
 
@@ -254,15 +255,15 @@ export function sessionCommands(data: unknown): CommandView[] {
     const name = str(c.name);
     if (name.length === 0) continue;
     const source = c.source;
-    if (source !== 'plugin' && source !== 'skill' && source !== 'builtin') continue;
+    if (source !== 'command' && source !== 'skill') continue;
     out.push({ name, description: optStr(c.description), source });
   }
   return out;
 }
 
 /** 技能清单 → 目录条目（get_commands 的 skill 源同型命名 `skill:<name>`）。
- * 无会话时（新建任务页）以用户级启用技能预构目录——plugin/builtin
- * 源依赖会话态（插件注册表/能力门控），预摆即假能力，不构造。 */
+ * 无会话时（新建任务页）以用户级启用技能预构目录——command 源（机器拦截
+ * 斜杠动词）与命令注册表绑定，会话外预摆无执行面，不构造。 */
 export function previewCommands(skills: readonly { name: string }[]): CommandView[] {
   const out: CommandView[] = [];
   for (const skill of skills) {

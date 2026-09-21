@@ -38,7 +38,7 @@ function fakeHost(models: Array<Record<string, unknown>>): { port: HostProcessPo
       if (command.type === "get_models") return Promise.resolve({ ok: true, data: models });
       if (command.type === "permission/get_mode") return Promise.resolve({ ok: true, data: { mode: "default", source: "user" } });
       if (command.type === "settings/get") {
-        return Promise.resolve({ ok: true, data: { values: { "permission.defaultMode": "plan", "thinking.default": "low" } } });
+        return Promise.resolve({ ok: true, data: { values: { "permission.defaultMode": "default", "thinking.default": "low" } } });
       }
       return Promise.resolve({ ok: true, data: {} });
     },
@@ -128,14 +128,14 @@ describe("api-routes 安全面（C-S2/C-S8/C-S4）", () => {
     const first = (await routes.invoke("provider/upsert", {
       name: "a-b",
       baseUrl: "https://a.example.com",
-      api: "openai-completions",
+      api: "openai",
       models: [{ id: "m", reasoning: false, vision: false }],
     })) as { ok: boolean };
     expect(first.ok).toBe(true);
     const collide = (await routes.invoke("provider/upsert", {
       name: "a_b",
       baseUrl: "https://b.example.com",
-      api: "openai-completions",
+      api: "openai",
       models: [{ id: "m", reasoning: false, vision: false }],
     })) as { ok: boolean; reason?: string };
     expect(collide).toEqual({ ok: false, reason: "provider_name_conflict" });
@@ -143,7 +143,7 @@ describe("api-routes 安全面（C-S2/C-S8/C-S4）", () => {
     const self = (await routes.invoke("provider/upsert", {
       name: "a-b",
       baseUrl: "https://a2.example.com",
-      api: "openai-completions",
+      api: "openai",
       models: [{ id: "m2", reasoning: true, vision: false }],
     })) as { ok: boolean };
     expect(self.ok).toBe(true);
@@ -155,7 +155,7 @@ describe("api-routes 安全面（C-S2/C-S8/C-S4）", () => {
     const preset = (await routes.invoke("provider/upsert", {
       name: "glm",
       baseUrl: "https://x.example.com",
-      api: "openai-completions",
+      api: "openai",
       models: [{ id: "m", reasoning: false, vision: false }],
     })) as { ok: boolean; reason?: string };
     expect(preset).toEqual({ ok: false, reason: "provider_name_conflicts_preset:glm" });
@@ -174,7 +174,7 @@ describe("api-routes 安全面（C-S2/C-S8/C-S4）", () => {
     const upserted = (await routes.invoke("provider/upsert", {
       name: "glm",
       baseUrl: "https://x.example.com",
-      api: "openai-completions",
+      api: "openai",
       models: [
         { id: "m", reasoning: false, vision: false, contextWindow: 200000, maxTokens: 8192 },
       ],
@@ -194,7 +194,7 @@ describe("api-routes 安全面（C-S2/C-S8/C-S4）", () => {
     const upserted = (await routes.invoke("provider/upsert", {
       name: "glm",
       baseUrl: "https://x.example.com",
-      api: "openai-completions",
+      api: "openai",
       models: [
         { id: "m", reasoning: false, vision: false, contextWindow: 200000, maxTokens: 8192 },
       ],
@@ -237,14 +237,14 @@ describe("api-routes 权限模式与 hub 设置（hub 命令面）", () => {
   test("permission/setMode：permission/set_mode 透传 + 审计；词表外 mode 拒绝", async () => {
     const work = mkdtempSync(join(tmpdir(), "pai-sec-permset-"));
     const { routes, audits, sent } = await makeRoutes(work, { models: [] });
-    const ok = (await routes.invoke("permission/setMode", { threadId: "t1", mode: "acceptEdits" })) as { ok: boolean };
+    const ok = (await routes.invoke("permission/setMode", { threadId: "t1", mode: "auto" })) as { ok: boolean };
     expect(ok.ok).toBe(true);
     expect(sent.find((command) => command.type === "permission/set_mode")).toMatchObject({
       type: "permission/set_mode",
       threadId: "t1",
-      mode: "acceptEdits",
+      mode: "auto",
     });
-    expect(audits).toContain("permission_mode:t1:acceptEdits");
+    expect(audits).toContain("permission_mode:t1:auto");
     const bad = (await routes.invoke("permission/setMode", { threadId: "t1", mode: "yolo" })) as { ok: boolean; reason?: string };
     expect(bad).toEqual({ ok: false, reason: "invalid_params" });
   });
@@ -256,17 +256,17 @@ describe("api-routes 权限模式与 hub 设置（hub 命令面）", () => {
       ok: boolean;
       data: { permissionDefaultMode: string | null; thinkingDefault: string | null };
     };
-    expect(hub).toEqual({ ok: true, data: { permissionDefaultMode: "plan", thinkingDefault: "low" } });
+    expect(hub).toEqual({ ok: true, data: { permissionDefaultMode: "auto", thinkingDefault: "low" } });
   });
 
   test("app/setHubSettings：settings/set 按键写（permission.defaultMode / thinking.default）", async () => {
     const work = mkdtempSync(join(tmpdir(), "pai-sec-hubset-"));
     const { routes, sent } = await makeRoutes(work, { models: [] });
-    const outcome = (await routes.invoke("app/setHubSettings", { permissionDefaultMode: "fullAuto", thinkingDefault: "high" })) as { ok: boolean };
+    const outcome = (await routes.invoke("app/setHubSettings", { permissionDefaultMode: "full", thinkingDefault: "high" })) as { ok: boolean };
     expect(outcome.ok).toBe(true);
     const sets = sent.filter((command) => command.type === "settings/set");
     expect(sets).toEqual([
-      { type: "settings/set", key: "permission.defaultMode", value: "fullAuto" },
+      { type: "settings/set", key: "permission.defaultMode", value: "full" },
       { type: "settings/set", key: "thinking.default", value: "high" },
     ]);
   });
@@ -358,7 +358,8 @@ describe("api-routes 门禁（第三波审查补：file/search 与 reveal）", (
 describe("api-routes agent 定义面（T20）", () => {
   test("upsert user 级落位 + audit；project 未知目录拒绝（已知集合为空）；remove 落 audit", async () => {
     const work = mkdtempSync(join(tmpdir(), "pai-sec-agent-"));
-    const { routes, audits, home } = await makeRoutes(work);
+    // user 级 CRUD 走 hub 命令（D6）——需 fake host 在场
+    const { routes, audits, sent } = await makeRoutes(work, { models: [] });
     const definition = {
       name: "search",
       description: "d",
@@ -373,7 +374,12 @@ describe("api-routes agent 定义面（T20）", () => {
     };
     expect(upsert.ok).toBe(true);
     // host-hub renderAgentTypeMd 同构：无 name 字段（name ≡ 文件主干）
-    expect(readFileSync(join(home, ".my-agent", "agents", "search.md"), "utf8")).toContain("description: d");
+    // user 级写路径走 hub 命令（D6：round-trip 由 hub 保证，文件落位断言归集成门）
+    expect(sent.find((command) => command.type === "agents/create")).toMatchObject({
+      type: "agents/create",
+      name: "search",
+      description: "d",
+    });
     // host 未启动 → 已知项目集合为空 → project 作用域一律拒绝
     const rejected = (await routes.invoke("agent/upsert", {
       definition: { ...definition, scope: "project", project: "/nowhere" },
@@ -432,7 +438,7 @@ describe("渠道数据迁移端到端（T38 症状：渠道无法保存——旧
     writeFileSync(settingsFile, JSON.stringify({
       hubDev: { bunPath: null, hubEntry: null },
       providers: [
-        { name: "GLM", baseUrl: "https://x.example.com", api: "openai-completions", thinkingFormat: "zai",
+        { name: "GLM", baseUrl: "https://x.example.com", api: "openai", thinkingFormat: "zai",
           models: [{ id: "glm-4.7", reasoning: true, vision: false }] },
       ],
       trustedDefault: false, defaultModel: null, onboarded: true,
@@ -454,7 +460,7 @@ describe("渠道数据迁移端到端（T38 症状：渠道无法保存——旧
     // 旧渠道在（迁移保留）
     expect(settings.listProviders().map((p) => p.name)).toEqual(["GLM"]);
     // 新渠道保存成功且不落任何拒绝
-    const upsert = await settingsRoutes.routes["provider/upsert"]({ name: "Deepseek", baseUrl: "https://d.example.com", api: "anthropic-messages", models: [{ id: "deepseek-chat", reasoning: false, vision: false }] });
+    const upsert = await settingsRoutes.routes["provider/upsert"]({ name: "Deepseek", baseUrl: "https://d.example.com", api: "anthropic", models: [{ id: "deepseek-chat", reasoning: false, vision: false }] });
     expect(upsert.ok).toBe(true);
     expect(rejects).toEqual([]);
     // 落盘全量保留（旧 + 新），且无退役字段

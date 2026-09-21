@@ -2,23 +2,23 @@ import type { WalEvent } from './hub-protocol';
 
 /**
  * host-hub 常用响应 data 形状（adapter 收窄的输入镜像；从 hub-protocol 拆出
- * 保持行数预算）。规格真相源 = host-hub 仓库各 handler 实现。
+ * 保持行数预算）。规格真相源 = x-harness 仓库各 handler 实现。
  */
 
 // ============================================================================
 // 常用响应 data 形状（adapter 收窄的输入镜像）
 // ============================================================================
 
-/** get_entries 响应。 */
+/** get_entries 响应（seq 0 基 WAL 行号；event = 摊平 {type, …data, surfaceOp?}）。 */
 export interface EntriesData {
   entries: Array<{ seq: number; ts: number; event: WalEvent }>;
   leafSeq: number;
   hasMore: boolean;
 }
 
-/** get_state 响应（model 回落形态只带 modelId）。 */
+/** get_state 响应（model 复合形——字段名 model 非 modelId）。 */
 export interface StateData {
-  model: { provider?: string; modelId?: string } | { modelId: string };
+  model: { provider: string; model: string };
   isStreaming: boolean;
   isCompacting: boolean;
   sessionId: string;
@@ -28,12 +28,14 @@ export interface StateData {
   queue: { steering: string[]; followUp: string[] };
 }
 
-/** get_models 目录条目。 */
+/** get_models 目录条目（reasoning 恒在场；input 条件在场——携图能力判据）。 */
 export interface ModelCatalogEntry {
   id: string;
   provider: string;
   contextWindow: number;
   maxTokens: number;
+  reasoning: boolean;
+  input?: Array<'text' | 'image'>;
   cost?: { input: number; output: number; cacheRead?: number; cacheWrite?: number };
   source: 'preset' | 'custom';
 }
@@ -50,7 +52,7 @@ export interface ThreadListEntry {
   isStreaming: boolean;
 }
 
-/** thread/list_saved 会话摘要（无 sessionPath；app 按 agentDir/sessions/<id>/transcript.jsonl 布局重建）。 */
+/** thread/list_saved 会话摘要（无 sessionPath；app 按 agentDir/sessions/<id>/events.jsonl 布局重建）。 */
 export interface SavedSessionSummary {
   id: string;
   createdAt: number;
@@ -59,11 +61,8 @@ export interface SavedSessionSummary {
   model?: string;
   cwd?: string;
   forkParent?: string;
-  forkSeq?: number;
-  depth: number;
   messageCount: number;
   lastSeq: number;
-  archived: boolean;
 }
 
 /** thread/start|resume|register 响应。 */
@@ -81,6 +80,18 @@ export interface ForkData {
   sessionPath: string;
 }
 
+/** thread/delete 响应（本次实际删除的目录名集；幂等 = 空集）。 */
+export interface DeleteData {
+  removed: string[];
+}
+
+/** compact / prompt /compact 拦截成功响应（压缩同步长操作，响应即终态）。 */
+export interface CompactData {
+  summary: string;
+  replacedCount: number;
+  summaryTokens: number;
+}
+
 /** bash 响应。 */
 export interface BashResultData {
   output: string;
@@ -90,7 +101,7 @@ export interface BashResultData {
   fullOutputPath?: string;
 }
 
-/** get_inflight 响应。 */
+/** get_inflight 响应（toolOutputs 执行中有实时尾部内容）。 */
 export interface InflightData {
   turnStartSeq: number | null;
   turnStartedAt: number | null;
@@ -99,29 +110,34 @@ export interface InflightData {
   bash: { id: string; command: string; startedAt: number } | null;
 }
 
-/** get_subagents 响应。 */
+/** get_subagents 响应（ChildView 判别联合原样；hub 内部署恒 subagent 行）。 */
 export interface SubagentsData {
-  subagents: Array<{
-    agentId: string;
-    agentName: string;
-    work: string;
-    status: 'busy' | 'idle' | 'on-disk';
-    runId: number;
-    sessionId: string;
-    createdAt: number;
-    lastActiveAt: number;
-    agentType?: string;
-  }>;
+  subagents: Array<
+    | {
+        kind: 'subagent';
+        agentId: string;
+        sessionId: string;
+        type: string;
+        depth: number;
+        status: 'running' | 'idle' | 'stopped';
+        work?: string;
+      }
+    | {
+        kind: 'local-session';
+        name: string;
+        ref: string;
+        status: 'running' | 'idle';
+      }
+  >;
 }
 
-/** get_session_stats 响应。 */
+/** get_session_stats 响应（cost 嵌 tokens 且可缺席）。 */
 export interface SessionStatsData {
   userMessages: number;
   assistantMessages: number;
   toolCalls: number;
   toolResults: number;
-  tokens: { input: number; output: number; total: number };
-  cost: number;
+  tokens: { input: number; output: number; total: number; cost?: number };
 }
 
 /** get_host_info 响应。 */
@@ -142,17 +158,17 @@ export interface HostInfoData {
   };
 }
 
-/** get_commands 条目。 */
+/** get_commands 条目（source：command = 机器拦截的斜杠动词；skill = 模型分发面）。 */
 export interface CommandEntry {
   name: string;
   description?: string;
-  source: 'plugin' | 'builtin' | 'skill';
+  source: 'command' | 'skill';
 }
 
-/** get_thinking_level 响应。 */
+/** get_thinking_level 响应（无值态归一 off/source off）。 */
 export interface ThinkingLevelData {
-  level: 'off' | 'low' | 'medium' | 'high' | 'unset';
-  source: 'session' | 'project' | 'user' | 'unset';
+  level: 'off' | 'low' | 'medium' | 'high' | 'max';
+  source: 'session' | 'project' | 'user' | 'off';
 }
 
 /** permission/get_mode 响应。 */
@@ -177,11 +193,10 @@ export interface AgentTypeEntry {
   model?: string;
 }
 
-/** skills/list 响应。 */
+/** skills/list 响应（hub wire 形状——source 词表 user|project）。 */
 export interface SkillEntry {
   name: string;
-  source: 'skill-builtin' | 'skill-project' | 'skill-user';
+  source: 'user' | 'project';
   path: string;
   disabled: boolean;
 }
-

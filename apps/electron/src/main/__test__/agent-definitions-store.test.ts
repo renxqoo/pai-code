@@ -4,12 +4,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { createAgentDefinitionsStore } from '../agent-definitions-store';
-import { AGENT_DESCRIPTION_MAX, type AgentDefinition } from '@paiapp/contracts';
+import type { AgentDefinition } from '@paiapp/contracts';
 
 /**
- * 定义文件面回归：门禁（kebab name 词表 / 保留名 / description ≤500 / 项目集合 / 重名）、
- * 落位（home 的 .my-agent/agents 与项目内 .my-agent/agents）、改名与移动（写新删旧）、
- * 删除、枚举坏文件跳过、原子写无 .tmp 残留。身份键 = frontmatter name。
+ * 定义文件面回归（x-harness 规则）：门禁（name 非空无 `/` 无换行——无 kebab/保留名；
+ * description 非空单行非字段形态行——无长度上限；项目集合；重名）、落位（home 的
+ * .x-harness/agents 与项目内 .x-harness/agents）、改名与移动（写新删旧）、删除、
+ * 枚举坏文件跳过、原子写无 .tmp 残留。身份键 = frontmatter name。
  */
 
 function makeDef(overrides: Partial<AgentDefinition> = {}): AgentDefinition {
@@ -29,7 +30,7 @@ function makeStore(): { store: ReturnType<typeof createAgentDefinitionsStore>; h
   const work = mkdtempSync(join(tmpdir(), 'pai-agent-store-'));
   const home = join(work, 'home');
   mkdirSync(home, { recursive: true });
-  return { store: createAgentDefinitionsStore(home), home, userDir: join(home, '.my-agent', 'agents') };
+  return { store: createAgentDefinitionsStore(home), home, userDir: join(home, '.x-harness', 'agents') };
 }
 
 let PROJECTS: string[] = [];
@@ -38,14 +39,15 @@ beforeAll(() => {
 });
 
 describe('agent-definitions-store 门禁', () => {
-  test('非法 name（路径逃逸/禁字符/空白/大写与下划线与 Unicode/保留名/首尾连字符）拒绝写；kebab 放行', () => {
+  test('非法 name（空/含路径分隔符/换行/文件名主干不可用）拒绝写；宽松词形（空格/大小写/下划线/中文/历史保留名）放行', () => {
     const { store } = makeStore();
-    for (const name of ['../evil', 'a/b', 'a\\b', '', '.hidden', 'a:b', 'a*b', 'trailing ', ' lead', 'code reviewer', '代码审查员', 'CamelCase', 'UPPER', 'a_b', 'fork', 'main', '-lead', 'trail-']) {
+    for (const name of ['../evil', 'a/b', '', 'a\nb', '.hidden', 'a\\b']) {
       expect(store.upsert(makeDef({ name }), null, PROJECTS)).toEqual({ ok: false, reason: 'invalid_name' });
     }
-    expect(store.upsert(makeDef({ name: 'search' }), null, PROJECTS)).toEqual({ ok: true });
-    expect(store.upsert(makeDef({ name: 'code-reviewer' }), null, PROJECTS)).toEqual({ ok: true });
-    expect(store.upsert(makeDef({ name: 'v2-fast' }), null, PROJECTS)).toEqual({ ok: true });
+    // x-harness 规则放宽：kebab/保留名/长度上限退役——这些形态全部合法
+    for (const name of ['search', 'code-reviewer', 'v2-fast', 'code reviewer', 'CamelCase', 'a_b', 'fork', 'main', '代码审查员']) {
+      expect(store.upsert(makeDef({ name }), null, PROJECTS)).toEqual({ ok: true });
+    }
     for (const name of ['../evil', 'a/b', '.hidden', '']) {
       expect(store.remove({ name, scope: 'user', project: null }, PROJECTS)).toEqual({ ok: false, reason: 'invalid_name' });
     }
@@ -53,12 +55,13 @@ describe('agent-definitions-store 门禁', () => {
     expect(store.remove({ name: 'ghost', scope: 'user', project: null }, PROJECTS)).toEqual({ ok: false, reason: 'not_found' });
   });
 
-  test('description 非空单行 ≤500 / systemPrompt 非空（镜像 hub agents/create 校验）', () => {
+  test('description 非空单行且非字段形态行 / systemPrompt 非空（镜像 x-harness agents-admin 校验；无长度上限）', () => {
     const { store } = makeStore();
     expect(store.upsert(makeDef({ description: '' }), null, PROJECTS)).toEqual({ ok: false, reason: 'invalid_description' });
     expect(store.upsert(makeDef({ description: '两行\n描述' }), null, PROJECTS)).toEqual({ ok: false, reason: 'invalid_description' });
-    expect(store.upsert(makeDef({ description: 'x'.repeat(AGENT_DESCRIPTION_MAX + 1) }), null, PROJECTS)).toEqual({ ok: false, reason: 'invalid_description' });
-    expect(store.upsert(makeDef({ description: 'x'.repeat(AGENT_DESCRIPTION_MAX) }), null, PROJECTS)).toEqual({ ok: true });
+    // frontmatter 注入防线：字段形态行拒绝
+    expect(store.upsert(makeDef({ description: 'model: injected' }), null, PROJECTS)).toEqual({ ok: false, reason: 'invalid_description' });
+    expect(store.upsert(makeDef({ description: 'x'.repeat(600) }), null, PROJECTS)).toEqual({ ok: true });
     expect(store.upsert(makeDef({ systemPrompt: '  ' }), null, PROJECTS)).toEqual({ ok: false, reason: 'invalid_prompt' });
   });
 
@@ -82,25 +85,26 @@ describe('agent-definitions-store 门禁', () => {
 });
 
 describe('agent-definitions-store 落位与生命周期', () => {
-  test('user 级写入 <home>/.my-agent/agents/<name>.md 且原子写无 tmp 残留', () => {
+  test('user 级写入 <home>/.x-harness/agents/<name>.md 且原子写无 tmp 残留', () => {
     const { store, userDir } = makeStore();
     expect(store.upsert(makeDef(), null, PROJECTS)).toEqual({ ok: true });
     const file = join(userDir, 'search.md');
     expect(existsSync(file)).toBe(true);
     expect(readdirSync(userDir).filter((name) => name.includes('.tmp'))).toEqual([]);
     const text = readFileSync(file, 'utf8');
-    // host-hub renderAgentTypeMd 同构：无 name 字段（name ≡ 主干）、无引号标量、tools 流数组
+    // x-harness renderAgentType 同构：name 入档、无引号标量、tools 逗号串
+    expect(text).toContain('name: search');
     expect(text).toContain('description: 联网搜索专员');
-    expect(text).toContain('tools: [bash]');
+    expect(text).toContain('tools: bash');
     expect(text).toContain('你是搜索专员。');
   });
 
-  test('project 级写入 <项目>/.my-agent/agents/<name>.md（目录不存在时创建）', () => {
+  test('project 级写入 <项目>/.x-harness/agents/<name>.md（目录不存在时创建）', () => {
     const work = mkdtempSync(join(tmpdir(), 'pai-agent-store-'));
     const project = join(work, 'proj');
     const store = createAgentDefinitionsStore(join(work, 'home'));
     expect(store.upsert(makeDef({ scope: 'project', project }), null, [project])).toEqual({ ok: true });
-    expect(existsSync(join(project, '.my-agent', 'agents', 'search.md'))).toBe(true);
+    expect(existsSync(join(project, '.x-harness', 'agents', 'search.md'))).toBe(true);
   });
 
   test('改名/移动：写新键位文件并删旧键位文件（身份键 = name）', () => {
@@ -142,13 +146,13 @@ describe('agent-definitions-store 落位与生命周期', () => {
     const { store, userDir } = makeStore();
     const project = mkdtempSync(join(tmpdir(), 'pai-agent-proj-'));
     mkdirSync(userDir, { recursive: true });
-    mkdirSync(join(project, '.my-agent', 'agents'), { recursive: true });
+    mkdirSync(join(project, '.x-harness', 'agents'), { recursive: true });
     writeFileSync(join(userDir, 'good.md'), '---\nname: good\ndescription: d\n---\nbody\n');
     // name 缺省 = 文件主干（host-hub 语义）——不再是坏文件
     writeFileSync(join(userDir, 'no-name.md'), '---\ndescription: d\n---\nbody\n');
     writeFileSync(join(userDir, 'broken.md'), 'not frontmatter\n');
     writeFileSync(join(userDir, 'notes.txt'), 'plain\n');
-    writeFileSync(join(project, '.my-agent', 'agents', 'scoped.md'), '---\nname: scoped\ndescription: p\n---\nbody\n');
+    writeFileSync(join(project, '.x-harness', 'agents', 'scoped.md'), '---\nname: scoped\ndescription: p\n---\nbody\n');
     const list = store.list([project]);
     expect(list.map((def) => `${def.scope}:${def.name}`).sort()).toEqual(['project:scoped', 'user:good', 'user:no-name']);
   });

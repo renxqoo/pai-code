@@ -132,7 +132,7 @@ export const en = {
     thinkingInvalid: 'That thinking level is not available.',
     /** 思考档写入被 hub 拒绝（reason 为 hub 错误文案） */
     thinkingRejected: (reason: string): string => `Thinking level not applied: ${reason}.`,
-    /** 子代理状态词（busy|idle|on-disk → 工作中/空闲/已归档） */
+    /** 子代理状态词（running|idle|stopped → 工作中/空闲/已归档） */
     subagentBusy: 'Working',
     subagentIdle: 'Idle',
     subagentArchived: 'Archived',
@@ -195,6 +195,8 @@ export const en = {
     stopConfirmYes: 'Stop all',
     stopConfirmNo: 'Cancel',
     bashNoImages: 'Direct commands cannot carry images. Remove them or send as a message.',
+    imagesDenied: 'This model does not accept image attachments. Remove them or switch to a multimodal model.',
+    imagesTooMany: 'Too many image attachments (max 8). Remove some.',
     bashFailed: (reason: string): string => `Command not run (${reason}).`,
     systemMessageLabel: 'System',
     sendFailed: (reason: string): string => `Message not sent (${reason}). Try again.`,

@@ -13,7 +13,7 @@ import { SelectField } from "./select-field";
 import { TextField } from "./text-field";
 
 /** OpenAI 兼容协议 id：新建渠道的缺省格式（绝大多数自建端点）。 */
-const OPENAI_COMPAT_API = "openai-completions";
+const OPENAI_COMPAT_API = "openai";
 
 export type ProviderUpsertInput = {
   name: string;

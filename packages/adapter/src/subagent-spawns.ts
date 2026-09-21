@@ -3,19 +3,20 @@ import type { SubagentSpawnView } from '@paiapp/contracts';
 import { clip } from './args-preview';
 
 /**
- * agent 委派工具参数 → 子代理执行清单。内核 agent 工具入参
- * {prompt, subagent_type?, name?, work?} 单发形态：agent = 类型/显示名，
- * task = prompt（自包含任务文本）。其余工具或垃圾形状返回空数组。
+ * 子代理委派工具参数 → 子代理执行清单。x-harness agent_spawn 工具入参
+ * {description, prompt, subagent_type?, model?, isolation?} 单发形态：
+ * agent = 类型名（回退 description 摘要），task = prompt（自包含任务文本）。
+ * 其余工具或垃圾形状返回空数组。
  */
 
-const AGENT_TOOL = 'agent';
+const AGENT_SPAWN_TOOL = 'agent_spawn';
 
 export function subagentSpawnsOf(name: string, args: Record<string, unknown>): SubagentSpawnView[] {
-  if (name.trim().toLowerCase() !== AGENT_TOOL) return [];
+  if (name.trim().toLowerCase() !== AGENT_SPAWN_TOOL) return [];
   const type = clip(textOf(args['subagent_type']));
-  const display = clip(textOf(args['name']));
+  const description = clip(textOf(args['description']));
   const prompt = clip(textOf(args['prompt']));
-  const agent = type.length > 0 ? type : display.length > 0 ? display : 'agent';
+  const agent = type.length > 0 ? type : description.length > 0 ? description : 'agent';
   if (prompt.length === 0 && agent === 'agent') return [];
   return [{ agent, task: prompt }];
 }

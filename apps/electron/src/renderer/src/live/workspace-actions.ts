@@ -166,7 +166,20 @@ function defaultModelKey(cwd: string): string {
 /** 投递失败通知口径：宿主桥不可用不弹（横幅已显式呈现），恢复失败用专项文案。 */
 function notifySubmitFailure(reason: string | null): void {
   if (reason === null || reason === 'bridge_unavailable') return;
-  pushNotice(reason === 'resume_failed' ? copy.flow.resumeFailed : copy.flow.sendFailed(reason));
+  if (reason === 'resume_failed') {
+    pushNotice(copy.flow.resumeFailed);
+    return;
+  }
+  // hub 能力门/量限的友好文案（细节原文对用户无行动价值；其余 reason 原样透传）
+  if (reason.startsWith('invalid images: model does not accept images')) {
+    pushNotice(copy.flow.imagesDenied);
+    return;
+  }
+  if (reason.startsWith('too many images')) {
+    pushNotice(copy.flow.imagesTooMany);
+    return;
+  }
+  pushNotice(copy.flow.sendFailed(reason));
 }
 
 export function createWorkspaceActions(): WorkspaceActions {

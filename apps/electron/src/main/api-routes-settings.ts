@@ -1,5 +1,5 @@
 import type { ApiMethod, ApiOutcome, ApiParams, ProviderConfigView, SkillView } from '@paiapp/contracts';
-import { isApiFormat } from '@paiapp/contracts';
+import { isApiFormat, normalizeLegacyPermMode } from '@paiapp/contracts';
 
 import { HUB_API_FORMATS, envVarNameForProvider } from './models-config';
 import { createProviderProbe } from './provider-probe';
@@ -8,7 +8,7 @@ import type { createFileSettings, ProviderKeyStore } from './file-settings';
 /**
  * 设置与目录路由组（api-routes 的本地配置子集）：providers/技能目录/hub 设置/偏好写。
  * 技能清单与启停走 hub 命令（skills/list、skills/set_enabled——hub 是
- * ~/.my-agent/skills 布局与 hub-settings skills.disabled 名单的单一写者）；
+ * ~/.x-harness/skills 布局与 hub-settings skills.disabled 名单的单一写者）；
  * 视图构建器（providersView/preferencesView）随路由一并产出。
  */
 
@@ -78,8 +78,7 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
       const entry = item as Record<string, unknown>;
       const name = typeof entry['name'] === 'string' ? entry['name'] : '';
       if (name.length === 0) continue;
-      const source =
-        entry['source'] === 'skill-builtin' ? 'builtin' : entry['source'] === 'skill-project' ? 'project' : entry['source'] === 'skill-user' ? 'user' : null;
+      const source = entry['source'] === 'project' ? 'project' : entry['source'] === 'user' ? 'user' : null;
       if (source === null) continue;
       out.push({ name, enabled: entry['disabled'] !== true, source });
     }
@@ -115,11 +114,14 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
         .listProviders()
         .some((provider) => provider.name !== params.name && envVarNameForProvider(provider.name) === envName);
       if (collides) return failLogged('provider_name_conflict');
-      // api 词表校验（host-hub models/add 同源：词表外格式写盘会被目录降级剔除）
+      // api 词表校验（providers.json protocol 同源：词表外语形写盘会被目录剔除降级）
       if (!isApiFormat(params.api)) return failLogged('provider_api_unsupported');
-      // 撞 hub 预设键：custom 条目 provider 撞预设键会被 host-hub readCatalog 静默剔除
-      // （渠道消失 + 目录降级仅预设）——写前显式拒绝；host 未启动时目录不可得，
-      // 保守拒绝（落盘即静默失效比拒绝对用户更糟）
+      // baseUrl 形状校验（无 scheme 的档案被目录整档剔除且零告警——写前显式拒绝）
+      if (!params.baseUrl.startsWith('http://') && !params.baseUrl.startsWith('https://')) {
+        return failLogged('provider_baseurl_invalid');
+      }
+      // 撞 hub 预设键：custom 档案撞预设键在 x-harness 是整档覆盖语义（预设视图被遮蔽）
+      // ——写前显式拒绝；host 未启动时目录不可得，保守拒绝（落盘即静默遮蔽比拒绝对用户更糟）
       const modelsResult = await deps.command({ type: 'get_models' });
       if (!modelsResult.ok) return failLogged(`host_unavailable:${modelsResult.reason}`);
       const presetKeys = new Set(
@@ -159,10 +161,13 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
       return {
         ok: true as const,
         data: {
-          permissionDefaultMode:
-            mode === 'plan' || mode === 'default' || mode === 'acceptEdits' || mode === 'fullAuto' ? mode : null,
+          // 读侧归一：旧 4 档存量值（my-agent 期写入）收敛到 3 档（default/acceptEdits→auto、
+          // fullAuto→full）——归一展示不丢语义；词表外语形视为未设置
+          permissionDefaultMode: typeof mode === 'string' ? (normalizeLegacyPermMode(mode) ?? null) : null,
           thinkingDefault:
-            thinking === 'off' || thinking === 'low' || thinking === 'medium' || thinking === 'high' ? thinking : null,
+            thinking === 'off' || thinking === 'low' || thinking === 'medium' || thinking === 'high' || thinking === 'max'
+              ? thinking
+              : null,
         },
       };
     },

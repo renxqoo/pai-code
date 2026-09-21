@@ -40,33 +40,15 @@ const chatBody = (modelId: string): string =>
 const bearer = (apiKey: string): Record<string, string> => ({ authorization: `Bearer ${apiKey}` });
 
 const PROBE_SPECS: Readonly<Record<string, ProbeSpec>> = {
-  "openai-completions": {
+  openai: {
     body: chatBody,
     path: (base) => `${base}/chat/completions`,
     headers: bearer,
   },
-  "mistral-conversations": {
-    body: chatBody,
-    path: (base) => `${base}/chat/completions`,
-    headers: bearer,
-  },
-  "openai-responses": {
-    body: (modelId) => JSON.stringify({ model: modelId, input: "ping", max_output_tokens: 16 }),
-    path: (base) => `${base}/responses`,
-    headers: bearer,
-  },
-  "anthropic-messages": {
+  anthropic: {
     body: chatBody,
     path: (base) => `${base}/messages`,
     headers: (apiKey) => ({ "x-api-key": apiKey, "anthropic-version": "2023-06-01" }),
-  },
-  "google-generative-ai": {
-    body: () => JSON.stringify({ contents: [{ parts: [{ text: "ping" }] }] }),
-    // 官方文档的模型 id 常带 `models/` 前缀，路径已含 /models/：去前缀，避免 /models/models%2F…
-    path: (base, modelId) =>
-      `${base}/models/${encodeURIComponent(modelId.replace(/^models\//, ""))}:generateContent`,
-    headers: () => ({}),
-    query: (apiKey) => ({ key: apiKey }),
   },
 };
 

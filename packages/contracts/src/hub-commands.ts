@@ -1,8 +1,10 @@
 import type { ImagePayload } from './hub-protocol';
+import type { PermMode } from './permissions';
+import type { ThinkingLevel } from './thinking-levels';
 
 /**
- * host-hub 命令入参形状（55 命令；从 hub-protocol 拆出保持行数预算）。
- * 规格真相源 = host-hub 仓库 src/protocol/commands.ts 与各 handler 实现。
+ * host-hub 命令入参形状（56 命令；从 hub-protocol 拆出保持行数预算）。
+ * 规格真相源 = x-harness 仓库 src/protocol/commands.ts 与各 handler 实现。
  */
 
 // ============================================================================
@@ -15,22 +17,22 @@ export interface ThreadStartCmd {
   cwd?: string;
   /** 裸模型 id（三级消歧）；缺省 = 目录首条。 */
   modelId?: string;
-  /** 信任项目级扩展（.my-agent/agents、skills、settings）；缺省 false。 */
+  /** 信任项目级扩展（.x-harness 域：agents、skills、settings）；缺省 false。 */
   trusted?: boolean;
-  /** 会话权限模式初值（词表外静默忽略）。 */
-  permissionMode?: 'plan' | 'default' | 'acceptEdits' | 'fullAuto';
-  /** 思考档初值（词表外静默降级 unset）。 */
-  thinkingLevel?: 'off' | 'low' | 'medium' | 'high';
+  /** 会话权限模式初值（词表外静默降级）。 */
+  permissionMode?: PermMode;
+  /** 思考档初值（词表外静默降级；词表内但模型不支持显式拒）。 */
+  thinkingLevel?: ThinkingLevel;
 }
 
 export interface ThreadResumeCmd {
   type: 'thread/resume';
-  /** 会话文件（`<sessionsRoot>/<id>/transcript.jsonl` 词法围栏）。 */
+  /** 会话文件（`<sessionsRoot>/<id>/events.jsonl` 词法围栏）。 */
   sessionPath: string;
   cwd?: string;
   trusted?: boolean;
-  permissionMode?: 'plan' | 'default' | 'acceptEdits' | 'fullAuto';
-  thinkingLevel?: 'off' | 'low' | 'medium' | 'high';
+  permissionMode?: PermMode;
+  thinkingLevel?: ThinkingLevel;
 }
 
 /** 会话文件纳管为 parked 表项（host 本地、零 worker、幂等）。 */
@@ -49,6 +51,12 @@ export interface ThreadStopCmd {
 export interface ThreadRetireCmd {
   type: 'thread/retire';
   threadId: string;
+}
+
+/** 会话删除（host 本地；trash 原子 rename + 血缘级联；幂等）。 */
+export interface ThreadDeleteCmd {
+  type: 'thread/delete';
+  sessionPath: string;
 }
 
 /** 表项「免闲置收编」标志（host 本地零 worker；只豁免闲置 sweep；不持久化，fork 不继承）。 */
@@ -217,10 +225,10 @@ export interface SetRssRetireBytesCmd {
 export interface SetThinkingLevelCmd {
   type: 'set_thinking_level';
   threadId: string;
-  level: 'off' | 'low' | 'medium' | 'high';
+  level: ThinkingLevel;
 }
 
-/** 读会话思考档（单数；level=unset 表示各级均未设置，按 source 层级回退）。 */
+/** 读会话思考档（单数；无值态归一 off，按 source 层级回退）。 */
 export interface GetThinkingLevelCmd {
   type: 'get_thinking_level';
   threadId: string;
@@ -230,7 +238,7 @@ export interface GetThinkingLevelCmd {
 export interface PermissionSetModeCmd {
   type: 'permission/set_mode';
   threadId: string;
-  mode: 'plan' | 'default' | 'acceptEdits' | 'fullAuto';
+  mode: PermMode;
 }
 
 /** 会话权限模式（读；source = session|project|user|default）。 */
@@ -302,7 +310,7 @@ export interface ModelsAddCmd {
   type: 'models/add';
   id: string;
   provider: string;
-  api: 'anthropic-messages' | 'openai-completions';
+  protocol: 'anthropic' | 'openai';
   baseUrl: string;
   apiKeyEnv?: string;
   contextWindow?: number;
@@ -322,12 +330,12 @@ export interface AgentsListCmd {
   threadId?: string;
 }
 
-/** agent 类型定义 CRUD（user 级：hub 写 ~/.my-agent/agents/<name>.md）。 */
+/** agent 类型定义 CRUD（user 级：hub 写 ~/.x-harness/agents/<name>.md；round-trip 复析保证）。 */
 export interface AgentsCreateCmd {
   type: 'agents/create';
-  /** ^[a-z0-9][a-z0-9-]*$（保留名 fork/main 拒绝）。 */
+  /** 非空、不含 `/`、不含换行。 */
   name: string;
-  /** 非空单行，≤500 字符。 */
+  /** 非空单行，且非 `[a-zA-Z-]+:` 字段形态行（frontmatter 注入防线）。 */
   description: string;
   /** 非空正文。 */
   systemPrompt: string;
@@ -371,6 +379,7 @@ export type HubCommand =
   | (ThreadRegisterCmd & { id?: string })
   | (ThreadStopCmd & { id?: string })
   | (ThreadRetireCmd & { id?: string })
+  | (ThreadDeleteCmd & { id?: string })
   | (ThreadSetKeepaliveCmd & { id?: string })
   | (ThreadListCmd & { id?: string })
   | (ThreadListSavedCmd & { id?: string })
@@ -422,13 +431,14 @@ export type HubCommand =
   | (SkillsRemoveCmd & { id?: string })
   | (SubagentSteerCmd & { id?: string });
 
-/** 命令词表（与 host-hub COMMAND_NAMES 逐一对应；测试做封闭断言）。 */
+/** 命令词表（与 host-hub COMMAND_NAMES 逐一对应——56 条；测试做封闭断言）。 */
 export const HUB_COMMAND_TYPES = [
   'thread/start',
   'thread/resume',
   'thread/register',
   'thread/stop',
   'thread/retire',
+  'thread/delete',
   'thread/set_keepalive',
   'thread/list',
   'thread/list_saved',

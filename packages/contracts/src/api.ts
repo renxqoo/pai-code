@@ -64,7 +64,7 @@ export const HistoryItemSchema = z.discriminatedUnion('kind', [
     ),
     usage: z.object({ input: z.number(), output: z.number() }).nullable(),
     /** 异常终态（done 增量 stopReason 收窄）；null = 正常结束（stop/toolUse）。 */
-    stopReason: z.enum(['error', 'aborted', 'length']).nullable(),
+    stopReason: z.enum(['error', 'aborted', 'max-tokens']).nullable(),
     /** stopReason=error 时的上游原始错误信息；其余 null。 */
     errorMessage: z.string().nullable(),
   }),
@@ -81,7 +81,7 @@ export const HistoryItemSchema = z.discriminatedUnion('kind', [
 export type HistoryItem = z.infer<typeof HistoryItemSchema>;
 
 export const ThreadStateViewSchema = z.object({
-  model: z.object({ provider: z.string(), modelId: z.string() }).nullable(),
+  model: z.object({ provider: z.string(), model: z.string() }).nullable(),
   isStreaming: z.boolean(),
   isCompacting: z.boolean(),
   sessionName: z.string().nullable(),
@@ -94,6 +94,7 @@ export const SessionStatsViewSchema = z.object({
   userMessages: z.number().int(),
   assistantMessages: z.number().int(),
   toolCalls: z.number().int(),
+  toolResults: z.number().int(),
   tokens: z.object({ input: z.number(), output: z.number(), total: z.number() }),
   cost: z.number(),
 });
@@ -120,18 +121,18 @@ export const SavedSessionViewSchema = z.object({
 });
 export type SavedSessionView = z.infer<typeof SavedSessionViewSchema>;
 
-/** 会话思考档读口（get_thinking_level：当前值 + 生效层级）。 */
+/** 会话思考档读口（get_thinking_level：当前值 + 生效层级；无值态归一 off/source off）。 */
 export const ThinkingLevelViewSchema = z.object({
   level: z.string(),
-  source: z.enum(['session', 'project', 'user', 'unset']),
+  source: z.enum(['session', 'project', 'user', 'off']),
 });
 export type ThinkingLevelView = z.infer<typeof ThinkingLevelViewSchema>;
 
-/** 会话内斜杠命令/技能条目（get_commands 收窄；source 三源：plugin/skill/builtin）。 */
+/** 会话内斜杠命令/技能条目（get_commands 收窄；source 两源：command=机器拦截斜杠动词、skill=模型分发面）。 */
 export const CommandViewSchema = z.object({
   name: z.string(),
   description: z.string().nullable(),
-  source: z.enum(['plugin', 'skill', 'builtin']),
+  source: z.enum(['command', 'skill']),
 });
 export type CommandView = z.infer<typeof CommandViewSchema>;
 
@@ -305,7 +306,10 @@ export const ApiSchemas = {
       .refine((params) => params.message.length > 0 || (params.images?.length ?? 0) > 0, {
         message: 'message_or_images_required',
       }),
-    result: z.null(),
+    // 普通消息 = null（受理）；/compact 词形直发 compact 命令时 = 压缩三元组（响应即终态）
+    result: z
+      .object({ summary: z.string(), replacedCount: z.number().int(), summaryTokens: z.number().int() })
+      .nullable(),
   },
   'session/abort': {
     params: threadOnly,
@@ -562,6 +566,11 @@ export const ApiSchemas = {
   'session/retire': {
     params: threadOnly,
     result: z.null(),
+  },
+  /** 会话删除（thread/delete：trash 原子 rename + 血缘级联；幂等；活族先拒）。 */
+  'session/delete': {
+    params: z.object({ sessionPath: z.string().min(1) }).strict(),
+    result: z.object({ removed: z.array(z.string()) }),
   },
   /** 强制回收（clear_queue + abort + thread/retire 逐条容错；对失控生成一步到位）。 */
   'session/forceRetire': {

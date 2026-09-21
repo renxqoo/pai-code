@@ -129,7 +129,7 @@ describe('stop-or-abort 三态（读 store 真相）', () => {
           effort: 'high',
           tokens: 1,
           toolCount: 0,
-          status: 'busy',
+          status: 'running',
           startedAt: 1,
           endedAt: null,
           summary: '',

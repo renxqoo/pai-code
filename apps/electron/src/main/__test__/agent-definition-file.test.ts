@@ -16,8 +16,8 @@ describe('agent 定义 md 编解码', () => {
       tools: ['read', 'bash'],
       model: 'glm-4.7',
     });
-    // 写侧产物与 host-hub renderAgentTypeMd 逐行同构
-    expect(text).toBe(['---', 'description: 联网搜索专员', 'model: glm-4.7', 'tools: [read, bash]', '---', '', '你是搜索专员。', '', '## 工具', '', '只有 bash。', ''].join('\n'));
+    // 写侧产物与 x-harness renderAgentType 逐行同构（name 入档 + tools 逗号分隔）
+    expect(text).toBe(['---', 'name: search', 'description: 联网搜索专员', 'model: glm-4.7', 'tools: read,bash', '---', '', '你是搜索专员。', '', '## 工具', '', '只有 bash。', ''].join('\n'));
     // name 缺省 → stem 回落（hub 语义）
     const parsed = parseAgentDefinition(text, 'search');
     expect(parsed).toEqual({
@@ -60,7 +60,7 @@ describe('agent 定义 md 编解码', () => {
   test('description 单行契约：多行描述由 store 写前校验拒绝（序列化不做折叠——hub renderAgentTypeMd 同为原样单行）', () => {
     const text = serializeAgentDefinition({ name: 'a', description: '第一行\n第二行', systemPrompt: '', tools: null, model: null });
     // 多行 description 破坏 frontmatter——这是调用方契约违约，store 层校验先行拒绝
-    expect(text.split('\n')[1]).toBe('description: 第一行');
+    expect(text.split('\n')[2]).toBe('description: 第一行');
   });
 
   test('hub 全形态（审查回归）：flow 数组 / 空数组 / 标量尾注释 / BOM / 栅栏尾空格 / 任意 name', () => {
@@ -79,8 +79,8 @@ describe('agent 定义 md 编解码', () => {
     expect(parseAgentDefinition(cjk)?.name).toBe('搜索');
   });
 
-  test('键位路径：user 固定 <home>/.my-agent/agents；project 固定 <项目>/.my-agent/agents', () => {
-    expect(agentDefinitionPath('/home/u', 'user', null, 'search')).toBe('/home/u/.my-agent/agents/search.md');
-    expect(agentDefinitionPath('/home/u', 'project', '/work/app', 'search')).toBe('/work/app/.my-agent/agents/search.md');
+  test('键位路径：user 固定 <home>/.x-harness/agents；project 固定 <项目>/.x-harness/agents', () => {
+    expect(agentDefinitionPath('/home/u', 'user', null, 'search')).toBe('/home/u/.x-harness/agents/search.md');
+    expect(agentDefinitionPath('/home/u', 'project', '/work/app', 'search')).toBe('/work/app/.x-harness/agents/search.md');
   });
 });

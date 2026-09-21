@@ -13,9 +13,9 @@ export function summarizeAgents(agents: readonly SubagentModel[]): PanelSummary 
   let settledCount = 0;
   let totalTokens = 0;
   for (const agent of agents) {
-    if (agent.status === 'busy') {
+    if (agent.status === 'running') {
       busyCount += 1;
-    } else if (agent.status === 'on-disk') {
+    } else if (agent.status === 'stopped') {
       settledCount += 1;
     }
     if (agent.tokens !== null && Number.isFinite(agent.tokens) && agent.tokens > 0) {

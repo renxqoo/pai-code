@@ -56,16 +56,15 @@ export const InflightViewSchema = z.object({
 });
 export type InflightView = z.infer<typeof InflightViewSchema>;
 
-/** get_subagents 的视图（manager 全量表快照；无子代理为空数组）。 */
+/** get_subagents 的视图（ChildView 水化快照；无子代理为空数组——键 agentId，type 为定义名展示键）。 */
 export const SubagentSnapshotViewSchema = z.object({
   agentId: z.string(),
-  agentName: z.string(),
-  /** 任务描述（manager work 字段）。 */
-  work: z.string(),
-  status: z.enum(['busy', 'idle', 'on-disk']),
-  runId: z.number(),
-  sessionId: z.string(),
-  agentType: z.string().optional(),
+  /** 定义名（agent type；展示键——x-harness 身份模型中 agentName ≡ type）。 */
+  agentType: z.string(),
+  sessionId: z.string().optional(),
+  /** 任务摘要（spawn description；复活自 header 回填——旧档案可能缺席）。 */
+  work: z.string().optional(),
+  status: z.enum(['running', 'idle', 'stopped']),
 });
 export type SubagentSnapshotView = z.infer<typeof SubagentSnapshotViewSchema>;
 

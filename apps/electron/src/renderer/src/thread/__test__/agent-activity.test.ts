@@ -26,7 +26,7 @@ function agent(overrides: Partial<SubagentModel>): SubagentModel {
     effort: 'high',
     tokens: 51,
     toolCount: 1,
-    status: 'busy',
+    status: 'running',
     startedAt: 1000,
     endedAt: null,
     summary: '报告',
@@ -48,10 +48,10 @@ describe('agentActivity', () => {
   });
 
   test('已结束 / 尚未出生 / 时间倒挂 → idle', () => {
-    expect(agentActivity(agent({ status: 'on-disk' }), 9999)).toEqual({ kind: 'idle' });
+    expect(agentActivity(agent({ status: 'stopped' }), 9999)).toEqual({ kind: 'idle' });
     expect(agentActivity(agent({ startedAt: 5000 }), 1000)).toEqual({ kind: 'idle' });
     expect(agentActivity(agent({ startedAt: 5000, endedAt: 1000 }), 3000)).toEqual({ kind: 'idle' });
-    expect(agentActivity(agent({ status: 'on-disk' }), Number.NaN)).toEqual({ kind: 'idle' });
+    expect(agentActivity(agent({ status: 'stopped' }), Number.NaN)).toEqual({ kind: 'idle' });
     // 空闲态（busy|idle|on-disk 三态）同归 idle
     expect(agentActivity(agent({ status: 'idle' }), 2000)).toEqual({ kind: 'idle' });
   });

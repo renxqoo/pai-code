@@ -39,7 +39,7 @@ describe('branchSwitchLocked', () => {
           effort: 'medium',
           tokens: 5,
           toolCount: 0,
-          status: 'busy',
+          status: 'running',
           startedAt: 1,
           endedAt: null,
           summary: '',

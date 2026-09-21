@@ -26,7 +26,7 @@ export const HostInfoViewSchema = z.object({
 export type HostInfoView = z.infer<typeof HostInfoViewSchema>;
 
 /** thread/list 行收窄（worker 表：hub 是进程态真相；host-hub 无 subagents 计数字段——
- *  在途徽标数据源 = agents/state 事件 / get_subagents）。 */
+ *  在途徽标数据源 = agent/status 事件 / get_subagents）。 */
 export const WorkerRowViewSchema = z.object({
   threadId: z.string(),
   cwd: z.string(),

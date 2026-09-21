@@ -36,20 +36,20 @@ export type ToolCallModel = {
 };
 
 /**
- * 子代理状态（manager 词表）：busy = 执行中；idle = 存活未在跑；
- * on-disk = 终态归档（settled / 快照落盘）。
+ * 子代理状态（x-harness ChildView 词表）：running = 执行中；idle = 存活未在跑；
+ * stopped = 终态归档（可复活再 running）。
  */
-export type SubagentStatus = 'busy' | 'idle' | 'on-disk';
+export type SubagentStatus = 'running' | 'idle' | 'stopped';
 
 export type SubagentModel = {
-  /** 面板列表键（事件流身份）；保留旧字段名避免全量改写消费面。 */
+  /** 面板列表键 = agentId（x-harness 身份模型：agentId 唯一，type 为定义名展示键）。 */
   id: string;
   /** steer 寻址 id（subagent/steer 的 agentId 入参；'' = 未知，行内输入不显示）。 */
   agentId: string;
   name: string;
-  /** 面板类型胶囊：Explore / general-purpose */
+  /** 面板类型胶囊：Explore / general-purpose（x-harness 的 type 字段）。 */
   agentType: string;
-  /** 任务描述（subagentStarted/快照 work；'' = 未知）。 */
+  /** 任务摘要（agent/spawned work / 快照；'' = 未知——复活旧档案可能缺席）。 */
   task: string;
   model: string;
   effort: string;
@@ -63,7 +63,7 @@ export type SubagentModel = {
   endedAt: number | null;
   /** 流式正文累积（终态展示为报告摘要） */
   summary: string;
-  /** 权限请求等待中（agents/permission-ask：协议无应答命令，hub 到期自动拒绝——仅信息展示）。 */
+  /** 权限请求等待态已退役（协议无 ask 归属信号——ui_request 无归属字段、decided 为事后帧）；保留 null 态。 */
   pendingAsk: { toolName: string; summary: string } | null;
   tools: readonly ToolCallModel[];
 };

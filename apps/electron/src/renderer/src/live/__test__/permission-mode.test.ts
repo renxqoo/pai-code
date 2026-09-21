@@ -22,8 +22,15 @@ test.each(PERM_MODES)('normalizePermMode：词表内 %s 原样返回', (mode: Pe
   expect(normalizePermMode(mode)).toBe(mode);
 });
 
-test('normalizePermMode：词表外（协议扩展/垃圾输入）回落 default 档（不崩溃不臆造新模式）', () => {
-  expect(normalizePermMode('ask')).toBe('default');
-  expect(normalizePermMode('')).toBe('default');
-  expect(normalizePermMode('full-auto')).toBe('default');
+test('normalizePermMode：词表外（协议扩展/垃圾输入）回落 auto 档（不崩溃不臆造新模式）', () => {
+  expect(normalizePermMode('ask')).toBe('auto');
+  expect(normalizePermMode('')).toBe('auto');
+  expect(normalizePermMode('full-auto')).toBe('auto');
+});
+
+test('normalizePermMode：旧 4 档存量值归一（my-agent 期写入 hub-settings 的读盘收敛）', () => {
+  expect(normalizePermMode('default')).toBe('auto');
+  expect(normalizePermMode('acceptEdits')).toBe('auto');
+  expect(normalizePermMode('fullAuto')).toBe('full');
+  expect(normalizePermMode('plan')).toBe('plan');
 });

@@ -108,9 +108,9 @@ async function makeRoutes(skills: Array<SkillsEntry | string>, options: { startH
 }
 
 const CATALOG: SkillsEntry[] = [
-  { name: 'rxopen-hot', source: 'skill-user', disabled: false },
-  { name: 'rx-stock', source: 'skill-builtin', disabled: false },
-  { name: 'draft-writer', source: 'skill-project', disabled: true },
+  { name: 'rxopen-hot', source: 'user', disabled: false },
+  { name: 'rx-stock', source: 'project', disabled: false },
+  { name: 'draft-writer', source: 'project', disabled: true },
 ];
 
 describe('api-routes skills（hub 命令面）', () => {
@@ -120,13 +120,13 @@ describe('api-routes skills（hub 命令面）', () => {
     expect(outcome.ok).toBe(true);
     expect(outcome.data).toEqual([
       { name: 'rxopen-hot', enabled: true, source: 'user' },
-      { name: 'rx-stock', enabled: true, source: 'builtin' },
+      { name: 'rx-stock', enabled: true, source: 'project' },
       { name: 'draft-writer', enabled: false, source: 'project' },
     ]);
   });
 
   test('list：垃圾清单条目（缺名/词表外 source/非对象）丢弃不拖垮', async () => {
-    const { routes } = await makeRoutes([{ source: 'skill-user' }, { name: 'x', source: 'weird' }, 'junk', { name: 'ok', source: 'skill-user' }]);
+    const { routes } = await makeRoutes([{ source: 'user' }, { name: 'x', source: 'weird' }, 'junk', { name: 'ok', source: 'user' }]);
     const outcome = (await routes.invoke('skills/list', {})) as { ok: boolean; data: Array<{ name: string }> };
     expect(outcome.ok).toBe(true);
     expect(outcome.data.map((item) => item.name)).toEqual(['ok']);

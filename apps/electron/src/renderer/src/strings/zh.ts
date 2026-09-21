@@ -133,7 +133,7 @@ export const zh: typeof en = {
     thinkingInvalid: '该思考档不可用。',
     /** 思考档写入被 hub 拒绝（reason 为 hub 错误文案） */
     thinkingRejected: (reason: string): string => `思考档未应用：${reason}。`,
-    /** 子代理状态词（busy|idle|on-disk → 工作中/空闲/已归档） */
+    /** 子代理状态词（running|idle|stopped → 工作中/空闲/已归档） */
     subagentBusy: '工作中',
     subagentIdle: '空闲',
     subagentArchived: '已归档',
@@ -192,6 +192,8 @@ export const zh: typeof en = {
     stopConfirmYes: '全部停止',
     stopConfirmNo: '取消',
     bashNoImages: '直执行命令不支持携带图片，请移除附件或改用消息发送。',
+    imagesDenied: '当前模型不接受图片附件，请移除附件或切换到多模态模型。',
+    imagesTooMany: '图片附件超出限制（最多 8 张），请减少附件。',
     systemMessageLabel: '系统',
     sendFailed: (reason: string): string => `消息未发送（${reason}），请重试。`,
     toolFailed: (exitCode: number): string => `退出码 ${exitCode}`,

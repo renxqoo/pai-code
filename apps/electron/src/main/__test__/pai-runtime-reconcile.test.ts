@@ -38,12 +38,12 @@ function savedReply(ids: string[]): { ok: true; data: unknown } {
   };
 }
 
-/** 会话文件布局契约路径（<sessionsRoot>/<id>/transcript.jsonl）；建 id 目录——
+/** 会话文件布局契约路径（<sessionsRoot>/<id>/events.jsonl）；建 id 目录——
  *  resume 白名单对缺失文件的父目录做 realpath 归一，目录在才能落进白名单。 */
 function sessionFileOf(work: string, id: string): string {
   const dir = join(work, 'agent', 'sessions', id);
   mkdirSync(dir, { recursive: true });
-  return join(dir, 'transcript.jsonl');
+  return join(dir, 'events.jsonl');
 }
 
 function makeFixture(work: string, reply: (cmd: PaiCommand) => Reply) {

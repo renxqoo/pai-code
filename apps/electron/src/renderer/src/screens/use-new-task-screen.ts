@@ -68,7 +68,7 @@ export function useNewTaskScreen(enterCwd: string): NewTaskScreenProps {
   const hostDown = hostPhase === null || hostPhase === 'failed';
   const modelOptions = React.useMemo(() => models.map((model) => `${model.provider}/${model.modelId}`), [models]);
   /** 权限模式缺省（hub settings 未设置时按 hub 内建 default 档展示）。 */
-  const defaultPermissionMode: PermMode = hubSettings?.permissionDefaultMode ?? 'default';
+  const defaultPermissionMode: PermMode = hubSettings?.permissionDefaultMode ?? 'auto';
 
   /** 切分支包装：成功即失效线程页只读分支段（切完后返回会话页必须看到新分支） */
   const checkoutBranch = React.useCallback(

@@ -12,7 +12,7 @@ const noop = (): void => undefined;
 const zhipu: ProviderConfigView = {
   name: 'zhipu',
   baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
-  api: 'openai-completions',
+  api: 'openai',
   models: [
     { id: 'glm-4.6', reasoning: true, vision: false },
     { id: 'glm-5', reasoning: false, vision: false },
@@ -24,7 +24,7 @@ const zhipu: ProviderConfigView = {
 const claude: ProviderConfigView = {
   name: 'claude',
   baseUrl: 'https://api.anthropic.com',
-  api: 'anthropic-messages',
+  api: 'anthropic',
   models: [{ id: 'claude-sonnet-4', reasoning: false, vision: true }],
  
   hasKey: false,
@@ -59,8 +59,8 @@ describe('渠道分区渲染冒烟', () => {
     const html = render([zhipu, claude], null, []);
     expect(html).toContain(copy.settings.providersCount(2));
     expect(html).toContain('zhipu');
-    expect(html).toContain(copy.settings.providerMeta(copy.settings.apiFormatOptions['openai-completions'], 2));
-    expect(html).toContain(copy.settings.providerMeta(copy.settings.apiFormatOptions['anthropic-messages'], 1));
+    expect(html).toContain(copy.settings.providerMeta(copy.settings.apiFormatOptions['openai'], 2));
+    expect(html).toContain(copy.settings.providerMeta(copy.settings.apiFormatOptions['anthropic'], 1));
     expect(html).toContain(copy.settings.keyPresent);
     expect(html).toContain(copy.settings.keyMissing);
     expect(html).toContain('https://api.anthropic.com');

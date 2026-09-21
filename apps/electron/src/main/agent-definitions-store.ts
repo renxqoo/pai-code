@@ -3,17 +3,18 @@ import { homedir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { dirname as dirnamePath } from 'node:path';
 
-import { AGENT_DESCRIPTION_MAX, isValidAgentName, type AgentDefinition, type AgentScope } from '@paiapp/contracts';
+import { AGENT_FIELD_LINE, isValidAgentName, type AgentDefinition, type AgentScope } from '@paiapp/contracts';
 
 import { agentDefinitionPath, fileNameStemOf, isSafeFileNameStem, parseAgentDefinition, serializeAgentDefinition } from './agent-definition-file';
 
 /**
- * 子 agent 定义文件面（管理 CRUD 的单一实现，host-hub 同格式热发现——写删即生效、零重启）：
- * user 级 = ~/.my-agent/agents/<name>.md（host-hub agents 域布局契约）；
- * project 级 = <项目>/.my-agent/agents/<name>.md。
- * 身份键 = name（= 文件名主干，app 写入不变式）；hub 按行首 frontmatter name 注册类型。
- * 写门禁（镜像 host-hub registry/agents-create 校验）：name 过 kebab-case 词表（保留名
- * fork/main 拒绝）、description 非空单行 ≤500、systemPrompt 非空；project 写入仅限调用方
+ * 子 agent 定义文件面（project 级直写 + 两域枚举；x-harness 同格式热发现——写删即生效）：
+ * user 级 = ~/.x-harness/agents/<name>.md（**写路径走 hub agents/create|remove 命令**——
+ * round-trip 复析由 hub 保证，路由层分派；本面只读枚举）；
+ * project 级 = <项目>/.x-harness/agents/<name>.md（app 直写）。
+ * 身份键 = name（= 文件名主干，app 写入不变式）。
+ * 写门禁（镜像 x-harness agents-admin 校验）：name 非空无 `/` 无换行、description
+ * 非空单行且非字段形态行、systemPrompt 非空、model 单行；project 写入仅限调用方
  * 传入的已知项目集合——坏定义文件被 hub 静默跳过，校验缺失 = 用户定义静默消失。
  */
 
@@ -30,19 +31,22 @@ export type AgentDefinitionsStore = {
 export function createAgentDefinitionsStore(homeDir: string = homedir()): AgentDefinitionsStore {
   const home = homeDir;
 
-  const userDir = `${home}/.my-agent/agents`;
-  const projectDir = (project: string): string => `${project}/.my-agent/agents`;
+  const userDir = `${home}/.x-harness/agents`;
+  const projectDir = (project: string): string => `${project}/.x-harness/agents`;
 
-  /** 写前校验 = host-hub agents-create 校验表镜像（词法/单行/非字段形态/单 token）——
+  /** 写前校验 = x-harness agents-admin 校验表镜像（非空/单行/非字段形态/单行 model）——
    *  坏定义文件被 hub 解析器静默跳过，校验缺失 = 用户定义静默消失。 */
   const validate = (definition: AgentDefinition): { ok: true } | { ok: false; reason: 'invalid_name' | 'invalid_description' | 'invalid_prompt' | 'invalid_model' } => {
     if (!isValidAgentName(definition.name)) return { ok: false, reason: 'invalid_name' };
+    // 枚举可见性前置（hub 侧 round-trip 复析同目的）：stem 词法不可枚举的名字写了列不出
+    // （. 开头/含反斜杠等）——静默丢失比拒绝更糟
+    if (!isSafeFileNameStem(definition.name)) return { ok: false, reason: 'invalid_name' };
     const description = definition.description.trim();
-    if (description.length === 0 || description.includes('\n') || description.length > AGENT_DESCRIPTION_MAX || /^[a-z]+:/.test(description)) {
+    if (description.length === 0 || description.includes('\n') || AGENT_FIELD_LINE.test(description)) {
       return { ok: false, reason: 'invalid_description' };
     }
     if (definition.systemPrompt.trim().length === 0) return { ok: false, reason: 'invalid_prompt' };
-    if (definition.model !== null && definition.model.length > 0 && !/^[A-Za-z0-9._-]+$/.test(definition.model)) {
+    if (definition.model !== null && definition.model.length > 0 && (definition.model.includes('\n') || definition.model.trim().length === 0)) {
       return { ok: false, reason: 'invalid_model' };
     }
     return { ok: true };

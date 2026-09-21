@@ -28,9 +28,9 @@ describe('PermissionsSection', () => {
   });
 
   test('已设缺省：对应段选中', () => {
-    const html = render({ permissionDefaultMode: 'acceptEdits', thinkingDefault: 'high' });
+    const html = render({ permissionDefaultMode: 'auto', thinkingDefault: 'high' });
     expect(html).toContain('aria-checked="true"');
-    expect(html).toContain(copy.settings.permModeOptions.acceptEdits);
+    expect(html).toContain(copy.settings.permModeOptions.auto);
   });
 
   test('未加载（hubSettings null）：加载占位', () => {

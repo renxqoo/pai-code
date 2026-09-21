@@ -6,7 +6,7 @@ import { apiFormatLabel, apiFormatOptions } from '../api-format-options';
 
 describe('API 格式选项', () => {
   test('词表顺序即展示顺序，词表内值不追加回退项', () => {
-    const options = apiFormatOptions('anthropic-messages');
+    const options = apiFormatOptions('anthropic');
     expect(options.map((option) => option.id)).toEqual([...API_FORMAT_IDS]);
     expect(options.every((option) => option.label.length > 0)).toBe(true);
   });
@@ -22,7 +22,7 @@ describe('API 格式选项', () => {
   });
 
   test('值 → 文案：词表内取词表文案，词表外走自定义回退', () => {
-    expect(apiFormatLabel('openai-completions')).toBe(copy.settings.apiFormatOptions['openai-completions']);
+    expect(apiFormatLabel('openai')).toBe(copy.settings.apiFormatOptions['openai']);
     expect(apiFormatLabel('bedrock-converse-stream')).toBe(copy.settings.apiFormatUnknown('bedrock-converse-stream'));
   });
 });

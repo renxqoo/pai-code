@@ -19,7 +19,7 @@ import { createGitBranches, type GitBranches } from './git-branches';
 import { createGitGraph, type GitGraph } from './git-graph';
 import { createOpenLocation, type OpenLocation } from './open-location';
 import { createLocalRoutes } from './api-routes-local';
-import { interceptsCompact } from './compact-lexing';
+import { compactInvocationOf } from './compact-lexing';
 import { createSettingsRoutes } from './api-routes-settings';
 import type { AgentDefinitionsStore } from './agent-definitions-store';
 import { THINKING_LEVEL_ORDER, type ThinkingLevel } from '@paiapp/contracts';
@@ -28,6 +28,8 @@ import { ApiSchemas, type ApiMethod, type ApiOutcome, type ApiParams, type Model
 import type { PaiRuntime } from './pai-runtime';
 import type { RuntimeMonitor } from './runtime-monitor/create-runtime-monitor';
 import { runtimeRoutes } from './api-routes-runtime';
+import { threadOpsRoutes } from './api-routes-thread-ops';
+import { resumeRoutes } from './api-routes-resume';
 import type { createFileSettings } from './file-settings';
 import type { ProviderKeyStore } from './file-settings';
 
@@ -91,7 +93,9 @@ export function createApiRoutes(deps: ApiRouteDeps) {
 
   const fail = (reason: string): { ok: false; reason: string } => ({ ok: false, reason });
 
-  /** 会话文件白名单：resolve 后必须位于 sessionsRoot 之下（真实路径优先，缺文件回退 resolve）。 */
+  /** 会话文件白名单：resolve 后必须位于 sessionsRoot 之下（真实路径优先；缺失段
+   *  逐级上溯到存在的祖先做 realpath 归一——删除后的会话目录幂等重删不得因归一
+   *  失败被误拒，逃逸路径 realpath 后仍在 root 外）。 */
   const insideSessionsRoot = (sessionPath: string): boolean => {
     let root = runtime.sessionsRoot;
     try {
@@ -103,12 +107,21 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     try {
       target = realpathSync(target);
     } catch {
-      // 目标文件尚不存在：按已存在的父目录归一（macOS /tmp→/private/tmp 符号链接），
-      // 前缀拦截仍生效；文件缺失的报错交给 host
-      try {
-        target = joinPaths(realpathSync(dirnamePath(target)), baseName(target));
-      } catch {
-        // 父目录也不存在：保持 resolve 形态（多半已在白名单外）
+      // 目标不在：逐级上溯最近的存在的祖先（macOS /tmp→/private/tmp 符号链接归一），
+      // 剩余相对段拼回——任意深度的已删路径都能归一到真实前缀域
+      let dir = dirnamePath(target);
+      const tail: string[] = [baseName(target)];
+      for (let depth = 0; depth < 8; depth += 1) {
+        try {
+          const real = realpathSync(dir);
+          target = tail.length > 0 ? joinPaths(real, ...tail) : real;
+          break;
+        } catch {
+          tail.unshift(baseName(dir));
+          const parent = dirnamePath(dir);
+          if (parent === dir) break; // 到根仍不存在：保持 resolve 形态（多半已在白名单外）
+          dir = parent;
+        }
       }
     }
     return target === root || target.startsWith(`${root}${pathSep}`);
@@ -215,48 +228,8 @@ export function createApiRoutes(deps: ApiRouteDeps) {
   });
   const { providersView, preferencesView, skillsList } = settings;
 
-  type RouteTable = { [M in ApiMethod]: (params: ApiParams<M>) => Outcome<M> };
+  type RouteTable = { [M in ApiMethod]?: (params: ApiParams<M>) => Outcome<M> };
 
-  /** thread/list 按 sessionPath 收养既有表项（resume 撞 already open 的回落路径）。 */
-  const adoptExistingThread = async (
-    sessionPath: string,
-  ): Promise<{ threadId: string; cwd: string; sessionPath: string } | null> => {
-    const list = await command({ type: 'thread/list' });
-    if (!list.ok) return null;
-    const rows = Array.isArray(list.data) ? list.data : [];
-    for (const row of rows) {
-      if (typeof row !== 'object' || row === null) continue;
-      const entry = row as Record<string, unknown>;
-      if (entry['sessionPath'] === sessionPath && typeof entry['threadId'] === 'string') {
-        return { threadId: entry['threadId'], cwd: typeof entry['cwd'] === 'string' ? entry['cwd'] : '', sessionPath };
-      }
-    }
-    return null;
-  };
-
-  /** resume 收尾（resume 响应与 already-open 收养共用）：视图落表 + 换 id 整行替换 + 元数据补齐。 */
-  const finishResume = (
-    threadId: string,
-    cwd: string,
-    sessionPath: string,
-    known: ReturnType<typeof findRegistryRowByPath>,
-  ): { ok: true; data: ReturnType<PaiRuntime["applyStartOutcome"]> } => {
-    // threadId 只信响应；标题沿用注册表行（占位视图/既有命名的延续，不回退默认标题）
-    // 恢复不是会话活动：活动时间 = max(注册表行, 会话文件 mtime)——await 窗口内到达的
-    // turn 事件可能已推进行/文件（帧同步派发先于本续体），不得用过期快照写回旧值；
-    // 双源皆不可得（无行且 stat 失败）降级当前时刻
-    const rowAtWrite = findRegistryRowByPath(sessionPath);
-    const lastActivityAt = Math.max(rowAtWrite?.updatedAt ?? 0, fileMtimeMs(sessionPath) ?? 0) || Date.now();
-    const view = runtime.applyStartOutcome(threadId, cwd, sessionPath, known?.title ?? runtime.defaultTitle, lastActivityAt, known?.trusted ?? false);
-    if (known !== null && known.threadId !== threadId) {
-      // 换 id 整行替换：旧行删除 + 旧 id 视图同步清出（与对账/启动链路同一不变量）；
-      // 常驻是会话文件的属性，随行迁移到新 id（否则唤醒一次即静默丢失）
-      runtime.removeSession(known.threadId);
-      if (known.keepalive) runtime.setSessionKeepalive(threadId, true);
-    }
-    fillSessionMeta(threadId);
-    return { ok: true as const, data: view };
-  };
 
   /** 渠道真相域过滤（纯函数见模块级 channelScopedModels）：model/list 与 bootstrap 同口径。 */
   const channelModels = (models: readonly ModelInfoView[]): ModelInfoView[] =>
@@ -265,6 +238,12 @@ export function createApiRoutes(deps: ApiRouteDeps) {
   const routes: RouteTable = {
     ...localRoutes,
     ...settings.routes,
+    ...threadOpsRoutes({
+      command,
+      fail,
+      runtime,
+      rootDeps: { audit: deps.audit, agentDefinitions: deps.agentDefinitions, knownCwds, insideSessionsRoot },
+    }),
     'app/bootstrap': async () => {
       const [saved, models] = await Promise.all([savedAcrossCwds(), command({ type: 'get_models' })]);
       const outcome = {
@@ -299,59 +278,6 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       fillSessionMeta(threadId);
       return { ok: true as const, data: view };
     },
-    'session/resume': async (params) => {
-      // 路径白名单：只允许恢复本应用 agentDir/sessions 下的会话文件（防被攻陷渲染层任意读）
-      if (!insideSessionsRoot(params.sessionPath)) return fail('session_path_forbidden');
-      // hub 协议 resume 缺省 trusted=false：不传时按注册表记录补全（同文件重开保持既有信任态）
-      const known = findRegistryRowByPath(params.sessionPath);
-      const trusted = params.trusted ?? known?.trusted ?? false;
-      if (params.trusted !== undefined || known?.trusted === true) deps.audit(`session_trusted:resume:${params.sessionPath}:${trusted}`);
-      const result = await command({
-        type: 'thread/resume',
-        sessionPath: params.sessionPath,
-        trusted,
-        ...(params.permissionMode !== undefined ? { permissionMode: params.permissionMode } : {}),
-        ...(params.thinkingLevel !== undefined ? { thinkingLevel: params.thinkingLevel } : {}),
-      });
-      if (!result.ok) {
-        if (/already open/.test(result.reason)) {
-          // hub 表内已有该会话的表项（retire 后 parked / 他方 live）——resume-by-path
-          // 对占用路径按设计拒绝；唤醒语义 = 按 threadId 的驱动命令自动唤醒。
-          // 从 thread/list 按 path 收养既有表项，恢复链路继续。
-          const adopted = await adoptExistingThread(params.sessionPath);
-          if (adopted !== null) {
-            return finishResume(adopted.threadId, adopted.cwd, adopted.sessionPath, known);
-          }
-        }
-        // 会话文件被删或属旧 pai 布局（hub 词法拒绝）：与对账同语义删行，
-        // 占位不再反复失败（hub 错误族：not found / no such / outside sessions dir /
-        // malformed layout / cannot resume）
-        if (known !== null && /not found|no such|outside sessions dir|malformed layout|cannot resume/i.test(result.reason)) {
-          runtime.removeSession(known.threadId);
-        }
-        return fail(result.reason);
-      }
-      const data = result.data as { threadId?: string; cwd?: string; sessionPath?: string | null };
-      const threadId = data.threadId ?? '';
-      if (threadId.length === 0) return fail('malformed_response');
-      return finishResume(threadId, data.cwd ?? known?.cwd ?? '', data.sessionPath ?? params.sessionPath, known);
-    },
-    'session/register': async (params) => {
-      // 白名单/trusted 补全同 resume。纳管 ≠ 激活：视图保持 parked 占位零副作用；会话头
-      // id 与注册表行分歧（外部改写怪态）不落表不换行，交水化失败面显式暴露
-      if (!insideSessionsRoot(params.sessionPath)) return fail('session_path_forbidden');
-      const known = findRegistryRowByPath(params.sessionPath);
-      if (known === null) return fail('unknown_session');
-      if (known.trusted === true) deps.audit(`session_trusted:register:${params.sessionPath}:true`);
-      const result = await command({ type: 'thread/register', sessionPath: params.sessionPath, trusted: known.trusted ?? false });
-      // 文件已删（对账之后失效）：与 resume 同语义删行，占位不再反复失败
-      if (!result.ok && /not found|no such|not readable|outside sessions dir|malformed layout|cannot resume/i.test(result.reason)) runtime.removeSession(known.threadId);
-      if (!result.ok) return fail(result.reason);
-      const threadId = (result.data as { threadId?: string }).threadId ?? '';
-      if (threadId !== known.threadId) return fail('thread_id_mismatch');
-      const existing = runtime.sessions().find((row) => row.threadId === known.threadId);
-      return existing === undefined ? fail('unknown_session') : { ok: true as const, data: existing };
-    },
     'session/stop': async (params) => {
       const result = await command({ type: 'thread/stop', threadId: params.threadId });
       if (!result.ok) return fail(result.reason);
@@ -364,9 +290,25 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       return { ok: true as const, data: await savedAcrossCwds(params.cwd) };
     },
     'session/prompt': async (params) => {
+      // /compact 词形命中 → 直发 compact 命令（D7：与 hub prompt 拦截同执行路径/同
+      // 词表/同 data 三元组——app 不依赖 hub 拦截面行为对齐；响应即终态，长超时）
+      const invocation = compactInvocationOf(params.message);
+      if (invocation !== undefined) {
+        const result = await command(
+          { type: 'compact', threadId: params.threadId, customInstructions: invocation.customInstructions },
+          COMPACT_REQUEST_TIMEOUT_MS,
+        );
+        if (!result.ok) return fail(result.reason);
+        void runtime.autoTitleOnPrompt(params.threadId, params.message).catch(() => undefined);
+        const raw = (result.data ?? {}) as Record<string, unknown>;
+        const compactResult =
+          typeof raw['summary'] === 'string' && typeof raw['replacedCount'] === 'number' && typeof raw['summaryTokens'] === 'number'
+            ? { summary: raw['summary'], replacedCount: raw['replacedCount'], summaryTokens: raw['summaryTokens'] }
+            : null;
+        return { ok: true as const, data: compactResult };
+      }
       // 受理窗口竞态（hub 判定 pendingSends>0 ∨ streaming，app 的 streaming 状态来自
       // 事件流天然滞后）：恰一次自动降级重试（补 followUp），重试仍败才上抛
-      const compact = interceptsCompact(params.message);
       const send = (behavior?: 'steer' | 'followUp') =>
         command(
           {
@@ -376,11 +318,10 @@ export function createApiRoutes(deps: ApiRouteDeps) {
             streamingBehavior: behavior ?? params.streamingBehavior,
             images: params.images,
           },
-          compact ? COMPACT_REQUEST_TIMEOUT_MS : PROMPT_REQUEST_TIMEOUT_MS,
+          PROMPT_REQUEST_TIMEOUT_MS,
         );
       let result = await send();
-      // 受理窗口竞态降级只适用普通消息；/compact 拦截路径无 streamingBehavior 面
-      if (!result.ok && !compact && params.streamingBehavior === undefined && /streamingBehavior required/.test(result.reason)) {
+      if (!result.ok && params.streamingBehavior === undefined && /streamingBehavior required/.test(result.reason)) {
         result = await send('followUp');
       }
       if (!result.ok) return fail(result.reason);
@@ -421,7 +362,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       const result = await command({ type: 'get_state', threadId: params.threadId });
       if (!result.ok) return fail(result.reason);
       const view = threadStateView(result.data);
-      runtime.touchSession(params.threadId, { model: view.model === null ? null : `${view.model.provider}/${view.model.modelId}` });
+      runtime.touchSession(params.threadId, { model: view.model === null ? null : `${view.model.provider}/${view.model.model}` });
       return { ok: true as const, data: view };
     },
     'session/stats': async (params) => {
@@ -486,20 +427,6 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     'agent/definitions': () => {
       // 管理面走主进程文件面（不经 hub：需要 systemPrompt 原文与全部已知项目的定义）
       return Promise.resolve({ ok: true as const, data: deps.agentDefinitions.list(knownCwds()) });
-    },
-    'agent/upsert': (params) => {
-      const result = deps.agentDefinitions.upsert(params.definition, params.previous, knownCwds());
-      if (!result.ok) return Promise.resolve(fail(result.reason));
-      const scope = params.definition.scope === 'project' ? `project(${params.definition.project})` : 'user';
-      deps.audit(`agent_upsert: ${scope}/${params.definition.name}`);
-      return Promise.resolve({ ok: true as const, data: null });
-    },
-    'agent/remove': (params) => {
-      const result = deps.agentDefinitions.remove(params, knownCwds());
-      if (!result.ok) return Promise.resolve(fail(result.reason));
-      const scope = params.scope === 'project' ? `project(${params.project})` : 'user';
-      deps.audit(`agent_remove: ${scope}/${params.name}`);
-      return Promise.resolve({ ok: true as const, data: null });
     },
     'session/fork': async (params) => {
       const result = await command({ type: 'fork', threadId: params.threadId, seq: params.seq, position: params.position });
@@ -582,8 +509,12 @@ export function createApiRoutes(deps: ApiRouteDeps) {
 
   /** start/resume 后补齐模型与思考档信息（失败不打断主流程）。 */
   const fillSessionMeta = (threadId: string): void => {
-    void routes['session/state']({ threadId }).catch(() => undefined);
+    void routes['session/state']?.({ threadId }).catch(() => undefined);
   };
+
+  const resume = resumeRoutes({ command, fail, runtime, audit: deps.audit, insideSessionsRoot, findRegistryRowByPath, fileMtimeMs, fillSessionMeta });
+  // 挂载在表字面量之后：resume 组依赖 fillSessionMeta，而它引用本表（调用期解引用，安全）
+  Object.assign(routes, resume);
 
   function parseThinkingLevel(level: string): ThinkingLevel | null {
     return (THINKING_LEVEL_ORDER as readonly string[]).includes(level) ? (level as ThinkingLevel) : null;
@@ -603,7 +534,9 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       }
       let outcome: unknown;
       try {
-        outcome = await routes[method as ApiMethod](parsed as never);
+        const handler = routes[method as ApiMethod];
+        if (handler === undefined) return fail(`unknown_method:${method}`);
+        outcome = await handler(parsed as never);
       } catch {
         // 路由实现内未捕获的异常（磁盘错/装配面）统一收窄，不沿 IPC reject 到渲染层
         outcome = fail('internal_error');

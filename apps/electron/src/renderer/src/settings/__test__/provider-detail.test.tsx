@@ -12,7 +12,7 @@ const noop = (): void => undefined;
 const zhipu: ProviderConfigView = {
   name: 'zhipu',
   baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
-  api: 'openai-completions',
+  api: 'openai',
   models: [{ id: 'glm-4.6', reasoning: true, vision: false }],
  
   hasKey: true,

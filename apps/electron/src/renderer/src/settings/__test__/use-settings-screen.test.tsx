@@ -79,7 +79,7 @@ function SettingsPropsProbe(): React.JSX.Element {
 }
 
 function makeProvider(name: string): ProviderConfigView {
-  return { name, baseUrl: 'https://example.com', api: 'openai-completions', models: [], hasKey: false };
+  return { name, baseUrl: 'https://example.com', api: 'openai', models: [], hasKey: false };
 }
 
 function deadSession(threadId: string): SessionView {

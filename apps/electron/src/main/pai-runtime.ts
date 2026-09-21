@@ -194,19 +194,19 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
       });
   };
 
-  /** hub 会话布局词法（<sessionsRoot>/<safeId>/transcript.jsonl）——旧 pai 布局判定用。 */
+  /** hub 会话布局词法（<sessionsRoot>/<safeId>/events.jsonl；id 围栏 = x-harness 全词法）——旧布局判定用。 */
   const isHubSessionLayout = (sessionPath: string): boolean => {
     const prefix = `${sessionsRoot}/`;
     if (!sessionPath.startsWith(prefix)) return false;
     const rest = sessionPath.slice(prefix.length);
     const segments = rest.split('/');
-    return segments.length === 2 && /^[A-Za-z0-9-]+$/.test(segments[0] ?? '') && segments[1] === 'transcript.jsonl';
+    return segments.length === 2 && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(segments[0] ?? '') && segments[1] === 'events.jsonl';
   };
 
   const dispatchFrame = (frame: Parameters<HostProcessDeps['onFrame']>[0]): void => {
     switch (frame.type) {
       case 'event': {
-        if (frame.name === 'inbox/spliced') {
+        if (frame.name === 'agent/inbox/spliced') {
           // 队列结构信号：hub 只发 queue/op/ids（无文本），按迁移指引拉 get_state.queue
           // 合成 queueChanged（文本快照与读命令同源）。合并去抖（N 连 splice 一拉）+
           // 失败恰一次重试（瞬态 busy/超时不丢队列面——失败即悬挂到下一信号是缺陷）

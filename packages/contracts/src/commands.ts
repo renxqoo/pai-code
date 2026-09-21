@@ -3,7 +3,7 @@ import type { HubCommand } from './hub-commands';
 /**
  * Pai 实际发出的命令子集（编码层形状校验以此为准）。
  * 全量命令词表见 hub-protocol 的 HUB_COMMAND_TYPES；
- * 此处增删 = 功能面变化，同步 T38 方案的 API 面表。
+ * 此处增删 = 功能面变化，同步 T39 方案的 API 面表。
  *
  * 读命令语义：get_state/get_entries/get_inflight/get_subagents/get_pending_dialogs
  * 对 parked/dead thread 由 host 本地直读应答（不唤醒 worker，直读不可用自动回退
@@ -45,7 +45,11 @@ export type PaiCommandType =
   | 'subagent/steer'
   | 'bash'
   | 'abort_bash'
-  | 'fork';
+  | 'fork'
+  | 'compact'
+  | 'thread/delete'
+  | 'agents/create'
+  | 'agents/remove';
 
 export type PaiCommand = Extract<HubCommand, { type: PaiCommandType }>;
 
@@ -86,6 +90,10 @@ export const PAI_COMMAND_TYPES = [
   'bash',
   'abort_bash',
   'fork',
+  'compact',
+  'thread/delete',
+  'agents/create',
+  'agents/remove',
 ] as const satisfies readonly PaiCommandType[];
 
 // 编译期封闭断言：Pai 命令词表与类型联合双向绑定（漏登记即编译失败）。

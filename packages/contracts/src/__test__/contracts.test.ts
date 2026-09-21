@@ -35,17 +35,18 @@ describe('词表封闭（双向）', () => {
     expect(() => UiEventSchema.parse({ type: 'nope', threadId: 't1' })).toThrow();
   });
 
-  test('hub 帧词表 == 七类（host-hub v1：subagent_event/subagent_message 摘除）', () => {
+  test('hub 帧词表 == 七类（x-harness host-hub 协议帧全集）', () => {
     expect([...HUB_FRAME_TYPES].sort(byStr)).toEqual(
       ['event', 'heartbeat', 'hub_error', 'response', 'thread_died', 'thread_parked', 'ui_request'].sort(byStr),
     );
   });
 
-  test('hub 命令词表 == 55（host-hub v1：原命令面 + 设置面 14 + workspace/trust）', () => {
-    expect(HUB_COMMAND_TYPES.length).toBe(55);
+  test('hub 命令词表 == 56（x-harness host-hub COMMAND_NAMES 镜像；thread/delete 为新增删除面）', () => {
+    expect(HUB_COMMAND_TYPES.length).toBe(56);
+    expect(HUB_COMMAND_TYPES).toContain('thread/delete');
     expect([...HUB_COMMAND_TYPES].sort(byStr)).toEqual(
       [
-        'thread/start', 'thread/resume', 'thread/register', 'thread/stop', 'thread/retire', 'thread/set_keepalive', 'thread/list', 'thread/list_saved',
+        'thread/start', 'thread/resume', 'thread/register', 'thread/stop', 'thread/retire', 'thread/delete', 'thread/set_keepalive', 'thread/list', 'thread/list_saved',
         'get_host_info', 'set_idle_retire_ms', 'set_rss_retire_bytes',
         'prompt', 'steer', 'follow_up', 'abort', 'clear_queue', 'compact',
         'get_state', 'get_messages', 'get_entries', 'get_tree', 'get_session_stats', 'set_session_name', 'get_commands', 'get_fork_messages',
@@ -67,14 +68,18 @@ describe('词表封闭（双向）', () => {
     );
   });
 
-  test('hub 事件名词表封闭（app 消费面；host-hub 另发 hook/error、request/start、step/*、plugin/*——app 忽略）', () => {
-    expect(HUB_EVENT_NAMES.length).toBe(19);
+  test('hub 事件名词表封闭（app 消费子集；x-harness 另发 request/*、system/message、assistant/attempt、session/*、todo/snapshot、command/run|done、autocompact/*、compaction/served-window|diagnostic、agent/error、step/start|end——app 忽略）', () => {
+    expect(HUB_EVENT_NAMES.length).toBe(18);
     expect([...HUB_EVENT_NAMES].sort(byStr)).toEqual(
       [
-        'assistant/stream', 'tool/start', 'tool/result', 'tool/progress',
-        'turn/start', 'turn/end', 'settled', 'inbox/spliced', 'compaction', 'llm/retry',
-        'permission/decision',
-        'agents/spawned', 'agents/state', 'agents/terminal', 'agents/evicted', 'agents/user-injected', 'agents/permission-ask', 'agents/idle',
+        'turn/start', 'turn/end',
+        'user/message', 'assistant/message',
+        'tool/call', 'tool/result',
+        'llm/retry', 'llm/chunk',
+        'agent/inbox/spliced', 'agent/assistant-stream', 'agent/tool-stream',
+        'agent/status', 'agent/spawned', 'agent/finished',
+        'compaction/landed', 'permission/decided',
+        'settled',
         'bash_execution_update',
       ].sort(byStr),
     );
@@ -86,9 +91,11 @@ describe('词表封闭（双向）', () => {
     }
   });
 
-  test('Pai 不发送 compact 命令（压缩经 prompt 通路的 /compact 拦截表达；hub 协议命令词表仍全量镜像）', () => {
-    expect(PAI_COMMAND_TYPES).not.toContain('compact');
-    expect(HUB_COMMAND_TYPES).toContain('compact');
+  test('Pai 命令子集含 x-harness 新面：compact/thread/delete 与 agents CRUD 直接寻址（hub 协议一等命令）', () => {
+    for (const t of ['compact', 'thread/delete', 'agents/create', 'agents/remove']) {
+      expect(PAI_COMMAND_TYPES).toContain(t);
+      expect(HUB_COMMAND_TYPES).toContain(t);
+    }
   });
 
   test('命令词表类型级校验：PaiCommand 可赋给 HubCommand 的 type 集', () => {
@@ -116,7 +123,7 @@ describe('Settings zod：round-trip 与拒绝表', () => {
   test('全量字段 round-trip', () => {
     const input = {
       hubDev: { bunPath: '/usr/local/bin/bun', hubEntry: '/Users/x/my-agent/packages/host-hub/src/host/cli.ts' },
-      providers: [{ name: 'glm', baseUrl: 'https://api.example.com', api: 'openai-completions', models: [{ id: 'glm-5.3', reasoning: true, vision: true }]}],
+      providers: [{ name: 'glm', baseUrl: 'https://api.example.com', api: 'openai', models: [{ id: 'glm-5.3', reasoning: true, vision: true }]}],
       trustedDefault: true,
       defaultModel: 'glm/glm-5.3',
       onboarded: true,
@@ -131,8 +138,8 @@ describe('Settings zod：round-trip 与拒绝表', () => {
 
   test.each([
     ['未知键', { extra: 1 } as Record<string, unknown>],
-    ['provider 空 models', { providers: [{ name: 'p', baseUrl: 'u', api: 'openai-completions', models: [] }] }],
-    ['provider 缺 baseUrl', { providers: [{ name: 'p', api: 'openai-completions', models: ['m'] }] }],
+    ['provider 空 models', { providers: [{ name: 'p', baseUrl: 'u', api: 'openai', models: [] }] }],
+    ['provider 缺 baseUrl', { providers: [{ name: 'p', api: 'openai', models: ['m'] }] }],
   ])('拒绝：%s', (_name, bad) => {
     expect(() => SettingsSchema.parse(bad)).toThrow();
   });
@@ -252,11 +259,14 @@ describe('API schema：每方法合法/非法样本', () => {
     expect(() => ApiSchemas['file/search'].params.parse({ cwd: '/w' })).toThrow();
   });
 
-  test('isValidAgentName：kebab-case 词表（host-hub NAME_PATTERN 镜像；保留名拒绝）', () => {
+  test('isValidAgentName：x-harness 规则镜像（非空、不含 /、不含换行；无 kebab 正则与保留名——判重归 hub）', () => {
     expect(isValidAgentName('code-reviewer')).toBe(true);
     expect(isValidAgentName('explore2')).toBe(true);
     expect(isValidAgentName('a-b-c-d')).toBe(true);
-    for (const bad of ['', 'Code', 'code_reviewer', 'code reviewer', '代码审查员', '-code', 'code-', 'fork', 'main', 'a/b']) {
+    for (const ok of ['Code', 'code_reviewer', 'code reviewer', '代码审查员', 'fork', 'main']) {
+      expect(isValidAgentName(ok)).toBe(true);
+    }
+    for (const bad of ['', 'a/b', 'a\nb']) {
       expect(isValidAgentName(bad)).toBe(false);
     }
   });
@@ -265,7 +275,7 @@ describe('API schema：每方法合法/非法样本', () => {
     const params = ApiSchemas['provider/upsert'].params.parse({
       name: 'glm',
       baseUrl: 'https://x.example.com',
-      api: 'openai-completions',
+      api: 'openai',
       models: [
         { id: 'tuned', reasoning: true, vision: true, contextWindow: 200000, maxTokens: 8192 },
         { id: 'defaulted', reasoning: false, vision: false },
@@ -276,7 +286,7 @@ describe('API schema：每方法合法/非法样本', () => {
     const view = ProviderConfigViewSchema.parse({
       name: 'glm',
       baseUrl: 'https://x.example.com',
-      api: 'openai-completions',
+      api: 'openai',
       models: params.models,
       hasKey: false,
     });
@@ -312,8 +322,8 @@ describe('API schema：每方法合法/非法样本', () => {
     ['agent/remove 非法 scope', 'agent/remove', { name: 'a', scope: 'global', project: null }],
     ['session/prompt 空消息', 'session/prompt', { threadId: 't', message: '' }],
     ['session/prompt 非法 streamingBehavior', 'session/prompt', { threadId: 't', message: 'hi', streamingBehavior: 'queue' }],
-    ['provider/upsert 空 models', 'provider/upsert', { name: 'p', baseUrl: 'u', api: 'openai-completions', models: [] }],
-    ['provider/upsert 旧形态 string models', 'provider/upsert', { name: 'p', baseUrl: 'u', api: 'openai-completions', models: ['m'] }],
+    ['provider/upsert 空 models', 'provider/upsert', { name: 'p', baseUrl: 'u', api: 'openai', models: [] }],
+    ['provider/upsert 旧形态 string models', 'provider/upsert', { name: 'p', baseUrl: 'u', api: 'openai', models: ['m'] }],
     ['dialog/pickDirectory 未知键', 'dialog/pickDirectory', { defaultPath: '/w', extra: 1 }],
     ['dialog/pickDirectory 空 defaultPath', 'dialog/pickDirectory', { defaultPath: '' }],
     ['git/branches 缺 cwd', 'git/branches', {}],
@@ -434,12 +444,11 @@ function samplePerUiEvent(): UiEvent[] {
     { type: 'compacted', threadId: t, replacedCount: 12 },
     { type: 'retrying', threadId: t, attempt: 1, errorMessage: 'x' },
     { type: 'subagentStarted', threadId: t, agentId: 'ag1', agentName: 'general-purpose', task: 'explore' },
-    { type: 'subagentDelta', threadId: t, agentName: 'general-purpose', delta: 'found' },
-    { type: 'subagentTool', threadId: t, agentName: 'general-purpose', call: { id: 'tc2', name: 'read_file', argsPreview: 'a.ts' }, phase: 'start' },
-    { type: 'subagentTool', threadId: t, agentName: 'general-purpose', call: { id: 'tc2', name: 'read_file', argsPreview: 'a.ts' }, phase: 'end', output: 'x', isError: false },
-    { type: 'subagentSettled', threadId: t, agentName: 'general-purpose', status: 'completed' },
-    { type: 'subagentState', threadId: t, agentName: 'general-purpose', busy: true },
-    { type: 'subagentAsk', threadId: t, agentName: 'explore', toolName: 'bash', summary: 'npm test' },
+    { type: 'subagentDelta', threadId: t, agentId: 'ag1', delta: 'found' },
+    { type: 'subagentTool', threadId: t, agentId: 'ag1', call: { id: 'tc2', name: 'read_file', argsPreview: 'a.ts' }, phase: 'start' },
+    { type: 'subagentTool', threadId: t, agentId: 'ag1', call: { id: 'tc2', name: 'read_file', argsPreview: 'a.ts' }, phase: 'end', output: 'x', isError: false },
+    { type: 'subagentSettled', threadId: t, agentId: 'ag1', status: 'completed' },
+    { type: 'subagentState', threadId: t, agentId: 'ag1', busy: true },
     { type: 'dialogRequest', threadId: t, requestId: 'r1', method: 'confirm', tool: 'bash', summary: 'npm test', reason: 'direct execution requested by client', agentName: 'explore' },
     { type: 'dialogSettled', requestId: 'r1' },
     { type: 'bashOutput', threadId: t, id: 'b1', delta: 'out', truncated: false },

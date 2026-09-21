@@ -30,3 +30,21 @@ describe('forkFromEntry 失败通知', () => {
     expect(store.getState().notices.map((notice) => notice.text)).toEqual([copy.flow.forkFailed]);
   });
 });
+
+describe('提交失败通知（D15：images 硬拒的友好文案）', () => {
+  test('hub 能力门拒绝（model does not accept images）→ imagesDenied 文案', async () => {
+    jest.spyOn(controller, 'submitDraft').mockResolvedValue('invalid images: model does not accept images');
+    expect(await workspaceActions.submitDraft('看图', [])).toBe('invalid images: model does not accept images');
+    expect(store.getState().notices.map((notice) => notice.text)).toEqual([copy.flow.imagesDenied]);
+  });
+
+  test('hub 量限拒绝（too many images）→ imagesTooMany 文案；其他 reason 原样透传', async () => {
+    jest.spyOn(controller, 'submitDraft').mockResolvedValueOnce('too many images (max 8)');
+    expect(await workspaceActions.submitDraft('图', [])).toBe('too many images (max 8)');
+    expect(store.getState().notices.map((notice) => notice.text)).toEqual([copy.flow.imagesTooMany]);
+    jest.spyOn(controller, 'submitDraft').mockResolvedValueOnce('Unknown threadId');
+    expect(await workspaceActions.submitDraft('文', [])).toBe('Unknown threadId');
+    expect(store.getState().notices.at(-1)?.text).toBe(copy.flow.sendFailed('Unknown threadId'));
+  });
+});
+

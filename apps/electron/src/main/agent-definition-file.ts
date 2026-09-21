@@ -4,11 +4,11 @@ import type { AgentScope } from '@paiapp/contracts';
 
 /**
  * 子 agent 定义文件（markdown）编解码。
- * 写侧 = host-hub renderAgentTypeMd 同构（round-trip 由 hub 解析器保证）：
- * frontmatter 无 name 字段（name ≡ 文件名主干）、description 无引号单行、
- * model 单 token、tools 流数组 [a, b]；正文 = systemPrompt。
- * 读侧比写侧宽容（无/单/双引号标量、尾注释、块列表/逗号串——手写文件仍可枚举），
- * 但带引号 name/tools 块列表是 hub 解析器拒绝的形态——写侧恒不产出。
+ * 写侧 = x-harness renderAgentType 同构（round-trip 由 hub 装载器保证）：
+ * frontmatter name/description/model?/tools?（逗号分隔）+ 正文 = systemPrompt；
+ * name 非空无 `/` 无换行、description 单行且非字段形态行。
+ * 读侧比写侧宽容（无/单/双引号标量、尾注释、块列表/逗号串/flow 数组——手写文件
+ * 仍可枚举），name 缺省回落文件名主干；未知字段忽略。
  */
 export type AgentDefinitionFile = {
   name: string;
@@ -18,12 +18,12 @@ export type AgentDefinitionFile = {
   model: string | null;
 };
 
-/** 序列化为 md 文本（host-hub renderAgentTypeMd 同构：无引号标量 + tools 流数组）；
+/** 序列化为 md 文本（x-harness renderAgentType 同构：name 入档 + tools 逗号分隔）；
  *  tools/model 为 null 或空时整个字段不写（= hub 运行期继承语义）。 */
 export function serializeAgentDefinition(def: AgentDefinitionFile): string {
-  const lines: string[] = ['---', `description: ${def.description}`];
+  const lines: string[] = ['---', `name: ${def.name}`, `description: ${def.description}`];
   if (def.model !== null && def.model.length > 0) lines.push(`model: ${def.model}`);
-  if (def.tools !== null && def.tools.length > 0) lines.push(`tools: [${def.tools.join(', ')}]`);
+  if (def.tools !== null && def.tools.length > 0) lines.push(`tools: ${def.tools.join(',')}`);
   lines.push('---', '', def.systemPrompt, '');
   return `${lines.join('\n')}`;
 }
@@ -97,9 +97,9 @@ function splitFrontmatter(text: string): [string, string] | null {
 }
 
 /**
- * 宽容解析：hub 语义 name 可缺省（缺省 = 文件名主干——stem 由调用方传入）；
- * description 缺失 → null（与 hub「单文件跳过」同语义）；tools 三形态
- * （块列表 / 逗号串 / flow 数组）取首个非空；未知字段忽略。
+ * 宽容解析：name 可缺省（缺省 = 文件名主干——stem 由调用方传入；x-harness 写侧
+ * 恒入档，缺省是手写旧档形态）；description 缺失 → null（与 hub「单文件跳过」
+ * 同语义）；tools 三形态（块列表 / 逗号串 / flow 数组）取首个非空；未知字段忽略。
  */
 export function parseAgentDefinition(text: string, stemFallback?: string): AgentDefinitionFile | null {
   const parts = splitFrontmatter(text);
@@ -172,10 +172,10 @@ export function fileNameStemOf(fileName: string): string | null {
 }
 
 /** 定义键位（作用域 + 项目 + name）→ 定义文件绝对路径；调用方保证 stem 已过校验。
- *  布局契约（host-hub agents 域）：user = ~/.my-agent/agents（core userDataRoot 缺省）；
- *  project = <项目>/.my-agent/agents（仅受信会话加载）。 */
+ *  布局契约（x-harness agents 域）：user = ~/.x-harness/agents；project =
+ *  <项目>/.x-harness/agents（仅受信会话加载；hub 热发现，app 直写同规）。 */
 export function agentDefinitionPath(homeDir: string, scope: AgentScope, project: string | null, stem: string): string {
   const fileName = `${stem}.md`;
-  if (scope === 'user') return joinPaths(homeDir, '.my-agent', 'agents', fileName);
-  return joinPaths(project ?? '.', '.my-agent', 'agents', fileName);
+  if (scope === 'user') return joinPaths(homeDir, '.x-harness', 'agents', fileName);
+  return joinPaths(project ?? '.', '.x-harness', 'agents', fileName);
 }

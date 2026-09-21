@@ -1,45 +1,40 @@
 import { describe, expect, test } from 'bun:test';
 
 import { mapEntries } from '../entries-mapper';
-import { diffFromPatch, isFileMutatingTool } from '../diff-extract';
+import { isFileMutatingTool } from '../diff-extract';
 
-/** WAL 事件行 {seq, ts, event}（get_entries 响应 entries 元素的形状）。 */
+/** WAL 投影行 {seq, ts, event}（get_entries 响应 entries 元素的形状——event 摊平 {type, …data}）。 */
 function row(seq: number, ts: number, event: Record<string, unknown>): Record<string, unknown> {
   return { seq, ts, event };
 }
 
-describe('mapEntries（WAL 转写真相源）', () => {
-  test('user 消息：text 块扁平化、image 块 mediaType 提取、origin 收窄', () => {
+describe('mapEntries（x-harness WAL 转写真相源）', () => {
+  test('user/message：text 块扁平化、image 块 mediaType 提取', () => {
     const { items, cursor } = mapEntries({
       entries: [
         row(1, 100, {
-          type: 'message',
-          role: 'user',
+          type: 'user/message',
+          turn: 0,
+          step: 0,
           content: [{ type: 'text', text: '看图' }, { type: 'image', data: 'aGk=', mediaType: 'image/png' }],
-          origin: 'user',
         }),
-        row(2, 200, { type: 'message', role: 'user', content: [{ type: 'text', text: '[task]普通消息' }], origin: 'steering' }),
-        row(3, 300, { type: 'message', role: 'user', content: [{ type: 'text', text: '子代理完成' }], origin: 'notification' }),
-        row(4, 400, { type: 'message', role: 'user', content: [{ type: 'text', text: '系统注入' }], origin: 'system' }),
-        row(5, 500, { type: 'message', role: 'user', content: [{ type: 'text', text: '缺 origin' }] }),
+        row(2, 200, { type: 'user/message', turn: 1, step: 0, content: [{ type: 'text', text: '普通消息' }] }),
       ],
     });
     expect(items).toEqual([
       { kind: 'user', id: 'seq-1', text: '看图', origin: 'user', images: [{ type: 'image', data: 'aGk=', mediaType: 'image/png' }], at: 100 },
-      { kind: 'user', id: 'seq-2', text: '[task]普通消息', origin: 'user', images: [], at: 200 },
-      { kind: 'user', id: 'seq-3', text: '子代理完成', origin: 'system', images: [], at: 300 },
-      { kind: 'user', id: 'seq-4', text: '系统注入', origin: 'system', images: [], at: 400 },
-      { kind: 'user', id: 'seq-5', text: '缺 origin', origin: 'user', images: [], at: 500 },
+      { kind: 'user', id: 'seq-2', text: '普通消息', origin: 'user', images: [], at: 200 },
     ]);
-    expect(cursor).toBe(5);
+    expect(cursor).toBe(2);
   });
 
   test('垃圾图片块丢弃（data/mediaType 空缺），文本不受影响', () => {
     const { items } = mapEntries({
       entries: [
         row(1, 1, {
-          type: 'message',
-          role: 'user',
+          type: 'user/message',
+          turn: 0,
+          step: 0,
           content: [
             { type: 'text', text: '图片有什么' },
             { type: 'image', data: 'aGk=', mediaType: 'image/png' },
@@ -55,18 +50,19 @@ describe('mapEntries（WAL 转写真相源）', () => {
     ]);
   });
 
-  test('assistant 消息：text/thinking/tool_use 块分离 + usage 视图 {input,output}', () => {
+  test('assistant/message：text/thinking/tool_use 块分离 + usage 视图 {input,output}（input 为 JSON 串）', () => {
     const { items } = mapEntries({
       entries: [
         row(1, 100, {
-          type: 'message',
-          role: 'assistant',
+          type: 'assistant/message',
+          turn: 0,
+          step: 0,
           content: [
             { type: 'thinking', text: '先跑' },
             { type: 'text', text: '跑起来了' },
-            { type: 'tool_use', id: 'tc1', name: 'bash', input: { command: 'bun test' } },
+            { type: 'tool_use', callId: 'tc1', name: 'bash', input: '{"command":"bun test"}' },
           ],
-          usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+          usage: { input: 10, output: 5, totalTokens: 15 },
         }),
       ],
     });
@@ -86,14 +82,25 @@ describe('mapEntries（WAL 转写真相源）', () => {
     ]);
   });
 
-  test('assistant 异常终态收窄：error 带 meta.error、aborted/length 透传不带文案、正常 stop/tool_use 归 null', () => {
+  test('assistant/message thinking 独立字段优先于 content 块', () => {
     const { items } = mapEntries({
       entries: [
-        row(1, 1, { type: 'message', role: 'assistant', content: [], stopReason: 'error', meta: { error: '401 {"type":"error"}' } }),
-        row(2, 2, { type: 'message', role: 'assistant', content: [], stopReason: 'aborted', meta: { error: 'interrupted' } }),
-        row(3, 3, { type: 'message', role: 'assistant', content: [{ type: 'text', text: '正常' }], stopReason: 'tool_use' }),
-        row(4, 4, { type: 'message', role: 'assistant', content: [{ type: 'text', text: '截断' }], stopReason: 'length' }),
-        row(5, 5, { type: 'message', role: 'assistant', content: [], stopReason: 'error' }),
+        row(1, 1, { type: 'assistant/message', turn: 0, step: 0, content: [{ type: 'text', text: '答' }], thinking: '独立思考' }),
+      ],
+    });
+    const assistant = items[0];
+    if (assistant?.kind !== 'assistant') throw new Error('expected assistant');
+    expect(assistant.thinking).toBe('独立思考');
+  });
+
+  test('assistant 异常终态收窄：error 带文案、aborted/max-tokens 透传不带文案、正常 stop/tool_use 归 null', () => {
+    const { items } = mapEntries({
+      entries: [
+        row(1, 1, { type: 'assistant/message', turn: 0, step: 0, content: [], stopReason: 'error', meta: { error: '401 {"type":"error"}' } }),
+        row(2, 2, { type: 'assistant/message', turn: 1, step: 0, content: [], stopReason: 'aborted', meta: { error: 'interrupted' } }),
+        row(3, 3, { type: 'assistant/message', turn: 2, step: 0, content: [{ type: 'text', text: '正常' }], stopReason: 'tool_use' }),
+        row(4, 4, { type: 'assistant/message', turn: 3, step: 0, content: [{ type: 'text', text: '截断' }], stopReason: 'max-tokens' }),
+        row(5, 5, { type: 'assistant/message', turn: 4, step: 0, content: [], stopReason: 'error' }),
       ],
     });
     const assistants = items.map((item) => (item.kind === 'assistant' ? { stopReason: item.stopReason, errorMessage: item.errorMessage } : null));
@@ -101,25 +108,26 @@ describe('mapEntries（WAL 转写真相源）', () => {
       { stopReason: 'error', errorMessage: '401 {"type":"error"}' },
       { stopReason: 'aborted', errorMessage: null },
       { stopReason: null, errorMessage: null },
-      { stopReason: 'length', errorMessage: null },
+      { stopReason: 'max-tokens', errorMessage: null },
       { stopReason: 'error', errorMessage: null },
     ]);
   });
 
-  test('tool_result 事件按 toolUseId 并入前一条 assistant 的 toolCalls（原位更新）', () => {
+  test('tool/result 事件按 callId 并入前一条 assistant 的 toolCalls（原位更新，content 为纯文本）', () => {
     const { items } = mapEntries({
       entries: [
-        row(1, 1, { type: 'message', role: 'user', content: [{ type: 'text', text: '跑测试' }] }),
+        row(1, 1, { type: 'user/message', turn: 0, step: 0, content: [{ type: 'text', text: '跑测试' }] }),
         row(2, 2, {
-          type: 'message',
-          role: 'assistant',
+          type: 'assistant/message',
+          turn: 0,
+          step: 0,
           content: [
-            { type: 'tool_use', id: 'tc1', name: 'bash', input: { command: 'bun test' } },
-            { type: 'tool_use', id: 'tc2', name: 'read', input: { path: 'a.ts' } },
+            { type: 'tool_use', callId: 'tc1', name: 'bash', input: '{"command":"bun test"}' },
+            { type: 'tool_use', callId: 'tc2', name: 'read', input: '{"path":"a.ts"}' },
           ],
         }),
-        row(3, 3, { type: 'tool_result', toolUseId: 'tc1', toolName: 'bash', content: [{ type: 'text', text: '3 pass' }], isError: false }),
-        row(4, 4, { type: 'tool_result', toolUseId: 'tc2', toolName: 'read', content: [{ type: 'text', text: 'oops' }], isError: true }),
+        row(3, 3, { type: 'tool/result', turn: 0, step: 0, callId: 'tc1', content: '3 pass', isError: undefined }),
+        row(4, 4, { type: 'tool/result', turn: 0, step: 0, callId: 'tc2', content: 'oops', isError: true }),
       ],
     });
     const assistant = items[1];
@@ -130,56 +138,55 @@ describe('mapEntries（WAL 转写真相源）', () => {
     ]);
   });
 
-  test('write/edit 的参数 diff 与 agent 的 subagents 在 tool_result 并入后保留', () => {
+  test('tool/call 先于 assistant/message 到达：参数暂存后在 message 落位（write diff 与 agent_spawn subagents 保留）', () => {
     const { items } = mapEntries({
       entries: [
-        row(1, 1, {
-          type: 'message',
-          role: 'assistant',
+        row(1, 1, { type: 'tool/call', turn: 0, step: 0, callId: 't2', name: 'write', arguments: '{"path":"new.ts","content":"a\\nb"}' }),
+        row(2, 2, { type: 'tool/call', turn: 0, step: 0, callId: 't3', name: 'agent_spawn', arguments: '{"description":"扫描","prompt":"扫描 A","subagent_type":"explore"}' }),
+        row(3, 3, {
+          type: 'assistant/message',
+          turn: 0,
+          step: 0,
           content: [
-            { type: 'tool_use', id: 't1', name: 'edit_file', input: { path: 'src/a.ts', edits: [{ oldText: 'x\ny', newText: 'z' }] } },
-            { type: 'tool_use', id: 't2', name: 'write_file', input: { path: 'new.ts', content: 'a\nb' } },
-            { type: 'tool_use', id: 't3', name: 'agent', input: { prompt: '扫描 A', subagent_type: 'explore' } },
+            { type: 'tool_use', callId: 't1', name: 'bash', input: '{"command":"ls"}' },
+            { type: 'tool_use', callId: 't2', name: 'write', input: '' },
+            { type: 'tool_use', callId: 't3', name: 'agent_spawn', input: '' },
           ],
         }),
-        row(2, 2, { type: 'tool_result', toolUseId: 't1', toolName: 'edit_file', content: [{ type: 'text', text: 'done' }], isError: false }),
-        row(3, 3, { type: 'tool_result', toolUseId: 't2', toolName: 'write_file', content: [], isError: false }),
-        row(4, 4, { type: 'tool_result', toolUseId: 't3', toolName: 'agent', content: [{ type: 'text', text: 'ok' }], isError: false }),
+        row(4, 4, { type: 'tool/result', turn: 0, step: 0, callId: 't2', content: 'done' }),
+        row(5, 5, { type: 'tool/result', turn: 0, step: 0, callId: 't3', content: 'ok' }),
       ],
     });
     const assistant = items[0];
     if (assistant?.kind !== 'assistant') throw new Error('expected assistant');
     expect(assistant.toolCalls).toEqual([
-      // edit/write 的 diff 来自参数（执行前已知），tool_result 无 diff 不得清掉
-      { id: 't1', name: 'edit_file', argsPreview: 'src/a.ts', output: 'done', isError: false, diff: [{ path: 'src/a.ts', additions: 1, deletions: 2 }] },
-      { id: 't2', name: 'write_file', argsPreview: 'new.ts', output: '', isError: false, diff: [{ path: 'new.ts', additions: 2, deletions: 0 }] },
-      { id: 't3', name: 'agent', argsPreview: 'explore', output: 'ok', isError: false, diff: null, subagents: [{ agent: 'explore', task: '扫描 A' }] },
+      { id: 't1', name: 'bash', argsPreview: 'ls', output: '', isError: false, diff: null },
+      { id: 't2', name: 'write', argsPreview: 'new.ts', output: 'done', isError: false, diff: [{ path: 'new.ts', additions: 2, deletions: 0 }] },
+      { id: 't3', name: 'agent_spawn', argsPreview: 'explore', output: 'ok', isError: false, diff: null, subagents: [{ agent: 'explore', task: '扫描 A' }] },
     ]);
   });
 
-  test('tool_use 块缺 name 时以 tool_result 的 toolName 回填（diff 按块名判定，回填不追溯重建）', () => {
+  test('tool/call 后于 assistant/message 到达：原位补齐 name/args（write diff 按 tool/call 参数判定）', () => {
     const { items } = mapEntries({
       entries: [
-        row(1, 1, {
-          type: 'message',
-          role: 'assistant',
-          content: [{ type: 'tool_use', id: 't1', name: '', input: { path: 'src/a.ts', edits: [{ oldText: 'x', newText: 'z' }] } }],
-        }),
-        row(2, 2, { type: 'tool_result', toolUseId: 't1', toolName: 'edit_file', content: [{ type: 'text', text: 'done' }], isError: false }),
+        row(1, 1, { type: 'assistant/message', turn: 0, step: 0, content: [{ type: 'tool_use', callId: 't1', name: 'write', input: '' }] }),
+        row(2, 2, { type: 'tool/call', turn: 0, step: 0, callId: 't1', name: 'write', arguments: '{"path":"src/a.ts","content":"x\\ny\\nz"}' }),
       ],
     });
     const assistant = items[0];
     if (assistant?.kind !== 'assistant') throw new Error('expected assistant');
-    expect(assistant.toolCalls).toEqual([{ id: 't1', name: 'edit_file', argsPreview: 'src/a.ts', output: 'done', isError: false, diff: null }]);
+    expect(assistant.toolCalls).toEqual([
+      { id: 't1', name: 'write', argsPreview: 'src/a.ts', output: '', isError: false, diff: [{ path: 'src/a.ts', additions: 3, deletions: 0 }] },
+    ]);
   });
 
-  test('孤儿 tool_result（找不到所属 assistant）丢弃不抛；user 消息后旧 tool_use 不可再并入', () => {
+  test('孤儿 tool/result（找不到所属 assistant）丢弃不抛；user/message 后旧 tool_use 不可再并入', () => {
     const { items } = mapEntries({
       entries: [
-        row(1, 1, { type: 'tool_result', toolUseId: 'ghost', toolName: 'bash', content: [], isError: true }),
-        row(2, 2, { type: 'message', role: 'assistant', content: [{ type: 'tool_use', id: 'tc1', name: 'bash', input: { command: 'ls' } }] }),
-        row(3, 3, { type: 'message', role: 'user', content: [{ type: 'text', text: '插话' }] }),
-        row(4, 4, { type: 'tool_result', toolUseId: 'tc1', toolName: 'bash', content: [{ type: 'text', text: 'late' }], isError: false }),
+        row(1, 1, { type: 'tool/result', turn: 0, step: 0, callId: 'ghost', content: '', isError: true }),
+        row(2, 2, { type: 'assistant/message', turn: 0, step: 0, content: [{ type: 'tool_use', callId: 'tc1', name: 'bash', input: '{"command":"ls"}' }] }),
+        row(3, 3, { type: 'user/message', turn: 1, step: 0, content: [{ type: 'text', text: '插话' }] }),
+        row(4, 4, { type: 'tool/result', turn: 0, step: 0, callId: 'tc1', content: 'late' }),
       ],
     });
     expect(items).toHaveLength(2);
@@ -191,9 +198,9 @@ describe('mapEntries（WAL 转写真相源）', () => {
   test('bash 信封还原：首行 `[bash] $ <cmd>`、其余为输出', () => {
     const { items } = mapEntries({
       entries: [
-        row(1, 1, { type: 'message', role: 'user', content: [{ type: 'text', text: '[bash] $ git status\nclean\nnothing to commit' }], origin: 'user' }),
-        row(2, 2, { type: 'message', role: 'user', content: [{ type: 'text', text: '[bash] $ echo hi' }] }),
-        row(3, 3, { type: 'message', role: 'user', content: [{ type: 'text', text: '[bash] $' }] }),
+        row(1, 1, { type: 'user/message', turn: 0, step: 0, content: [{ type: 'text', text: '[bash] $ git status\nclean\nnothing to commit' }] }),
+        row(2, 2, { type: 'user/message', turn: 0, step: 0, content: [{ type: 'text', text: '[bash] $ echo hi' }] }),
+        row(3, 3, { type: 'user/message', turn: 0, step: 0, content: [{ type: 'text', text: '[bash] $' }] }),
       ],
     });
     expect(items).toEqual([
@@ -204,36 +211,39 @@ describe('mapEntries（WAL 转写真相源）', () => {
     ]);
   });
 
-  test('元数据事件不产条目但 cursor 推进（按行消费不按渲染条目消费）', () => {
+  test('元数据/账本事件不产条目但 cursor 推进（按行消费不按渲染条目消费）', () => {
     const { items, cursor } = mapEntries({
       entries: [
-        row(1, 1, { type: 'session_init', sessionId: 's1', depth: 0, createdAt: 1, cwd: '/p' }),
-        row(2, 2, { type: 'message', role: 'user', content: [{ type: 'text', text: 'hi' }] }),
-        row(3, 3, { type: 'session_meta', key: 'title', value: 'n' }),
-        row(4, 4, { type: 'compaction', replacedCount: 5 }),
-        row(5, 5, { type: 'inbox_spliced', spliced: 1 }),
-        row(6, 6, { type: 'llm_retry', attempt: 1 }),
-        row(7, 7, { type: 'permission_decision', decision: 'allow' }),
-        row(8, 8, { type: 'turn_start', turnId: 1 }),
-        row(9, 9, { type: 'tool_result_redacted', toolUseId: 'x' }),
-        row(10, 10, { type: 'custom', id: 'e1' }),
-        row(11, 11, { type: 'message', role: 'mystery', content: [] }),
+        row(1, 1, { type: 'turn/start', turn: 0 }),
+        row(2, 2, { type: 'user/message', turn: 0, step: 0, content: [{ type: 'text', text: 'hi' }] }),
+        row(3, 3, { type: 'session/meta', key: 'title', value: 'n' }),
+        row(4, 4, { type: 'compaction/landed', trigger: 'manual', replacedNodes: 5, summaryTokens: 100 }),
+        row(5, 5, { type: 'agent/inbox/spliced', op: 'insert', target: 'next-turn', entries: [] }),
+        row(6, 6, { type: 'llm/retry', turn: 0, step: 0, retry: 1, delayMs: 500, failure: { message: 'x' } }),
+        row(7, 7, { type: 'permission/decided', tool: 'bash', verdict: 'allow', resolvedBy: 'rule', reason: 'r' }),
+        row(8, 8, { type: 'step/start', turn: 0, step: 1 }),
+        row(9, 9, { type: 'todo/snapshot', seq: 9, tasks: [], edges: [] }),
+        row(10, 10, { type: 'command/run', commandId: 'cmd-1', name: 'compact' }),
+        row(11, 11, { type: 'system/message', turn: 0, step: 0, text: 'sys' }),
+        row(12, 12, { type: 'assistant/attempt', turn: 0, step: 0, error: { message: 'm' } }),
+        row(13, 13, { type: 'request/header', model: 'm', tools: [] }),
+        row(14, 14, { type: 'unknown-future-event', whatever: 1 }),
       ],
     });
     expect(items).toEqual([{ kind: 'user', id: 'seq-2', text: 'hi', origin: 'user', images: [], at: 2 }]);
-    expect(cursor).toBe(11);
+    expect(cursor).toBe(14);
   });
 
   test('cursor = 最后有效 seq 行（数字）；无 seq 的行整行跳过不推进', () => {
     const { items, cursor } = mapEntries({
-      entries: [row(3, 3, { type: 'session_meta', key: 'k' }), null, 42, { ts: 9, event: { type: 'message' } }, row(7, 7, { type: 'session_meta', key: 'k' })],
+      entries: [row(3, 3, { type: 'session/meta', key: 'k' }), null, 42, { ts: 9, event: { type: 'user/message' } }, row(7, 7, { type: 'session/meta', key: 'k' })],
     });
     expect(items).toEqual([]);
     expect(cursor).toBe(7);
   });
 
   test('行 ts 缺省回落 0（messageTs/at 不因此丢行）', () => {
-    const { items } = mapEntries({ entries: [{ seq: 1, event: { type: 'message', role: 'user', content: 'hi' } }] });
+    const { items } = mapEntries({ entries: [{ seq: 1, event: { type: 'user/message', turn: 0, step: 0, content: 'hi' } }] });
     expect(items).toEqual([{ kind: 'user', id: 'seq-1', text: 'hi', origin: 'user', images: [], at: 0 }]);
   });
 
@@ -242,39 +252,16 @@ describe('mapEntries（WAL 转写真相源）', () => {
     expect(mapEntries(null)).toEqual({ items: [], cursor: null });
     expect(mapEntries({})).toEqual({ items: [], cursor: null });
     expect(mapEntries({ entries: 'nope' })).toEqual({ items: [], cursor: null });
-    expect(mapEntries([row(1, 1, { type: 'message', role: 'user', content: 'hi' })])).toEqual({ items: [], cursor: null });
+    expect(mapEntries([row(1, 1, { type: 'user/message', turn: 0, step: 0, content: 'hi' })])).toEqual({ items: [], cursor: null });
     expect(mapEntries({ entries: [] })).toEqual({ items: [], cursor: null });
   });
 });
 
-describe('diffFromPatch', () => {
-  test('统一 diff：+++ 头取路径、+/- 计数、a|b 前缀剥除', () => {
-    const patch = '--- a/p/q.ts\n+++ b/p/q.ts\n@@ -1,3 +1,4 @@\n ctx\n-rem\n+add\n+add2\n ctx2';
-    expect(diffFromPatch(patch)).toEqual({ path: 'p/q.ts', additions: 2, deletions: 1 });
-  });
-
-  test('文件头带时间戳列（tab 分隔）：取 tab 前路径；--- 兜底头也可定路径', () => {
-    const patch = '--- p/q.ts\t2026-01-01\n+++ p/q.ts\t2026-01-02\n@@ -1 +1 @@\n-a\n+b';
-    expect(diffFromPatch(patch)).toEqual({ path: 'p/q.ts', additions: 1, deletions: 1 });
-    const fallback = '--- only/old.ts\n+++ /dev/null\n@@ -1 +0 @@\n-gone';
-    expect(diffFromPatch(fallback)).toEqual({ path: 'only/old.ts', additions: 0, deletions: 1 });
-  });
-
+describe('isFileMutatingTool · 内核文件工具词表（x-harness：仅 write）', () => {
   test.each([
-    ['非字符串', 42],
-    ['空串', ''],
-    ['无文件头', '@@ -1 +1 @@\n+x'],
-  ])('垃圾：%s → null', (_name, patch) => {
-    expect(diffFromPatch(patch)).toBeNull();
-  });
-});
-
-describe('isFileMutatingTool · 内核文件工具词表', () => {
-  test.each([
-    ['edit_file', true],
-    ['write_file', true],
+    ['write', true],
     ['bash', false],
-    ['agent', false],
+    ['agent_spawn', false],
     ['', false],
   ])('%s → %s', (name, expected) => {
     expect(isFileMutatingTool(name)).toBe(expected);

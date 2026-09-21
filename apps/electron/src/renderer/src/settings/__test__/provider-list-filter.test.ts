@@ -7,7 +7,7 @@ import { filterProviders, providerListEmptyMessage } from '../provider-list-filt
 const zhipu: ProviderConfigView = {
   name: 'zhipu',
   baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
-  api: 'openai-completions',
+  api: 'openai',
   models: [{ id: 'glm-4.6', reasoning: true, vision: false }],
  
   hasKey: true,
@@ -16,7 +16,7 @@ const zhipu: ProviderConfigView = {
 const anthropic: ProviderConfigView = {
   name: 'claude',
   baseUrl: 'https://api.anthropic.com',
-  api: 'anthropic-messages',
+  api: 'anthropic',
   models: [{ id: 'claude-sonnet-4', reasoning: false, vision: true }],
  
   hasKey: false,

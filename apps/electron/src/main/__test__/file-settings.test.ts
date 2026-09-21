@@ -79,8 +79,8 @@ test('upsertProvider 按 name 键替换并落盘（模型条目带能力声明�
   const dir = tempDir();
   const file = join(dir, 'settings.json');
   const settings = createFileSettings(file, memoryKeyStore);
-  settings.upsertProvider({ name: 'glm', baseUrl: 'https://a', api: 'openai-completions', models: [{ id: 'm', reasoning: false, vision: false }] });
-  settings.upsertProvider({ name: 'glm', baseUrl: 'https://b', api: 'openai-completions', models: [{ id: 'm2', reasoning: true, vision: true }] });
+  settings.upsertProvider({ name: 'glm', baseUrl: 'https://a', api: 'openai', models: [{ id: 'm', reasoning: false, vision: false }] });
+  settings.upsertProvider({ name: 'glm', baseUrl: 'https://b', api: 'openai', models: [{ id: 'm2', reasoning: true, vision: true }] });
   const onDisk = JSON.parse(readFileSync(file, 'utf8')) as { providers: Array<{ baseUrl: string; models: { id: string; reasoning: boolean }[] }> };
   expect(onDisk.providers.length).toBe(1);
   expect(onDisk.providers[0]?.baseUrl).toBe('https://b');
@@ -94,7 +94,7 @@ test('症状回归：磁盘旧形态（models 为 string[]）读时升级为模�
     file,
     JSON.stringify({
       hubDev: { bunPath: null, hubEntry: null },
-      providers: [{ name: 'glm', baseUrl: 'https://a', api: 'openai-completions', models: ['glm-5.3-flash'] }],
+      providers: [{ name: 'glm', baseUrl: 'https://a', api: 'openai', models: ['glm-5.3-flash'] }],
       trustedDefault: false,
       defaultModel: null,
       onboarded: true,

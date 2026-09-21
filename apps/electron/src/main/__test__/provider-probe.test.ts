@@ -19,7 +19,7 @@ function makeHarness() {
       "glm",
       {
         baseUrl: "https://api.example.com/v1/",
-        api: "openai-completions",
+        api: "openai",
         models: [{ id: "glm-4.7" }],
       },
     ],
@@ -27,23 +27,23 @@ function makeHarness() {
       "multi",
       {
         baseUrl: "https://api.example.com/v1",
-        api: "openai-completions",
+        api: "openai",
         models: [{ id: "first-m" }, { id: "second-m" }],
       },
     ],
     [
       "nokey",
-      { baseUrl: "https://api.example.com/v1", api: "openai-completions", models: [{ id: "m" }] },
+      { baseUrl: "https://api.example.com/v1", api: "openai", models: [{ id: "m" }] },
     ],
     [
       "weird",
       {
         baseUrl: "https://api.example.com/v1/?x=1#frag",
-        api: "openai-completions",
+        api: "openai",
         models: [{ id: "m" }],
       },
     ],
-    ["nomodels", { baseUrl: "https://api.example.com/v1", api: "openai-completions", models: [] }],
+    ["nomodels", { baseUrl: "https://api.example.com/v1", api: "openai", models: [] }],
     [
       "private",
       { baseUrl: "https://api.example.com/v1", api: "pi-messages", models: [{ id: "m" }] },
@@ -79,7 +79,7 @@ function makeHarness() {
     addProvider: (name: string) => {
       providers.set(name, {
         baseUrl: `https://${name}.example.com`,
-        api: "openai-completions",
+        api: "openai",
         models: [{ id: "m" }],
       });
       keys.set(name, "sk");
@@ -104,6 +104,7 @@ test("非词表 API 格式 → unsupported_api（不发请求，不假装连通�
   });
   expect(h.calls).toEqual([]);
   expect(supportsProbe("pi-messages")).toBe(false);
+  // 历史词形（读盘归一前的存量值与退役格式）全部不可探
   for (const api of [
     "openai-completions",
     "openai-responses",
@@ -111,34 +112,23 @@ test("非词表 API 格式 → unsupported_api（不发请求，不假装连通�
     "google-generative-ai",
     "mistral-conversations",
   ]) {
+    expect(supportsProbe(api)).toBe(false);
+  }
+  for (const api of ["openai", "anthropic"]) {
     expect(supportsProbe(api)).toBe(true);
   }
 });
 
 test.each([
   [
-    "openai-completions",
+    "openai",
     "https://api.example.com/v1",
     "https://api.example.com/v1/chat/completions",
     { authorization: "Bearer sk-test", "content-type": "application/json" },
     { model: "glm-4.7", max_tokens: 1, messages: [{ role: "user", content: "ping" }] },
   ],
   [
-    "mistral-conversations",
-    "https://api.example.com/v1/",
-    "https://api.example.com/v1/chat/completions",
-    { authorization: "Bearer sk-test", "content-type": "application/json" },
-    { model: "glm-4.7", max_tokens: 1, messages: [{ role: "user", content: "ping" }] },
-  ],
-  [
-    "openai-responses",
-    "https://api.example.com/v1",
-    "https://api.example.com/v1/responses",
-    { authorization: "Bearer sk-test", "content-type": "application/json" },
-    { model: "glm-4.7", input: "ping", max_output_tokens: 16 },
-  ],
-  [
-    "anthropic-messages",
+    "anthropic",
     "https://api.example.com",
     "https://api.example.com/messages",
     {
@@ -148,14 +138,7 @@ test.each([
     },
     { model: "glm-4.7", max_tokens: 1, messages: [{ role: "user", content: "ping" }] },
   ],
-  [
-    "google-generative-ai",
-    "https://api.example.com/v1beta",
-    "https://api.example.com/v1beta/models/glm-4.7:generateContent?key=sk-test",
-    { "content-type": "application/json" },
-    { contents: [{ parts: [{ text: "ping" }] }] },
-  ],
-])("buildProbeRequest %s：路径/鉴权/请求体按格式取值", (api: string, baseUrl: string, url: string, headers: Record<string, string>, body: unknown) => {
+])("buildProbeRequest %s：路径/鉴权/请求体按协议取值", (api: string, baseUrl: string, url: string, headers: Record<string, string>, body: unknown) => {
   const request = buildProbeRequest({ baseUrl, api, modelId: "glm-4.7", apiKey: "sk-test" });
   expect(request).not.toBeNull();
   expect(request?.url.href).toBe(url);
@@ -163,32 +146,17 @@ test.each([
   expect(JSON.parse(request?.body ?? "")).toEqual(body);
 });
 
-test("buildProbeRequest：非词表格式返回 null；模型 id 特殊字符进 google 路径前 encode；带 models/ 前缀的官方 id 去前缀", () => {
-  expect(
-    buildProbeRequest({
-      baseUrl: "https://x.example.com",
-      api: "pi-messages",
-      modelId: "m",
-      apiKey: "k",
-    }),
-  ).toBeNull();
-  const request = buildProbeRequest({
-    baseUrl: "https://x.example.com",
-    api: "google-generative-ai",
-    modelId: "models/gemini 2.0",
-    apiKey: "k",
-  });
-  expect(request?.url.pathname).toBe("/models/gemini%202.0:generateContent");
-  expect(request?.url.search).toBe("?key=k");
-  // 官方文档给的 id（models/gemini-2.0-flash）不应拼成 /models/models%2F…
-  expect(
-    buildProbeRequest({
-      baseUrl: "https://x.example.com",
-      api: "google-generative-ai",
-      modelId: "models/gemini-2.0-flash",
-      apiKey: "k",
-    })?.url.href,
-  ).toBe("https://x.example.com/models/gemini-2.0-flash:generateContent?key=k");
+test("buildProbeRequest：非词表格式返回 null（历史词形与私有格式均不可探）", () => {
+  for (const api of ["pi-messages", "google-generative-ai", "openai-responses"]) {
+    expect(
+      buildProbeRequest({
+        baseUrl: "https://x.example.com",
+        api,
+        modelId: "m",
+        apiKey: "k",
+      }),
+    ).toBeNull();
+  }
 });
 
 test("200 → ok 且 latencyMs ≥ 0；URL 尾斜杠裁剪 + 1-token 请求体", async () => {

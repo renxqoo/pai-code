@@ -13,7 +13,7 @@ export function agentActivity(
   agent: Pick<SubagentModel, 'status' | 'startedAt' | 'endedAt' | 'tools'>,
   now: number,
 ): AgentActivity {
-  if (agent.status !== 'busy') return { kind: 'idle' };
+  if (agent.status !== 'running') return { kind: 'idle' };
   if (!Number.isFinite(now) || now < agent.startedAt) return { kind: 'idle' };
   if (agent.endedAt !== null && now >= agent.endedAt) return { kind: 'idle' };
   const running = agent.tools.find((tool) => tool.status === 'running');

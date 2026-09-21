@@ -19,5 +19,5 @@ export {
   pendingDialogsView,
   type SessionViewInput,
 } from './response-views';
-export { isFileMutatingTool, diffFromPatch, diffFromWriteArgs } from './diff-extract';
+export { isFileMutatingTool, diffFromWriteArgs } from './diff-extract';
 export { flattenUserText, assistantText, assistantThinking } from './content';

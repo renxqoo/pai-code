@@ -371,7 +371,8 @@ describe('foldEvents · 队列/压缩/崩溃', () => {
     expect(s.bashTail).toBe('');
     expect(s.queue).toEqual({ steering: [], followUp: [] });
     expect(s.crashed).toBe(true);
-    expect(s.agents[0]).toMatchObject({ id: 'explore', agentId: 's1', status: 'on-disk', endedAt: tick(5) });
+    // 面板行键 = agentId（id/agentId 同值）；worker 死亡就地终态 stopped
+    expect(s.agents[0]).toMatchObject({ id: 's1', agentId: 's1', name: 'explore', agentType: 'explore', task: '扫描', status: 'stopped', endedAt: tick(5) });
     // running 轮不会再有 settle：冻结为 completed（与错过 settle 的遗留轮一致）
     const turn = liveTurn(s);
     if (turn?.kind !== 'turn') throw new Error('expected turn');
@@ -394,38 +395,38 @@ describe('foldEvents · 子代理', () => {
     s = foldThreadEvent(s, ev({ type: 'subagentStarted', threadId: 't', agentId: 's1', agentName: 'explore', task: '扫描' }), tick(1));
     s = foldStopIntent(s);
     s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', ok: false, usage: null }), tick(2));
-    expect(s.agents).toMatchObject([{ id: 'explore', agentId: 's1', status: 'on-disk' }]);
-    // worker 死亡：全部 working 条目就地终态
+    expect(s.agents).toMatchObject([{ id: 's1', agentId: 's1', status: 'stopped' }]);
+    // worker 死亡：全部 running 条目就地终态
     s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(10) }), tick(10));
     s = foldThreadEvent(s, ev({ type: 'subagentStarted', threadId: 't', agentId: 's2', agentName: 'explore', task: '再扫' }), tick(11));
     s = foldThreadEvent(s, ev({ type: 'sessionDied', threadId: 't', reason: 'crash' }), tick(12));
-    expect(s.agents.every((agent) => agent.status === 'on-disk')).toBe(true);
+    expect(s.agents.every((agent) => agent.status === 'stopped')).toBe(true);
   });
 
   test('生命周期：started → delta → tool 三相 → settled', () => {
     let s = initialThreadState;
     s = foldThreadEvent(s, ev({ type: 'subagentStarted', threadId: 't', agentId: 's1', agentName: 'explore', task: '扫描' }), tick(0));
-    s = foldThreadEvent(s, ev({ type: 'subagentDelta', threadId: 't', agentName: 'explore', delta: '发现 ' }), tick(10));
-    s = foldThreadEvent(s, ev({ type: 'subagentDelta', threadId: 't', agentName: 'explore', delta: '3 个文件' }), tick(20));
+    s = foldThreadEvent(s, ev({ type: 'subagentDelta', threadId: 't', agentId: 's1', delta: '发现 ' }), tick(10));
+    s = foldThreadEvent(s, ev({ type: 'subagentDelta', threadId: 't', agentId: 's1', delta: '3 个文件' }), tick(20));
     s = foldThreadEvent(
       s,
-      ev({ type: 'subagentTool', threadId: 't', agentName: 'explore', call: { id: 'c1', name: 'read', argsPreview: 'a.ts' }, phase: 'start' }),
+      ev({ type: 'subagentTool', threadId: 't', agentId: 's1', call: { id: 'c1', name: 'read', argsPreview: 'a.ts' }, phase: 'start' }),
       tick(30),
     );
     s = foldThreadEvent(
       s,
-      ev({ type: 'subagentTool', threadId: 't', agentName: 'explore', call: { id: 'c1', name: 'read', argsPreview: 'a.ts' }, phase: 'update', output: '内容' }),
+      ev({ type: 'subagentTool', threadId: 't', agentId: 's1', call: { id: 'c1', name: 'read', argsPreview: 'a.ts' }, phase: 'update', output: '内容' }),
       tick(40),
     );
     s = foldThreadEvent(
       s,
-      ev({ type: 'subagentTool', threadId: 't', agentName: 'explore', call: { id: 'c1', name: 'read', argsPreview: 'a.ts' }, phase: 'end', output: '内容', isError: false }),
+      ev({ type: 'subagentTool', threadId: 't', agentId: 's1', call: { id: 'c1', name: 'read', argsPreview: 'a.ts' }, phase: 'end', output: '内容', isError: false }),
       tick(140),
     );
-    s = foldThreadEvent(s, ev({ type: 'subagentSettled', threadId: 't', agentName: 'explore', status: 'done' }), tick(160));
+    s = foldThreadEvent(s, ev({ type: 'subagentSettled', threadId: 't', agentId: 's1', status: 'stopped' }), tick(160));
 
     const agent = s.agents[0];
-    expect(agent).toMatchObject({ id: 'explore', name: 'explore', agentType: 'explore', status: 'on-disk', toolCount: 1, endedAt: tick(160) });
+    expect(agent).toMatchObject({ id: 's1', agentId: 's1', name: 'explore', agentType: 'explore', status: 'stopped', toolCount: 1, endedAt: tick(160) });
     expect(agent?.summary).toContain('发现 3 个文件');
     expect(agent?.tools[0]).toMatchObject({ id: 'c1', status: 'ok', durationMs: 110, output: '内容' });
   });
@@ -433,12 +434,12 @@ describe('foldEvents · 子代理', () => {
   test('subagentState 忙闲迁移：终态行不被迟到的 idle 帧复活', () => {
     let s = initialThreadState;
     s = foldThreadEvent(s, ev({ type: 'subagentStarted', threadId: 't', agentId: 's1', agentName: 'explore', task: '扫描' }), tick(0));
-    s = foldThreadEvent(s, ev({ type: 'subagentState', threadId: 't', agentName: 'explore', busy: false }), tick(1));
+    s = foldThreadEvent(s, ev({ type: 'subagentState', threadId: 't', agentId: 's1', busy: false }), tick(1));
     expect(s.agents[0]?.status).toBe('idle');
-    s = foldThreadEvent(s, ev({ type: 'subagentSettled', threadId: 't', agentName: 'explore', status: 'done' }), tick(2));
-    expect(s.agents[0]?.status).toBe('on-disk');
-    s = foldThreadEvent(s, ev({ type: 'subagentState', threadId: 't', agentName: 'explore', busy: true }), tick(3));
-    expect(s.agents[0]?.status).toBe('on-disk');
+    s = foldThreadEvent(s, ev({ type: 'subagentSettled', threadId: 't', agentId: 's1', status: 'stopped' }), tick(2));
+    expect(s.agents[0]?.status).toBe('stopped');
+    s = foldThreadEvent(s, ev({ type: 'subagentState', threadId: 't', agentId: 's1', busy: true }), tick(3));
+    expect(s.agents[0]?.status).toBe('stopped');
   });
 });
 

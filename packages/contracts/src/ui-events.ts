@@ -141,34 +141,26 @@ const uiEventDefs = {
     type: z.literal('subagentStarted'),
     threadId,
     agentId: z.string(),
+    /** 定义名（x-harness type 字段）——展示键；agentId 是唯一身份。 */
     agentName: z.string(),
-    /** 任务描述（agents/spawned 无此文本面；空串 = 待 get_subagents 快照回填）。 */
+    /** 任务摘要（agent/spawned work；空串 = 待 get_subagents 快照回填）。 */
     task: z.string(),
   }),
-  /** 子 agent 流式正文增量（event 帧 agentName 分流；累积由渲染层负责）。 */
-  subagentDelta: z.object({ type: z.literal('subagentDelta'), threadId, agentName: z.string(), delta: z.string() }),
+  /** 子 agent 流式正文增量（agent/assistant-stream 帧 agentName=agentId 分流；累积由渲染层负责）。 */
+  subagentDelta: z.object({ type: z.literal('subagentDelta'), threadId, agentId: z.string(), delta: z.string() }),
   subagentTool: z.object({
     type: z.literal('subagentTool'),
     threadId,
-    agentName: z.string(),
+    agentId: z.string(),
     call: ToolCallViewSchema,
     phase: z.enum(['start', 'update', 'end']),
     output: z.string().optional(),
     isError: z.boolean().optional(),
   }),
-  /** 子 agent 终态（agents/terminal；status = manager 终态词表原文）。 */
-  subagentSettled: z.object({ type: z.literal('subagentSettled'), threadId, agentName: z.string(), status: z.string() }),
-  /** 子 agent 忙闲迁移（agents/state busy|idle；面板状态徽标的数据源）。 */
-  subagentState: z.object({ type: z.literal('subagentState'), threadId, agentName: z.string(), busy: z.boolean() }),
-  /** 子 agent 权限请求（agents/permission-ask：协议无应答命令，hub 到期默认拒绝——仅信息展示）。 */
-  subagentAsk: z.object({
-    type: z.literal('subagentAsk'),
-    threadId,
-    agentName: z.string(),
-    toolName: z.string(),
-    summary: z.string(),
-    reason: z.string().optional(),
-  }),
+  /** 子 agent 运行周期终结（agent/finished；status = outcome 词表 completed|stopped|failed 原文）。 */
+  subagentSettled: z.object({ type: z.literal('subagentSettled'), threadId, agentId: z.string(), status: z.string() }),
+  /** 子 agent 忙闲迁移（agent/status running|idle；面板状态徽标的数据源）。 */
+  subagentState: z.object({ type: z.literal('subagentState'), threadId, agentId: z.string(), busy: z.boolean() }),
 
   dialogRequest: z.object({
     type: z.literal('dialogRequest'),

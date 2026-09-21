@@ -55,7 +55,7 @@ export type SessionPermissionModeView = {
 /** 活跃会话思考档读口视图（session/thinkingLevels）。 */
 export type ThinkingLevelStateView = {
   level: string;
-  source: 'session' | 'project' | 'user' | 'unset';
+  source: 'session' | 'project' | 'user' | 'off';
 };
 
 export interface LiveStoreState {
@@ -200,19 +200,19 @@ export function createLiveStore() {
         set((state) => {
           const agents = [...(state.threads[threadId]?.agents ?? [])];
           for (const entry of snapshot) {
-            const index = agents.findIndex((agent) => agent.name === entry.agentName);
+            const index = agents.findIndex((agent) => agent.agentId === entry.agentId);
             const base: SubagentModel =
               index === -1
-                ? { id: entry.agentName, agentId: entry.agentId, name: entry.agentName, agentType: entry.agentType ?? entry.agentName, task: entry.work, model: '', effort: '', tokens: null, toolCount: 0, status: entry.status, startedAt: now, endedAt: null, summary: '', pendingAsk: null, tools: [] }
+                ? { id: entry.agentId, agentId: entry.agentId, name: entry.agentType, agentType: entry.agentType, task: entry.work ?? '', model: '', effort: '', tokens: null, toolCount: 0, status: entry.status, startedAt: now, endedAt: null, summary: '', pendingAsk: null, tools: [] }
                 : (agents[index] as SubagentModel);
             const merged: SubagentModel = {
               ...base,
               agentId: entry.agentId.length > 0 ? entry.agentId : base.agentId,
-              // 快照缺 agentType 时不抹掉本地已知值
-              agentType: entry.agentType !== undefined && entry.agentType.length > 0 ? entry.agentType : base.agentType,
-              task: entry.work.length > 0 ? entry.work : base.task,
+              // 快照缺 agentType/work 时不抹掉本地已知值（复活旧档案 work 可能缺席）
+              agentType: entry.agentType.length > 0 ? entry.agentType : base.agentType,
+              task: (entry.work ?? '').length > 0 ? (entry.work as string) : base.task,
               status: entry.status,
-              endedAt: entry.status === 'on-disk' ? base.endedAt ?? now : null,
+              endedAt: entry.status === 'stopped' ? base.endedAt ?? now : null,
             };
             if (index === -1) agents.push(merged);
             else agents[index] = merged;

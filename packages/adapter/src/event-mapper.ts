@@ -1,45 +1,49 @@
 import type { UiEvent, UsageView } from '@paiapp/contracts';
 
 import { previewArgs } from './args-preview';
-import { diffFromToolCall, diffFromToolResult } from './diff-extract';
+import { diffFromToolCall } from './diff-extract';
 import { subagentsField } from './subagent-spawns';
 
 /**
- * host-hub event 帧事件 → UiEvent（渲染层流式装饰）。
+ * x-harness hub event 帧 → UiEvent（渲染层流式装饰）。
  *
- * 有状态映射：assistant/stream 的增量在 hub 侧无消息 id 与权威终快照——
- * 本映射器按线程维护流式累积态（start 开缓冲、done 出权威 messageFinal），
- * 渲染层的 messageFinal 语义（整体替换增量缓冲）由此保证。
- * 需要时刻的事件注入时钟；跨事件记忆的事实（如工具时长）由渲染层折叠。
+ * 归属判定：帧级 agentName 在场 = 子归属帧（桥播种 session→agentId 映射；agentName
+ * 即 agentId）；缺席 = 主会话路径，且 session 域帧再验 payload.session === threadId
+ * （双保险——子会话 WAL 帧不进主时间线）。
+ *
+ * 有状态映射：流式增量无消息 id 与权威终快照——本映射器按线程维护流式累积态
+ * （(turn, step) 对变化即重置缓冲并开新 message），渲染层的 messageFinal 语义
+ * （整体替换增量缓冲）由 WAL assistant/message 权威终局保证。
  *
  * 显式忽略清单（渲染无直接消费，或由别的事件/对账路径覆盖）：
- * assistant/stream 的 start/thinking_start|end/text_start|end/tool_use_* 段
- *   （块边界由 text/thinking 增量自明；工具参数以 tool/start 的完整 input 为准）
- * assistant/stream 的 usage/error 段（usage 并入 done 的 messageFinal；
- *   硬错误经 settled{ok:false} 呈现，可重试错误走 llm/retry）
+ * llm/chunk 的 tool-call-delta/finish（toolCallAdded 源 = WAL tool/call——参数
+ *   集齐即现；步终局以 WAL assistant/message 为准）
  * turn/end（终态以 settled 为准——worker 死亡 host 合成，无悬挂）
- * inbox/spliced（结构信号：主进程层拉取 get_state.queue 合成 queueChanged）
- * permission/decision（审计事件；对话框交互面是 ui_request 帧）
- * step/start|end、hook/error、request/start、plugin/*（前向兼容忽略）
- * agents/idle（manager 聚合域，面板态走 agents/state）
- * agents/user-injected（无面板语义）
+ * agent/inbox/spliced（结构信号：主进程层拉取 get_state.queue 合成 queueChanged）
+ * permission/decided（审计事件；对话框交互面是 ui_request 帧）
+ * user/message、step/start|end、system/message、assistant/attempt、request/*、
+ *   session/*、todo/snapshot、command/run|done、autocompact/*（前向兼容忽略）
+ * agent/error（终态经 settled/turn/end 收敛）
  */
 
 export interface EventMapDeps {
   now(): number;
 }
 
-/** 线程内流式累积态：assistant/stream start→done 之间的事实。 */
+/** 线程内流式累积态：(turn, step) 步边界之间的 llm/chunk 事实。 */
 interface StreamBuffer {
   messageId: string;
+  turn: number;
+  step: number;
   text: string;
   thinking: string;
   usage: UsageView | null;
 }
 
-/** 映射器实例的流式累积域（per-mapper 状态；mapStream 模块函数经此访问）。 */
+/** 映射器实例的流式累积域（per-mapper 状态；calls = callId→工具名，tool/result 无名字段——diff 提取靠它回查）。 */
 interface StreamState {
   streams: Map<string, StreamBuffer>;
+  calls: Map<string, string>;
   counter: number;
 }
 
@@ -49,7 +53,7 @@ export interface EventMapper {
 }
 
 export function createEventMapper(deps: EventMapDeps): EventMapper {
-  const state: StreamState = { streams: new Map(), counter: 0 };
+  const state: StreamState = { streams: new Map(), calls: new Map(), counter: 0 };
 
   return {
     mapEvent(frame): UiEvent[] {
@@ -57,41 +61,57 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
       if (frame.agentName !== undefined && frame.agentName !== '') {
         return mapSubagent(threadId, name, payload, frame.agentName);
       }
+      // 主会话谓词：session 域帧的 session 必须 === threadId（子会话 WAL 帧不进主时间线）
+      const session = payload['session'];
+      if (typeof session === 'string' && session !== threadId) return [];
       switch (name) {
         case 'turn/start':
-          return [{ type: 'turnStarted', threadId, at: num(payload.ts, deps.now()) }];
-        case 'assistant/stream':
-          return mapStream(state, threadId, payload, deps);
-        case 'tool/start': {
+          return [{ type: 'turnStarted', threadId, at: num(payload.time, deps.now()) }];
+        case 'llm/chunk':
+          return mapChunk(state, threadId, payload, deps);
+        case 'assistant/message': {
           const buffer = state.streams.get(threadId);
-          if (buffer === undefined) return [];
-          const toolUseId = str(payload.toolUseId);
-          const toolName = str(payload.toolName);
-          const args = recordOf(payload.input);
+          return [
+            {
+              type: 'messageFinal',
+              threadId,
+              message: { id: buffer?.messageId ?? `stream-${++state.counter}`, text: messageText(payload.content), thinking: messageThinking(payload.content), toolCalls: [], usage: usageOf(payload.usage) },
+            },
+          ];
+        }
+        case 'tool/call': {
+          const buffer = state.streams.get(threadId);
+          const toolName = str(payload.name);
+          const args = argsOf(payload.arguments);
+          const callId = str(payload.callId);
+          if (callId.length > 0) state.calls.set(callId, toolName);
           return [
             {
               type: 'toolCallAdded',
               threadId,
-              messageId: buffer.messageId,
-              call: { id: toolUseId, name: toolName, argsPreview: previewArgs(args), ...subagentsField(toolName, args) },
+              messageId: buffer?.messageId ?? '',
+              call: { id: callId, name: toolName, argsPreview: previewArgs(args), ...subagentsField(toolName, args) },
               diff: diffFromToolCall(toolName, args),
             },
           ];
         }
-        case 'tool/progress':
-          return [{ type: 'toolUpdated', threadId, callId: str(payload.toolUseId), output: str(payload.delta) }];
-        case 'tool/result':
+        case 'tool/result': {
+          const callId = str(payload.callId);
           return [
             {
               type: 'toolEnded',
               threadId,
-              callId: str(payload.toolUseId),
+              callId,
               output: toolResultText(payload.content),
               isError: payload.isError === true,
-              durationMs: num(payload.durationMs, 0),
-              diff: diffFromToolResult(str(payload.toolName), payload),
+              durationMs: 0,
+              // diff 已在 tool/call 参数级提取（x-harness 结果侧无 patch 面）
+              diff: null,
             },
           ];
+        }
+        case 'agent/tool-stream':
+          return [{ type: 'toolUpdated', threadId, callId: str(payload.callId), output: str(payload.delta) }];
         case 'settled':
           state.streams.delete(threadId);
           return [
@@ -103,13 +123,13 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
               usage: null,
             },
           ];
-        case 'compaction':
+        case 'compaction/landed':
           return [
             { type: 'compacting', threadId, active: false },
-            { type: 'compacted', threadId, replacedCount: num(payload.replacedCount, 0) },
+            { type: 'compacted', threadId, replacedCount: num(payload.replacedNodes, 0) },
           ];
         case 'llm/retry':
-          return [{ type: 'retrying', threadId, attempt: num(payload.attempt, 0), errorMessage: str(payload.reason) }];
+          return [{ type: 'retrying', threadId, attempt: num(payload.retry, 0), errorMessage: failureMessage(payload.failure) }];
         case 'bash_execution_update':
           return [
             {
@@ -120,6 +140,25 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
               ...(payload.truncated === true ? { truncated: true } : {}),
             },
           ];
+        case 'agent/spawned':
+          return [
+            {
+              type: 'subagentStarted',
+              threadId,
+              agentId: str(payload.agentId),
+              agentName: str(payload.type),
+              task: str(payload.work),
+            },
+          ];
+        case 'agent/finished':
+          return [
+            {
+              type: 'subagentSettled',
+              threadId,
+              agentId: str(payload.agentId),
+              status: str(payload.outcome),
+            },
+          ];
         default:
           return [];
       }
@@ -127,128 +166,148 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
   };
 }
 
-function beginStream(state: StreamState): StreamBuffer {
-  state.counter += 1;
-  return { messageId: `stream-${state.counter}`, text: '', thinking: '', usage: null };
-}
-
-function mapStream(state: StreamState, threadId: string, payload: Record<string, unknown>, deps: EventMapDeps): UiEvent[] {
-  const kind = payload['type'];
+/** llm/chunk 增量：(turn, step) 变化即重置流缓冲（messageStarted 边界——无 per-message start 帧）。 */
+function mapChunk(state: StreamState, threadId: string, payload: Record<string, unknown>, deps: EventMapDeps): UiEvent[] {
+  const chunk = recordOf(payload.chunk);
+  const kind = chunk['type'];
+  const turn = num(payload.turn, -1);
+  const step = num(payload.step, -1);
   let buffer = state.streams.get(threadId);
-  if (buffer === undefined && (kind === 'start' || kind === 'text' || kind === 'thinking')) {
-    // start 开缓冲；无 start 的增量（订阅窗口边界/竞争）同样开缓冲兜底，不丢单词
-    buffer = beginStream(state);
+  const boundary = buffer === undefined || buffer.turn !== turn || buffer.step !== step;
+  if (boundary && (kind === 'text-delta' || kind === 'thinking-delta')) {
+    // 步边界开新缓冲；无缓冲的首增量（订阅窗口边界/竞争）同样开缓冲兜底，不丢单词
+    state.counter += 1;
+    buffer = { messageId: `stream-${state.counter}`, turn, step, text: '', thinking: '', usage: null };
     state.streams.set(threadId, buffer);
-    return [
-      { type: 'messageStarted', threadId, messageId: buffer.messageId, at: deps.now() },
-      ...mapStream(state, threadId, payload, deps),
-    ];
+    const started: UiEvent = { type: 'messageStarted', threadId, messageId: buffer.messageId, at: deps.now() };
+    return [started, ...emitChunk(threadId, buffer, chunk)];
   }
   if (buffer === undefined) return [];
-  if (kind === 'text') {
-    const delta = str(payload.text);
+  return emitChunk(threadId, buffer, chunk);
+}
+
+function emitChunk(threadId: string, buffer: StreamBuffer, chunk: Record<string, unknown>): UiEvent[] {
+  const kind = chunk['type'];
+  if (kind === 'text-delta') {
+    const delta = str(chunk['text']);
     buffer.text += delta;
     return [{ type: 'textDelta', threadId, messageId: buffer.messageId, delta }];
   }
-  if (kind === 'thinking') {
-    const delta = str(payload.text);
+  if (kind === 'thinking-delta') {
+    const delta = str(chunk['text']);
     buffer.thinking += delta;
     return [{ type: 'thinkingDelta', threadId, messageId: buffer.messageId, delta }];
   }
   if (kind === 'usage') {
-    buffer.usage = usageOf(payload.usage);
-    return [];
-  }
-  if (kind === 'done') {
-    return [
-      {
-        type: 'messageFinal',
-        threadId,
-        message: { id: buffer.messageId, text: buffer.text, thinking: buffer.thinking, toolCalls: [], usage: buffer.usage },
-      },
-    ];
+    buffer.usage = usageOf(chunk['usage']);
   }
   return [];
 }
 
-/** 子代理中继事件（帧级 agentName 分流）：正文流 + 工具面 + agents/* 域。 */
-function mapSubagent(threadId: string, name: string, payload: Record<string, unknown>, agentName: string): UiEvent[] {
+/** 子归属帧（agentName = agentId）：正文流 + 工具面 + 状态域。 */
+function mapSubagent(threadId: string, name: string, payload: Record<string, unknown>, agentId: string): UiEvent[] {
   switch (name) {
-    case 'assistant/stream':
-      if (payload['type'] === 'text') {
-        return [{ type: 'subagentDelta', threadId, agentName, delta: str(payload['text']) }];
+    case 'agent/assistant-stream': {
+      const frame = recordOf(payload.frame);
+      if (frame['phase'] === 'chunk' && frame['kind'] === 'text') {
+        return [{ type: 'subagentDelta', threadId, agentId, delta: str(frame['text']) }];
       }
       return [];
-    case 'tool/start': {
-      const toolName = str(payload.toolName);
-      const args = recordOf(payload.input);
-      return [
-        {
-          type: 'subagentTool',
-          threadId,
-          agentName,
-          call: { id: str(payload.toolUseId), name: toolName, argsPreview: previewArgs(args) },
-          phase: 'start',
-        },
-      ];
     }
-    case 'tool/progress':
+    case 'agent/tool-stream':
       return [
         {
           type: 'subagentTool',
           threadId,
-          agentName,
-          call: { id: str(payload.toolUseId), name: str(payload.toolName), argsPreview: '' },
+          agentId,
+          call: { id: str(payload.callId), name: '', argsPreview: '' },
           phase: 'update',
           output: str(payload.delta),
         },
       ];
+    case 'tool/call': {
+      const toolName = str(payload.name);
+      const args = argsOf(payload.arguments);
+      return [
+        {
+          type: 'subagentTool',
+          threadId,
+          agentId,
+          call: { id: str(payload.callId), name: toolName, argsPreview: previewArgs(args) },
+          phase: 'start',
+        },
+      ];
+    }
     case 'tool/result':
       return [
         {
           type: 'subagentTool',
           threadId,
-          agentName,
-          call: { id: str(payload.toolUseId), name: str(payload.toolName), argsPreview: '' },
+          agentId,
+          call: { id: str(payload.callId), name: str(payload.name), argsPreview: '' },
           phase: 'end',
           output: toolResultText(payload.content),
           isError: payload.isError === true,
         },
       ];
-    case 'agents/spawned':
-      return [{ type: 'subagentStarted', threadId, agentId: str(payload.agentId), agentName: str(payload.agentName), task: '' }];
-    case 'agents/state':
-      return [{ type: 'subagentState', threadId, agentName: str(payload.agentName), busy: payload.to === 'busy' }];
-    case 'agents/terminal':
-      return [{ type: 'subagentSettled', threadId, agentName: str(payload.agentName), status: str(payload.status) }];
-    case 'agents/evicted':
-      return [{ type: 'subagentSettled', threadId, agentName: str(payload.agentName), status: 'evicted' }];
-    case 'agents/permission-ask':
-      return [
-        {
-          type: 'subagentAsk',
-          threadId,
-          agentName: str(payload.agentName),
-          toolName: str(payload.toolName),
-          summary: str(payload.summary),
-          ...(payload.reason !== undefined ? { reason: str(payload.reason) } : {}),
-        },
-      ];
+    case 'agent/status':
+      return [{ type: 'subagentState', threadId, agentId, busy: str(payload.status) === 'running' }];
     default:
       return [];
   }
 }
 
-/** 内核 usage {inputTokens, outputTokens} → 视图 {input, output}。 */
+/** 内核 usage {input, output, …} → 视图 {input, output}。 */
 function usageOf(usage: unknown): UsageView | null {
   const u = recordOf(usage);
-  const input = u['inputTokens'];
-  const output = u['outputTokens'];
+  const input = u['input'];
+  const output = u['output'];
   if (typeof input !== 'number' || typeof output !== 'number') return null;
   return { input, output };
 }
 
+/** tool/call arguments（JSON 字符串或对象）→ 宽容解析的参数对象。 */
+function argsOf(value: unknown): Record<string, unknown> {
+  if (typeof value !== 'string' || value.length === 0) return recordOf(value);
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return recordOf(parsed);
+  } catch {
+    return {};
+  }
+}
+
+/** WAL assistant/message content 块提取（text/thinking 拼接）。 */
+function messageText(content: unknown): string {
+  return contentBlocks(content, 'text');
+}
+
+function messageThinking(content: unknown): string {
+  return contentBlocks(content, 'thinking');
+}
+
+function contentBlocks(content: unknown, type: string): string {
+  if (!Array.isArray(content)) return '';
+  const parts: string[] = [];
+  for (const block of content) {
+    if (typeof block === 'object' && block !== null && (block as Record<string, unknown>)['type'] === type) {
+      const text = (block as Record<string, unknown>)['text'];
+      if (typeof text === 'string') parts.push(text);
+    }
+  }
+  return parts.join('\n');
+}
+
+function failureMessage(failure: unknown): string {
+  const f = recordOf(failure);
+  const message = str(f.message);
+  const code = str(f.code);
+  if (message.length > 0 && code.length > 0) return `${message} (${code})`;
+  return message.length > 0 ? message : code;
+}
+
 function toolResultText(content: unknown): string {
+  if (typeof content === 'string') return content;
   if (!Array.isArray(content)) return '';
   const parts: string[] = [];
   for (const block of content) {

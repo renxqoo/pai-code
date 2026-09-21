@@ -85,8 +85,8 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
       state = { ...state, turnsSettled: state.turnsSettled + 1, turnStartSeq: null };
       // 用户停止 = abort：杀掉该对话全部子代理（前台+后台，无通知）；自然结束不动（后台任务跨轮）
       const agents =
-        state.stopping && state.agents.some((agent) => agent.status !== 'on-disk')
-          ? state.agents.map((agent) => (agent.status === 'on-disk' ? agent : { ...agent, status: 'on-disk' as const, endedAt: now }))
+        state.stopping && state.agents.some((agent) => agent.status !== 'stopped')
+          ? state.agents.map((agent) => (agent.status === 'stopped' ? agent : { ...agent, status: 'stopped' as const, endedAt: now }))
           : state.agents;
       if (state.liveTurnId === null) return { ...state, streaming: false, retrying: null, stopping: false, agents };
       const stopped = state.stopping;
@@ -128,7 +128,6 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
     case 'subagentTool':
     case 'subagentSettled':
     case 'subagentState':
-    case 'subagentAsk':
       return onSubagentEvent(state, event, now);
     case 'sessionDied':
       // worker 死亡时全部在途子代理随进程自灭且无 settle 通知（api.md U2）：就地终态
@@ -175,7 +174,7 @@ export function foldDeath(state: LiveThreadState, now: number, frozenStatus: 'co
   return {
     ...state,
     items,
-    agents: state.agents.map((agent) => (agent.status === 'on-disk' ? agent : { ...agent, status: 'on-disk' as const, endedAt: now })),
+    agents: state.agents.map((agent) => (agent.status === 'stopped' ? agent : { ...agent, status: 'stopped' as const, endedAt: now })),
     queue: { steering: [], followUp: [] },
     streaming: false,
     compacting: false,

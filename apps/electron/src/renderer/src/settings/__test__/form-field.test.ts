@@ -34,27 +34,27 @@ describe('文本字段回调接线', () => {
 
 describe('单选字段回调接线', () => {
   const options = [
-    { id: 'openai-completions', label: 'OpenAI 兼容' },
-    { id: 'anthropic-messages', label: 'Anthropic' },
+    { id: 'openai', label: 'OpenAI 兼容' },
+    { id: 'anthropic', label: 'Anthropic' },
   ];
 
   test('选中回调回传选项 id', () => {
     const picked: string[] = [];
-    const tree = SelectField({ label: 'API 格式', value: 'openai-completions', options, onChange: (id) => picked.push(id) });
-    (findElementProps(tree, (props) => props['onSelect'] !== undefined)['onSelect'] as (id: string) => void)('anthropic-messages');
-    expect(picked).toEqual(['anthropic-messages']);
+    const tree = SelectField({ label: 'API 格式', value: 'openai', options, onChange: (id) => picked.push(id) });
+    (findElementProps(tree, (props) => props['onSelect'] !== undefined)['onSelect'] as (id: string) => void)('anthropic');
+    expect(picked).toEqual(['anthropic']);
   });
 
   test('触发器展示当前选项文案；值不在选项表时回退显示原值', () => {
     const triggerTexts = (tree: ReturnType<typeof SelectField>): unknown[] =>
       collectElementProps(findElementProps(tree, (props) => props['trigger'] !== undefined)['trigger'] as React.ReactNode).map((props) => props['children']);
 
-    expect(triggerTexts(SelectField({ label: 'API 格式', value: 'anthropic-messages', options, onChange: () => undefined }))).toContain('Anthropic');
+    expect(triggerTexts(SelectField({ label: 'API 格式', value: 'anthropic', options, onChange: () => undefined }))).toContain('Anthropic');
     expect(triggerTexts(SelectField({ label: 'API 格式', value: 'pi-messages', options, onChange: () => undefined }))).toContain('pi-messages');
   });
 
   test('触发器带可访问名，hint 展示在控件下方', () => {
-    const props = collectElementProps(SelectField({ label: 'API 格式', value: 'openai-completions', options, onChange: () => undefined, hint: 'hint' }));
+    const props = collectElementProps(SelectField({ label: 'API 格式', value: 'openai', options, onChange: () => undefined, hint: 'hint' }));
     expect(props.find((p) => p['aria-label'] === 'API 格式')).toBeDefined();
     expect(props.some((p) => p['children'] === 'hint')).toBe(true);
   });

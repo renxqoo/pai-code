@@ -131,12 +131,12 @@ describe('ComposerRegion 数据形态', () => {
     seedLive({});
     liveStore.setState({ sessionPermissionMode: { mode: 'default', source: 'user' } });
     const withMode = render(<ComposerRegion />);
-    expect(withMode.container.textContent).toContain(copy.settings.permModeOptions.default);
+    expect(withMode.container.textContent).toContain(copy.settings.permModeOptions.auto);
     withMode.unmount();
 
     liveStore.setState({ sessionPermissionMode: null });
     const unloaded = render(<ComposerRegion />);
-    expect(unloaded.container.textContent).not.toContain(copy.settings.permModeOptions.default);
+    expect(unloaded.container.textContent).not.toContain(copy.settings.permModeOptions.auto);
     unloaded.unmount();
   });
 });

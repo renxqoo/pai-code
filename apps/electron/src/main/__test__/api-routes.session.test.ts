@@ -143,7 +143,7 @@ describe('session/prompt 受理窗口竞态（症状：streaming 中发消息偶
 
 describe('session/entries 游标域（症状：分支切换后增量窗口 stale 不自愈）', () => {
   test("症状回归：'invalid since cursor' → 全量兜底重拉（不带 since）", async () => {
-    const full = { entries: [{ seq: 1, ts: 1, event: { type: 'message', role: 'user', content: [{ type: 'text', text: 'hi' }] } }] };
+    const full = { entries: [{ seq: 1, ts: 1, event: { type: 'user/message', turn: 0, step: 0, content: [{ type: 'text', text: 'hi' }] } }], leafSeq: 1, hasMore: false };
     const { routes, sent } = await makeRoutes((command, index) => {
       if (command.type === 'get_entries') {
         // 带游标的首次请求失效；兜底全量请求（index=1）成功

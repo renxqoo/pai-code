@@ -148,16 +148,12 @@ event 帧 `{type:"event", threadId, name, payload, agentName?}` 不变。**归�
 
 ### 4.2 实施顺序
 
-**波次结构（审查后重构）**：app 侧 W2-W4 为**域切片波**（每波跨层成对：contracts + 该域全部消费点 + 测试同波），承认波间存在类型耦合时的原子序列兜底（T38 实证做法）；每波四门全绿 + 该域旧词表 grep 清零。
+**波次结构（W0 实施后修订）**：W2-W6 = **单原子实施序列**（T38 bb39fb8 同模式）——集成门是全协议面的活体断言，任何词表/事件/形状变化都打断 my-agent 过渡形态（permission 词表换 → my-agent 拒；providers.json 换 → my-agent 不读），域切片波不可行。序列内顺序：contracts → adapter → main → renderer → 集成门换代，**一个提交**交付（四门全绿后）；W6 的旅程扩面并入该提交的集成门重写。
 
-1. **W0（x-harness 仓库）**：D10 三缺口（能力位/work 链/delete data）+ 编译形态冒烟 + 摸底清单（provider? 死字段、script 运行时行为/共享游标实证、preset 撞名运行时复核）；按 x-harness 规约两轮审查；实测事实回写本档。
-2. **W1（app，集成点）**：hub-paths/sync-resources/hub-paths.test 期望串 + 裸 JSONL 探针脚本冒烟（真 x-harness：get_host_info/prompt→settled/EOF 停机，脚本不入测试门、用后即删）。**不动存量集成测试**（其自带入口注入，W1-W5 继续跑 my-agent 形态——过渡态声明）。
-3. **W2（app，词表域切片）**：permission 3 档 + thinking 5 档 + api 词表迁移（contracts + provider-probe + api-routes-settings + renderer 菜单/strings + 测试）。
-4. **W3（app，事件域切片）**：hub-events + event-mapper（谓词/步边界）+ fold-events/fold-subagents + pai-runtime inbox 分流 + entries-mapper + 工具名面（D14）+ 测试。本波最大，允许波内按 mapper→折叠器→渲染细分提交。
-5. **W4（app，catalog/布局/agents 域切片）**：providers.json + hub-data 响应形状 + response-views + 对账布局 + hub 挂载点已切（W1）复核 + agents 面（D6）+ compact 直发 + session/delete + 孤儿清扫 + 测试。
-6. **W5（app，渲染收尾）**：权限/思考菜单、子代理面板（agentId/work）、附件门禁、strings 全量 + 测试。
-7. **W6（app，集成门换代）**：host-hub.integration.test.ts 整体重写（script provider + x-harness 入口缺省 + 全接口旅程 + 落存储断言 + 子代理共享游标编排旅程 + delete 级联 + GLM opt-in 保留）；**删除 my-agent 形态装置**（过渡态终结）。
-8. **W7**：收口（实施轮对抗审查 + 假绿抽查 + grep 清零终检 + 数字如实 + 状态推进）。
+1. **W0（x-harness 仓库，已完成 41199f2）**：D10 三缺口 + 编译形态冒烟 + 摸底（provider? 死字段确认、script 参数、共享游标实证）。
+2. **W1（app，已提交 9c67649）**：hub-paths/sync-resources 集成点切换 + 源码/编译双形态探针冒烟（此波不动协议——存量集成门最后一次跑 my-agent 形态）。
+3. **W2-W6（app，单原子提交）**：contracts 镜像换代（词表三变/56 词表/事件词表/响应形状）→ adapter 族重写（事件映射谓词与步边界/工具名/entries 全表）→ 主进程（providers.json + api 归一迁移/agents 面/对账布局/delete 路由/compact 直发/孤儿清扫）→ 渲染层（折叠器/菜单/面板/附件门禁/strings）→ 集成门整体换代（x-harness 入口 + script provider + 全接口旅程 + 落存储断言）。序列内旧词表 grep 清零。
+4. **W7**：收口（实施轮对抗审查 + 假绿抽查 + grep 清零终检 + 数字如实 + 状态推进）。
 
 ### 4.3 测试计划
 

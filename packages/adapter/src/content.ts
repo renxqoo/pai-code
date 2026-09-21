@@ -75,16 +75,27 @@ export function assistantToolCalls(content: unknown): ToolCallBlockView[] {
     if (typeof block !== 'object' || block === null) continue;
     const b = block as Block;
     if (!isToolUseBlock(b)) continue;
-    const id = typeof b['id'] === 'string' ? b['id'] : '';
+    const id = typeof b['callId'] === 'string' ? b['callId'] : '';
     const name = typeof b['name'] === 'string' ? b['name'] : '';
-    const input = b['input'];
-    const args = typeof input === 'object' && input !== null && !Array.isArray(input) ? (input as Record<string, unknown>) : {};
-    calls.push({ id, name, args });
+    calls.push({ id, name, args: argsOfInput(b['input']) });
   }
   return calls;
 }
 
-/** 工具结果 content（ContentBlock 数组）→ 文本。 */
+/** tool_use.input = JSON 字符串（宽容解析：坏 JSON/非串降级空对象）。 */
+function argsOfInput(input: unknown): Record<string, unknown> {
+  if (typeof input !== 'string' || input.length === 0) {
+    return typeof input === 'object' && input !== null && !Array.isArray(input) ? (input as Record<string, unknown>) : {};
+  }
+  try {
+    const parsed: unknown = JSON.parse(input);
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** 工具结果 content（纯文本 string）→ 文本。 */
 export function toolResultText(content: unknown): string {
-  return flattenUserText(content);
+  return typeof content === 'string' ? content : flattenUserText(content);
 }

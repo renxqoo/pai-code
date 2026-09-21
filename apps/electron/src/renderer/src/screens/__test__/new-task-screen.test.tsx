@@ -27,7 +27,7 @@ function renderScreen(overrides: Partial<Parameters<typeof NewTaskScreen>[0]> = 
       defaultModelFor={() => 'glm/glm-4.7'}
       modelOptions={['glm/glm-4.7', 'glm/glm-5.3']}
       noModelsLabel={copy.composer.noModels}
-      defaultPermissionMode="acceptEdits"
+      defaultPermissionMode="auto"
       onSearchFiles={() => Promise.resolve(null)}
       onListBranches={() => Promise.resolve({ ok: true, data: { isRepo: true, current: 'main', branches: ['main'], dirtyFiles: 0 } })}
       onListGraph={() => Promise.resolve({ ok: true, data: { isRepo: true, commits: [], truncated: false } })}
@@ -71,7 +71,7 @@ describe('NewTaskScreen', () => {
 
   test('权限模式控件渲染 hub 缺省档（本地未选时展示并作为不干预基线）', () => {
     const html = renderScreen();
-    expect(html).toContain(copy.settings.permModeOptions.acceptEdits);
+    expect(html).toContain(copy.settings.permModeOptions.auto);
   });
 
   test('无预选目录：只渲染「选择工作区」入口，不渲染分支段（未选目录不是「分支不可用」）', () => {
@@ -107,7 +107,7 @@ describe('NewTaskScreen 分支切换锁（T36：与线程页同一把，目录�
       defaultModelFor: () => 'glm/glm-4.7',
       modelOptions: ['glm/glm-4.7'],
       noModelsLabel: copy.composer.noModels,
-      defaultPermissionMode: 'default' as const,
+      defaultPermissionMode: 'auto' as const,
       onSearchFiles: () => Promise.resolve(null),
       onListBranches: () => Promise.resolve({ ok: true as const, data: { ...REPO_VIEW, branches: [...REPO_VIEW.branches] } }),
       onListGraph: () => Promise.resolve({ ok: true as const, data: { isRepo: true, commits: [], truncated: false } }),

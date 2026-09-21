@@ -425,7 +425,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       const outcome = await client.invoke('permission/setMode', { threadId, mode });
       return outcome.ok ? null : outcome.reason;
     },
-    async readThinkingLevel(threadId: string): Promise<{ level: string; source: 'session' | 'project' | 'user' | 'unset' } | null> {
+    async readThinkingLevel(threadId: string): Promise<{ level: string; source: 'session' | 'project' | 'user' | 'off' } | null> {
       const outcome = await client.invoke('session/thinkingLevels', { threadId });
       if (!outcome.ok) return null;
       if (store.getState().activeThreadId !== threadId) return null;

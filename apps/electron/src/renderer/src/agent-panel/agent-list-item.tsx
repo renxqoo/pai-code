@@ -33,8 +33,7 @@ type DetailLine =
  * 归档后显报告摘要，无摘要时退回任务描述/最后工具名。
  */
 function detailLine(agent: SubagentModel, now: number): DetailLine {
-  if (agent.pendingAsk !== null) return { kind: 'ask', toolName: agent.pendingAsk.toolName, summary: agent.pendingAsk.summary };
-  if (agent.status === 'on-disk') {
+  if (agent.status === 'stopped') {
     if (agent.summary.length > 0) return { kind: 'summary', text: agent.summary };
     if (agent.task.length > 0) return { kind: 'summary', text: agent.task };
     const lastTool = agent.tools[agent.tools.length - 1];
@@ -58,12 +57,12 @@ function AgentListItem({ agent, now, onSteer }: AgentListItemProps) {
     copy.flow.metaTokens(formatTokenCount(agent.tokens)),
     copy.flow.metaTools(agent.toolCount),
   ].filter((item): item is string => item !== null);
-  const steerable = agent.status === 'busy' && agent.agentId.length > 0;
+  const steerable = agent.status !== 'stopped' && agent.agentId.length > 0;
 
   return (
     <div className="py-[8px]">
       <div className="flex h-[20px] items-center gap-[9px]">
-        <StatusDot tone={agent.status === 'busy' ? 'active' : agent.status === 'idle' ? 'idle' : 'done'} />
+        <StatusDot tone={agent.status === 'running' ? 'active' : agent.status === 'idle' ? 'idle' : 'done'} />
         <button
           type="button"
           onClick={toggle}

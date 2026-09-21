@@ -43,9 +43,9 @@ describe('composerSelectionOf', () => {
     expect(composerSelectionOf([], session({ thinkingLevel: 'high' }), null).effort).toBe('High');
     // 缺失回落首档——菜单始终可选，选择即显式设置
     expect(composerSelectionOf([], session(), null).effort).toBe('Off');
-    // 'unset'（词表外读回值）同样回落首档
-    expect(composerSelectionOf([], session(), thinking('unset', 'unset')).effort).toBe('Off');
-    // 四档展示名（词表顺序即菜单顺序）
-    expect(composerSelectionOf([], undefined, null).effortOptions).toEqual(['Off', 'Low', 'Medium', 'High']);
+    // 词表外读回值同样回落首档（无值态在 x-harness 归一为 off——不再有 unset 形态）
+    expect(composerSelectionOf([], session(), thinking('weird', 'off')).effort).toBe('Off');
+    // 五档展示名（词表顺序即菜单顺序）
+    expect(composerSelectionOf([], undefined, null).effortOptions).toEqual(['Off', 'Low', 'Medium', 'High', 'Max']);
   });
 });
