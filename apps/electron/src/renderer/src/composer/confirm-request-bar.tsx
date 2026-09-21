@@ -27,7 +27,9 @@ function ConfirmRequestBar({ dialog, remaining, onRespond, onCancel }: ConfirmRe
           <span className="shrink-0 font-mono text-[11.5px] leading-[17px] text-muted-foreground">{dialog.tool}</span>
         ) : null}
         {dialog.summary !== undefined && dialog.summary.length > 0 ? (
-          <span title={dialog.summary} className="min-w-0 flex-1 truncate font-mono text-[11.5px] leading-[17px] text-foreground/80">{dialog.summary}</span>
+          <span title={[dialog.summary, dialog.reason].filter(Boolean).join('\n')} className="min-w-0 flex-1 truncate font-mono text-[11.5px] leading-[17px] text-foreground/80">{dialog.summary}</span>
+        ) : dialog.reason !== undefined && dialog.reason.length > 0 ? (
+          <span title={dialog.reason} className="min-w-0 flex-1 truncate font-mono text-[11.5px] leading-[17px] text-foreground/80">{dialog.reason}</span>
         ) : null}
         {remaining > 0 ? (
           <span className="shrink-0 text-[11.5px] leading-[17px] text-muted-foreground">{copy.dialogs.morePending(remaining)}</span>

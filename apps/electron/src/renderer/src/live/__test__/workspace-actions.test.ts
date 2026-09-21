@@ -48,6 +48,18 @@ describe('提交失败通知（D15：images 硬拒的友好文案）', () => {
     expect(store.getState().notices.at(-1)?.text).toBe(copy.flow.sendFailed('unknown_thread'));
   });
 
+  test('transient face 全词表直达精准文案（含此前漏网的 command_failed），不透传 token 原文', async () => {
+    // 症状回归（对抗审查）：旧手工 Set 漏 command_failed —— hub 回 success:false 缺 error
+    // 载荷/未识别 infra 串都归入该 face，落 sendFailed 透传 token；词表判定与
+    // transientFaceCopy 同源闭集后新增 face 不再漂移
+    jest.spyOn(controller, 'submitDraft').mockResolvedValueOnce('command_failed');
+    expect(await workspaceActions.submitDraft('文', [])).toBe('command_failed');
+    expect(store.getState().notices.at(-1)?.text).toBe('命令执行失败，请重试。');
+    jest.spyOn(controller, 'submitDraft').mockResolvedValueOnce('timeout');
+    expect(await workspaceActions.submitDraft('文', [])).toBe('timeout');
+    expect(store.getState().notices.at(-1)?.text).toBe('操作超时，请重试。');
+  });
+
   test('空舞台投递（no_active_session）→ noActiveSession 可行动文案，不透传 schema 密文', async () => {
     jest.spyOn(controller, 'submitDraft').mockResolvedValueOnce('no_active_session');
     expect(await workspaceActions.submitDraft('写个脚本', [])).toBe('no_active_session');

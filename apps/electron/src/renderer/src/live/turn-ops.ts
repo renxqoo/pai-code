@@ -45,15 +45,16 @@ export function beginLiveTurn(state: LiveThreadState, at: number): LiveThreadSta
     );
   }
   items = items.filter((item) => !(item.kind === 'turn' && item.turn.id.startsWith(LIVE_TURN_PREFIX) && item.turn.status !== 'running'));
+  const turnSerial = state.turnSerial + 1;
   const turn: TurnModel = {
-    id: `${LIVE_TURN_PREFIX}${at}-${items.length}`,
+    id: `${LIVE_TURN_PREFIX}${at}-${turnSerial}`,
     status: 'running',
     startedAt: at,
     endedAt: null,
     blocks: [],
     streamingThinkingBlockId: null,
   };
-  return { ...state, items: [...items, { kind: 'turn', turn }], liveTurnId: turn.id, liveMessageId: null };
+  return { ...state, items: [...items, { kind: 'turn', turn }], liveTurnId: turn.id, liveMessageId: null, turnSerial };
 }
 
 /** 条目插到在途轮之前（live 轮恒在尾部附近：从尾向前找，避免长会话每次从头扫）。 */

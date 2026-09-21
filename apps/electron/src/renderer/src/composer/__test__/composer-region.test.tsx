@@ -3,6 +3,7 @@ import * as React from 'react';
 
 import { ComposerRegion } from '../composer-region';
 import { initialThreadState, type LiveThreadState } from '@/live/live-thread-state';
+import type { PendingDialog } from '@/live/store';
 import { store as liveStore, workspaceActions } from '@/live/workspace-runtime';
 import { uiStore } from '@/ui/ui-store';
 import { render, renderProbe } from '@/testing/render';
@@ -62,6 +63,7 @@ function seedLive(input: {
   stats?: Record<string, SessionStatsView>
   models?: readonly ModelInfoView[]
   activeThreadId?: string
+  dialogs?: PendingDialog[]
 }): void {
   const tid = input.activeThreadId ?? 't1';
   const threads: Record<string, LiveThreadState> = {};
@@ -75,6 +77,7 @@ function seedLive(input: {
     stats: input.stats ?? { [tid]: statsOf(1200) },
     models: input.models ?? [model('openai', 'gpt-5.3')],
     preferences: preferences(),
+    ...(input.dialogs !== undefined ? { dialogs: input.dialogs } : {}),
   });
 }
 
@@ -87,6 +90,42 @@ afterEach(() => {
   uiStore.getState().reset();
   liveStore.getState().reset();
   jest.restoreAllMocks();
+});
+
+describe('待答 confirm 内联条（随发起会话走）', () => {
+  test('混合会话弹窗：只渲染当前会话的确认条；无关 store 更新不触发无限重渲（getSnapshot 稳定性回归）', () => {
+    seedLive({
+      dialogs: [
+        { requestId: 'r1', threadId: 't1', method: 'confirm', tool: 'Bash', summary: 'rm -rf /tmp/a' },
+        { requestId: 'r2', threadId: 't2', method: 'confirm', tool: 'Bash', summary: 'rm -rf /tmp/b' },
+      ],
+    });
+    const view = render(<ComposerRegion />);
+    expect(view.container.textContent).toContain('需要确认');
+    expect(view.container.textContent).toContain('rm -rf /tmp/a');
+    expect(view.container.textContent).not.toContain('rm -rf /tmp/b'); // 其他会话的待答不进本会话输入卡
+    // P1 回归判别：混合态下无关节点更新若击穿 selector 引用稳定性，act 内会以
+    // Maximum update depth 崩溃（修复前实证 55 次渲染后崩）
+    React.act(() => {
+      liveStore.setState({ stats: { t1: statsOf(9999) } });
+    });
+    expect(view.container.textContent).toContain('rm -rf /tmp/a');
+    view.unmount();
+  });
+
+  test('当前会话多条待答：首条 + 「还有 1 个请求等待」计数', () => {
+    seedLive({
+      dialogs: [
+        { requestId: 'r1', threadId: 't1', method: 'confirm', tool: 'Bash', summary: 'first' },
+        { requestId: 'r2', threadId: 't1', method: 'confirm', tool: 'Bash', summary: 'second' },
+      ],
+    });
+    const view = render(<ComposerRegion />);
+    expect(view.container.textContent).toContain('first');
+    expect(view.container.textContent).not.toContain('second'); // 逐条应答，后续条不占位
+    expect(view.container.textContent).toContain('还有 1 个请求等待');
+    view.unmount();
+  });
 });
 
 describe('ComposerRegion 数据形态', () => {

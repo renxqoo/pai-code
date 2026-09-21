@@ -94,3 +94,9 @@ export const zhErrorCopy = {
   compact_images_rejected: '压缩请求不支持携带图片附件。',
   bash_images_rejected: bashImagesRejectedCopy,
 } satisfies ErrorCopyTable;
+
+/** transient face 词表判定（与 transientFaceCopy 同源闭集）：submitDraft 透传的
+ * 失败串按此窄化——新增 face 随 Record 编译期强制带文案，词表不会漂移。 */
+export function isTransientFace(token: string): token is TransientFace {
+  return token in transientFaceCopy;
+}

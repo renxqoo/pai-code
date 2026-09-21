@@ -92,7 +92,7 @@ async function runTurn(thread: ThreadState, echoText: string): Promise<void> {
   }
 
   const callId = `call-${turn}`;
-  emit(thread, 'tool/call', { turn, step, callId, name: 'bash', arguments: { command: 'ls -la' } });
+  emit(thread, 'tool/call', { turn, step, callId, name: 'bash', arguments: JSON.stringify({ command: 'ls -la' }) });
   await sleep(BEAT);
   for (const piece of ['total 8\ndrwxr-xr-x', '  src  out  package.json\n', 'done']) {
     emit(thread, 'agent/tool-stream', { turn, step, callId, delta: piece });
@@ -129,18 +129,21 @@ async function runTurn(thread: ThreadState, echoText: string): Promise<void> {
   wal(thread, { type: 'tool/result', callId, name: 'bash', content: 'total 8\nsrc  out  package.json\ndone', isError: false });
   await sleep(BEAT);
 
-  emit(thread, 'settled', { ok: true });
-  thread.streaming = false;
   thread.turn += 1;
 
-  // 队列消费：轮末自动取下一条（hub 原子语义）；inbox 变更同样发信号（队列面清位）
+  // 队列消费：轮末自动取下一条（hub 原子语义）；inbox 变更加发 claim 信号（队列面清位）。
+  // settled 是 per-send、agent 完全 idle 后才发（真内核 whenIdle 语义）：排空队列的
+  // 轮间链式续跑，无中间 settled——两帧 settled 在链尾背靠背到达
   const next = thread.queue.shift();
   if (next !== undefined) {
     await sleep(3 * BEAT);
-    emit(thread, 'agent/inbox/spliced', { op: 'splice', ids: [] });
+    emit(thread, 'agent/inbox/spliced', { op: 'claim', target: 'next-turn', turn: thread.turn, claimed: [`msg-${thread.turn}`] });
     wal(thread, { type: 'user/message', content: [{ type: 'text', text: next }] });
     void runTurn(thread, next);
+    return;
   }
+  emit(thread, 'settled', { ok: true, sendId: `send-${turn}` });
+  thread.streaming = false;
 }
 
 const startPrompt = (thread: ThreadState, message: string): void => {
@@ -244,7 +247,7 @@ function handle(command: Record<string, unknown>): void {
         // hub 原子排队：流式中 followUp 入队，轮末自动消费；inbox 变更发
         // agent/inbox/spliced 信号（主进程据此拉 get_state 合成 queueChanged）
         thread.queue.push(message);
-        emit(thread, 'agent/inbox/spliced', { op: 'push', ids: [String(Date.now())] });
+        emit(thread, 'agent/inbox/spliced', { op: 'insert', target: 'next-turn', entries: [{ id: `msg-${Date.now()}`, content: message }] });
         respond(id, { queued: true });
         return;
       }
@@ -281,7 +284,7 @@ function handle(command: Record<string, unknown>): void {
       respond(id, {
         turnStartSeq: thread.transcript.at(-1)?.seq ?? null,
         turnStartedAt: Date.now() - 2000,
-        message: { messageTs: Date.now(), text: '', thinking: '', toolCalls: [] },
+        message: { role: 'assistant', content: [{ type: 'thinking', text: '用户问的是队列与消息渲染，我先检查渲染管线' }, { type: 'text', text: '收到「' }] },
         toolOutputs: [],
         bash: null,
       });

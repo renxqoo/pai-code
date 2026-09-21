@@ -14,6 +14,8 @@ const CDP_PORT = 9333;
 
 function prepareUserData(): void {
   rmSync(USER_DATA, { recursive: true, force: true });
+  // 假 hub 的命令追踪只增不清：断言按全文 grep，必须每次运行从零开始
+  rmSync(resolve(import.meta.dir, 'hub-trace.log'), { force: true });
   // 会话根 = agentDir/sessions（HUB_AGENT_DIR 布局，与 pai-runtime sessionsRoot 同构）；
   // s1/s2 双会话——弹窗隔离验收需要跨会话切换
   for (const id of ['s1', 's2']) {
@@ -224,7 +226,7 @@ async function main(): Promise<void> {
       return { value: areas.at(-1)?.value ?? null, buttons, notice: document.body.innerText.slice(0, 400) };
     })()`);
     console.log('[diag]', JSON.stringify(diag, null, 1).slice(0, 900));
-    await waitFor(cdp, `document.body.innerText.includes('先检查渲染管线') || document.body.innerText.includes('渲染管线')`, 20_000, 'thinking streamed');
+    await waitFor(cdp, `document.body.innerText.includes('先检查渲染管线')`, 20_000, 'thinking streamed');
     await cdp.screenshot(join(SHOT_DIR, '03-streaming.png'));
 
     // 4) 流式中排队第二条：思考文本刚出现即发送（必在流式窗口内）→ hub 入队 →
@@ -369,15 +371,15 @@ async function main(): Promise<void> {
     if (!denyOk) throw new Error('deny button click failed');
     await waitFor(cdp, `!document.body.innerText.includes('需要确认')`, 10_000, 'confirm bar closed after deny');
     console.log('[assert ✓] deny closes confirm bar');
-    // 应答确实回传 hub（ui_response 命令入 trace）
-    await waitFor(
-      cdp,
-      'true',
-      3_000,
-      'noop', // trace 是文件侧事实，等一拍后由主进程断言
-    ).catch(() => undefined);
-    const trace = await Bun.file(resolve(import.meta.dir, 'hub-trace.log')).text();
-    if (!trace.includes('"type":"ui_response"')) throw new Error('ui_response not delivered to hub');
+    // 应答确实回传 hub（ui_response 入 trace；跨 IPC 有时延，真轮询等待）
+    const tracePath = resolve(import.meta.dir, 'hub-trace.log');
+    const traceStarted = Date.now();
+    for (;;) {
+      const trace = await Bun.file(tracePath).text().catch(() => '');
+      if (trace.includes('"type":"ui_response"')) break;
+      if (Date.now() - traceStarted > 10_000) throw new Error('ui_response not delivered to hub');
+      await sleep(250);
+    }
     console.log('[assert ✓] deny response delivered to hub (ui_response)');
     await cdp.screenshot(join(SHOT_DIR, '09-confirm-answered.png'));
 

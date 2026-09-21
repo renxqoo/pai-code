@@ -9,7 +9,6 @@
 
 export type EscAction =
   | { kind: 'none' }
-  | { kind: 'dismiss-dialogs' }
   | { kind: 'close-palette' }
   | { kind: 'close-usage' }
   | { kind: 'close-project-files' }

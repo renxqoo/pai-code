@@ -123,8 +123,9 @@ export function foldHydrate(state: LiveThreadState, action: HydrateAction): Live
           }
         }
       }
-      // messageTurns 随重建清空：live 轮 id 按 (时间戳,长度) 生成可复用，陈旧归属会误杀后续合法 messageFinal
-      return { ...state, items, cursor: action.cursor, seenIds: capSeenIds(new Set(action.items.map((item) => item.id))), liveTurnId: null, liveMessageId: null, messageTurns: {}, hydrateFailed: false };
+      // messageTurns 与 turnSerial 随 state 保留：轮 id 全局单调唯一后，陈旧归属
+      // 恒不等于新轮 id——清空反而放开守卫（迟到 final 以 owner undefined 直通污染新轮）
+      return { ...state, items, cursor: action.cursor, seenIds: capSeenIds(new Set(action.items.map((item) => item.id))), liveTurnId: null, liveMessageId: null, hydrateFailed: false };
     }
     case 'hydrate/failed':
       return { ...state, hydrateFailed: true };

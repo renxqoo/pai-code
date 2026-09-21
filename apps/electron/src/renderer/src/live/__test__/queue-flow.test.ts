@@ -183,7 +183,7 @@ describe('排队全流程（流式中发消息 → 队列镜像 → 结算消费
     controller.dispose();
   });
 
-  test('发送失败面：hub 不可达 → submitDraft 返回错误 kind（上层通知 + 草稿保留重发的依据）', async () => {
+  test('发送失败面：hub 不可达 → submitDraft 返回 transient face（上层通知精准文案 + 草稿保留重发的依据）', async () => {
     const script: Script = {
       prompts: [],
       entriesItems: [],

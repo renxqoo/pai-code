@@ -284,7 +284,7 @@ function onMessageFinal(
     if (event.message.thinking.length > 0 && !blocks.some((block) => block.kind === 'thinking' && block.id === `think-${event.message.id}`)) {
       insertBlock(blocks, { kind: 'thinking', id: `think-${event.message.id}`, text: clip(event.message.thinking) });
     }
-    // 流式未见的 toolCall（错过增量）补为完成态
+    // 流式未见的 toolCall（错过增量）补为运行中块——终态由 settle 定格或 toolEnded 并入
     for (const call of event.message.toolCalls) {
       if (!blocks.some((block) => block.kind === 'tools' && block.calls.some((existing) => existing.id === call.id))) {
         blocks = appendToolCall(

@@ -32,6 +32,9 @@ export type LiveThreadState = {
   callStarts: Readonly<Record<string, number>>;
   /** messageId → 所属轮（messageStarted 时登记）：迟到 messageFinal 的跨轮污染守卫。 */
   messageTurns: Readonly<Record<string, string>>;
+  /** live 轮 id 的单调序（跨 rebuild 持续递增）：轮 id 全局唯一是迟到 messageFinal
+   *  归属守卫的事实基础——同毫秒重启轮/重建后再开轮不得复用旧 id。 */
+  turnSerial: number;
   queue: QueueState;
   streaming: boolean;
   compacting: boolean;
@@ -66,6 +69,7 @@ export const initialThreadState: LiveThreadState = {
   liveMessageId: null,
   callStarts: {},
   messageTurns: {},
+  turnSerial: 0,
   queue: { steering: [], followUp: [] },
   streaming: false,
   compacting: false,
@@ -126,7 +130,9 @@ export function noteCallStart(table: Readonly<Record<string, number>>, callId: s
   return next;
 }
 
-/** 消息归属轮写入：与 callStarts 同款封顶（超限保留最新一半）。 */
+/** 消息归属轮写入：与 callStarts 同款封顶（超限保留最新一半）。键序依赖插入序=时序：
+ *  键必须非整数样（整数样键按数值序先于插入序）且不重注册（覆写不移动键位）——
+ *  生产形态 messageId 恒为 `stream-<n>` 前缀（event-mapper 单调生成），满足约束。 */
 export function noteMessageTurn(table: Readonly<Record<string, string>>, messageId: string, turnId: string): Readonly<Record<string, string>> {
   const merged = { ...table, [messageId]: turnId };
   const keys = Object.keys(merged);

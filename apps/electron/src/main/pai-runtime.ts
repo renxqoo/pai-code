@@ -14,6 +14,8 @@ import {
 } from '@paiapp/api';
 
 import { errorLogToken } from '@paiapp/api';
+
+import { createQueueMirror } from './queue-mirror';
 import {
   openRegistryStore,
   createHostProcess,
@@ -178,8 +180,6 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
     }
   };
 
-  const queueFetchPending = new Set<string>();
-
   const emitQueueOf = (data: unknown, threadId: string): void => {
     const queue = (data as { queue?: { steering?: unknown; followUp?: unknown } }).queue ?? {};
     const steering = Array.isArray(queue.steering) ? queue.steering.filter((item): item is string => typeof item === 'string') : [];
@@ -187,26 +187,11 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
     emit({ type: 'queueChanged', threadId, steering, followUp });
   };
 
-  const scheduleQueueFetch = (threadId: string, retry = false): void => {
-    if (queueFetchPending.has(threadId)) return; // 在拉取中：本拍信号并入下一次拉取的结果
-    queueFetchPending.add(threadId);
-    void hubApi?.session
-      .getState({ threadId })
-      .then((outcome) => {
-        if (outcome.ok) {
-          emitQueueOf(outcome.data, threadId);
-          return;
-        }
-        if (!retry) {
-          queueFetchPending.delete(threadId);
-          scheduleQueueFetch(threadId, true);
-        }
-      })
-      .catch(() => undefined)
-      .finally(() => {
-        queueFetchPending.delete(threadId);
-      });
-  };
+  // 队列面镜像（去抖/恰一次重试/在途守卫的回归在 __test__/queue-mirror）
+  const queueMirror = createQueueMirror({
+    fetchState: (threadId) => hubApi?.session.getState({ threadId }) ?? Promise.resolve({ ok: false } as const),
+    emitQueue: emitQueueOf,
+  });
 
   /** hub 会话布局词法（<sessionsRoot>/<safeId>/events.jsonl；id 围栏 = x-harness 全词法）——旧布局判定用。 */
   const isHubSessionLayout = (sessionPath: string): boolean => {
@@ -233,10 +218,11 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
           return;
         }
         if (frame.name === 'agent/inbox/spliced') {
-          // 队列结构信号：hub 只发 queue/op/ids（无文本），按迁移指引拉 get_state.queue
-          // 合成 queueChanged（文本快照与读命令同源）。合并去抖（N 连 splice 一拉）+
-          // 失败恰一次重试（瞬态 busy/超时不丢队列面——失败即悬挂到下一信号是缺陷）
-          scheduleQueueFetch(frame.threadId);
+          // 队列结构信号：载荷为 op 词表（insert/claim/clear，entries 携带文本快照），
+          // 本侧只当触发器（读 threadId），拉 get_state.queue 合成 queueChanged（文本
+          // 快照与读命令同源）。合并去抖 + 失败恰一次重试（瞬态 busy/超时不丢队列面
+          // ——失败即悬挂到下一信号是缺陷）
+          queueMirror.signal(frame.threadId);
           return;
         }
         applyUiEvents(frame.threadId, eventMapper.mapEvent(frame));

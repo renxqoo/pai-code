@@ -2,8 +2,10 @@ import { describe, expect, test } from 'bun:test';
 import type { UiEvent } from '@paiapp/contracts';
 
 import { foldThreadEvent } from '../fold-events';
+import { foldHydrate } from '../fold-hydrate';
 import { initialThreadState, noteMessageTurn } from '../live-thread-state';
 import type { LiveThreadState } from '../live-thread-state';
+import type { HistoryItem } from '@paiapp/contracts';
 import type { ThreadItem, TurnBlock } from '@/thread/thread-model';
 
 /**
@@ -188,6 +190,48 @@ describe('同步折叠性能探针（无定时器/批延迟参与合并）', () 
     // 归属登记：两条消息都指向当前轮（迟到 final 守卫的事实基础）
     expect(s.messageTurns['m1']).toBe(liveTurn(s)?.id);
     expect(s.messageTurns['m2']).toBe(liveTurn(s)?.id);
+  });
+});
+
+/** rebuild 载荷最小形状（真源 get_entries → entries-mapper 的 items）。 */
+function rebuildItems(): HistoryItem[] {
+  return [
+    { kind: 'user', id: 'seq-1', text: '分析一下', origin: 'user', at: 1, images: [] },
+    { kind: 'assistant', id: 'seq-2', at: 2, messageTs: 2, text: '旧轮权威正文', thinking: '', toolCalls: [], usage: null, stopReason: null, errorMessage: null },
+  ] as unknown as HistoryItem[];
+}
+
+describe('迟到 messageFinal 跨轮守卫的三个边界（对抗审查 F1/F2 回归）', () => {
+  test('F1：settle→rebuild→新轮后，旧轮迟到 final 不得以 owner undefined 直通污染新轮', () => {
+    let s = initialThreadState;
+    s = ev({ type: 'turnStarted', threadId: T, at: 100 }, s);
+    s = ev({ type: 'messageStarted', threadId: T, messageId: 'stream-1', at: 101 }, s);
+    s = ev({ type: 'textDelta', threadId: T, messageId: 'stream-1', delta: '旧轮流式' }, s);
+    s = ev({ type: 'turnSettled', threadId: T, ok: true, usage: null }, s);
+    // settle 后 rebuild（live-controller 的对账路径）；归属表不随重建清空
+    s = foldHydrate(s, { kind: 'hydrate/rebuild', items: rebuildItems(), cursor: 2 });
+    s = ev({ type: 'turnStarted', threadId: T, at: 200 }, s);
+    s = ev({ type: 'messageStarted', threadId: T, messageId: 'stream-2', at: 201 }, s);
+    s = ev({ type: 'textDelta', threadId: T, messageId: 'stream-2', delta: '新轮正文' }, s);
+    // 旧轮权威此刻迟到（错序/重放形态）
+    s = ev({ type: 'messageFinal', threadId: T, message: { id: 'stream-1', text: '旧轮权威', thinking: '', toolCalls: [], usage: null } }, s);
+    expect(blocksOf(s, ['text'])).toBe('text:新轮正文'); // 修复前：混入 text:旧轮权威
+  });
+
+  test('F2：同毫秒连开两轮（失败重试零条目增长），旧轮迟到 final 因轮 id 单调唯一被拦', () => {
+    let s = initialThreadState;
+    s = ev({ type: 'turnStarted', threadId: T, at: 5000 }, s);
+    s = ev({ type: 'messageStarted', threadId: T, messageId: 'stream-1', at: 5001 }, s);
+    s = ev({ type: 'textDelta', threadId: T, messageId: 'stream-1', delta: '轮1' }, s);
+    s = ev({ type: 'turnSettled', threadId: T, ok: false, usage: null }, s);
+    s = ev({ type: 'turnStarted', threadId: T, at: 5000 }, s); // 同毫秒：旧实现 id 按 (时间戳,长度) 复用
+    s = ev({ type: 'messageStarted', threadId: T, messageId: 'stream-2', at: 5002 }, s);
+    s = ev({ type: 'textDelta', threadId: T, messageId: 'stream-2', delta: '轮2' }, s);
+    s = ev({ type: 'messageFinal', threadId: T, message: { id: 'stream-1', text: '轮1权威', thinking: '', toolCalls: [], usage: null } }, s);
+    expect(blocksOf(s, ['text'])).toBe('text:轮2'); // 修复前：owner===liveTurnId 误放行
+    // 轮 id 单调唯一的事实：两轮 id 不同
+    const ids = s.items.filter((item) => item.kind === 'turn').map((item) => (item as { kind: 'turn'; turn: { id: string } }).turn.id);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });
 

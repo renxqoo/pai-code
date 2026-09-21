@@ -64,8 +64,12 @@ function ComposerRegion(): React.JSX.Element {
   const branchRevision = useStore(uiStore, (s) => s.branchRevision);
   /** 排队中消息（hub 队列镜像：queueChanged 事件折叠的 followUp 文本；事件时差内为空态） */
   const queuedMessages = threadState?.queue.followUp ?? EMPTY_QUEUED;
-  /** 待答 confirm（只呈现发起会话的——内联确认条随输入卡走，切会话自然不在场） */
-  const pendingDialogs = useStore(liveStore, (s) => dialogsOfThread(s.dialogs, s.activeThreadId));
+  /** 待答 confirm（只呈现发起会话的——内联确认条随输入卡走，切会话自然不在场）。
+   *  两片输入各自引用稳定后经 useMemo 合成：useSyncExternalStore 的 selector 恒返
+   *  新数组会击穿 getSnapshot 一致性检查（混合会话弹窗态无限重渲），过滤必须在
+   *  memo 层做 */
+  const allDialogs = useStore(liveStore, (s) => s.dialogs);
+  const pendingDialogs = React.useMemo(() => dialogsOfThread(allDialogs, activeThreadId), [allDialogs, activeThreadId]);
 
   const value = drafts[activeThreadId] ?? composerDraft;
   const generating = threadState?.streaming ?? false;
