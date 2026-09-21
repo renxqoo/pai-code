@@ -205,15 +205,33 @@ expect(r).toEqual({ ok: false, error: { kind: 'unknown_thread' } });   // kind �
 
 ### 外部实现（三个圈各自的完整形态）
 
-**圈1a · api-routes（业务 + 一行调用 + kind 分派）**：
+**圈1a · api-routes（三种真实形态——`settle`/`relay` 两原语消灭解包仪式）**：
 
 ```ts
-'session/setKeepalive': async (params) => {
-  const result = await hub.thread.setKeepalive({ threadId: params.threadId, keepalive: params.keepalive });
-  if (!result.ok) return fail(result.error);          // ApiError 判别联合直达渲染层
-  return { ok: true as const, data: null };
+// packages/api 导出 settle：HubResult → ApiOutcome 的单点折叠（全仓唯一一处干这事）
+export function settle<T>(r: HubResult<T>): ApiOutcome<T> {
+  return r.ok ? { ok: true, data: r.data } : { ok: false, error: r.error };
+}
+
+// 形态① 纯转发路由（无业务）——一行，relay 组合器：params 形状 == hub 入参时直接挂
+'session/setKeepalive': relay(hub.thread.setKeepalive),
+'session/subagents':    relay(hub.session.subagents),
+
+// 形态② 带业务路由——业务本体不可省，失败出口一行 settle：
+'session/start': async (params) => {
+  const result = await hub.thread.start(params);
+  if (!result.ok) return settle(result);
+  const view = runtime.applyStartOutcome(result.data.threadId, …);   // app 业务
+  return { ok: true, data: view };
 },
+
+// 形态③ 非路由消费（pai-runtime/monitor）——本来就是一行：
+await hub.thread.setKeepalive({ threadId, keepalive });
 ```
+
+relay 放 api-routes 本地（8 行组合器：`(call) => async (p) => settle(await call(p))`，
+类型上强制「路由 params 形状 ≡ hub 入参」——不一致就写不成 relay，必须回到形态②显式
+映射，错配不可能静默溜过）。§2d 早期示例的逐字段展开是讲解形态，非生产形态。
 
 **圈1b · pai-runtime（原直连收编——单命令薄封装 + 编排留驻原地）**：
 
