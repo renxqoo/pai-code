@@ -1,8 +1,8 @@
 /**
  * HubApi 门面（T40 §2/§2c）：全进程恰一个实例（pai-runtime buildHost 装配），
  * 消费方经注入拿域接口，不自己拼命令。零 class、freeze、纯依赖注入可裸测。
- * 七域齐备（thread/session/models/permissions/agents/settings/host）；收窄视图
- * 并入（views/）随 W3 落位。
+ * 七域齐备（thread/session/models/permissions/agents/settings/host）；帧解码/
+ * 命令编码/事件映射（events/）与协议响应收窄视图（views/）由本包统一导出。
  */
 import { createAgentCommands, type AgentCommands } from './commands/agents';
 import { createHostCommands, type HostCommands } from './commands/host';
@@ -47,3 +47,27 @@ export type { PermissionCommands } from './commands/permissions';
 export type { AgentCommands } from './commands/agents';
 export type { SettingsCommands } from './commands/settings';
 export type { HostCommands } from './commands/host';
+
+export { createFrameDecoder, classifyFrame, type FrameDecoder, type FrameDecoderOptions } from './events/frame-decoder';
+export { encodeCommand } from './events/command-encoder';
+export { createEventMapper, type EventMapDeps, type EventMapper } from './events/event-mapper';
+export { mapDialogRequest } from './views/dialog-mapper';
+export { mapEntries } from './views/entries-mapper';
+export {
+  toSessionView,
+  threadStateView,
+  thinkingLevelView,
+  savedSessions,
+  modelInfos,
+  sessionStatsView,
+  sessionCommands,
+  previewCommands,
+  hostInfoView,
+  threadListRows,
+  inflightView,
+  subagentSnapshotView,
+  pendingDialogsView,
+  type SessionViewInput,
+} from './views/response-views';
+export { diffFromWriteArgs } from './views/diff-extract';
+export { flattenUserText, assistantText, assistantThinking } from './views/content';

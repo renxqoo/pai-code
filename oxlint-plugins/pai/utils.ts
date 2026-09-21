@@ -8,12 +8,11 @@ import type { ESTree } from '@oxlint/plugins'
 
 export const WORKSPACE_MATRIX: Record<string, readonly string[]> = {
   '@paiapp/contracts': [],
-  '@paiapp/adapter': ['@paiapp/contracts'],
   '@paiapp/core': ['@paiapp/contracts'],
-  '@paiapp/infra': ['@paiapp/contracts', '@paiapp/core', '@paiapp/adapter'],
-  '@paiapp/api': ['@paiapp/contracts', '@paiapp/core', '@paiapp/infra', '@paiapp/adapter'],
+  '@paiapp/api': ['@paiapp/contracts'],
+  '@paiapp/infra': ['@paiapp/contracts', '@paiapp/core', '@paiapp/api'],
   '@paiapp/ui': ['@paiapp/contracts'],
-  '@paiapp/testkit': ['@paiapp/contracts', '@paiapp/adapter'],
+  '@paiapp/testkit': ['@paiapp/contracts'],
 }
 
 const pkgNameCache = new Map<string, string | null>()

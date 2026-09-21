@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
 import { mapEntries } from '../entries-mapper';
-import { isFileMutatingTool } from '../diff-extract';
 
 /** WAL 投影行 {seq, ts, event}（get_entries 响应 entries 元素的形状——event 摊平 {type, …data}）。 */
 function row(seq: number, ts: number, event: Record<string, unknown>): Record<string, unknown> {
@@ -299,16 +298,6 @@ describe('mapEntries（x-harness WAL 转写真相源）', () => {
   });
 });
 
-describe('isFileMutatingTool · 内核文件工具词表（x-harness：仅 write）', () => {
-  test.each([
-    ['write', true],
-    ['bash', false],
-    ['agent_spawn', false],
-    ['', false],
-  ])('%s → %s', (name, expected) => {
-    expect(isFileMutatingTool(name)).toBe(expected);
-  });
-});
 
 describe('surfaceOp replace（压缩区间折叠——docs/COMPACTION.md §2.A）', () => {
   test('带 replace 的摘要条目剔除区间内旧条目再追加；append 直通', () => {

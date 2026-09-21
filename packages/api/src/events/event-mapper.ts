@@ -1,8 +1,8 @@
 import type { UiEvent, UsageView } from '@paiapp/contracts';
 
-import { previewArgs } from './args-preview';
-import { diffFromToolCall } from './diff-extract';
-import { subagentsField } from './subagent-spawns';
+import { previewArgs } from '../views/args-preview';
+import { diffFromToolCall } from '../views/diff-extract';
+import { subagentsField } from '../views/subagent-spawns';
 
 /**
  * x-harness hub event 帧 → UiEvent（渲染层流式装饰）。

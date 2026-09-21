@@ -23,7 +23,6 @@
         "@base-ui/react": "^1.8.0",
         "@fontsource-variable/geist": "^5.3.0",
         "@happy-dom/global-registrator": "^20.14.3",
-        "@paiapp/adapter": "workspace:*",
         "@paiapp/api": "workspace:*",
         "@paiapp/contracts": "workspace:*",
         "@paiapp/core": "workspace:*",
@@ -56,12 +55,6 @@
         "zustand": "^5.0.15",
       },
     },
-    "packages/adapter": {
-      "name": "@paiapp/adapter",
-      "dependencies": {
-        "@paiapp/contracts": "workspace:*",
-      },
-    },
     "packages/api": {
       "name": "@paiapp/api",
       "dependencies": {
@@ -83,7 +76,7 @@
     "packages/infra": {
       "name": "@paiapp/infra",
       "dependencies": {
-        "@paiapp/adapter": "workspace:*",
+        "@paiapp/api": "workspace:*",
         "@paiapp/contracts": "workspace:*",
         "@paiapp/core": "workspace:*",
       },
@@ -399,8 +392,6 @@
     "@oxlint/binding-win32-x64-msvc": ["@oxlint/binding-win32-x64-msvc@1.81.0", "", { "os": "win32", "cpu": "x64" }, "sha512-IZuUCwGw9emG5JtCp+fYGB+Z4OWEoeEcM8R5BA1pYw63/ieYFVdcU2ylxTpHbVHSenZnsYE+ZZ20uHAJszQ4cA=="],
 
     "@oxlint/plugins": ["@oxlint/plugins@1.81.0", "", {}, "sha512-HhD8kd3r6XpelZkhxhRty/po8V6yK1VV63Eq4kSsOS2IoHUywG3DV2EX+z/ZHw46aLI74Y6aA604NRiAqLKW9w=="],
-
-    "@paiapp/adapter": ["@paiapp/adapter@workspace:packages/adapter"],
 
     "@paiapp/api": ["@paiapp/api@workspace:packages/api"],
 

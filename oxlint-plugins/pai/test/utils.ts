@@ -25,7 +25,6 @@ export function lintTree(files: Record<string, string>, lintTarget: string): Lin
     }
     for (const [dir, name] of [
       ['packages/contracts', '@paiapp/contracts'],
-      ['packages/adapter', '@paiapp/adapter'],
       ['packages/core', '@paiapp/core'],
       ['packages/infra', '@paiapp/infra'],
       ['packages/api', '@paiapp/api'],

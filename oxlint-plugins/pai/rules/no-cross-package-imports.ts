@@ -3,8 +3,9 @@ import type { Context } from '@oxlint/plugins'
 
 import { importVisitors, packageOf, WORKSPACE_MATRIX } from '../utils.ts'
 
-// workspace 包间依赖方向：只准按矩阵向下依赖（contracts ← core ← infra ← api），
-// ui/testkit 只认 contracts；apps 内不受限。矩阵在 utils.ts，改动即修宪法。
+// workspace 包间依赖方向：只准按矩阵向下依赖（contracts ← core、api ← infra；
+// core/api 只认 contracts），ui/testkit 只认 contracts；apps 内不受限。
+// 矩阵在 utils.ts，改动即修宪法。
 
 export default defineRule({
   meta: {

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { createEventMapper } from '../event-mapper';
 import { encodeCommand } from '../command-encoder';
-import { mapDialogRequest } from '../dialog-mapper';
+import { mapDialogRequest } from '../../views/dialog-mapper';
 import type { EventMapper } from '../event-mapper';
 
 const deps = { now: () => 1_000 };

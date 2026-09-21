@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFi
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { HUB_ERROR_CODES } from '@paiapp/contracts';
 import { createApiRoutes } from '../api-routes';
 import { createAgentDefinitionsStore } from '../agent-definitions-store';
 import { createFileSettings, type ProviderKeyStore } from '../file-settings';
@@ -189,6 +190,12 @@ describe('app API 全接口 × 真 x-harness host-hub（script 默认门）', ()
     const bootstrap = (await h.invoke('app/bootstrap', {})) as { ok: boolean; data: { models: unknown[]; saved: unknown[]; hostPhase: string } };
     expect(bootstrap.ok).toBe(true);
     expect(bootstrap.data.hostPhase).toBe('ready');
+
+    // --- 码表对拍（T40 §2.6 真·双侧封闭）：真 hub 握手暴露的 errorCodes 与
+    //     contracts 镜像集合相等——x-harness 新增码未镜像即此断言红 ---
+    const info = await h.runtime.hub.host.info();
+    expect(info.ok).toBe(true);
+    expect([...((info.data as { errorCodes: string[] }).errorCodes ?? [])].sort()).toEqual([...HUB_ERROR_CODES].sort());
 
     // --- 会话生命周期：start → events.jsonl + header.json 落盘 ---
     const started = (await h.invoke('session/start', { cwd: h.work, trusted: true })) as { ok: boolean; data: { threadId: string; sessionPath: string } };

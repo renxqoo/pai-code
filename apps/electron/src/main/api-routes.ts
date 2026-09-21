@@ -2,6 +2,8 @@ import { realpathSync, statSync } from 'node:fs';
 import { basename as baseName, dirname as dirnamePath, join as joinPaths, resolve as resolvePath, sep as pathSep } from 'node:path';
 
 import {
+  appError,
+  createHubApi,
   inflightView,
   mapEntries,
   modelInfos,
@@ -10,10 +12,13 @@ import {
   savedSessions,
   sessionCommands,
   sessionStatsView,
+  settle,
   subagentSnapshotView,
   threadStateView,
   thinkingLevelView,
-} from '@paiapp/adapter';
+  type HubApi,
+  type HubResult,
+} from '@paiapp/api';
 import { createFileRead, type FileRead } from './file-read';
 import { createGitBranches, type GitBranches } from './git-branches';
 import { createGitGraph, type GitGraph } from './git-graph';
@@ -24,7 +29,6 @@ import { createSettingsRoutes } from './api-routes-settings';
 import type { AgentDefinitionsStore } from './agent-definitions-store';
 import { THINKING_LEVEL_ORDER, type ThinkingLevel } from '@paiapp/contracts';
 import type { ApiError } from '@paiapp/contracts';
-import { appError, createHubApi, settle, type HubApi, type HubResult } from '@paiapp/api';
 import { errorLogToken } from './error-log-token';
 import { ApiSchemas, type ApiMethod, type ApiOutcome, type ApiParams, type ModelInfoView } from '@paiapp/contracts';
 
@@ -38,7 +42,7 @@ import type { ProviderKeyStore } from './file-settings';
 
 /**
  * 渲染层 invoke 路由：zod 校验 → hub 域方法（runtime.hub 单实例门面）→ 响应收窄为视图。
- * 全部错误以 {ok:false,error:ApiError}（kind 判别联合）；协议字面量只在本文件族与 adapter 出现。
+ * 全部错误以 {ok:false,error:ApiError}（kind 判别联合）；协议字面量只在本文件族与 @paiapp/api（views/events）出现。
  */
 
 type FileSettings = ReturnType<typeof createFileSettings>;

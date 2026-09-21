@@ -58,39 +58,55 @@ describe('pai/no-cross-package-imports', () => {
   })
 })
 
-describe('pai/no-cross-package-imports · adapter 矩阵（T10 修宪）', () => {
-  test('adapter → contracts：合法', () => {
+describe('pai/no-cross-package-imports · api/infra/testkit 矩阵锁定', () => {
+  test('api → contracts：合法（views/events 收窄层）', () => {
     const { exitCode, stdout } = lintTree(
-      { ...MINI_TREE, 'packages/adapter/src/a.ts': "import type {} from '@paiapp/contracts';\nexport {};\n" },
-      'packages/adapter/src/a.ts',
+      { ...MINI_TREE, 'packages/api/src/a.ts': "import type {} from '@paiapp/contracts';\nexport {};\n" },
+      'packages/api/src/a.ts',
     )
     expect(exitCode).toBe(0)
     expect(ruleCount(stdout, 'no-cross-package-imports')).toBe(0)
   })
 
-  test('adapter → infra（越层向上）：报', () => {
+  test('api → infra（越层向上）：报', () => {
     const { stdout } = lintTree(
-      { ...MINI_TREE, 'packages/adapter/src/b.ts': "import type {} from '@paiapp/infra';\nexport {};\n" },
-      'packages/adapter/src/b.ts',
+      { ...MINI_TREE, 'packages/api/src/b.ts': "import type {} from '@paiapp/infra';\nexport {};\n" },
+      'packages/api/src/b.ts',
     )
     expect(ruleCount(stdout, 'no-cross-package-imports')).toBe(1)
   })
 
-  test('infra → adapter：合法（host 进程用帧解码）', () => {
+  test('infra → api：合法（host 进程用帧解码/命令编码）', () => {
     const { exitCode, stdout } = lintTree(
-      { ...MINI_TREE, 'packages/infra/src/h.ts': "import type {} from '@paiapp/adapter';\nexport {};\n" },
+      { ...MINI_TREE, 'packages/infra/src/h.ts': "import type {} from '@paiapp/api';\nexport {};\n" },
       'packages/infra/src/h.ts',
     )
     expect(exitCode).toBe(0)
     expect(ruleCount(stdout, 'no-cross-package-imports')).toBe(0)
   })
 
-  test('testkit → adapter：合法（fake-hub/夹具共用）', () => {
+  test('infra → @paiapp/adapter：报（包已删，残留引用即违规）', () => {
+    const { stdout } = lintTree(
+      { ...MINI_TREE, 'packages/infra/src/i.ts': "import type {} from '@paiapp/adapter';\nexport {};\n" },
+      'packages/infra/src/i.ts',
+    )
+    expect(ruleCount(stdout, 'no-cross-package-imports')).toBe(1)
+  })
+
+  test('testkit → contracts：合法（fake-hub/夹具共用）', () => {
     const { exitCode, stdout } = lintTree(
-      { ...MINI_TREE, 'packages/testkit/src/f.ts': "import type {} from '@paiapp/adapter';\nexport {};\n" },
-      'packages/testkit/src/f.ts',
+      { ...MINI_TREE, 'packages/testkit/src/g.ts': "import type {} from '@paiapp/contracts';\nexport {};\n" },
+      'packages/testkit/src/g.ts',
     )
     expect(exitCode).toBe(0)
     expect(ruleCount(stdout, 'no-cross-package-imports')).toBe(0)
+  })
+
+  test('testkit → @paiapp/adapter：报（包已删，残留引用即违规）', () => {
+    const { stdout } = lintTree(
+      { ...MINI_TREE, 'packages/testkit/src/f.ts': "import type {} from '@paiapp/adapter';\nexport {};\n" },
+      'packages/testkit/src/f.ts',
+    )
+    expect(ruleCount(stdout, 'no-cross-package-imports')).toBe(1)
   })
 })

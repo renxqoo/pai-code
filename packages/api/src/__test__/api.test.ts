@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test';
 
 import type { HostCommandOutcome, PaiCommand } from '@paiapp/contracts';
 
+import { HUB_ERROR_CODES } from '@paiapp/contracts';
+
 import { createHubApi } from '../index';
 import { decodeApiError } from '../errors';
 import { createTransport } from '../transport';
@@ -81,6 +83,12 @@ describe('transport 管线契约（T40 §2.3 审查处置 H1）', () => {
 });
 
 describe('decodeApiError 全函数（永不抛）', () => {
+  test('全码矩阵：HUB_ERROR_CODES 逐一 kind 直映（词表漂移即此处红）', () => {
+    for (const code of HUB_ERROR_CODES) {
+      expect(decodeApiError({ code, message: `msg:${code}` })).toEqual({ kind: code, message: `msg:${code}` });
+    }
+  });
+
   test('infra 串 → transient 面；未知串保留原文；垃圾输入落 command_failed', () => {
     expect(decodeApiError('host_not_running')).toEqual({ kind: 'transient', face: 'host_not_running' });
     expect(decodeApiError('weird new failure')).toEqual({ kind: 'transient', face: 'command_failed', message: 'weird new failure' });

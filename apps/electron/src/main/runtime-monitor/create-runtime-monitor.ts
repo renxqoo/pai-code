@@ -1,5 +1,4 @@
-import { hostInfoView, threadListRows } from '@paiapp/adapter';
-import type { HubApi } from '@paiapp/api';
+import { hostInfoView, threadListRows, type HubApi } from '@paiapp/api';
 import type {
   HeartbeatFrame,
   HostInfoView,

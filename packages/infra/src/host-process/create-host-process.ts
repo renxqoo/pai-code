@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 
-import { createFrameDecoder, encodeCommand } from '@paiapp/adapter';
+import { createFrameDecoder, encodeCommand } from '@paiapp/api';
 import type { HostDiagnostics, HostPhase, HostProcessPort, HostRuntimeConfig, HostCommandOutcome, HubFrame, PaiCommand } from '@paiapp/contracts';
 
 import { hubSpawnEnv } from './spawn-env';

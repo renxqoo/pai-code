@@ -185,8 +185,8 @@ describe('foldEvents · 真实协议形态回归（对抗审查 P0-1/P0-2）', (
     expect(texts[0]).toMatchObject({ text: '苹果 香蕉 橘子' });
   });
 
-  test('user 消息不产生渲染事件（adapter 侧过滤）；fold 侧防御：messageStarted 空 id 不炸', () => {
-    // adapter 层已过滤；fold 侧防御：messageStarted 空 id 不炸
+  test('user 消息不产生渲染事件（映射层过滤）；fold 侧防御：messageStarted 空 id 不炸', () => {
+    // 映射层（@paiapp/api events）已过滤；fold 侧防御：messageStarted 空 id 不炸
     let s = initialThreadState;
     s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(0) }), tick(0));
     s = foldThreadEvent(s, ev({ type: 'messageStarted', threadId: 't', messageId: '', at: tick(1) }), tick(1));

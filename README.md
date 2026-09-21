@@ -22,10 +22,10 @@ Pai 是一个 macOS 上的 AI 干活助手：你用一句话说清要什么，�
 | --- | --- |
 | `apps/electron` | 应用壳：主进程 / preload / renderer 三面（electron-vite + React） |
 | `packages/contracts` | Client 接口、hub 协议镜像、Port 定义（单一真相） |
-| `packages/adapter` | hub 协议适配：帧解析、事件映射、命令编码、夹具库 |
+
 | `packages/core` | 线程调度与预算：客户端限流、StreamAggregator、Budget |
 | `packages/infra` | HubSupervisor（spawn/心跳/恢复）+ 视图持久化（node:sqlite） |
-| `packages/api` | 主进程 API 服务、IPC handlers 与安全加固 |
+| `packages/api` | hub 接口统一封装：七域命令门面、transport 管线、ApiError 解码、views/events（收窄映射与帧编解码） |
 | `packages/ui` | 渲染层通用组件（shadcn 风格）与 strings 文案目录 |
 | `packages/testkit` | 测试装置（fake-hub 等） |
 | `oxlint-plugins/pai` | 工程纪律 oxlint 插件：依赖白名单、环境面、UI 规则 |

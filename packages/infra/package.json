@@ -8,6 +8,6 @@
   "dependencies": {
     "@paiapp/contracts": "workspace:*",
     "@paiapp/core": "workspace:*",
-    "@paiapp/adapter": "workspace:*"
+    "@paiapp/api": "workspace:*"
   }
 }

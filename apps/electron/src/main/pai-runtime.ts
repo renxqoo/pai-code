@@ -2,8 +2,14 @@ import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-import { createEventMapper, mapDialogRequest, savedSessions, toSessionView } from '@paiapp/adapter';
-import { createHubApi, type HubApi } from '@paiapp/api';
+import {
+  createEventMapper,
+  createHubApi,
+  mapDialogRequest,
+  savedSessions,
+  toSessionView,
+  type HubApi,
+} from '@paiapp/api';
 
 import { errorLogToken } from './error-log-token';
 import { autoTitleCandidateOf } from './auto-title';
@@ -28,7 +34,7 @@ import { writeModelsConfig } from './models-config';
 
 /**
  * 主进程运行时：host 进程 + 注册表 + 会话表（SessionView 单一内存真相）。
- * 职责：帧 → UiEvent（协议语义只经 adapter）；注册表与内存表同步；
+ * 职责：帧 → UiEvent（协议语义只经 @paiapp/api 的 events/views）；注册表与内存表同步；
  * 启动/重启后只对账（注册表 vs 盘上会话，parked 占位渲染），会话恢复是
  * 渲染层按需发起的 session/resume（懒恢复）；渲染层事件在 bootstrap 前
  * 缓冲（上限 1000，先到先丢弃）。

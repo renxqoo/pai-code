@@ -8,9 +8,6 @@ import type { DiffFileView } from '@paiapp/contracts';
 
 const FILE_MUTATING_TOOLS = new Set(['write']);
 
-export function isFileMutatingTool(name: string): boolean {
-  return FILE_MUTATING_TOOLS.has(name);
-}
 
 function lineCount(text: string): number {
   return text.length === 0 ? 0 : text.split('\n').length;
