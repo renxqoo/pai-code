@@ -20,10 +20,10 @@ function candidatesOf(root: string): [string, string] {
 }
 
 describe('hub-paths 解析链（设置 > env > dev 同级探测 > 打包产物）', () => {
-  test('症状回归：无 env 无 settings 时探测同级 my-agent 检出，src 优先于 dist', () => {
+  test('症状回归：无 env 无 settings 时探测同级 x-harness 检出，src 优先于 dist', () => {
     const [src, dist] = candidatesOf('/work/agent-app');
-    expect(src).toBe('/work/my-agent/packages/host-hub/src/host/cli.ts');
-    expect(dist).toBe('/work/my-agent/packages/host-hub/dist/host/cli.js');
+    expect(src).toBe('/work/x-harness/apps/host-hub/src/host/cli.ts');
+    expect(dist).toBe('/work/x-harness/apps/host-hub/dist/host/cli.js');
     const resolved = resolveHubPaths({
       fromSettings: null,
       fromEnv: null,

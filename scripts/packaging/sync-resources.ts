@@ -7,7 +7,7 @@ import { basename, dirname, join, resolve } from 'node:path';
  * resources/（bun/bun + host-hub/host-hub，即打包态运行时的 extraResources 布局，
  * 见主进程 hub-paths 解析链）。host-hub 产物 = `bun build --compile` 单文件可执行
  * （直执行形态：hub 与 worker 同可执行体自 spawn，无 node_modules 依赖）；bun 二进制
- * 供 settings hubDev 脚本形态覆盖用。来源默认 AGENTS.md dev 拓扑的旁级 my-agent 检出
+ * 供 settings hubDev 脚本形态覆盖用。来源默认 AGENTS.md dev 拓扑的旁级 x-harness 检出
  * 源码入口与本机 bun；PAI_HUB_ENTRY（源入口）与 PAI_BUN_PATH 可覆盖。
  */
 
@@ -17,7 +17,7 @@ export interface ResourceSources {
   hubSource: string;
 }
 
-/** 资源来源解析（纯函数）：env 覆盖 > 开发缺省（旁级 my-agent 源码入口） */
+/** 资源来源解析（纯函数）：env 覆盖 > 开发缺省（旁级 x-harness 源码入口） */
 export function resolveResourceSources(
   env: Record<string, string | undefined>,
   repoRoot: string,
@@ -26,7 +26,7 @@ export function resolveResourceSources(
   return {
     bunPath: env['PAI_BUN_PATH'] ?? execPath,
     hubSource:
-      env['PAI_HUB_ENTRY'] ?? join(repoRoot, '..', 'my-agent', 'packages', 'host-hub', 'src', 'host', 'cli.ts'),
+      env['PAI_HUB_ENTRY'] ?? join(repoRoot, '..', 'x-harness', 'apps', 'host-hub', 'src', 'host', 'cli.ts'),
   };
 }
 

@@ -29,9 +29,9 @@ export interface ResolveHubPathsDeps {
 }
 
 /** dev 同级 host-hub 检出的入口候选（源码形态优先：bun 原生跑 TS，免构建；
- *  dist 产物 --external @my-agent/* 只能原地跑，作为兜底）。 */
+ *  dist 产物 --external @x-harness/* 只能原地跑，作为兜底）。 */
 export function devHubEntryCandidates(devRepoRoot: string): string[] {
-  const hubRoot = resolve(devRepoRoot, '..', 'my-agent', 'packages', 'host-hub');
+  const hubRoot = resolve(devRepoRoot, '..', 'x-harness', 'apps', 'host-hub');
   return [join(hubRoot, 'src', 'host', 'cli.ts'), join(hubRoot, 'dist', 'host', 'cli.js')];
 }
 
