@@ -1,7 +1,7 @@
 import type { GitGraphCommit, GitGraphView } from '@paiapp/contracts';
-import type { ApiError } from '@paiapp/api';
+import type { ApiError } from '../errors';
 
-import { failureError, mapGitFailure, runGit, type GitExec } from './git-branches';
+import { failureError, mapGitFailure, type GitExec } from './git-branches';
 
 /**
  * 本地 git 图谱读口（T36）：topo 序提交 + parents（渲染层算泳道几何）+ 本地分支装饰。
@@ -77,7 +77,7 @@ export interface GitGraph {
   invalidate: (cwd: string) => void
 }
 
-export function createGitGraph(run: GitExec = runGit): GitGraph {
+export function createGitGraph(run: GitExec): GitGraph {
   const graphInFlight = new Map<string, Promise<GitGraphOutcome>>();
 
   const readGraph = async (cwd: string): Promise<GitGraphOutcome> => {

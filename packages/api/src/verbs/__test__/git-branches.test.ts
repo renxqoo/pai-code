@@ -1,14 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { execFileSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 
 import { classifyGitExecError, createGitBranches, isValidBranchName, mapGitFailure, parseBranchList, parseDirtyCount, type GitExec, type GitExecResult } from '../git-branches';
 
 /**
  * 本地 git 分支能力（T23）：纯函数分类 + fake 执行器驱动的行为
  * （非仓库空形态 / 脏工作区拒绝 / 创建并检出 / 同 cwd 单飞与串行）。
+ * execFile 默认执行器的真子进程集成在 apps/electron（git-exec.test.ts）。
  */
 
 const ok = (stdout: string): GitExecResult => ({ code: 0, stdout, stderr: '', error: null });
@@ -171,12 +168,6 @@ describe('list', () => {
       ok: false,
       error: { kind: 'internal_error', message: 'git_failed:fatal: detected dubious ownership in repository' },
     });
-  });
-
-  test('默认执行器：工作目录不存在 → cwd_not_found（不误报成 git 不在 PATH）', async () => {
-    const gone = join(mkdtempSync(join(tmpdir(), 'pai-git-gone-')), 'inner');
-    rmSync(gone, { recursive: true, force: true });
-    expect(await createGitBranches().list(gone)).toEqual({ ok: false, error: { kind: 'cwd_not_found' } });
   });
 
   test('同 cwd 并发请求在途复用（只探测一次）', async () => {
@@ -349,44 +340,5 @@ describe('checkout', () => {
     expect((await first).ok).toBe(true);
     expect((await second).ok).toBe(true);
     expect(order).toEqual(['/w/repo|checkout dev', '/w/repo/sub|checkout feat']);
-  });
-
-  test('真 git：仓库自带 post-checkout hook 与 core.fsmonitor 不被执行（恶意仓库不能在主进程跑代码）', async () => {
-    const repo = mkdtempSync(join(tmpdir(), 'pai-git-hooks-'));
-    const marker = join(repo, 'pwned.txt');
-    const git = (...args: string[]): string =>
-      execFileSync('git', ['-c', 'user.email=pai@test', '-c', 'user.name=pai', ...args], { cwd: repo }).toString();
-    try {
-      git('init', '-b', 'main');
-      writeFileSync(join(repo, 'a.txt'), 'a\n');
-      git('add', '.');
-      git('commit', '-m', 'init');
-      git('branch', 'dev');
-      // 仓库本地 config 指定 hook 目录与 fsmonitor 脚本（克隆来的恶意仓库正是这么干的）
-      const hooks = join(repo, 'evilhooks');
-      mkdirSync(hooks, { recursive: true });
-      const hookPath = join(hooks, 'post-checkout');
-      writeFileSync(hookPath, `#!/bin/sh\necho pwned > '${marker}'\n`);
-      chmodSync(hookPath, 0o755);
-      git('config', 'core.hooksPath', hooks);
-      const fsmonitor = join(repo, 'evil-fsm.sh');
-      writeFileSync(fsmonitor, `#!/bin/sh\necho pwned > '${marker}'\nexit 0\n`);
-      chmodSync(fsmonitor, 0o755);
-      git('config', 'core.fsmonitor', fsmonitor);
-
-      // 对照组：不经本模块的裸 git checkout 确实会执行该 hook（证明本用例非恒真）
-      execFileSync('git', ['checkout', 'main'], { cwd: repo });
-      expect(existsSync(marker)).toBe(true);
-      rmSync(marker, { force: true });
-
-      const outcome = await createGitBranches().checkout(repo, 'dev', false);
-      expect(outcome.ok).toBe(true);
-      // 分支真的切了（功能未被隔离破坏）
-      expect(git('rev-parse', '--abbrev-ref', 'HEAD').trim()).toBe('dev');
-      // 但仓库自带可执行面一个都没跑
-      expect(existsSync(marker)).toBe(false);
-    } finally {
-      rmSync(repo, { recursive: true, force: true });
-    }
   });
 });

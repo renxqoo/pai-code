@@ -27,26 +27,27 @@ export function createReadPorts(client: BridgeClient): ReadPorts {
   const api = createApiClient(client);
   const unavailable = new Set<string>();
   const readPort = async <T>(
-    method: 'session/inflight' | 'session/subagents' | 'session/pendingDialogs',
-    threadId: string,
+    key: string,
+    call: () => Promise<{ ok: true; data: unknown } | { ok: false; error: { kind: string } }>,
     pick: (data: unknown) => T,
   ): Promise<T | null> => {
-    if (unavailable.has(method)) return null;
-    const outcome = await client.invoke(method, { threadId }).catch(() => null);
+    if (unavailable.has(key)) return null;
+    const outcome = await call().catch(() => null);
     if (outcome === null) return null;
     if (!outcome.ok) {
       // 「不支持该命令」才缓存（老 hub）；瞬态失败只本次跳过，下次重试
-      if (outcome.error.kind === 'unknown_command') unavailable.add(method);
+      if (outcome.error.kind === 'unknown_command') unavailable.add(key);
       return null;
     }
     return pick(outcome.data);
   };
 
   return {
-    inflight: (threadId) => readPort<InflightView>('session/inflight', threadId, (data) => data as InflightView),
-    subagents: (threadId) => readPort<SubagentSnapshotView[]>('session/subagents', threadId, (data) => listOf<SubagentSnapshotView>(data, 'subagents')),
+    inflight: (threadId) => readPort('inflight', () => api.session.inflight({ threadId }), (data) => data as InflightView),
+    subagents: (threadId) =>
+      readPort('subagents', () => api.session.subagents({ threadId }), (data) => listOf<SubagentSnapshotView>(data, 'subagents')),
     pendingDialogs: (threadId) =>
-      readPort<PendingDialogView[]>('session/pendingDialogs', threadId, (data) => listOf<PendingDialogView>(data, 'dialogs')),
+      readPort('pendingDialogs', () => api.session.pendingDialogs({ threadId }), (data) => listOf<PendingDialogView>(data, 'dialogs')),
     async threadState(threadId) {
       const outcome = await api.session.state({ threadId }).catch(() => null);
       return outcome?.ok === true ? (outcome.data as ThreadStateView) : null;

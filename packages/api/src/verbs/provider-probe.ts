@@ -1,7 +1,7 @@
-import { appError, type ApiError } from '@paiapp/api';
+import { appError, type ApiError } from '../errors';
 
 /**
- * provider 连接探活：主进程按渠道的 API 格式直发最小请求（1 token / ping 文本）。
+ * provider 连接探活：按渠道的 API 格式直发最小请求（1 token / ping 文本）。
  * 不经 hub、不落任何状态；key 只从 keyStore 取，只出现在请求头或 query，不进日志与错误信息。
  * 并发预算：同 provider 同模型单飞（复用在途 Promise）；全局在途上限 3，超出直接 busy；单次 10s 超时。
  */
@@ -134,7 +134,7 @@ export function createProviderProbe(deps: ProviderProbeDeps) {
 
   return {
     /** 探活指定模型（缺省 = 渠道第一个模型）；同 provider 同模型单飞。 */
-    probe(name: string, modelId?: string): Promise<ProbeOutcome> {
+    probe: (name: string, modelId?: string): Promise<ProbeOutcome> => {
       // JSON 编码防拼接碰撞（渠道名含 "::" 时 name::modelId 拼接会撞键）
       const inflightKey = JSON.stringify([name, modelId ?? ""]);
       const existing = inflight.get(inflightKey);

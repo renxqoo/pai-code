@@ -3,15 +3,17 @@ import { basename as baseName, dirname as dirnamePath, join as joinPaths, resolv
 
 import {
   appError,
+  createGitBranches,
+  createGitGraph,
   createHubApi,
   savedSessions,
+  type GitBranches,
+  type GitGraph,
   type HubApi,
 } from '@paiapp/api';
 import { createFileRead, type FileRead } from './file-read';
 import { searchProjectFiles } from './file-search';
-import { createProviderProbe } from './provider-probe';
-import { createGitBranches, type GitBranches } from './git-branches';
-import { createGitGraph, type GitGraph } from './git-graph';
+import { runGit } from './git-exec';
 import { createOpenLocation, type OpenLocation } from './open-location';
 import { createLocalRoutes } from '@paiapp/api';
 import { createSettingsRoutes } from '@paiapp/api';
@@ -194,8 +196,8 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     });
   };
 
-  const git = deps.git ?? createGitBranches();
-  const graph = deps.graph ?? createGitGraph();
+  const git = deps.git ?? createGitBranches(runGit);
+  const graph = deps.graph ?? createGitGraph(runGit);
   const openLocation = deps.openLocation ?? createOpenLocation();
   const fileRead = deps.fileRead ?? createFileRead();
 
@@ -232,13 +234,8 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     openLocation,
     fileRead,
   });
-  const providerProbe = createProviderProbe({
-    getProvider: (name) => deps.settings.listProviders().find((provider) => provider.name === name),
-    getKey: (name) => deps.keyStore.getKey(name),
-  });
   const settings = createSettingsRoutes({
     settings: deps.settings,
-    probeProvider: (name, modelId) => providerProbe.probe(name, modelId),
     keyStore: deps.keyStore,
     restartHost: restartHostForProviders,
     settingsCommands: () => hub().settings,

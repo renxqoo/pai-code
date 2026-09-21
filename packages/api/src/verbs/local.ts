@@ -1,5 +1,3 @@
-import type { RuntimePort } from './ports';
-
 import type { ApiError, ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
 import { appError } from '../index';
 

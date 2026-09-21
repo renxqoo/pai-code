@@ -1,4 +1,4 @@
-import { hostInfoView, threadListRows, type HubApi } from '@paiapp/api';
+import { hostInfoView, parseDiagnosticEvent, threadListRows, type HubApi } from '@paiapp/api';
 import type {
   HeartbeatFrame,
   HostInfoView,
@@ -10,8 +10,6 @@ import type {
   WorkerRowView,
 } from '@paiapp/contracts';
 import { createSampleRing, createSupervisionLog } from '@paiapp/infra';
-
-import { parseDiagnosticEvent } from './diagnostic-events';
 
 /**
  * 运行状态监控器（T29）：2s 单定时器轮询 host 本地观测面（thread/list +

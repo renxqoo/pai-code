@@ -448,10 +448,13 @@ describe("渠道数据迁移端到端（T38 症状：渠道无法保存——旧
       settings,
       keyStore,
       restartHost: () => Promise.resolve(undefined),
-      command: (cmd) =>
-        Promise.resolve(cmd.type === "get_models"
-          ? ({ ok: true as const, data: [{ id: "glm-5.3", provider: "glm", source: "preset" }] })
-          : { ok: true as const, data: {} }),
+      settingsCommands: () => ({
+        get: () => Promise.resolve({ ok: true as const, data: {} }),
+        set: () => Promise.resolve({ ok: true as const, data: {} }),
+        listSkills: () => Promise.resolve({ ok: true as const, data: {} }),
+        setSkillEnabled: () => Promise.resolve({ ok: true as const, data: {} }),
+        setIdleRetireMs: () => Promise.resolve({ ok: true as const, data: {} }),
+      }),
       onReject: (message) => rejects.push(message),
     });
     // 旧渠道在（迁移保留）

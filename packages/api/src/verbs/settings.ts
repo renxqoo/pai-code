@@ -7,6 +7,7 @@ import type { SettingsCommands } from '../index';
 
 import { envVarNameForProvider } from './env-name';
 import { errorLogToken } from './error-log-token';
+import { createProviderProbe } from './provider-probe';
 
 /**
  * 设置与目录路由组（api-routes 的本地配置子集）：providers/技能目录/hub 设置/偏好写。
@@ -30,8 +31,6 @@ interface KeyStorePort { getKey(name: string): string | null; }
 export type SettingsRoutesDeps = {
   settings: SettingsStorePort;
   keyStore: KeyStorePort;
-  /** 探活注入位（实现持宿主 HTTP 面；getProvider/getKey 由装配闭包） */
-  probeProvider: (name: string, modelId?: string) => Promise<{ ok: true; latencyMs: number } | { ok: false; error: ApiError }>;
   /** provider 配置变更后重启 host（providers.json 只在启动期读入）。 */
   restartHost: () => Promise<void>;
   /** hub settings 域 accessor（惰性：路由构造早于 runtime.start；host 未启动时各路由显式降级）。 */
@@ -89,8 +88,11 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
     return out;
   };
 
-  // 连接探活（宿主能力——HTTP 直发不经 hub；装配层注入实现，key 不进日志）
-  const probe = deps.probeProvider;
+  // 连接探活（HTTP 直发不经 hub；渠道与 key 取本路由组的 settings/keyStore 端口，key 不进日志）
+  const probe = createProviderProbe({
+    getProvider: (name) => deps.settings.listProviders().find((provider) => provider.name === name),
+    getKey: (name) => deps.keyStore.getKey(name),
+  }).probe;
 
   const routes: {
     'skills/list': Handler<'skills/list'>;

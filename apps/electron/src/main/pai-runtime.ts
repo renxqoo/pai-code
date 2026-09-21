@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import {
+  autoTitleCandidateOf,
   createEventMapper,
   createHubApi,
   mapDialogRequest,
@@ -12,7 +13,6 @@ import {
 } from '@paiapp/api';
 
 import { errorLogToken } from '@paiapp/api';
-import { autoTitleCandidateOf } from './auto-title';
 import {
   openRegistryStore,
   createHostProcess,

@@ -50,6 +50,9 @@ export { createSettingsRoutes } from './verbs/settings';
 export { compactInvocationOf, interceptsCompact } from './verbs/compact-lexing';
 export { errorLogToken } from './verbs/error-log-token';
 export { envVarNameForProvider } from './verbs/env-name';
+export { autoTitleCandidateOf } from './verbs/auto-title';
+export { createGitBranches, classifyGitExecError, type GitBranches, type GitExec, type GitExecResult, type GitExecError } from './verbs/git-branches';
+export { createGitGraph, type GitGraph } from './verbs/git-graph';
 export type { RuntimePort, MonitorPort, AgentDefinitionsPort, AuditPort, FailPort } from './verbs/ports';
 export { createApiClient, type ApiClient, type ApiClientTransport } from './client';
 export { TIMEOUTS } from './timeouts';
@@ -84,3 +87,4 @@ export {
 } from './views/response-views';
 export { diffFromWriteArgs } from './views/diff-extract';
 export { flattenUserText, assistantText, assistantThinking } from './views/content';
+export { parseDiagnosticEvent } from './views/diagnostic-events';

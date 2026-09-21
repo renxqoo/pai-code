@@ -1,13 +1,10 @@
-import { execFile } from 'node:child_process';
-import { existsSync } from 'node:fs';
-
 import type { GitBranchesView } from '@paiapp/contracts';
-import { appError, type ApiError } from '@paiapp/api';
+import { appError, type ApiError } from '../errors';
 
 /**
  * 本地 git 分支能力（新建任务页项目/分支选择）：只读分支列表 + 切换/创建并检出。
- * git 子进程不经 shell（参数原样传递），带超时与输出上限；同 cwd 的列表请求在途复用，
- * checkout 全局串行（工作树是独占资源，宁可跨仓库过度串行也不并发写）。
+ * git 子进程执行器（GitExec）由装配层注入（execFile 实现在宿主侧）；同 cwd 的列表
+ * 请求在途复用，checkout 全局串行（工作树是独占资源，宁可跨仓库过度串行也不并发写）。
  */
 
 /** 进程级异常（超时杀进程 / 输出超限 / 启动失败 / 工作目录不存在）；正常退出与非零退出均为 null。 */
@@ -26,17 +23,8 @@ export type GitExec = (args: readonly string[], cwd: string) => Promise<GitExecR
 export type GitBranchesOutcome = { ok: true; data: GitBranchesView } | { ok: false; error: ApiError }
 export type GitCheckoutOutcome = { ok: true; data: { branch: string } } | { ok: false; error: ApiError }
 
-const GIT_TIMEOUT_MS = 5000;
-/** 单条命令输出上限（分支列表/状态在正常仓库远小于此）。 */
-const GIT_MAX_BUFFER = 1 << 20;
 /** 错误摘要长度上限（透传给渲染层的 message 不做无界透传）。 */
 const ERROR_SUMMARY_LIMIT = 200;
-/**
- * 隔离仓库自带的可执行面：仓库本地 config 的 hooks 与 fsmonitor 都指向可执行文件，
- * 克隆来的恶意仓库能让「切分支」在 main 进程全权限下执行任意代码（绕开 hub 沙箱）。
- * -c 必须位于子命令之前；core.hooksPath 指向不存在的目录即等于无 hook。
- */
-const GIT_ISOLATION_ARGS: readonly string[] = ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false'];
 
 const okBranches = (data: GitBranchesView): GitBranchesOutcome => ({ ok: true, data });
 
@@ -47,31 +35,6 @@ export function classifyGitExecError(error: { code?: unknown; killed?: unknown; 
   if (typeof error.code === 'number') return null;
   return 'spawn_failed';
 }
-
-/** 默认执行器：execFile（无 shell）+ 超时 + 输出上限 + 仓库可执行面隔离。git 读口族共用。 */
-export const runGit: GitExec = (args, cwd) =>
-  new Promise((resolve) => {
-    execFile(
-      'git',
-      [...GIT_ISOLATION_ARGS, ...args],
-      { cwd, timeout: GIT_TIMEOUT_MS, maxBuffer: GIT_MAX_BUFFER, windowsHide: true },
-      (error, stdout, stderr) => {
-        if (error === null) {
-          resolve({ code: 0, stdout: stdout ?? '', stderr: stderr ?? '', error: null });
-          return;
-        }
-        const failure = error as { code?: unknown; killed?: unknown; signal?: unknown };
-        const kind = classifyGitExecError(failure);
-        resolve({
-          code: typeof failure.code === 'number' ? failure.code : null,
-          stdout: stdout ?? '',
-          stderr: stderr ?? '',
-          // spawn 失败且目录不存在：更可能是目录被删（不是 git 不在 PATH），区分开才不误报
-          error: kind === 'spawn_failed' && !existsSync(cwd) ? 'cwd_missing' : kind,
-        });
-      },
-    );
-  });
 
 /** 首行错误摘要（git 报错首行即原因，后续为提示）。 */
 function firstLine(text: string): string {
@@ -143,7 +106,7 @@ export interface GitBranches {
   checkout: (cwd: string, branch: string, create: boolean) => Promise<GitCheckoutOutcome>
 }
 
-export function createGitBranches(run: GitExec = runGit): GitBranches {
+export function createGitBranches(run: GitExec): GitBranches {
   const listInFlight = new Map<string, Promise<GitBranchesOutcome>>();
   /** 全局 checkout 串行尾节点（跨 cwd 也串行：不同 cwd 可能指向同一仓库）。 */
   let checkoutTail: Promise<unknown> = Promise.resolve();

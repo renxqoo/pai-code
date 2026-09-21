@@ -2,7 +2,8 @@
  * 渲染层类型化代理（T41 §1：UI→api→hub，进程边界是 transport 注入细节）。
  * IPC 方法名字符串全仓唯一在此文件出现（收口断言：renderer 零方法名字面量）；
  * 参数/应答类型全部从 contracts ApiSchemas 泛型抽取——zod 校验单点仍在主进程
- * 注册表，本层只做类型化调用面。域划分与 ApiMethod 闭集一一对照（63 方法）。
+ * 注册表，本层只做类型化调用面。域划分与 ApiMethod 闭集一一对照（词表漂移
+ * 由 __test__/client.test.ts 映射断言钉住）。
  */
 import type { ApiData, ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
 
