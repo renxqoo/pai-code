@@ -35,8 +35,14 @@ export function onSubagentEvent(state: LiveThreadState, event: SubagentUiEvent, 
     case 'subagentTool':
       return onSubagentTool(state, event, now);
     case 'subagentSettled':
-      // agent/finished：每运行周期恰一次（终态 stopped——可复活再 running）
-      return upsertAgent(state, event.agentId, '', now, (agent) => ({ ...agent, status: 'stopped', endedAt: now }));
+      // agent/finished：每运行周期恰一次（终态 stopped——可复活再 running）；
+      // outcome 判别保留（failed 与 completed 面板可区分）
+      return upsertAgent(state, event.agentId, '', now, (agent) => ({
+        ...agent,
+        status: 'stopped',
+        endedWith: event.status === 'completed' || event.status === 'stopped' || event.status === 'failed' ? event.status : undefined,
+        endedAt: now,
+      }));
     case 'subagentState':
       // 忙闲迁移（agent/status）：终态行不被迟到的 idle 帧复活
       return upsertAgent(state, event.agentId, '', now, (agent) =>

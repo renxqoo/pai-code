@@ -1,10 +1,10 @@
 /**
  * host-hub 协议镜像（v1）。
  *
- * 同步纪律：本文件是外部仓库 host-hub（/Users/wrr/work/my-agent/packages/host-hub）
- * 协议面的镜像抄录，不引入运行时依赖。规格真相源 = host-hub 仓库
+ * 同步纪律：本文件是外部仓库 host-hub（x-harness 仓库/packages/host-hub）
+ * 协议面的镜像抄录，不引入运行时依赖。规格真相源 = x-harness 仓库
  * `src/protocol/commands.ts`（COMMAND_NAMES）与 `src/protocol/frames.ts`；
- * 载荷形状以其各 handler 实现为准。协议变更时，先走 host-hub 仓库流程定稿，
+ * 载荷形状以其各 handler 实现为准。协议变更时，先走 x-harness 仓库流程定稿，
  * 再在同一提交内更新本文件与 `__test__` 的词表断言。
  */
 

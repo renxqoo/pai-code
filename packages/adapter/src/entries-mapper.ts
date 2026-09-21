@@ -26,6 +26,9 @@ type AssistantToolCall = Extract<HistoryItem, { kind: 'assistant' }>['toolCalls'
 export function mapEntries(data: unknown): { items: HistoryItem[]; cursor: number | null } {
   const list = Array.isArray((recordOf(data))['entries']) ? (recordOf(data)['entries'] as unknown[]) : [];
   const items: HistoryItem[] = [];
+  // 条目 seq 记录（surfaceOp replace 区间折叠用——压缩摘要是位置区间替换，原始
+  // WAL 事件仍在流里，水化必须剔除被替换区间否则历史双份，docs/COMPACTION.md §2.A）
+  const seqOfItem = new Map<HistoryItem, number>();
   // callId → 最近一个 assistant HistoryItem 的 toolCalls 数组引用（tool/result 并入）
   const pendingTools = new Map<string, AssistantToolCall[]>();
   // tool/call 先于 assistant/message 到达时的暂存（name/args 补齐面）
@@ -45,11 +48,8 @@ export function mapEntries(data: unknown): { items: HistoryItem[]; cursor: numbe
     if (type === 'user/message') {
       const text = flattenUserText(event['content']);
       const bashItem = bashItemOf(id, at, text);
-      if (bashItem !== null) {
-        items.push(bashItem);
-      } else {
-        items.push({ kind: 'user', id, text, origin: 'user', at, images: userImages(event['content']) });
-      }
+      const item = bashItem ?? { kind: 'user', id, text, origin: 'user', at, images: userImages(event['content']) } as HistoryItem;
+      applySurfaceOp(items, seqOfItem, event['surfaceOp'], seq, item);
       pendingTools.clear();
       continue;
     }
@@ -69,12 +69,13 @@ export function mapEntries(data: unknown): { items: HistoryItem[]; cursor: numbe
           ...subagentsField(name, args),
         };
       });
-      // 异常终态收窄：error/aborted/max-tokens 透传，正常 stop/tool_use 不产生视图噪音
+      // 异常终态收窄（内核词表 stop|max-tokens + interrupted 布尔）：max-tokens 透传，
+      // interrupted（中止/打断）映射 aborted；失败信息在 turn/end reason（live 经
+      // settled reason 呈现），消息级无 error 面——不再杜撰 meta.error 读取
       const rawStopReason = event['stopReason'];
-      const stopReason =
-        rawStopReason === 'error' || rawStopReason === 'aborted' || rawStopReason === 'max-tokens' ? rawStopReason : null;
-      const errorMessage = str(recordOf(event['meta'])['error']) || failureText(event);
-      items.push({
+      const interrupted = event['interrupted'] === true;
+      const stopReason = rawStopReason === 'max-tokens' ? 'max-tokens' : interrupted ? 'aborted' : null;
+      applySurfaceOp(items, seqOfItem, event['surfaceOp'], seq, {
         kind: 'assistant',
         id,
         at,
@@ -84,7 +85,7 @@ export function mapEntries(data: unknown): { items: HistoryItem[]; cursor: numbe
         toolCalls: toolCallViews,
         usage: usageOf(event['usage']),
         stopReason,
-        errorMessage: stopReason === 'error' && errorMessage.length > 0 ? errorMessage : null,
+        errorMessage: null,
       });
       for (const call of toolCallViews) pendingTools.set(call.id, toolCallViews);
       continue;
@@ -145,6 +146,36 @@ export function mapEntries(data: unknown): { items: HistoryItem[]; cursor: numbe
   return { items, cursor };
 }
 
+/** surfaceOp 应用（压缩区间折叠）：append 追加；replace 先剔除 [startSeq,endSeq]
+ *  区间内已收集条目再追加携带摘要的本条——历史视图与 session.surface() 对齐。 */
+function applySurfaceOp(
+  items: HistoryItem[],
+  seqOfItem: Map<HistoryItem, number>,
+  surfaceOp: unknown,
+  seq: number,
+  item: HistoryItem,
+): void {
+  const op = recordOf(surfaceOp);
+  const kind = op['op'];
+  if (kind === 'replace') {
+    const start = op['startSeq'];
+    const end = op['endSeq'];
+    if (typeof start === 'number' && typeof end === 'number') {
+      for (let index = items.length - 1; index >= 0; index -= 1) {
+        const existing = items[index];
+        if (existing === undefined) continue;
+        const existingSeq = seqOfItem.get(existing);
+        if (existingSeq !== undefined && existingSeq >= start && existingSeq <= end) {
+          items.splice(index, 1);
+          seqOfItem.delete(existing);
+        }
+      }
+    }
+  }
+  items.push(item);
+  seqOfItem.set(item, seq);
+}
+
 /** 直执行 bash 信封还原：首行 `[bash] $ <cmd>`、其余为输出。 */
 function bashItemOf(id: string, at: number, text: string): HistoryItem | null {
   if (!text.startsWith(BASH_ENVELOPE)) return null;
@@ -186,13 +217,6 @@ function argsOfJson(value: unknown): Record<string, unknown> {
   } catch {
     return {};
   }
-}
-
-/** 异常终态的错误文本（assistant/attempt 邻行的失败细节在 stopReason=error 时可见面）。 */
-function failureText(event: Record<string, unknown>): string {
-  const interrupted = event['interrupted'];
-  if (interrupted === true) return 'interrupted';
-  return '';
 }
 
 function str(value: unknown): string {

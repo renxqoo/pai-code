@@ -9,7 +9,7 @@ export type OnboardingScreenProps = {
   providers: readonly ProviderConfigView[]
   /** "provider/modelId" 形的可选默认模型 */
   modelOptions: readonly string[]
-  onUpsertProvider: (input: ProviderUpsertInput) => Promise<boolean>
+  onUpsertProvider: (input: ProviderUpsertInput) => Promise<string | null>
   onSelectDefaultModel: (value: string | null) => void
   onRefreshModels: () => void
   /** 完成引导；cwd 非空时调用方负责用它开首个会话 */

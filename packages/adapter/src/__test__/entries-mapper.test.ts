@@ -93,23 +93,23 @@ describe('mapEntries（x-harness WAL 转写真相源）', () => {
     expect(assistant.thinking).toBe('独立思考');
   });
 
-  test('assistant 异常终态收窄：error 带文案、aborted/max-tokens 透传不带文案、正常 stop/tool_use 归 null', () => {
+  test('assistant 异常终态收窄（内核词表 stop|max-tokens + interrupted 布尔）：interrupted→aborted、max-tokens 透传、正常归 null', () => {
     const { items } = mapEntries({
       entries: [
-        row(1, 1, { type: 'assistant/message', turn: 0, step: 0, content: [], stopReason: 'error', meta: { error: '401 {"type":"error"}' } }),
-        row(2, 2, { type: 'assistant/message', turn: 1, step: 0, content: [], stopReason: 'aborted', meta: { error: 'interrupted' } }),
-        row(3, 3, { type: 'assistant/message', turn: 2, step: 0, content: [{ type: 'text', text: '正常' }], stopReason: 'tool_use' }),
-        row(4, 4, { type: 'assistant/message', turn: 3, step: 0, content: [{ type: 'text', text: '截断' }], stopReason: 'max-tokens' }),
-        row(5, 5, { type: 'assistant/message', turn: 4, step: 0, content: [], stopReason: 'error' }),
+        row(1, 1, { type: 'assistant/message', turn: 0, step: 0, content: [], stopReason: 'stop', interrupted: true }),
+        row(2, 2, { type: 'assistant/message', turn: 1, step: 0, content: [{ type: 'text', text: '正常' }], stopReason: 'stop' }),
+        row(3, 3, { type: 'assistant/message', turn: 2, step: 0, content: [{ type: 'text', text: '截断' }], stopReason: 'max-tokens' }),
+        row(4, 4, { type: 'assistant/message', turn: 3, step: 0, content: [], stopReason: 'stop', interrupted: true }),
+        row(5, 5, { type: 'assistant/message', turn: 4, step: 0, content: [] }),
       ],
     });
     const assistants = items.map((item) => (item.kind === 'assistant' ? { stopReason: item.stopReason, errorMessage: item.errorMessage } : null));
     expect(assistants).toEqual([
-      { stopReason: 'error', errorMessage: '401 {"type":"error"}' },
       { stopReason: 'aborted', errorMessage: null },
       { stopReason: null, errorMessage: null },
       { stopReason: 'max-tokens', errorMessage: null },
-      { stopReason: 'error', errorMessage: null },
+      { stopReason: 'aborted', errorMessage: null },
+      { stopReason: null, errorMessage: null },
     ]);
   });
 
@@ -267,3 +267,49 @@ describe('isFileMutatingTool · 内核文件工具词表（x-harness：仅 write
     expect(isFileMutatingTool(name)).toBe(expected);
   });
 });
+
+describe('surfaceOp replace（压缩区间折叠——docs/COMPACTION.md §2.A）', () => {
+  test('带 replace 的摘要条目剔除区间内旧条目再追加；append 直通', () => {
+    const { items } = mapEntries({
+      entries: [
+        row(1, 1, { type: 'user/message', turn: 0, step: 0, content: [{ type: 'text', text: '问题一' }] }),
+        row(2, 2, { type: 'assistant/message', turn: 0, step: 0, content: [{ type: 'text', text: '长回答' }] }),
+        row(3, 3, { type: 'user/message', turn: 1, step: 0, content: [{ type: 'text', text: '问题二' }] }),
+        row(4, 4, { type: 'assistant/message', turn: 1, step: 0, content: [{ type: 'text', text: '另一答' }] }),
+        // 压缩摘要：替换 seq 1..3（保留「另一答」）
+        row(5, 5, {
+          type: 'user/message',
+          turn: 2,
+          step: 0,
+          content: [{ type: 'text', text: '[summary] 前情摘要' }],
+          surfaceOp: { op: 'replace', startSeq: 1, endSeq: 3 },
+        }),
+        row(6, 6, { type: 'user/message', turn: 3, step: 0, content: [{ type: 'text', text: '新消息' }], surfaceOp: 'append' }),
+      ],
+    });
+    expect(items.map((item) => (item.kind === 'user' || item.kind === 'assistant' ? item.text : ''))).toEqual([
+      '另一答',
+      '[summary] 前情摘要',
+      '新消息',
+    ]);
+  });
+
+  test('turn/end reason 判别穷举（六 kind 均不产渲染条目——cursor 推进）', () => {
+    const reasons = [
+      { kind: 'completed' },
+      { kind: 'aborted', cause: 'client-abort' },
+      { kind: 'blocked', reason: 'permission' },
+      { kind: 'error', message: 'boom' },
+      { kind: 'max-tokens' },
+      { kind: 'interrupted' },
+    ];
+    const entries = reasons.flatMap((reason, index) => [
+      row(index * 2 + 1, index * 2 + 1, { type: 'user/message', turn: index, step: 0, content: [{ type: 'text', text: `q${index}` }] }),
+      row(index * 2 + 2, index * 2 + 2, { type: 'turn/end', turn: index, reason }),
+    ]);
+    const { items, cursor } = mapEntries({ entries });
+    expect(items.map((item) => (item.kind === 'user' ? item.text : ''))).toEqual(['q0', 'q1', 'q2', 'q3', 'q4', 'q5']);
+    expect(cursor).toBe(12);
+  });
+});
+

@@ -94,8 +94,8 @@ export interface LiveController {
   readonly listGitGraph: (cwd: string) => Promise<ApiOutcome<'git/graph'>>;
   /** 切换/创建并检出分支（成功返回 {ok:true}；失败原因透传，由调用方转文案）。 */
   readonly checkoutGitBranch: (cwd: string, branch: string, create: boolean) => Promise<ApiOutcome<'git/checkout'>>;
-  readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; apiKey?: string }) => Promise<boolean>;
-  readonly removeProvider: (name: string) => Promise<boolean>;
+  readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; apiKey?: string }) => Promise<string | null>;
+  readonly removeProvider: (name: string) => Promise<string | null>;
   /** 应用偏好部分写（返回写后视图；失败返回 null，原因走通知条）。 */
   readonly updatePreferences: (patch: { defaultModel?: string | null; onboarded?: boolean; projectModels?: Record<string, string>; pinnedSessions?: string[]; trustedDefault?: boolean; hiddenProjects?: string[]; archivedSessions?: string[]; hubDev?: { bunPath: string | null; hubEntry: string | null } }) => Promise<PreferencesView | null>;
   /** provider 连接探活（主进程直发；结果原样透传给调用方做内联展示）。 */

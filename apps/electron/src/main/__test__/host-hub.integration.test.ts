@@ -512,7 +512,7 @@ describe('app API × 真 x-harness host-hub（GLM 真门，opt-in）', () => {
     const threadId = started.data.threadId;
     const prompted = (await routes.invoke('session/prompt', { threadId, message: '只回复两个字：收到' })) as { ok: boolean };
     expect(prompted.ok).toBe(true);
-    expect(await waitFor(() => events.includes('turnSettled'), 90_000)).toBe(true);
+    expect(await waitFor(() => events.includes('turnSettled'), 180_000)).toBe(true);
     const entries = (await routes.invoke('session/entries', { threadId })) as { ok: boolean; data: { items: Array<{ kind: string }> } };
     expect(entries.ok).toBe(true);
     expect(entries.data.items.map((item) => item.kind)).toContain('assistant');

@@ -27,7 +27,7 @@ export type ProviderUpsertInput = {
 type ProviderEditorProps = {
   /** 编辑态预填（null = 新建）；由外层 key 重建保证每次进入都是全新状态。 */
   initial: ProviderConfigView | null;
-  onSubmit: (input: ProviderUpsertInput) => Promise<boolean>;
+  onSubmit: (input: ProviderUpsertInput) => Promise<string | null>;
   /** 取消/返回列表；onboarding 不传（提交成功后清空继续录入）。 */
   onCancel?: () => void;
   /** 保存成功回调（settings 传：新建切到新渠道详情、编辑停留详情）；不传则清空字段。 */
@@ -89,13 +89,13 @@ function ProviderEditor({
   /** 清除已存 key：用磁盘现值 upsert 空 key（与表单草稿无关，避免未保存编辑被顺带写入）。 */
   const clearKey = async (): Promise<boolean> => {
     if (initial === null) return false;
-    return onSubmit({
+    return (await onSubmit({
       name: initial.name,
       baseUrl: initial.baseUrl,
       api: initial.api,
       models: [...initial.models],
       apiKey: "",
-    });
+    })) === null;
   };
 
   const submit = async (): Promise<void> => {
@@ -107,10 +107,10 @@ function ProviderEditor({
       return;
     }
     setSaving(true);
-    const ok = await onSubmit(payload.input);
+    const failure = await onSubmit(payload.input);
     setSaving(false);
-    if (!ok) {
-      setError(copy.settings.formFailed);
+    if (failure !== null) {
+      setError(copy.settings.formFailedReason(failure));
       return;
     }
     setApiKey("");

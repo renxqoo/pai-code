@@ -118,6 +118,11 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
       return { ...state, queue: { steering: [...event.steering], followUp: [...event.followUp] } };
     case 'compacting':
       return { ...state, compacting: event.active };
+    case 'compacted':
+      // 压缩落地：compacting 归位（landed 与 command/done 双路径幂等）。live items 的
+      // 区间裁剪挂账——compaction/landed 无区间载荷，视图由下次 entries 水化对齐
+      // （水化侧 surfaceOp replace 折叠已在 entries-mapper 落地）
+      return { ...state, compacting: false };
     case 'retrying':
       return {
         ...state,

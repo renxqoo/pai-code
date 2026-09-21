@@ -58,6 +58,8 @@ export type SubagentModel = {
   /** 已启动的工具调用数 */
   toolCount: number;
   status: SubagentStatus;
+  /** 运行周期结局（agent/finished.outcome 原文）——failed 与 completed 面板可区分。 */
+  endedWith?: 'completed' | 'stopped' | 'failed';
   startedAt: number;
   /** null = 仍在运行，耗时实时累加 */
   endedAt: number | null;

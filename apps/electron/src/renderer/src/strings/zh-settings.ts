@@ -60,6 +60,13 @@ export const zhSettings: typeof enSettings = {
     confirmRemove: '确认移除',
     formIncomplete: '名称、Base URL 和至少一个模型 id 必填。',
     formFailed: '保存失败，请检查后重试。',
+    formFailedReason: (reason: string): string => {
+      if (reason === 'provider_name_conflict') return '渠道名与现有渠道的环境变量名冲突，请换个名字。';
+      if (reason === 'provider_api_unsupported') return '协议不受支持（仅 Anthropic / OpenAI 兼容）。';
+      if (reason === 'provider_baseurl_invalid') return '接口地址需以 http:// 或 https:// 开头。';
+      if (reason.startsWith('host_unavailable')) return '宿主未就绪，请稍候重试。';
+      return `保存失败（${reason}），请检查后重试。`;
+    },
     runtimeTitle: '运行状态',
     runtimeDesc: '系统监控、Worker 管理与诊断。分区打开期间实时轮询。',
     runtimeAttention: '注意：宿主未就绪或存在异常 worker',
@@ -127,7 +134,7 @@ export const zhSettings: typeof enSettings = {
     agentsScopeUser: '用户',
     agentsScopeUserHint: '全局配置，所有项目可用。',
     agentsScopeProject: '指定项目',
-    agentsScopeProjectHint: '写入项目 .my-agent/agents，仅受信会话加载。',
+    agentsScopeProjectHint: '写入项目 .x-harness/agents，仅受信会话加载。',
     agentsScopeProjectNone: '选择项目',
     agentsSave: '保存',
     agentsCancel: '取消',

@@ -28,7 +28,7 @@ export type SettingsCommand = (
 export type SettingsRoutesDeps = {
   settings: FileSettings;
   keyStore: ProviderKeyStore;
-  /** provider 配置变更后重启 host（models.json 只在启动期读入）。 */
+  /** provider 配置变更后重启 host（providers.json 只在启动期读入）。 */
   restartHost: () => Promise<void>;
   /** hub 命令通道（技能/设置/模型目录命令；host 未启动时各路由显式降级）。 */
   command: SettingsCommand;
@@ -120,17 +120,8 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
       if (!params.baseUrl.startsWith('http://') && !params.baseUrl.startsWith('https://')) {
         return failLogged('provider_baseurl_invalid');
       }
-      // 撞 hub 预设键：custom 档案撞预设键在 x-harness 是整档覆盖语义（预设视图被遮蔽）
-      // ——写前显式拒绝；host 未启动时目录不可得，保守拒绝（落盘即静默遮蔽比拒绝对用户更糟）
-      const modelsResult = await deps.command({ type: 'get_models' });
-      if (!modelsResult.ok) return failLogged(`host_unavailable:${modelsResult.reason}`);
-      const presetKeys = new Set(
-        (Array.isArray(modelsResult.data) ? modelsResult.data : [])
-          .filter((entry) => typeof entry === 'object' && entry !== null && (entry as Record<string, unknown>)['source'] === 'preset')
-          .map((entry) => (entry as Record<string, unknown>)['provider'])
-          .filter((value): value is string => typeof value === 'string'),
-      );
-      if (presetKeys.has(params.name)) return failLogged(`provider_name_conflicts_preset:${params.name}`);
+      // 同名内置预设 = 用户覆盖（x-harness 整档覆盖语义 + 消歧 custom 优先）：用户
+      // 配置胜出、删渠道即恢复内置——不再拒名（T39 实施轮用户裁决：app 无「预设挡人」面）
       deps.settings.upsertProvider({
         name: params.name,
         baseUrl: params.baseUrl,

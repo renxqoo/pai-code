@@ -203,9 +203,27 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
     return segments.length === 2 && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(segments[0] ?? '') && segments[1] === 'events.jsonl';
   };
 
+  /** session 域壳的归属判定（主会话谓词——与 event-mapper 同口径）。 */
+  const payloadSessionOf = (frame: { type: 'event'; threadId: string; name: string; payload: Record<string, unknown> }): string | undefined => {
+    const session = frame.payload['session'];
+    return typeof session === 'string' ? session : undefined;
+  };
+
   const dispatchFrame = (frame: Parameters<HostProcessDeps['onFrame']>[0]): void => {
     switch (frame.type) {
       case 'event': {
+        // 压缩进行中指示（E-M3）：内核命令面 command/run|done 是 WAL 镜像（主会话
+        // 谓词同 mapper——session 域壳判 threadId），run 置位、done 归位（landed 事件
+        // 亦归位，幂等）；command/run 对 parked 不可达（命令即唤醒）——threadId 即主
+        if (frame.name === 'command/run' && payloadSessionOf(frame) === frame.threadId) {
+          const name = typeof frame.payload['name'] === 'string' ? frame.payload['name'] : '';
+          if (name === 'compact') emit({ type: 'compacting', threadId: frame.threadId, active: true });
+          return;
+        }
+        if (frame.name === 'command/done' && payloadSessionOf(frame) === frame.threadId) {
+          emit({ type: 'compacting', threadId: frame.threadId, active: false });
+          return;
+        }
         if (frame.name === 'agent/inbox/spliced') {
           // 队列结构信号：hub 只发 queue/op/ids（无文本），按迁移指引拉 get_state.queue
           // 合成 queueChanged（文本快照与读命令同源）。合并去抖（N 连 splice 一拉）+
@@ -322,7 +340,7 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
         hubEntry: hub.hubEntry,
         agentDir: deps.paths.agentDir,
         cwd: homedir(),
-        // 每次 spawn（含重启）重生成 models.json 并解析最新 key 注入
+        // 每次 spawn（含重启）重生成 providers.json 并解析最新 key 注入
         // 档位随 spawn 生效（运行期变更经 set_idle_retire_ms 即时同步）
         buildEnv: () => ({
           ...writeModelsConfig(deps.paths.agentDir, deps.providers(), deps.keyStore).env,

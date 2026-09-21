@@ -550,21 +550,21 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     listGitBranches: (cwd: string) => listGitBranches(client, cwd),
     listGitGraph: (cwd: string) => listGitGraph(client, cwd),
     checkoutGitBranch: (cwd: string, branch: string, create: boolean) => checkoutGitBranch(client, cwd, branch, create),
-    async upsertProvider(input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; apiKey?: string }): Promise<boolean> {
+    async upsertProvider(input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; apiKey?: string }): Promise<string | null> {
       const outcome = await client.invoke('provider/upsert', input);
-      if (!outcome.ok) return false;
+      if (!outcome.ok) return outcome.reason;
       store.setState({ providers: outcome.data });
       const models = await client.invoke('model/list', {});
       if (models.ok) store.setState({ models: models.data });
-      return true;
+      return null;
     },
-    async removeProvider(name: string): Promise<boolean> {
+    async removeProvider(name: string): Promise<string | null> {
       const outcome = await client.invoke('provider/remove', { name });
-      if (!outcome.ok) return false;
+      if (!outcome.ok) return outcome.reason;
       store.setState({ providers: outcome.data });
       const models = await client.invoke('model/list', {});
       if (models.ok) store.setState({ models: models.data });
-      return true;
+      return null;
     },
     async updatePreferences(patch: { defaultModel?: string | null; onboarded?: boolean; projectModels?: Record<string, string>; pinnedSessions?: string[]; trustedDefault?: boolean; hiddenProjects?: string[]; archivedSessions?: string[]; hubDev?: { bunPath: string | null; hubEntry: string | null } }): Promise<PreferencesView | null> {
       const outcome = await client.invoke('app/setPreference', patch);

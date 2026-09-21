@@ -137,6 +137,7 @@ export const zh: typeof en = {
     subagentBusy: '工作中',
     subagentIdle: '空闲',
     subagentArchived: '已归档',
+    subagentFailed: '失败',
     /** 子代理权限请求信息行（协议无应答命令，hub 到期自动拒绝） */
     subagentAskPending: (toolName: string): string => `等待确认（${toolName}），超时自动拒绝`,
     workingFor: '已工作',

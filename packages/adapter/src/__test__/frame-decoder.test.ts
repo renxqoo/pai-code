@@ -12,8 +12,8 @@ function collect(): { frames: HubFrame[]; dropped: string[]; onFrame: (f: HubFra
 describe('classifyFrame · 七帧分类', () => {
   test.each([
     ['response', { type: 'response', id: '1', command: 'prompt', success: true, data: { x: 1 } }],
-    ['event', { type: 'event', threadId: 't1', name: 'assistant/stream', payload: { type: 'text', text: 'hi' } }],
-    ['event(子代理中继)', { type: 'event', threadId: 't1', name: 'assistant/stream', payload: { type: 'text', text: 'hi' }, agentName: 'explore' }],
+    ['event', { type: 'event', threadId: 't1', name: 'llm/chunk', payload: { turn: 0, step: 0, chunk: { type: 'text-delta', text: 'hi' } } }],
+    ['event(子代理中继)', { type: 'event', threadId: 't1', name: 'llm/chunk', payload: { turn: 0, step: 0, chunk: { type: 'text-delta', text: 'hi' } }, agentName: 'explore' }],
     ['ui_request', { type: 'ui_request', requestId: 'r1', threadId: 't1', method: 'confirm', tool: 'bash', summary: 's' }],
     ['heartbeat', { type: 'heartbeat' }],
     ['heartbeat(资源位)', { type: 'heartbeat', rssBytes: 123, cpuPercent: 4.5 }],

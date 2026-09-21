@@ -68,10 +68,17 @@ describe('createEventMapper · 主线程事件', () => {
       { type: 'messageStarted', threadId: 't', messageId: 'stream-3', at: 1000 },
       { type: 'thinkingDelta', threadId: 't', messageId: 'stream-3', delta: 'x' },
     ]);
-    // 步终局（WAL assistant/message）挂在最新缓冲的 messageId 上
-    const events = mapper.mapEvent(frame('assistant/message', { content: [{ type: 'text', text: 'final' }] }));
+    // 步终局（WAL assistant/message）：事件自带步坐标——与最新缓冲同坐标则挂其
+    // messageId；坐标不一致时以 WAL 为准自开新缓冲（无文本步不复用陈旧缓冲）
+    const events = mapper.mapEvent(frame('assistant/message', { turn: 4, step: 0, content: [{ type: 'text', text: 'final' }], thinking: '定形思考' }));
     expect(events).toEqual([
-      { type: 'messageFinal', threadId: 't', message: { id: 'stream-3', text: 'final', thinking: '', toolCalls: [], usage: null } },
+      { type: 'messageFinal', threadId: 't', message: { id: 'stream-3', text: 'final', thinking: '定形思考', toolCalls: [], usage: null } },
+    ]);
+    // 纯 tool_use 步（无文本）：自开新缓冲出 messageFinal——toolCallAdded 由独立的
+    // tool/call WAL 事件产生（消息事件不重复展开工具面）
+    const detached = mapper.mapEvent(frame('assistant/message', { turn: 9, step: 0, content: [{ type: 'tool_use', callId: 'c9', name: 'bash', input: '{}' }] }));
+    expect(detached).toEqual([
+      { type: 'messageFinal', threadId: 't', message: { id: 'stream-4', text: '', thinking: '', toolCalls: [], usage: null } },
     ]);
   });
 
@@ -98,7 +105,10 @@ describe('createEventMapper · 主线程事件', () => {
     expect(
       mapper.mapEvent(
         frame('assistant/message', {
-          content: [{ type: 'thinking', text: 'P' }, { type: 'text', text: 'a' }, { type: 'text', text: 'b' }],
+          turn: 0,
+          step: 0,
+          content: [{ type: 'text', text: 'a' }, { type: 'text', text: 'b' }],
+          thinking: 'P',
           usage: { input: 3, output: 4, total: 7 },
         }),
       ),
@@ -420,3 +430,21 @@ describe('encodeCommand', () => {
     expect(line.endsWith('\n')).toBe(true);
   });
 });
+
+describe('agent/tool-stream 增量累积（桥发 delta 批非快照）', () => {
+  test('同 callId 多批累积为快照；tool/result 冲净；settled 清记忆表', () => {
+    const mapper = createEventMapper(deps);
+    expect(mapper.mapEvent(frame('agent/tool-stream', { callId: 'c1', delta: 'part1-' }))).toEqual([
+      { type: 'toolUpdated', threadId: 't', callId: 'c1', output: 'part1-' },
+    ]);
+    expect(mapper.mapEvent(frame('agent/tool-stream', { callId: 'c1', delta: 'part2' }))).toEqual([
+      { type: 'toolUpdated', threadId: 't', callId: 'c1', output: 'part1-part2' },
+    ]);
+    // 结算后新轮同 callId 不残留旧累积
+    mapper.mapEvent(frame('tool/result', { callId: 'c1', content: 'done' }));
+    expect(mapper.mapEvent(frame('agent/tool-stream', { callId: 'c1', delta: 'fresh' }))).toEqual([
+      { type: 'toolUpdated', threadId: 't', callId: 'c1', output: 'fresh' },
+    ]);
+  });
+});
+

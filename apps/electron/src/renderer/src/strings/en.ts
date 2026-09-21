@@ -136,6 +136,7 @@ export const en = {
     subagentBusy: 'Working',
     subagentIdle: 'Idle',
     subagentArchived: 'Archived',
+    subagentFailed: 'Failed',
     /** 子代理权限请求信息行（协议无应答命令，hub 到期自动拒绝） */
     subagentAskPending: (toolName: string): string => `Waiting for permission (${toolName}) — auto-denied on timeout`,
     workingFor: 'Working for',

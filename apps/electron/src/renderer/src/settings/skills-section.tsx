@@ -18,7 +18,7 @@ type SkillsSectionProps = {
   onRefresh: () => void
 }
 
-/** 技能来源展示文案（builtin = hub 随包内置；user = ~/.my-agent/skills；project = 项目内）。 */
+/** 技能来源展示文案（builtin = hub 随包内置；user = ~/.x-harness/skills；project = 项目内）。 */
 function skillSourceLabel(source: SkillView['source']): string {
   return copy.settings.skillSourceOptions[source];
 }

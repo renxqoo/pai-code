@@ -44,6 +44,8 @@ interface StreamBuffer {
 interface StreamState {
   streams: Map<string, StreamBuffer>;
   calls: Map<string, string>;
+  /** callId → 工具输出累积（agent/tool-stream 增量批的快照化；result 冲净） */
+  toolStreams: Map<string, string>;
   counter: number;
 }
 
@@ -53,13 +55,13 @@ export interface EventMapper {
 }
 
 export function createEventMapper(deps: EventMapDeps): EventMapper {
-  const state: StreamState = { streams: new Map(), calls: new Map(), counter: 0 };
+  const state: StreamState = { streams: new Map(), calls: new Map(), toolStreams: new Map(), counter: 0 };
 
   return {
     mapEvent(frame): UiEvent[] {
       const { threadId, name, payload } = frame;
       if (frame.agentName !== undefined && frame.agentName !== '') {
-        return mapSubagent(threadId, name, payload, frame.agentName);
+        return mapSubagent(state, threadId, name, payload, frame.agentName);
       }
       // 主会话谓词：session 域帧的 session 必须 === threadId（子会话 WAL 帧不进主时间线）
       const session = payload['session'];
@@ -70,12 +72,21 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
         case 'llm/chunk':
           return mapChunk(state, threadId, payload, deps);
         case 'assistant/message': {
-          const buffer = state.streams.get(threadId);
+          // 步坐标以 WAL 权威事件为准更新缓冲（E-H4：无文本步不复用陈旧缓冲——
+          // 事件自带 turn/step，比对后重置；thinking 是内核顶层字段非 content 块）
+          const turn = num(payload.turn, -1);
+          const step = num(payload.step, -1);
+          let buffer = state.streams.get(threadId);
+          if (buffer === undefined || buffer.turn !== turn || buffer.step !== step) {
+            state.counter += 1;
+            buffer = { messageId: `stream-${state.counter}`, turn, step, text: '', thinking: '', usage: null };
+            state.streams.set(threadId, buffer);
+          }
           return [
             {
               type: 'messageFinal',
               threadId,
-              message: { id: buffer?.messageId ?? `stream-${++state.counter}`, text: messageText(payload.content), thinking: messageThinking(payload.content), toolCalls: [], usage: usageOf(payload.usage) },
+              message: { id: buffer.messageId, text: messageText(payload.content), thinking: str(payload.thinking), toolCalls: [], usage: usageOf(payload.usage) },
             },
           ];
         }
@@ -97,6 +108,7 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
         }
         case 'tool/result': {
           const callId = str(payload.callId);
+          state.toolStreams.delete(callId);
           return [
             {
               type: 'toolEnded',
@@ -110,10 +122,23 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
             },
           ];
         }
-        case 'agent/tool-stream':
-          return [{ type: 'toolUpdated', threadId, callId: str(payload.callId), output: str(payload.delta) }];
+        case 'agent/tool-stream': {
+          // 桥发增量批（≥25ms 尾沿合并的 delta）——UiEvent toolUpdated 是快照语义，
+          // 协议边界按 callId 累积（tool/result 结算时冲净，见下）
+          const callId = str(payload.callId);
+          const delta = str(payload.delta);
+          const accumulated = (state.toolStreams.get(callId) ?? '') + delta;
+          state.toolStreams.set(callId, accumulated);
+          return [{ type: 'toolUpdated', threadId, callId, output: accumulated }];
+        }
         case 'settled':
           state.streams.delete(threadId);
+          // 轮结算清记忆表（callId→工具名 / callId→累积输出）：跨轮 callId 不复用，
+          // 长会话生命周期内无界增长即泄漏
+          for (const callId of state.calls.keys()) {
+            if (!state.toolStreams.has(callId)) state.calls.delete(callId);
+          }
+          state.toolStreams.clear();
           return [
             {
               type: 'turnSettled',
@@ -205,7 +230,7 @@ function emitChunk(threadId: string, buffer: StreamBuffer, chunk: Record<string,
 }
 
 /** 子归属帧（agentName = agentId）：正文流 + 工具面 + 状态域。 */
-function mapSubagent(threadId: string, name: string, payload: Record<string, unknown>, agentId: string): UiEvent[] {
+function mapSubagent(state: StreamState, threadId: string, name: string, payload: Record<string, unknown>, agentId: string): UiEvent[] {
   switch (name) {
     case 'agent/assistant-stream': {
       const frame = recordOf(payload.frame);
@@ -214,17 +239,21 @@ function mapSubagent(threadId: string, name: string, payload: Record<string, unk
       }
       return [];
     }
-    case 'agent/tool-stream':
+    case 'agent/tool-stream': {
+      const callId = str(payload.callId);
+      const accumulated = (state.toolStreams.get(callId) ?? '') + str(payload.delta);
+      state.toolStreams.set(callId, accumulated);
       return [
         {
           type: 'subagentTool',
           threadId,
           agentId,
-          call: { id: str(payload.callId), name: '', argsPreview: '' },
+          call: { id: callId, name: '', argsPreview: '' },
           phase: 'update',
-          output: str(payload.delta),
+          output: accumulated,
         },
       ];
+    }
     case 'tool/call': {
       const toolName = str(payload.name);
       const args = argsOf(payload.arguments);
@@ -239,6 +268,7 @@ function mapSubagent(threadId: string, name: string, payload: Record<string, unk
       ];
     }
     case 'tool/result':
+      state.toolStreams.delete(str(payload.callId));
       return [
         {
           type: 'subagentTool',
@@ -280,10 +310,6 @@ function argsOf(value: unknown): Record<string, unknown> {
 /** WAL assistant/message content 块提取（text/thinking 拼接）。 */
 function messageText(content: unknown): string {
   return contentBlocks(content, 'text');
-}
-
-function messageThinking(content: unknown): string {
-  return contentBlocks(content, 'thinking');
 }
 
 function contentBlocks(content: unknown, type: string): string {

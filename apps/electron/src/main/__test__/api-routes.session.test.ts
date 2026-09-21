@@ -241,3 +241,84 @@ describe('session 命令契约面', () => {
 afterAll(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
+
+describe('session/delete 级联收敛（removed 集驱动注册表行移除）', () => {
+  test('主行 + 级联子行按 removed 集收敛；幂等空集无操作', async () => {
+    let deleteCount = 0;
+    const { routes, runtime, agentDir } = await makeRoutes((command) => {
+      if (command.type === 'thread/delete') {
+        deleteCount += 1;
+        return { ok: true, data: { removed: deleteCount === 1 ? ['main-thread', 'child-thread'] : [] } };
+      }
+      return { ok: true, data: {} };
+    });
+    const dir = join(agentDir, 'sessions');
+    mkdirSync(join(dir, 'main-thread'), { recursive: true });
+    const sessionPath = join(dir, 'main-thread', 'events.jsonl');
+    writeFileSync(sessionPath, '{}');
+    // seed：模拟已恢复的注册表行（removeSession/registry 依赖 runtime 真表）
+    runtime.applyStartOutcome('main-thread', '/w', sessionPath, null, 1, false);
+    runtime.applyStartOutcome('child-thread', '/w', join(dir, 'child-thread', 'events.jsonl'), null, 1, false);
+    const deleted = (await routes.invoke('session/delete', { sessionPath })) as { ok: boolean; reason?: string; data: { removed: string[] } };
+    expect(deleted.ok).toBe(true);
+    expect(deleted.data.removed).toEqual(['main-thread', 'child-thread']);
+    expect(runtime.registry.get('main-thread')).toBeNull();
+    expect(runtime.registry.get('child-thread')).toBeNull();
+    // 幂等：hub 回 removed:[]（目录已不在）——无行可动
+    const again = (await routes.invoke('session/delete', { sessionPath })) as { ok: boolean; data: { removed: string[] } };
+    expect(again.data.removed).toEqual([]);
+  });
+});
+
+describe('/compact 直发成功三元组（D7：词形命中→compact 命令→data 透传）', () => {
+  test('compact 响应三元组解析透传；携图本地硬拒（hub 同文案）', async () => {
+    const trio = { summary: 'SUM', replacedCount: 3, summaryTokens: 120 };
+    const { routes, sent } = await makeRoutes((command) => (command.type === 'compact' ? { ok: true, data: trio } : { ok: true, data: {} }));
+    const compacted = (await routes.invoke('session/prompt', { threadId: 't1', message: '/compact keep goals' })) as {
+      ok: boolean;
+      data: { summary: string; replacedCount: number; summaryTokens: number } | null;
+    };
+    expect(compacted.ok).toBe(true);
+    expect(compacted.data).toEqual(trio);
+    const cmd = sent.find((command) => command.type === 'compact');
+    expect(cmd).toMatchObject({ type: 'compact', threadId: 't1', customInstructions: 'keep goals' });
+    // 携图命中命令：本地硬拒（附件不静默丢弃），不发命令
+    const withImage = (await routes.invoke('session/prompt', {
+      threadId: 't1',
+      message: '/compact',
+      images: [{ type: 'image', data: 'aGk=', mediaType: 'image/png' }],
+    })) as { ok: boolean; reason?: string };
+    expect(withImage).toEqual({ ok: false, reason: 'invalid images: compact does not accept images' });
+    expect(sent.filter((command) => command.type === 'compact').length).toBe(1);
+  });
+});
+
+describe('session/register 主进程处理器（白名单/trusted 审计/删行正则/id 分歧拒）', () => {
+  test('白名单外拒绝；合法路径 trusted 补全 + thread_id_mismatch 拒', async () => {
+    const { routes, runtime, agentDir, sent } = await makeRoutes((command) =>
+      command.type === 'thread/register' ? { ok: true, data: { threadId: command.threadId === 'mismatch-thread' ? 'other-id' : 'main-thread' } } : { ok: true, data: {} },
+    );
+    const outside = (await routes.invoke('session/register', { sessionPath: '/etc/passwd' })) as { ok: boolean; reason?: string };
+    expect(outside.reason).toBe('session_path_forbidden');
+    const dir = join(agentDir, 'sessions', 'main-thread');
+    mkdirSync(dir, { recursive: true });
+    const sessionPath = join(dir, 'events.jsonl');
+    writeFileSync(sessionPath, '{}');
+    // 注册表无行 → unknown_session（纳管前须先有行——对账/水化链先行）
+    const noRow = (await routes.invoke('session/register', { sessionPath })) as { ok: boolean; reason?: string };
+    expect(noRow.reason).toBe('unknown_session');
+    runtime.applyStartOutcome('main-thread', '/w', sessionPath, null, 1, true);
+    const ok = (await routes.invoke('session/register', { sessionPath })) as { ok: boolean };
+    expect(ok.ok).toBe(true);
+    expect(sent.find((command) => command.type === 'thread/register')).toMatchObject({ type: 'thread/register', trusted: true });
+    // id 分歧（外部改写怪态）：不落表不换行，显式拒
+    const dir2 = join(agentDir, 'sessions', 'mismatch-thread');
+    mkdirSync(dir2, { recursive: true });
+    const mismatchPath = join(dir2, 'events.jsonl');
+    writeFileSync(mismatchPath, '{}');
+    runtime.applyStartOutcome('mismatch-thread', '/w', mismatchPath, null, 1, false);
+    const mismatch = (await routes.invoke('session/register', { sessionPath: mismatchPath })) as { ok: boolean; reason?: string };
+    expect(mismatch.reason).toBe('thread_id_mismatch');
+  });
+});
+

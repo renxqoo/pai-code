@@ -21,8 +21,8 @@ type ProvidersSectionProps = {
   list: readonly ProviderConfigView[];
   defaultModel: string | null;
   modelOptions: readonly string[]; // "provider/modelId" 形态
-  onUpsert: (input: ProviderUpsertInput) => Promise<boolean>;
-  onRemove: (name: string) => Promise<boolean>;
+  onUpsert: (input: ProviderUpsertInput) => Promise<string | null>;
+  onRemove: (name: string) => Promise<string | null>;
   onSelectDefaultModel: (value: string | null) => void;
   onTest: (name: string, modelId?: string) => Promise<ProviderTestResult>;
 };
@@ -62,10 +62,15 @@ function ProvidersSection({
 
   const removeProvider = (name: string): Promise<boolean> => {
     setRemoveFailed(false);
-    return onRemove(name).then((ok) => {
-      if (!ok) setRemoveFailed(true);
-      return ok;
-    });
+    return onRemove(name)
+      .then((reason) => {
+        if (reason !== null) setRemoveFailed(true);
+        return reason === null;
+      })
+      .catch(() => {
+        setRemoveFailed(true);
+        return false;
+      });
   };
 
   if (view.kind === "create" || editingProvider !== undefined) {

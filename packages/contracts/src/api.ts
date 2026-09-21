@@ -162,7 +162,7 @@ export const SkillViewSchema = z
   .object({
     name: z.string(),
     enabled: z.boolean(),
-    /** builtin = hub 随包内置；user = ~/.my-agent/skills；project = <项目>/.my-agent/skills。 */
+    /** builtin = hub 随包内置；user = ~/.x-harness/skills；project = <项目>/.my-agent/skills。 */
     source: z.enum(['builtin', 'user', 'project']),
   })
   .strict();

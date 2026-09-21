@@ -62,8 +62,8 @@ export type SettingsScreenProps = {
     list: readonly ProviderConfigView[];
     defaultModel: string | null;
     modelOptions: readonly string[];
-    onUpsert: (input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; apiKey?: string }) => Promise<boolean>;
-    onRemove: (name: string) => Promise<boolean>;
+    onUpsert: (input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; apiKey?: string }) => Promise<string | null>;
+    onRemove: (name: string) => Promise<string | null>;
     onSelectDefaultModel: (value: string | null) => void;
     onTest: (name: string, modelId?: string) => Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }>;
   };

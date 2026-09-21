@@ -21,7 +21,7 @@ import { agentDefinitionPath, fileNameStemOf, isSafeFileNameStem, parseAgentDefi
 export type AgentDefinitionKey = { name: string; scope: AgentScope; project: string | null };
 
 export type AgentDefinitionsStore = {
-  /** 枚举 user 目录 + 各已知项目的 .my-agent/agents（快照读；坏文件跳过，与 hub 同语义）。 */
+  /** 枚举 user 目录 + 各已知项目的 .x-harness/agents（快照读；坏文件跳过，与 hub 同语义）。 */
   list: (projects: readonly string[]) => AgentDefinition[];
   /** 新建/编辑/改名/移动统一：校验 → 原子写新文件 → 删旧键位文件（删除失败不影响结果，audit 由路由层记录）。 */
   upsert: (definition: AgentDefinition, previous: AgentDefinitionKey | null, projects: readonly string[]) => { ok: true } | { ok: false; reason: 'invalid_name' | 'invalid_description' | 'invalid_prompt' | 'invalid_model' | 'invalid_project' | 'name_exists' | 'write_failed' };

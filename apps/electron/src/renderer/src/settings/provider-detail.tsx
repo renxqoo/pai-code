@@ -11,7 +11,7 @@ import type { ProviderTestResult } from "./provider-test";
 type ProviderDetailProps = {
   /** 编辑态渠道快照（null = 新建）。 */
   provider: ProviderConfigView | null;
-  onUpsert: (input: ProviderUpsertInput) => Promise<boolean>;
+  onUpsert: (input: ProviderUpsertInput) => Promise<string | null>;
   /** 渠道/模型探活（modelId 缺省 = 第一个模型；新建态无渠道可探）。 */
   onTest: (name: string, modelId?: string) => Promise<ProviderTestResult>;
   onBack: () => void;

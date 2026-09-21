@@ -124,8 +124,8 @@ export type WorkspaceActions = {
   /** J2 通用偏好保存（trustedDefault / 宿主路径）。 */
   readonly saveGeneralPreferences: (patch: { trustedDefault?: boolean }) => Promise<boolean>;
   readonly testProvider: (name: string, modelId: string | undefined) => Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }>;
-  readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; apiKey?: string }) => Promise<boolean>;
-  readonly removeProvider: (name: string) => Promise<boolean>;
+  readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; apiKey?: string }) => Promise<string | null>;
+  readonly removeProvider: (name: string) => Promise<string | null>;
   readonly renameSession: (threadId: string, name: string) => Promise<boolean>;
   /** 归档：关闭会话（文件保留）+ archivedSessions 偏好标记；侧栏与历史默认隐藏。 */
   readonly archiveSession: (threadId: string) => void;

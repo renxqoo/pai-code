@@ -149,7 +149,7 @@ describe("api-routes 安全面（C-S2/C-S8/C-S4）", () => {
     expect(self.ok).toBe(true);
   });
 
-  test("撞 hub 预设键拒绝（custom 条目会被 host 目录静默剔除——写前显式拒绝）；api 词表外拒绝", async () => {
+  test("撞内置预设名 = 用户覆盖放行（x-harness 整档覆盖 + 消歧 custom 优先——app 无「预设挡人」面）；api 词表外拒绝", async () => {
     const work = mkdtempSync(join(tmpdir(), "pai-sec-preset-"));
     const { routes } = await makeRoutes(work, { models: [{ id: "glm-5.3", provider: "glm", source: "preset" }] });
     const preset = (await routes.invoke("provider/upsert", {
@@ -158,7 +158,7 @@ describe("api-routes 安全面（C-S2/C-S8/C-S4）", () => {
       api: "openai",
       models: [{ id: "m", reasoning: false, vision: false }],
     })) as { ok: boolean; reason?: string };
-    expect(preset).toEqual({ ok: false, reason: "provider_name_conflicts_preset:glm" });
+    expect(preset.ok).toBe(true);
     const badApi = (await routes.invoke("provider/upsert", {
       name: "custom",
       baseUrl: "https://x.example.com",
@@ -168,7 +168,7 @@ describe("api-routes 安全面（C-S2/C-S8/C-S4）", () => {
     expect(badApi).toEqual({ ok: false, reason: "provider_api_unsupported" });
   });
 
-  test("C-S4：host 未启动时 provider/upsert 保守拒绝（host_unavailable）；bootstrap 全走 outcome 不 reject；remove 照常", async () => {
+  test("C-S4：host 未启动时 provider/upsert 照常落盘（目录只在 spawn 期读入——保存不依赖 host）；bootstrap 全走 outcome 不 reject；remove 照常", async () => {
     const work = mkdtempSync(join(tmpdir(), "pai-sec-contract-"));
     const { routes } = await makeRoutes(work);
     const upserted = (await routes.invoke("provider/upsert", {
@@ -179,8 +179,7 @@ describe("api-routes 安全面（C-S2/C-S8/C-S4）", () => {
         { id: "m", reasoning: false, vision: false, contextWindow: 200000, maxTokens: 8192 },
       ],
     })) as { ok: boolean; reason?: string };
-    // hub 目录不可得 → 预设撞键无法判定，保守拒绝（落盘即静默失效比拒绝对用户更糟）
-    expect(upserted).toEqual({ ok: false, reason: "host_unavailable:host_unavailable" });
+    expect(upserted.ok).toBe(true);
     const bootstrap = (await routes.invoke("app/bootstrap", {})) as { ok: boolean; data: unknown };
     expect(bootstrap.ok).toBe(true);
     await expect(routes.invoke("provider/remove", { name: "glm" })).resolves.toMatchObject({

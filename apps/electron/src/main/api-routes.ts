@@ -206,7 +206,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
   };
 
   /**
-   * provider 配置变更 → 重启 host 恢复链路：hub 的模型目录只在启动时读入 models.json，
+   * provider 配置变更 → 重启 host 恢复链路：hub 的模型目录只在启动时读入 providers.json，
    * 且 key 经 spawn env 注入——模型能力或 key 的任何变化都必须重 spawn 才生效。
    * host 未启动则配置已落盘，下次启动时生效。
    */
@@ -294,6 +294,9 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       // 词表/同 data 三元组——app 不依赖 hub 拦截面行为对齐；响应即终态，长超时）
       const invocation = compactInvocationOf(params.message);
       if (invocation !== undefined) {
+        // 携图命中命令 = hub 硬拒（invalid images: compact does not accept images）——
+        // 直发路径本地同口径先拒，附件不被静默丢弃
+        if ((params.images?.length ?? 0) > 0) return fail('invalid images: compact does not accept images');
         const result = await command(
           { type: 'compact', threadId: params.threadId, customInstructions: invocation.customInstructions },
           COMPACT_REQUEST_TIMEOUT_MS,

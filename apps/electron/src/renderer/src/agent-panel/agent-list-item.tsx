@@ -24,7 +24,6 @@ type DetailLine =
   | { kind: 'summary'; text: string }
   | { kind: 'tool'; toolName: string }
   | { kind: 'status'; label: string }
-  | { kind: 'ask'; toolName: string; summary: string }
   | { kind: 'none' };
 
 /**
@@ -33,6 +32,7 @@ type DetailLine =
  * 归档后显报告摘要，无摘要时退回任务描述/最后工具名。
  */
 function detailLine(agent: SubagentModel, now: number): DetailLine {
+  if (agent.endedWith === 'failed') return { kind: 'status', label: copy.flow.subagentFailed };
   if (agent.status === 'stopped') {
     if (agent.summary.length > 0) return { kind: 'summary', text: agent.summary };
     if (agent.task.length > 0) return { kind: 'summary', text: agent.task };
@@ -91,10 +91,6 @@ function AgentListItem({ agent, now, onSteer }: AgentListItemProps) {
               </>
             ) : detail.kind === 'status' ? (
               <span className="text-[11.5px] leading-none text-muted-foreground">{detail.label}</span>
-            ) : detail.kind === 'ask' ? (
-              <span className="truncate text-[11.5px] leading-none text-foreground/85">
-                {copy.flow.subagentAskPending(detail.toolName)}
-              </span>
             ) : (
               <span className="truncate text-[11.5px] leading-[16px] text-foreground/85">{detail.text}</span>
             )}
