@@ -1,17 +1,17 @@
 import { afterEach, beforeEach, describe, expect, jest, test } from 'bun:test';
 import * as React from 'react';
 
-import { editQueuedDraft, insertIntoDraft, registerComposerTextarea, setDraftAndFocus, unregisterComposerTextarea } from '../composer-controller';
+import { insertIntoDraft, registerComposerTextarea, setDraftAndFocus, unregisterComposerTextarea } from '../composer-controller';
 import { stopOrAbort } from '../stop-or-abort';
-import { submitComposerDraft } from '../submit-composer-draft';
-import { queuedDrafts } from '@/composer/queued-drafts';
 import { initialThreadState, type LiveThreadState } from '@/live/live-thread-state';
 import { store as liveStore, workspaceActions } from '@/live/workspace-runtime';
 import { uiStore } from '@/ui/ui-store';
 import { render } from '@/testing/render';
 import type { SessionView } from '@paiapp/contracts';
 
-/** 输入卡编排模块：通道（插入/替换/聚焦/排队编辑）、停止三态、提交三分支——全部读 store 真相。 */
+/** 输入卡编排模块：通道（插入/替换/聚焦）、停止三态——全部读 store 真相。
+ *  （提交链已主进程化：submit-composer-draft/queued-drafts 模块随 T41 R1 删除，
+ *  发送三分支回归见 composer-region 提交用例与 main api-routes.session 管线用例。） */
 
 function seedThread(threadId: string, thread: Partial<LiveThreadState> = {}): void {
   const session: SessionView = {
@@ -88,21 +88,6 @@ describe('composer-controller', () => {
     setDraftAndFocus('y'); // 通道无元素：不抛错，草稿替换照常
     expect(uiStore.getState().composerDraft).toBe('y');
   });
-
-  test('editQueuedDraft：取出活跃线程暂存条目回填草稿并产生一次性图片信号；同 id 再取无副作用', () => {
-    seedThread('t1');
-    queuedDrafts.stage('t1', '/tmp/t38/s/t1.jsonl', '排队内容', [{ name: '图.png', payload: { data: 'd', mimeType: 'image/png' } }]);
-    const id = queuedDrafts.snapshot().t1?.[0]?.id;
-    expect(id).toBeDefined();
-    editQueuedDraft(id as number);
-    expect(uiStore.getState().drafts.t1).toBe('排队内容');
-    const restore = uiStore.getState().composerRestore;
-    expect(restore?.token).toBeGreaterThan(0);
-    expect(restore?.images).toHaveLength(1);
-    const before = uiStore.getState().drafts.t1;
-    editQueuedDraft(id as number);
-    expect(uiStore.getState().drafts.t1).toBe(before);
-  });
 });
 
 describe('stop-or-abort 三态（读 store 真相）', () => {
@@ -150,35 +135,5 @@ describe('stop-or-abort 三态（读 store 真相）', () => {
     stopOrAbort();
     expect(stop).toHaveBeenCalledTimes(1);
     expect(uiStore.getState().confirmStop).toBe(false);
-  });
-});
-
-describe('submit-composer-draft 三分支（读 store 真相）', () => {
-  test('生成中普通消息→本地暂存 + 清草稿 + resolve true（PromptCard 据此清附件）', async () => {
-    // queuedDrafts 是无 reset 的模块单例：各用例独立线程 id 隔离暂存残留
-    seedThread('t-stage', { streaming: true });
-    uiStore.getState().setDraft('t-stage', '排队消息');
-    const sent = await submitComposerDraft('排队消息', []);
-    expect(sent).toBe(true);
-    expect(queuedDrafts.snapshot()['t-stage'] ?? []).toHaveLength(1);
-    expect(uiStore.getState().composerDraft).toBe('');
-    expect('t-stage' in uiStore.getState().drafts).toBe(false);
-  });
-
-  test('生成中行首斜杠命令不暂存（直发通路；离线桥下失败草稿保留）', async () => {
-    seedThread('t-slash', { streaming: true });
-    uiStore.getState().setDraft('t-slash', '/compact');
-    const sent = await submitComposerDraft('/compact', []);
-    expect(sent).toBe(false);
-    expect(queuedDrafts.snapshot()['t-slash'] ?? []).toHaveLength(0);
-    expect(uiStore.getState().drafts['t-slash']).toBe('/compact');
-  });
-
-  test('空闲直发：空文本空附件拦截 false，草稿不动', async () => {
-    seedThread('t-empty');
-    uiStore.getState().setDraft('t-empty', '   ');
-    const sent = await submitComposerDraft('   ', []);
-    expect(sent).toBe(false);
-    expect(uiStore.getState().drafts['t-empty']).toBe('   ');
   });
 });

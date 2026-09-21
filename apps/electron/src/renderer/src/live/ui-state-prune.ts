@@ -6,8 +6,7 @@ import type { LiveStore } from './store';
  * 会话消亡时的 UI 态回收：sessionRemoved 后线程 id 不复用（重开/懒恢复/宿主重启
  * 一律换新 id），按 id 寻址的 UI 态——会话草稿槽（ui store）与面板组态档案
  * （模块档案）——随 sessions 表差集回收。宿主死亡只终态化 threads、不清 sessions
- * 表，bootstrap 合并只补缺，差集即确定性移除，无误伤窗口。queuedDrafts 不在此列：
- * 暂存消息有按 sessionPath 改绑机器（重开接续投递，见 queued-flush）。
+ * 表，bootstrap 合并只补缺，差集即确定性移除，无误伤窗口。
  */
 export function connectSessionUiPrune(store: LiveStore, uiStore: UiStore, panelArchive: PanelArchive): () => void {
   let prevIds = new Set(Object.keys(store.getState().sessions));

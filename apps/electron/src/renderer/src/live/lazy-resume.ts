@@ -4,8 +4,10 @@ import type { LiveStore } from './store';
 /**
  * 懒恢复机制（T16 建立、T27 收窄为「写路径专用」）：parked 占位 →
  * session/resume 的按需通路。读路径（浏览历史）经 host 直读不再唤醒
- * worker，只有发消息/写动作经 ensureLiveSession 兜底唤醒。
- * 单一职责文件：在途去重（waking）、乐观登记（resumedByPath）只在这里。
+ * worker；写动作的唤醒已随发送管线主进程化（session/prompt 内懒唤醒 +
+ * unknown_thread 自愈），本模块只剩显式恢复入口（openSavedSession/重开链）
+ * 与信任重载前的在途结算。单一职责文件：在途去重（waking）、乐观登记
+ * （resumedByPath）只在这里。
  */
 
 export interface LazyResume {
@@ -13,10 +15,7 @@ export interface LazyResume {
   readonly resumeByPath: (sessionPath: string, trusted?: boolean) => Promise<string | null>;
   /** parked 占位 → 恢复返回可用 threadId；非 parked 原样返回（dead 由 hub 写命令自愈）；失败 null。 */
   readonly ensureLiveSession: (threadId: string) => Promise<string | null>;
-  /** 强制重锚：绕过乐观登记直接 resume（hub 对已打开文件回 already open，由主进程
-   *  resume 路由收养既有表项——两条出路都得到可用 id）。僵尸视图自愈专用。 */
-  readonly forceResume: (sessionPath: string) => Promise<string | null>;
-  /** 显式激活会话（只读激活同一入口；唤醒换 id 的激活由 submitDraft 处理）。 */
+  /** 显式激活会话（只读激活同一入口）。 */
   readonly activate: (threadId: string) => void;
   /** host 进程消亡：乐观登记的「已恢复」随 worker 全灭失效。 */
   readonly invalidate: () => void;
@@ -78,7 +77,6 @@ export function createLazyResume(client: BridgeClient, store: LiveStore): LazyRe
   return {
     resumeByPath,
     ensureLiveSession,
-    forceResume: (sessionPath: string) => attemptResume(sessionPath),
     activate,
     invalidate: () => {
       resumedByPath.clear();

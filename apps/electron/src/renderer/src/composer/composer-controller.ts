@@ -1,12 +1,12 @@
-import { queuedDrafts, type QueuedDraftImages } from '@/composer/queued-drafts';
 import { store as liveStore } from '@/live/workspace-runtime';
+import type { NamedPendingImages } from '@/composer/read-image-file';
 import { uiStore } from '@/ui/ui-store';
 
 /**
  * 输入卡跨区通道（模块单例，T33 U2）：textarea 注册/聚焦、图片回填一次性信号、
- * 草稿插入（palette 的斜杠命令追加）与替换（fork/编辑重发）、排队消息编辑回填。
+ * 草稿插入（palette 的斜杠命令追加）与替换（fork/编辑重发）。
  * 区域挂载时注册 textarea（对象 ref + effect——子件只认对象 ref，回调 ref 会废
- * 补全采纳后的光标定位）；palette/fork/排队编辑等跨区入口 import 即调。
+ * 补全采纳后的光标定位）；palette/fork 等跨区入口 import 即调。
  * 寻址一律读 live store 真相（调用时的活跃线程）。
  */
 
@@ -25,7 +25,7 @@ export function focusComposer(): void {
 }
 
 /** 图片回填一次性信号（token 递增；消费端 PromptCard 按并入处理，空数组并入零项）。 */
-export function restoreComposerImages(images: QueuedDraftImages): void {
+export function restoreComposerImages(images: NamedPendingImages): void {
   uiStore.getState().setComposerRestore(images);
 }
 
@@ -48,13 +48,4 @@ export function setDraftAndFocus(text: string): void {
   const threadId = liveStore.getState().activeThreadId ?? '';
   uiStore.getState().setDraft(threadId, text);
   focusComposer();
-}
-
-/** 排队消息编辑：取出活跃线程的暂存条目回填草稿与附件信号 + 聚焦。 */
-export function editQueuedDraft(id: number): void {
-  const threadId = liveStore.getState().activeThreadId ?? '';
-  const draft = queuedDrafts.take(threadId, id);
-  if (draft === null) return;
-  setDraftAndFocus(draft.text);
-  restoreComposerImages(draft.images);
 }

@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, jest, test } from 'bun:test';
 import * as React from 'react';
 
 import { ComposerRegion } from '../composer-region';
-import { queuedDrafts } from '@/composer/queued-drafts';
 import { initialThreadState, type LiveThreadState } from '@/live/live-thread-state';
 import { store as liveStore, workspaceActions } from '@/live/workspace-runtime';
 import { uiStore } from '@/ui/ui-store';
@@ -11,8 +10,10 @@ import { copy } from '@/strings';
 import type { ModelInfoView, PreferencesView, SessionStatsView, SessionView } from '@paiapp/contracts';
 
 /**
- * 输入卡区域回归（T33 M2）：0 props 自订阅——数据形态/交互动作直落 store 与
- * queuedDrafts；B-keystroke 双用例钉重渲半径（敲键只重渲本子树、无关线程事件零穿透）。
+ * 输入卡区域回归（T33 M2）：0 props 自订阅——数据形态/交互动作直落 store；
+ * B-keystroke 双用例钉重渲半径（敲键只重渲本子树、无关线程事件零穿透）。
+ * 排队卡片数据源 = hub 队列镜像（queueChanged 事件折叠）；提交 = 一行动作
+ * 面 submitDraft（发送管线居主进程，T41 R1）。
  */
 
 function model(provider: string, modelId: string): ModelInfoView {
@@ -49,6 +50,11 @@ function preferences(overrides: Partial<PreferencesView> = {}): PreferencesView 
 }
 
 const statsOf = (total: number): SessionStatsView => ({ userMessages: 3, assistantMessages: 5, toolCalls: 7, tokens: { input: 800, output: Math.max(0, total - 800), total }, cost: 0.1 });
+
+/** spy 首调入参（提交一行断言：文本与转换后附件恰两参，mode 缺省不显式传）。 */
+function subjectCallOf(spy: { mock: { calls: unknown[][] } }): unknown[] {
+  return spy.mock.calls[0] ?? [];
+}
 
 function seedLive(input: {
   threads?: Record<string, Partial<LiveThreadState>>
@@ -155,40 +161,53 @@ describe('ComposerRegion 交互', () => {
     view.unmount();
   });
 
-  test('排队卡片三动作：暂存后渲染卡片堆；移除即消失；编辑回填草稿', () => {
-    seedLive({ threads: { t1: { streaming: true } } });
-    uiStore.getState().setDraft('t1', '第一条');
-    queuedDrafts.stage('t1', '/tmp/t38/s/t1.jsonl', '排队的消息', []);
+  test('排队卡片数据源 = hub 队列镜像：followUp 文本渲染卡片堆（只读，无单条动作位）；队列清空即消失', () => {
+    seedLive({ threads: { t1: { streaming: true, queue: { steering: [], followUp: ['排队的消息'] } } } });
     const view = render(<ComposerRegion />);
     expect(view.container.textContent).toContain('排队的消息');
+    // hub 队列无单条操作（协议仅 clear_queue）：镜像卡片不带立即/编辑/移除动作
+    expect([...view.container.querySelectorAll('button')].some((b) => b.getAttribute('aria-label')?.includes('排队消息'))).toBe(false);
+    expect([...view.container.querySelectorAll('button')].some((b) => b.textContent?.trim() === '立即')).toBe(false);
+    // queueChanged 折叠清空 → 卡片随之消失（事件时差内的空态）
     React.act(() => {
-      [...view.container.querySelectorAll('button')].find((b) => b.getAttribute('aria-label') === '移除排队消息')?.click();
+      liveStore.getState().applyEvent({ type: 'queueChanged', threadId: 't1', steering: [], followUp: [] }, Date.now());
     });
     expect(view.container.textContent).not.toContain('排队的消息');
-    // 再暂存一条走编辑回填
-    queuedDrafts.stage('t1', '/tmp/t38/s/t1.jsonl', '第二条排队', []);
-    view.rerender(<ComposerRegion />);
-    React.act(() => {
-      [...view.container.querySelectorAll('button')].find((b) => b.getAttribute('aria-label') === '编辑排队消息')?.click();
-    });
-    expect(uiStore.getState().drafts.t1 ?? uiStore.getState().composerDraft).toBe('第二条排队');
     view.unmount();
   });
 
-  test('排队卡片「立即」改向：以 steer 模式直投活跃线程（附件经 ImagePayload 转换）', async () => {
-    // queuedDrafts 无 reset 单例：独立线程 id 隔离跨文件残留
-    seedLive({ activeThreadId: 't-steer', threads: { 't-steer': { streaming: true } } });
-    const submit = jest.spyOn(workspaceActions, 'submitThreadDraft').mockResolvedValue(null);
-    queuedDrafts.stage('t-steer', '/tmp/t38/s/t-steer.jsonl', '改向消息', [{ name: '图.png', payload: { data: 'd', mimeType: 'image/png' } }]);
+  test('提交一行：表单提交 → 动作面 submitDraft（文本原样、回填附件经 ImagePayload 转换）；成功清草稿', async () => {
+    seedLive({});
+    uiStore.getState().setDraft('t1', '发出这条');
+    const submit = jest.spyOn(workspaceActions, 'submitDraft').mockResolvedValue(null);
     const view = render(<ComposerRegion />);
+    // 回填信号并入附件态（token 变化消费一次性信号）
     React.act(() => {
-      [...view.container.querySelectorAll('button')].find((b) => b.textContent?.trim() === '立即')?.click();
+      uiStore.getState().setComposerRestore([{ name: '图.png', payload: { data: 'd', mimeType: 'image/png' } }]);
     });
-    // sendNow 经线程内串行队列（链式微任务）异步派发——刷足微任务拍后断言
     await React.act(async () => {
-      for (let i = 0; i < 6; i += 1) await Promise.resolve();
+      view.container.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      for (let i = 0; i < 10; i += 1) await Promise.resolve();
     });
-    expect(submit).toHaveBeenCalledWith('t-steer', '改向消息', [{ type: 'image', data: 'd', mediaType: 'image/png' }], 'steer');
+    expect(subjectCallOf(submit)).toEqual([
+      '发出这条',
+      [{ type: 'image', data: 'd', mediaType: 'image/png' }],
+    ]);
+    expect(uiStore.getState().composerDraft).toBe('');
+    expect('t1' in uiStore.getState().drafts).toBe(false);
+    view.unmount();
+  });
+
+  test('提交失败草稿保留（失败通知由动作面分派）：resolve 非 null 不清草稿', async () => {
+    seedLive({});
+    uiStore.getState().setDraft('t1', '重发这条');
+    jest.spyOn(workspaceActions, 'submitDraft').mockResolvedValue('no_active_session');
+    const view = render(<ComposerRegion />);
+    await React.act(async () => {
+      view.container.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      for (let i = 0; i < 10; i += 1) await Promise.resolve();
+    });
+    expect(uiStore.getState().drafts.t1).toBe('重发这条');
     view.unmount();
   });
 
@@ -312,7 +331,7 @@ describe('重渲边界回归（B-keystroke）', () => {
     view.unmount();
   });
 
-  test('无关线程事件零穿透：后台会话更新与后台排队暂存不重渲 Region', () => {
+  test('无关线程事件零穿透：后台会话更新与后台队列折叠不重渲 Region', () => {
     seedLive({ activeThreadId: 't1' });
     let commits = 0;
     const countCommit = (): void => { commits += 1; };
@@ -325,9 +344,9 @@ describe('重渲边界回归（B-keystroke）', () => {
     React.act(() => {
       liveStore.setState({ sessions: { t1: activeEntry, 'bg-thread': session('bg-thread') } });
     });
-    // 后台线程排队暂存（queuedDrafts 通知，但按键取快照对 t1 引用不变）
+    // 后台线程队列折叠（queueChanged：threads 表换引用，活跃线程条目引用不变）
     React.act(() => {
-      queuedDrafts.stage('bg-thread', '/tmp/t38/s/bg.jsonl', '后台暂存', []);
+      liveStore.getState().applyEvent({ type: 'queueChanged', threadId: 'bg-thread', steering: [], followUp: ['后台排队'] }, Date.now());
     });
     expect(commits).toBe(0); // §1.3 预算：无关线程事件不进区域订阅面
     view.unmount();

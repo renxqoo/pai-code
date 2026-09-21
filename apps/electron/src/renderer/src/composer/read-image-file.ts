@@ -18,6 +18,9 @@ const MAX_ENCODED_BYTES = 4 * 1024 * 1024;
 /** 本地暂存形态（协议载荷的 mimeType 同义名；发送时经 imagePayloadOf 转协议 mediaType）。 */
 export type PendingImage = { data: string; mimeType: string };
 
+/** 命名附件列表（回填信号/分叉回填共用形态：文件名 + 本地暂存图）。 */
+export type NamedPendingImages = readonly { name: string; payload: PendingImage }[];
+
 /** 等比缩放目标尺寸：长边超限按比例缩小，不放大；最小 1px 防退化。 */
 export function scaledImageSize(width: number, height: number, maxEdge = MAX_EDGE_PX): { width: number; height: number } {
   const longest = Math.max(width, height);

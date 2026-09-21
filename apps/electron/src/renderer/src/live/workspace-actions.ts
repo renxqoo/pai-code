@@ -17,8 +17,6 @@ import { statsTargetsOf } from './stats-targets';
 
 export type WorkspaceActions = {
   readonly submitDraft: (message: string, images?: readonly ImagePayload[], mode?: 'auto' | 'steer' | 'followUp') => Promise<string | null>;
-  /** 指定线程投递（排队暂存的立即改向/轮末冲刷，目标可为后台线程）；失败通知与 submitDraft 同口径。 */
-  readonly submitThreadDraft: (threadId: string, message: string, images?: readonly ImagePayload[], mode?: 'auto' | 'steer' | 'followUp') => Promise<string | null>;
   readonly stopActiveTurn: () => void;
   readonly selectSession: (threadId: string) => void;
   readonly createSession: (input: {
@@ -186,6 +184,11 @@ function notifySubmitFailure(reason: string | null): void {
     pushNotice(copy.flow.imagesTooMany);
     return;
   }
+  // 直执行（`! `）携图互斥：主进程本地先拒的 kind（文案与 bashNoImages 同句）
+  if (reason === 'bash_images_rejected') {
+    pushNotice(copy.flow.bashNoImages);
+    return;
+  }
   pushNotice(copy.flow.sendFailed(reason));
 }
 
@@ -222,13 +225,8 @@ export function createWorkspaceActions(): WorkspaceActions {
   return {
     submitDraft: async (message, images, mode) => {
       // 调用时读 store 真相：fork/重开等异步链路后的旧闭包不得打到旧线程；
-      // parked 占位的懒恢复兜底在 controller.submitDraft 内（threadId 只信 resume 响应）
+      // 空舞台守卫/parked 懒唤醒/unknown_thread 自愈在主进程 session/prompt 管线内
       const reason = await controller.submitDraft(activeThreadOf(), message, images, mode);
-      notifySubmitFailure(reason);
-      return reason;
-    },
-    submitThreadDraft: async (threadId, message, images, mode) => {
-      const reason = await controller.submitDraft(threadId, message, images, mode);
       notifySubmitFailure(reason);
       return reason;
     },

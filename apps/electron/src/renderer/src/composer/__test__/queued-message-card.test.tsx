@@ -40,4 +40,10 @@ describe("QueuedMessageCard", () => {
     const html = renderCard("一句特别特别特别长的排队消息 ".repeat(20));
     expect(html).toContain("truncate");
   });
+
+  test("hub 队列镜像来源只读形态：不传动作回调时不渲染动作位（队列无单条操作）", () => {
+    const html = renderToStaticMarkup(<QueuedMessageCard text="排队中" />);
+    expect(html).toContain("排队中");
+    expect(html).not.toContain("<button");
+  });
 });

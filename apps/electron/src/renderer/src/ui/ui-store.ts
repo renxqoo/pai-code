@@ -1,6 +1,6 @@
 import { createStore } from 'zustand/vanilla';
 
-import type { QueuedDraftImages } from '@/composer/queued-drafts';
+import type { NamedPendingImages } from '@/composer/read-image-file';
 import type { ProjectFileNode } from '@/sidebar/build-file-tree';
 import {
   closeAllPanels,
@@ -65,7 +65,7 @@ export type UiState = {
   /** 停止二次确认条开合（存在在途子代理时停止不可恢复；Esc 链同源）。 */
   confirmStop: boolean;
   /** 输入卡图片回填一次性信号：token 递增即并入附件态（消费端 PromptCard）。 */
-  composerRestore: { token: number; images: QueuedDraftImages } | null;
+  composerRestore: { token: number; images: NamedPendingImages } | null;
   /** 分支视图失效代次（新建任务页 checkout 成功递增，输入卡上下文条分支段重拉）。 */
   branchRevision: number;
   /** 面板系统当前多标签态（会话级存档在 panel-controller 的模块档案，非当前态）。 */
@@ -115,7 +115,7 @@ export type UiActions = {
   /** 输入浮层高度写入：接收原始测量值，消费侧避让偏移（+24）在此统一加成。 */
   setComposerInset: (rawHeight: number) => void;
   /** 图片回填信号（token 自增；images 可为空数组——仍产生一次信号，消费端并入零项）。 */
-  setComposerRestore: (images: QueuedDraftImages) => void;
+  setComposerRestore: (images: NamedPendingImages) => void;
   bumpBranchRevision: () => void;
   beginProjectFiles: (target: { name: string; path: string }) => void;
   completeProjectFiles: (tree: readonly ProjectFileNode[]) => void;

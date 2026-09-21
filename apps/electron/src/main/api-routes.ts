@@ -24,8 +24,8 @@ import { createGitBranches, type GitBranches } from './git-branches';
 import { createGitGraph, type GitGraph } from './git-graph';
 import { createOpenLocation, type OpenLocation } from './open-location';
 import { createLocalRoutes } from './api-routes-local';
-import { compactInvocationOf } from './compact-lexing';
 import { createSettingsRoutes } from './api-routes-settings';
+import { promptRoutes } from './api-routes-prompt';
 import type { AgentDefinitionsStore } from './agent-definitions-store';
 import { THINKING_LEVEL_ORDER, type ThinkingLevel } from '@paiapp/contracts';
 import type { ApiError } from '@paiapp/contracts';
@@ -251,6 +251,25 @@ export function createApiRoutes(deps: ApiRouteDeps) {
 
   type RouteTable = { [M in ApiMethod]?: (params: ApiParams<M>) => Outcome<M> };
 
+  /** 直执行 bash 路由处理器（表外命名：session/prompt 的 `! ` 分支复用同一实现——
+   *  audit/24h 长命档/结果收窄不得分叉）。 */
+  const bashRoute = async (params: ApiParams<'session/bash'>): Promise<ApiOutcome<'session/bash'>> => {
+    deps.audit(`bash_run:${params.threadId}`);
+    // hub bash 完成才回包（bash 域方法 24h 长命档）：30s 缺省超时会误报仍在执行的命令
+    const result = await hub().session.bash({ threadId: params.threadId, command: params.command });
+    if (!result.ok) return fail(result.error);
+    const data = result.data as { output?: unknown; exitCode?: unknown; cancelled?: unknown; truncated?: unknown; fullOutputPath?: unknown };
+    return {
+      ok: true as const,
+      data: {
+        output: typeof data.output === 'string' ? data.output : '',
+        exitCode: typeof data.exitCode === 'number' ? data.exitCode : 0,
+        cancelled: data.cancelled === true,
+        truncated: data.truncated === true,
+        fullOutputPath: typeof data.fullOutputPath === 'string' ? data.fullOutputPath : null,
+      },
+    };
+  };
 
   /** 渠道真相域过滤（纯函数见模块级 channelScopedModels）：model/list 与 bootstrap 同口径。 */
   const channelModels = (models: readonly ModelInfoView[]): ModelInfoView[] =>
@@ -310,41 +329,15 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     'session/listSaved': async (params) => {
       return { ok: true as const, data: await savedAcrossCwds(params.cwd) };
     },
-    'session/prompt': async (params) => {
-      // /compact 词形命中 → 直发 compact 命令（D7：与 hub prompt 拦截同执行路径/同
-      // 词表/同 data 三元组——app 不依赖 hub 拦截面行为对齐；响应即终态，长超时）
-      const invocation = compactInvocationOf(params.message);
-      if (invocation !== undefined) {
-        // 携图命中命令 = hub 硬拒（compact 不接受图片）——
-        // 直发路径本地同口径先拒，附件不被静默丢弃
-        if ((params.images?.length ?? 0) > 0) return fail(appError('compact_images_rejected'));
-        const result = await hub().session.compact({ threadId: params.threadId, customInstructions: invocation.customInstructions });
-        if (!result.ok) return fail(result.error);
-        void runtime.autoTitleOnPrompt(params.threadId, params.message).catch(() => undefined);
-        const raw = (result.data ?? {}) as Record<string, unknown>;
-        const compactResult =
-          typeof raw['summary'] === 'string' && typeof raw['replacedCount'] === 'number' && typeof raw['summaryTokens'] === 'number'
-            ? { summary: raw['summary'], replacedCount: raw['replacedCount'], summaryTokens: raw['summaryTokens'] }
-            : null;
-        return { ok: true as const, data: compactResult };
-      }
-      // 受理窗口竞态（hub 判定 pendingSends>0 ∨ streaming，app 的 streaming 状态来自
-      // 事件流天然滞后）：恰一次自动降级重试（补 followUp），重试仍败才上抛
-      const send = (behavior?: 'steer' | 'followUp') =>
-        hub().session.prompt({
-          threadId: params.threadId,
-          message: params.message,
-          streamingBehavior: behavior ?? params.streamingBehavior,
-          images: params.images,
-        });
-      let result = await send();
-      if (!result.ok && params.streamingBehavior === undefined && result.error.kind === 'streaming_window') {
-        result = await send('followUp');
-      }
-      if (!result.ok) return fail(result.error);
-      void runtime.autoTitleOnPrompt(params.threadId, params.message).catch(() => undefined);
-      return { ok: true as const, data: null };
-    },
+    // 发送管线（`! ` 路由/空舞台守卫/懒唤醒/unknown_thread 自愈）独立模块；
+    // resume 通路经表晚绑定（resume 组挂载在本表字面量之后，调用期解引用）
+    ...promptRoutes({
+      sessionCommands: () => hub().session,
+      fail,
+      runtime,
+      bashRoute,
+      resumeRoute: () => routes['session/resume'],
+    }),
     'session/abort': async (params) => {
       // Esc/停止语义 = 清队列 + 停止当前轮（客户端约定）
       await hub().session.clearQueue({ threadId: params.threadId });
@@ -472,23 +465,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       const result = await hub().session.clearQueue({ threadId: params.threadId });
       return result.ok ? { ok: true as const, data: null } : fail(result.error);
     },
-    'session/bash': async (params) => {
-      deps.audit(`bash_run:${params.threadId}`);
-      // hub bash 完成才回包（bash 域方法 24h 长命档）：30s 缺省超时会误报仍在执行的命令
-      const result = await hub().session.bash({ threadId: params.threadId, command: params.command });
-      if (!result.ok) return fail(result.error);
-      const data = result.data as { output?: unknown; exitCode?: unknown; cancelled?: unknown; truncated?: unknown; fullOutputPath?: unknown };
-      return {
-        ok: true as const,
-        data: {
-          output: typeof data.output === 'string' ? data.output : '',
-          exitCode: typeof data.exitCode === 'number' ? data.exitCode : 0,
-          cancelled: data.cancelled === true,
-          truncated: data.truncated === true,
-          fullOutputPath: typeof data.fullOutputPath === 'string' ? data.fullOutputPath : null,
-        },
-      };
-    },
+    'session/bash': bashRoute,
     // 全量中止语义（D13：bash 执行 id = 命令关联 id，app 侧不可定向指定）
     'session/abortBash': relay((api) => (input) => api.session.abortBash(input)),
     'permission/mode': async (params) => {

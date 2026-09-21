@@ -6,7 +6,6 @@ import type { DiffFileView } from '@paiapp/contracts';
  * 行数。结果侧（tool/result）是纯文本 content，无 patch 面——diff 只在参数级提取。
  */
 
-const FILE_MUTATING_TOOLS = new Set(['write']);
 
 
 function lineCount(text: string): number {

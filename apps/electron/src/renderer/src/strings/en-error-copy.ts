@@ -11,6 +11,7 @@ export const imagesTooManyCopy = 'Too many image attachments (max 8). Remove som
 export const noActiveSessionCopy = 'No active session — start a new task first (⌘N).';
 export const resumeFailedCopy = 'Resuming the conversation failed. Try again.';
 export const openEditorMissingCopy = 'No editor found. Install the code, cursor, or zed CLI and retry.';
+export const bashImagesRejectedCopy = 'Direct commands cannot carry images. Remove them or send as a message.';
 
 /** transient 族 host_* 面孔共用句（宿主代际切换窗口的各形态对用户是同一件事） */
 const hostNotReadyCopy = 'The agent host is not ready (starting or restarting). Try again shortly.';
@@ -91,4 +92,5 @@ export const enErrorCopy = {
   resume_failed: resumeFailedCopy,
   bootstrap_crashed: 'The app failed to start. Restart it and try again.',
   compact_images_rejected: 'Compaction requests cannot carry image attachments.',
+  bash_images_rejected: bashImagesRejectedCopy,
 } satisfies ErrorCopyTable;

@@ -7,19 +7,16 @@ import { CONVERSATION_COLUMN_CLASS } from '@/thread/conversation-column';
 import { baseNameOf } from '@/lib/project-dirs';
 import { copyOfError } from '@/lib/error-text';
 import { copy } from '@/strings';
-import { queuedDrafts } from '@/composer/queued-drafts';
-import { submitQueuedDraft } from '@/composer/queued-submit';
+import { imagePayloadOf } from '@/composer/read-image-file';
 import { ComposerActionsRow } from '@/composer/composer-actions-row';
 import { composerSelectionOf } from '@/composer/composer-selection';
 import { normalizePermMode } from '@/live/permission-mode';
 import {
-  editQueuedDraft,
   registerComposerTextarea,
   unregisterComposerTextarea,
 } from '@/composer/composer-controller';
 import { stopOrAbort } from '@/composer/stop-or-abort';
-import { submitComposerDraft } from '@/composer/submit-composer-draft';
-import { PromptCard } from '@/composer/prompt-card';
+import { PromptCard, type ComposerAttachment } from '@/composer/prompt-card';
 import { PromptContextBar } from '@/composer/prompt-context-bar';
 import { PromptInputArea } from '@/composer/prompt-input-area';
 import { QueuedMessageCard } from '@/composer/queued-message-card';
@@ -34,18 +31,19 @@ import { summarizeAgents } from '@/thread/panel-summary';
 import { store as liveStore, workspaceActions } from '@/live/workspace-runtime';
 import { uiStore } from '@/ui/ui-store';
 
-/** 排队列表的空态恒定引用（按键取快照；后台线程的排队变化不进本区域订阅面）。 */
-const EMPTY_QUEUED: readonly { id: number; text: string }[] = [];
+/** 排队列表的空态恒定引用（hub 队列镜像的 followUp 文本；后台线程排队不进本区域订阅面）。 */
+const EMPTY_QUEUED: readonly string[] = [];
 
 /** 本区域互斥浮层：分支面板 → 创建分支弹窗 / 图谱弹窗（同一时刻至多一个）。 */
 type ComposerDialog = 'branch' | 'create-branch' | 'graph' | null;
 
 /**
- * 线程页输入卡区域（T33 M2 / T34 M2，0 props）：live/ui store 与 queuedDrafts 自订阅 →
- * 组装双页共享的四个子件（子件 props 契约不动）；提交/停止编排走模块；
- * textarea 对象 ref + 本区域挂载 effect 注册 controller 跨区聚焦通道
- * （区域卸载即注销、重挂即换绑——无 stale 元素窗口）。敲键与流式增量的重渲
- * 半径收敛在本子树内（B-keystroke 回归钉住）。文案直读 copy（hostDown 三态）。
+ * 线程页输入卡区域（T33 M2 / T34 M2，0 props）：live/ui store 自订阅 →
+ * 组装双页共享的四个子件（子件 props 契约不动）；提交 = 一行 api 动词
+ * （发送管线居主进程 session/prompt——流式中 followUp 入队、排队卡片读 hub
+ * 队列镜像）；textarea 对象 ref + 本区域挂载 effect 注册 controller 跨区
+ * 聚焦通道（区域卸载即注销、重挂即换绑——无 stale 元素窗口）。敲键与流式
+ * 增量的重渲半径收敛在本子树内（B-keystroke 回归钉住）。文案直读 copy。
  */
 function ComposerRegion(): React.JSX.Element {
   const activeThreadId = useStore(liveStore, (s) => s.activeThreadId) ?? '';
@@ -62,11 +60,8 @@ function ComposerRegion(): React.JSX.Element {
   const drafts = useStore(uiStore, (s) => s.drafts);
   const composerRestore = useStore(uiStore, (s) => s.composerRestore);
   const branchRevision = useStore(uiStore, (s) => s.branchRevision);
-  const queuedMessages = React.useSyncExternalStore(
-    queuedDrafts.subscribe,
-    () => queuedDrafts.snapshot()[activeThreadId] ?? EMPTY_QUEUED,
-    () => EMPTY_QUEUED,
-  );
+  /** 排队中消息（hub 队列镜像：queueChanged 事件折叠的 followUp 文本；事件时差内为空态） */
+  const queuedMessages = threadState?.queue.followUp ?? EMPTY_QUEUED;
 
   const value = drafts[activeThreadId] ?? composerDraft;
   const generating = threadState?.streaming ?? false;
@@ -165,6 +160,16 @@ function ComposerRegion(): React.JSX.Element {
     return () => unregisterComposerTextarea(el);
   }, []);
 
+  /** 发送一行：附件转协议载荷 → submitDraft（`! `/排队语义在主进程管线内）→
+   *  成功清草稿（草稿清理 = 发送成功分支的一步；失败草稿保留重发）。 */
+  const submit = async (text: string, attachments: readonly ComposerAttachment[]): Promise<boolean> => {
+    const images = attachments.length === 0 ? undefined : attachments.map(({ payload }) => imagePayloadOf(payload));
+    const reason = await workspaceActions.submitDraft(text, images);
+    if (reason !== null) return false;
+    uiStore.getState().clearDraft(activeThreadId);
+    return true;
+  };
+
   return (
     <div className={`${CONVERSATION_COLUMN_CLASS} pointer-events-auto`}>
       <PromptContextBar
@@ -200,25 +205,14 @@ function ComposerRegion(): React.JSX.Element {
       <PromptCard
         className="relative z-[1] -mt-[10px]"
         value={value}
-        onSubmit={submitComposerDraft}
+        onSubmit={submit}
         scope={activeThreadId}
         restore={composerRestore}
         canSubmit={value.trim().length > 0}
         queued={
           queuedMessages.length === 0
             ? undefined
-            : queuedMessages.map((item) => (
-                <QueuedMessageCard
-                  key={item.id}
-                  text={item.text}
-                  sendNowLabel={copy.composer.sendNow}
-                  editLabel={copy.composer.editQueued}
-                  removeLabel={copy.composer.removeQueued}
-                  onSendNow={() => void queuedDrafts.sendNow(activeThreadId, item.id, submitQueuedDraft)}
-                  onEdit={() => editQueuedDraft(item.id)}
-                  onRemove={() => queuedDrafts.remove(activeThreadId, item.id)}
-                />
-              ))
+            : queuedMessages.map((text, index) => <QueuedMessageCard key={`${index}:${text}`} text={text} />)
         }
         input={
           <PromptInputArea

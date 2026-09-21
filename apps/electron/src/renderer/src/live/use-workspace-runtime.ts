@@ -1,8 +1,6 @@
 import * as React from 'react';
 import { useStore } from 'zustand';
 
-import { submitQueuedDraft } from '@/composer/queued-submit';
-import { connectQueuedDraftFlush } from '@/live/queued-flush';
 import { panelSwitchOutcome, type PanelArchive } from '@/panel/panel-state';
 import { connectSessionUiPrune } from '@/live/ui-state-prune';
 import { bridgeClient, controller, store } from '@/live/workspace-runtime';
@@ -11,7 +9,8 @@ import { uiStore } from '@/ui/ui-store';
 /**
  * 工作区运行挂载（T34 M3，useLiveWorkspace 退役后的单一挂载点）：
  * controller 生命周期、切会话 effect（水化/权限模式/思考档/命令目录）、
- * 暂存轮末冲刷连接、面板组态会话级存档/恢复、会话消亡时的 UI 态回收。
+ * 面板组态会话级存档/恢复、会话消亡时的 UI 态回收。流式排队的真相与
+ * 冲刷在 hub 队列（session/prompt 的 followUp 原子语义），无渲染层连接器。
  * 无返回值——数据订阅全部归各区域/装配面自取；本 hook 在工作区守卫的
  * 早退分支之前无条件调用。
  */
@@ -30,9 +29,6 @@ export function useWorkspaceRuntime(): void {
     // StrictMode 双挂载下两次 bootstrap 应答全部被丢弃——启动永久停留 loading
     return () => controller.dispose();
   }, []);
-
-  // 暂存排队消息的轮末冲刷（连接器单一真相 live/queued-flush；投递实现在 composer/queued-submit）
-  React.useEffect(() => connectQueuedDraftFlush(store, submitQueuedDraft), [submitQueuedDraft]);
 
   // 会话消亡修剪：死线程的草稿槽/面板档案回收（连接器单一真相 live/ui-state-prune）
   React.useEffect(() => connectSessionUiPrune(store, uiStore, panelArchive), []);

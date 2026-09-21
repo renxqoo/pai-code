@@ -1,6 +1,7 @@
 /** 英文文案表（key 结构 = 唯一真相；zh 表按同形状翻译）。 */
 import { enSettings } from './en-settings';
 import {
+  bashImagesRejectedCopy,
   enErrorCopy,
   imagesDeniedCopy,
   imagesTooManyCopy,
@@ -210,7 +211,7 @@ export const en = {
     stopConfirmHint: 'This terminates all foreground and background subagents and cannot be undone.',
     stopConfirmYes: 'Stop all',
     stopConfirmNo: 'Cancel',
-    bashNoImages: 'Direct commands cannot carry images. Remove them or send as a message.',
+    bashNoImages: bashImagesRejectedCopy,
     imagesDenied: imagesDeniedCopy,
     imagesTooMany: imagesTooManyCopy,
     bashFailed: (reason: string): string => `Command not run (${reason}).`,
@@ -241,9 +242,6 @@ export const en = {
   composer: {
     placeholder: 'Ask anything, @tag files/folders, or / for commands and skills',
     queuePlaceholder: 'Type to queue a follow-up…',
-    sendNow: 'Send now',
-    editQueued: 'Edit queued message',
-    removeQueued: 'Remove queued message',
     attach: 'Attach images and files',
     send: 'Send message',
     stop: 'Stop generating',

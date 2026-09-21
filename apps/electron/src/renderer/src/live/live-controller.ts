@@ -3,7 +3,6 @@ import { isSettableThinkingLevel } from '@paiapp/contracts';
 
 import { copy } from '@/strings';
 import { copyOfError } from '@/lib/error-text';
-import { queuedDrafts } from '@/composer/queued-drafts';
 import type { BridgeClient } from './client-invoke';
 import { createRuntimeController } from './runtime-controller';
 import { createBashEndProbe } from './bash-end-probe';
@@ -54,7 +53,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
 
   /** 懒恢复机制（在途去重/乐观登记）独立模块。 */
   const lazy = createLazyResume(client, store);
-  const { resumeByPath, ensureLiveSession, forceResume, activate } = lazy;
+  const { resumeByPath, ensureLiveSession, activate } = lazy;
 
   /** 收敛读口（能力探测缓存属本控制器实例：渲染层重载即新实例，宿主代际变化显式失效）。 */
   const ports = createReadPorts(client);
@@ -241,47 +240,29 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       mode: 'auto' | 'steer' | 'followUp' = 'auto',
     ): Promise<string | null> {
       const text = message.trim();
-      // 纯图消息合法投递（fork 重试带图）：文本与图片都空才是空消息
+      // 纯图消息合法投递（fork 重试带图）：文本与图片都空才是空消息——本地一行免 IPC 往返
       if (text.length === 0 && (images === undefined || images.length === 0)) return 'empty_message';
-      // 空舞台守卫：无活跃会话时 threadId 为空串，定址命令只会换回 schema 拒绝的
-      // invalid_params 密文——先行拒绝并给用户可行动的去向
+      // 空舞台守卫：无活跃会话时 threadId 为空串，定址只会换回 schema 拒绝密文
       if (threadId.length === 0) return 'no_active_session';
-      const session = store.getState().sessions[threadId];
-      if (session?.state === 'parked' && !client.available) return 'bridge_unavailable';
-      // 懒恢复兜底：目标会话还是 parked 占位（启动对账/重启回落）时先唤活再投递；
-      // 非 parked 原样返回（dead 由 hub 下条命令自动恢复）
-      const liveId = await ensureLiveSession(threadId);
-      if (liveId === null) return 'resume_failed';
-      // 换 id 时同步激活（旧占位由主进程 sessionRemoved 清出）；唤醒在途已被切走则只投递不劫持
-      if (liveId !== threadId && store.getState().activeThreadId === threadId) activate(liveId);
-      const payloads = images === undefined || images.length === 0 ? undefined : [...images];
-      const withImages = payloads === undefined ? {} : { images: payloads };
-      // 投递裁决交给 hub 的原子语义（prompt+streamingBehavior）：空闲立即发送、
-      // 流式中按模式入队并在轮末自动消费。不得以本地 streaming 镜像选路——
-      // 镜像滞留 true 时会把空闲会话的消息投进永远不会被消费的队列。
-      const send = (target: string) =>
-        client.invoke('session/prompt', {
-          threadId: target,
-          message: text,
-          streamingBehavior: mode === 'steer' ? 'steer' : 'followUp',
-          ...withImages,
-        });
-      let outcome = await send(liveId);
-      if (!outcome.ok && outcome.error.kind === 'unknown_thread') {
-        // 僵尸视图自愈：视图 live 而 hub 线程表已忘掉该 id（host 代际切换窗口/换轨
-        // 在飞残留——unknown_thread 正是内核为陈旧 id 设计的结算信号；fork 换轨的
-        // thread_superseded 不触发自愈——防复活 fork 前状态）。
-        // 会话文件是持久真相：按路径强制重锚一次再投递；仍败按原 error 上抛
-        const session = store.getState().sessions[liveId] ?? store.getState().sessions[threadId];
-        const reanchored = session?.sessionPath != null ? await forceResume(session.sessionPath) : null;
-        if (reanchored !== null) {
-          if (reanchored !== threadId && store.getState().activeThreadId === threadId) activate(reanchored);
-          outcome = await send(reanchored);
-        }
+      // 发送管线（`! ` 路由/空舞台守卫/懒唤醒/unknown_thread 自愈/streaming_window
+      // 降级）整体居主进程 session/prompt 路由——这里只投递。投递裁决交给 hub 的
+      // 原子语义（prompt+streamingBehavior）：空闲立即发送、流式中入队轮末自动消费。
+      const outcome = await client.invoke('session/prompt', {
+        threadId,
+        message: text,
+        streamingBehavior: mode === 'steer' ? 'steer' : 'followUp',
+        ...(images === undefined || images.length === 0 ? {} : { images: [...images] }),
+      });
+      if (!outcome.ok) {
+        // 桥不可用（浏览器直开无 preload）本地 token 化：横幅已显式呈现，不叠通知
+        if (outcome.error.kind === 'transient' && outcome.error.face === 'bridge_unavailable') return 'bridge_unavailable';
+        return outcome.error.kind;
       }
-      // 本地 reason token（empty_message/no_active_session/resume_failed）与 hub 失败
-      // 的 kind 字符串共用本通道（W2 再定型为 ApiError 判别联合）
-      return outcome.ok ? null : outcome.error.kind;
+      // 直执行（`! ` 分支）的 [bash] 结果条目无事件终态帧（hub bash 只推增量）：
+      // 受理回执即命令已完成——对账一次使条目不依赖输出事件到达（静默命令也进流）。
+      // 模型轮消息的权威回显仍由 turnStarted 对账负责（此处早拉无害）。
+      void fetchEntries(threadId, store.getState().threads[threadId]?.cursor ?? null, false).catch(() => undefined);
+      return null;
     },
     async stopActiveTurn(threadId: string): Promise<void> {
       // 空舞台守卫：无目标会话即无在飞轮次——停止天然幂等，静默返回
@@ -353,9 +334,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       return true;
     },
     async closeSession(threadId: string): Promise<void> {
-      // 用户关闭：stop(dispose) + 注册表删行（remove 路由语义）；本地暂存
-      // 排队随之硬丢弃（重开/懒恢复类移除不走这里——那类按路径改绑，见 queued-flush）
-      queuedDrafts.dropThread(threadId);
+      // 用户关闭：stop(dispose) + 注册表删行（remove 路由语义）
       const sessionPath = store.getState().sessions[threadId]?.sessionPath ?? null;
       await client.invoke('session/stop', { threadId, remove: true });
       if (sessionPath !== null) lazy.discardResumed(sessionPath);
@@ -557,7 +536,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     ensureHydrated: (threadId: string, options?: { force?: boolean }) => readonlyHydration.ensureHydrated(threadId, options),
     selectSession(threadId: string): void {
       // parked 只读激活（历史经 host 直读水化，不唤醒 worker）；
-      // 发消息走 submitDraft 的 ensureLiveSession 兜底唤醒（T27：读不唤醒、写才唤醒）
+      // 发消息的唤醒居主进程 session/prompt 管线（T41 R1；读不唤醒、写才唤醒）
       activate(threadId);
     },
   };

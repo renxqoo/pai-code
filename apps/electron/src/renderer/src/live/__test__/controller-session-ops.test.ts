@@ -224,16 +224,15 @@ test('selectModel 成功：命令透传、无通知', async () => {
   expect(store.getState().notices).toEqual([]);
 });
 
-/** 顺序应答客户端：prompt 首答 Unknown threadId（僵尸视图症状），resume 回新 id。 */
-function makeZombieClient(prompts: Outcome[], resume: Outcome): BridgeClient & { calls: Array<{ method: string; params: unknown }> } {
+/** 顺序应答客户端：prompt 按序回放（首答失败/次答成功）。 */
+function makeScriptedPromptClient(prompts: Outcome[]): BridgeClient & { calls: Array<{ method: string; params: unknown }> } {
   const calls: Array<{ method: string; params: unknown }> = [];
   return {
     calls,
     available: true,
-    invoke: (method: string, params?: unknown) => {
+    invoke: (method, params?: unknown) => {
       calls.push({ method, params: params ?? null });
       if (method === 'session/prompt') return Promise.resolve((prompts.shift() ?? { ok: true as const, data: null }) as never);
-      if (method === 'session/resume') return Promise.resolve(resume as never);
       return Promise.resolve({ ok: true as const, data: null } as never);
     },
     subscribe: () => () => undefined,
@@ -254,27 +253,30 @@ function seedLiveSession(threadId: string, sessionPath: string | null): ReturnTy
   return store;
 }
 
-test('症状回归「消息未发送（unknown_thread）」：僵尸视图自愈——按会话文件强制重锚后以新 id 重投一次', async () => {
-  const client = makeZombieClient(
-    [{ ok: false, error: { kind: 'unknown_thread', message: 'Unknown threadId' } }, { ok: true, data: null }],
-    { ok: true, data: { threadId: 't2' } },
-  );
+test('症状回归「消息未发送（unknown_thread）」：僵尸视图自愈居主进程管线——渲染层薄调用按 kind 透传、不本地重锚', async () => {
+  // 自愈（按注册表 sessionPath 强制 resume 后以新 id 重投恰一次）随发送管线主进程化，
+  // 回归见 main __test__/api-routes.session.test.ts 的 unknown_thread 自愈用例；
+  // 此处钉渲染层契约：失败 kind 字符串 token 原样上抛，渲染层不发自多的 resume/prompt。
+  const client = makeScriptedPromptClient([{ ok: false, error: { kind: 'unknown_thread', message: 'Unknown threadId' } }]);
   const store = seedLiveSession('t1', '/s/t1/events.jsonl');
-  expect(await createLiveController(client, store).submitDraft('t1', '你好')).toBeNull();
-  // 重锚恰一次；投递先打旧 id、再打新 id；活跃线程随重锚翻到新 id
-  expect(client.calls.filter((call) => call.method === 'session/resume')).toHaveLength(1);
-  expect(client.calls.filter((call) => call.method === 'session/prompt').map((call) => (call.params as { threadId: string }).threadId)).toEqual(['t1', 't2']);
-  expect(store.getState().activeThreadId).toBe('t2');
+  expect(await createLiveController(client, store).submitDraft('t1', '你好')).toBe('unknown_thread');
+  expect(client.calls.filter((call) => call.method === 'session/prompt')).toHaveLength(1);
+  expect(client.calls.some((call) => call.method === 'session/resume')).toBe(false);
+  // 主进程管线失败时渲染层视图不本地翻转（换 id 激活由 resume 事件链同步）
+  expect(store.getState().activeThreadId).toBe('t1');
 });
 
-test('自愈重锚失败/无会话文件：按原 kind 上抛（不无限重试、不发无用 resume）', async () => {
-  const failedResume = makeZombieClient([{ ok: false, error: { kind: 'unknown_thread', message: 'Unknown threadId' } }], { ok: false, error: { kind: 'transient', face: 'busy' } });
-  const failedStore = seedLiveSession('t1', '/s/t1/events.jsonl');
-  expect(await createLiveController(failedResume, failedStore).submitDraft('t1', '你好')).toBe('unknown_thread');
-  expect(failedResume.calls.filter((call) => call.method === 'session/prompt')).toHaveLength(1);
+test('submitDraft 成功受理后补一次条目对账（`! ` 分支结果条目无事件终态帧，静默命令也进流）', async () => {
+  const client = makeScriptedPromptClient([]);
+  const store = seedLiveSession('t1', '/s/t1/events.jsonl');
+  expect(await createLiveController(client, store).submitDraft('t1', '! mkdir demo')).toBeNull();
+  // `! ` 路由居主进程：渲染层只见 session/prompt；bash 条目靠受理后对账拉取到达
+  expect(client.calls.some((call) => call.method === 'session/bash')).toBe(false);
+  expect(client.calls.some((call) => call.method === 'session/entries')).toBe(true);
+});
 
-  const noPath = makeZombieClient([{ ok: false, error: { kind: 'unknown_thread', message: 'Unknown threadId' } }], { ok: true, data: { threadId: 't2' } });
-  const noPathStore = seedLiveSession('t1', null);
-  expect(await createLiveController(noPath, noPathStore).submitDraft('t1', '你好')).toBe('unknown_thread');
-  expect(noPath.calls.some((call) => call.method === 'session/resume')).toBe(false);
+test('submitDraft 桥不可用（浏览器直开无 preload）：transient/bridge_unavailable 本地 token 化不弹通知', async () => {
+  const client = makeClient({ 'session/prompt': { ok: false, error: { kind: 'transient', face: 'bridge_unavailable' } } });
+  const store = seedLiveSession('t1', null);
+  expect(await createLiveController(client, store).submitDraft('t1', '你好')).toBe('bridge_unavailable');
 });

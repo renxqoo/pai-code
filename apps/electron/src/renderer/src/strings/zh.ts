@@ -2,12 +2,13 @@
 import { zhSettings } from './zh-settings';
 import type { en } from './en';
 import {
-  zhErrorCopy,
+  bashImagesRejectedCopy,
   imagesDeniedCopy,
   imagesTooManyCopy,
   noActiveSessionCopy,
   openEditorMissingCopy,
   resumeFailedCopy,
+  zhErrorCopy,
 } from './zh-error-copy';
 
 export const zh: typeof en = {
@@ -207,7 +208,7 @@ export const zh: typeof en = {
     stopConfirmHint: '将终止全部前台与后台子智能体，且不可恢复。',
     stopConfirmYes: '全部停止',
     stopConfirmNo: '取消',
-    bashNoImages: '直执行命令不支持携带图片，请移除附件或改用消息发送。',
+    bashNoImages: bashImagesRejectedCopy,
     imagesDenied: imagesDeniedCopy,
     imagesTooMany: imagesTooManyCopy,
     systemMessageLabel: '系统',
@@ -233,9 +234,6 @@ export const zh: typeof en = {
   composer: {
     placeholder: '随便问；@ 引用文件，/ 选择命令或技能',
     queuePlaceholder: '继续输入以排队后续修改',
-    sendNow: '立即',
-    editQueued: '编辑排队消息',
-    removeQueued: '移除排队消息',
     attach: '添加图片与文件',
     send: '发送消息',
     stop: '停止生成',

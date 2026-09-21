@@ -9,6 +9,7 @@ export const imagesTooManyCopy = '图片附件超出限制（最多 8 张），�
 export const noActiveSessionCopy = '当前没有进行中的会话，请先新建任务（⌘N）。';
 export const resumeFailedCopy = '会话恢复失败，请重试。';
 export const openEditorMissingCopy = '未找到可用的编辑器，可安装 code、cursor 或 zed CLI 后重试。';
+export const bashImagesRejectedCopy = '直执行命令不支持携带图片，请移除附件或改用消息发送。';
 
 /** transient 族 host_* 面孔共用句（宿主代际切换窗口的各形态对用户是同一件事） */
 const hostNotReadyCopy = 'agent 宿主未就绪（正在启动或重启），请稍后重试。';
@@ -89,4 +90,5 @@ export const zhErrorCopy = {
   resume_failed: resumeFailedCopy,
   bootstrap_crashed: '应用启动失败，请重启后重试。',
   compact_images_rejected: '压缩请求不支持携带图片附件。',
+  bash_images_rejected: bashImagesRejectedCopy,
 } satisfies ErrorCopyTable;

@@ -56,6 +56,7 @@ const dirs: string[] = [];
 async function makeRoutes(
   reply: (command: PaiCommand, callIndexOfType: number) => HostCommandOutcome,
   logSink?: string[],
+  auditSink?: string[],
 ) {
   const work = mkdtempSync(join(tmpdir(), 'pai-session-route-'));
   dirs.push(work);
@@ -85,7 +86,7 @@ async function makeRoutes(
     runtime,
     settings: createFileSettings(join(work, 'settings.json'), keyStore),
     keyStore,
-    audit: () => undefined,
+    audit: (message) => (auditSink !== undefined ? auditSink.push(message) : undefined),
     agentDefinitions: createAgentDefinitionsStore(join(work, 'home')),
     agentDir,
     revealPath: () => undefined,
@@ -96,13 +97,21 @@ async function makeRoutes(
   return { routes, runtime, sent: host.sent, agentDir };
 }
 
+/** 落一行 live 会话（registry + 内存表；title 缺省「New conversation」让 autoTitle 可观察；
+ *  sessionPath 缺省按 hub 布局拼路径，显式 null = 无会话文件空占位）。 */
+function seedLiveSession(runtime: ReturnType<typeof createPaiRuntime>, threadId: string, agentDir: string, sessionPath?: string | null, title: string | null = null): string {
+  const path = sessionPath !== undefined ? sessionPath : agentDir.length > 0 ? join(agentDir, 'sessions', threadId, 'events.jsonl') : null;
+  return runtime.applyStartOutcome(threadId, '/w', path, title, 1, false).threadId;
+}
+
 describe('session/prompt 受理窗口竞态（症状：streaming 中发消息偶发失败）', () => {
   test('症状回归：线上不可观测——start/prompt 失败经 hub onCall 落诊断日志（hub_call_rejected，kind 不折平）', async () => {
     const logs: string[] = [];
-    const { routes } = await makeRoutes((command) => {
+    const { routes, runtime, agentDir } = await makeRoutes((command) => {
       if (command.type === 'prompt' || command.type === 'thread/start') return { ok: false, error: 'no dial' };
       return { ok: true, data: {} };
     }, logs);
+    seedLiveSession(runtime, 't1', agentDir);
     const promptOutcome = (await routes.invoke('session/prompt', { threadId: 't1', message: 'hi' })) as { ok: boolean };
     expect(promptOutcome.ok).toBe(false);
     const startOutcome = (await routes.invoke('session/start', { cwd: '/tmp' })) as { ok: boolean };
@@ -114,7 +123,7 @@ describe('session/prompt 受理窗口竞态（症状：streaming 中发消息偶
   });
 
   test("症状回归：'streamingBehavior required' 恰一次自动降级重试（补 followUp），重试成功不上抛", async () => {
-    const { routes, sent } = await makeRoutes((command, index) => {
+    const { routes, runtime, agentDir, sent } = await makeRoutes((command, index) => {
       if (command.type === 'prompt') {
         // 首答按 hub 受理窗口判定拒绝；降级重试（followUp）放行
         if (index === 0) return { ok: false, error: { code: 'streaming_window', message: 'streamingBehavior required' } };
@@ -122,6 +131,7 @@ describe('session/prompt 受理窗口竞态（症状：streaming 中发消息偶
       }
       return { ok: true, data: {} };
     });
+    seedLiveSession(runtime, 't1', agentDir);
     const outcome = (await routes.invoke('session/prompt', { threadId: 't1', message: '继续' })) as { ok: boolean; error?: { kind: string; message?: string } };
     expect(outcome).toEqual({ ok: true, data: null });
     const prompts = sent.filter((command) => command.type === 'prompt');
@@ -132,10 +142,11 @@ describe('session/prompt 受理窗口竞态（症状：streaming 中发消息偶
   });
 
   test('重试仍败 → 上抛 hub error（不无限重试）', async () => {
-    const { routes, sent } = await makeRoutes((command) => {
+    const { routes, runtime, agentDir, sent } = await makeRoutes((command) => {
       if (command.type === 'prompt') return { ok: false, error: { code: 'streaming_window', message: 'streamingBehavior required' } };
       return { ok: true, data: {} };
     });
+    seedLiveSession(runtime, 't1', agentDir);
     const outcome = (await routes.invoke('session/prompt', { threadId: 't1', message: '继续' })) as { ok: boolean; error?: { kind: string; message?: string } };
     expect(outcome).toEqual({ ok: false, error: { kind: 'streaming_window', message: 'streamingBehavior required' } });
     expect(sent.filter((command) => command.type === 'prompt').length).toBe(2);
@@ -146,6 +157,7 @@ describe('session/prompt 受理窗口竞态（症状：streaming 中发消息偶
       if (command.type === 'prompt') return { ok: false, error: { code: 'streaming_window', message: 'streamingBehavior required' } };
       return { ok: true, data: {} };
     });
+    seedLiveSession(explicit.runtime, 't1', explicit.agentDir);
     const steered = (await explicit.routes.invoke('session/prompt', { threadId: 't1', message: '改需求', streamingBehavior: 'steer' })) as { ok: boolean; error?: { kind: string; message?: string } };
     expect(steered).toEqual({ ok: false, error: { kind: 'streaming_window', message: 'streamingBehavior required' } });
     expect(explicit.sent.filter((command) => command.type === 'prompt').length).toBe(1);
@@ -154,6 +166,7 @@ describe('session/prompt 受理窗口竞态（症状：streaming 中发消息偶
       if (command.type === 'prompt') return { ok: false, error: { code: 'unknown_thread', message: 'Unknown threadId' } };
       return { ok: true, data: {} };
     });
+    seedLiveSession(other.runtime, 't1', other.agentDir);
     const unknown = (await other.routes.invoke('session/prompt', { threadId: 't1', message: '继续' })) as { ok: boolean; error?: { kind: string; message?: string } };
     expect(unknown).toEqual({ ok: false, error: { kind: 'unknown_thread', message: 'Unknown threadId' } });
     expect(other.sent.filter((command) => command.type === 'prompt').length).toBe(1);
@@ -292,7 +305,8 @@ describe('session/delete 级联收敛（removed 集驱动注册表行移除）',
 describe('/compact 直发成功三元组（D7：词形命中→compact 命令→data 透传）', () => {
   test('compact 响应三元组解析透传；携图本地硬拒（hub 同文案）', async () => {
     const trio = { summary: 'SUM', replacedCount: 3, summaryTokens: 120 };
-    const { routes, sent } = await makeRoutes((command) => (command.type === 'compact' ? { ok: true, data: trio } : { ok: true, data: {} }));
+    const { routes, runtime, agentDir, sent } = await makeRoutes((command) => (command.type === 'compact' ? { ok: true, data: trio } : { ok: true, data: {} }));
+    seedLiveSession(runtime, 't1', agentDir);
     const compacted = (await routes.invoke('session/prompt', { threadId: 't1', message: '/compact keep goals' })) as {
       ok: boolean;
       data: { summary: string; replacedCount: number; summaryTokens: number } | null;
@@ -341,3 +355,147 @@ describe('session/register 主进程处理器（白名单/trusted 审计/删行�
   });
 });
 
+
+describe('session/prompt 发送管线主进程化（T41 R1：`! ` 路由/空舞台守卫/懒唤醒/自愈）', () => {
+  test("症状回归「`! ` 直执行检测在 composer 层」：行首 `! ` 复用 session/bash 命令链（audit/同一收窄实现），不发 prompt、autoTitle 抑制", async () => {
+    const audits: string[] = [];
+    const { routes, runtime, agentDir, sent } = await makeRoutes(() => ({ ok: true, data: {} }), undefined, audits);
+    seedLiveSession(runtime, 't1', agentDir);
+    const outcome = (await routes.invoke('session/prompt', { threadId: 't1', message: '  ! git status  ' })) as { ok: boolean; data: unknown };
+    expect(outcome).toEqual({ ok: true, data: null });
+    expect(sent.find((command) => command.type === 'bash')).toMatchObject({ type: 'bash', threadId: 't1', command: 'git status' });
+    expect(sent.some((command) => command.type === 'prompt')).toBe(false);
+    expect(audits).toContain('bash_run:t1');
+    // 直执行不进模型轮次：命令文本不作标题候选（与原渲染层链同语义）
+    expect(sent.some((command) => command.type === 'set_session_name')).toBe(false);
+  });
+
+  test('`! ` 携图互斥：bash_images_rejected 本地先拒（compact_images_rejected 同型），附件不静默丢弃', async () => {
+    const { routes, runtime, agentDir, sent } = await makeRoutes(() => ({ ok: true, data: {} }));
+    seedLiveSession(runtime, 't1', agentDir);
+    const outcome = (await routes.invoke('session/prompt', {
+      threadId: 't1',
+      message: '! echo hi',
+      images: [{ type: 'image', data: 'aGk=', mediaType: 'image/png' }],
+    })) as { ok: boolean; error?: { kind: string } };
+    expect(outcome).toEqual({ ok: false, error: { kind: 'bash_images_rejected' } });
+    expect(sent.filter((command) => command.type === 'bash' || command.type === 'prompt')).toEqual([]);
+  });
+
+  test('空舞台守卫：注册表外 id（含换轨残留）→ no_active_session 零命令；空串 id 同型（live 会话原样投递对照）', async () => {
+    const { routes, runtime, agentDir, sent } = await makeRoutes(() => ({ ok: true, data: {} }));
+    seedLiveSession(runtime, 't1', agentDir);
+    const unknown = (await routes.invoke('session/prompt', { threadId: 'ghost', message: '你好' })) as { ok: boolean; error?: { kind: string } };
+    expect(unknown).toEqual({ ok: false, error: { kind: 'no_active_session' } });
+    const bash = (await routes.invoke('session/prompt', { threadId: 'ghost', message: '! ls' })) as { ok: boolean; error?: { kind: string } };
+    expect(bash).toEqual({ ok: false, error: { kind: 'no_active_session' } });
+    expect(sent).toEqual([]);
+    // live 会话原样投递（dead 由 hub 下条命令自动恢复，不本地拦截）
+    const ok = (await routes.invoke('session/prompt', { threadId: 't1', message: '你好' })) as { ok: boolean };
+    expect(ok.ok).toBe(true);
+    expect(sent.find((command) => command.type === 'prompt')).toMatchObject({ threadId: 't1', message: '你好' });
+  });
+
+  test('懒唤醒：parked 占位先 thread/resume（收养/换轨链），以恢复后 id 投递；换 id 整行替换', async () => {
+    const { routes, runtime, agentDir, sent } = await makeRoutes((command) => {
+      if (command.type === 'thread/resume') return { ok: true, data: { threadId: 't9', cwd: '/w', sessionPath: null } };
+      return { ok: true, data: {} };
+    });
+    const sessionPath = join(agentDir, 'sessions', 't1', 'events.jsonl');
+    seedLiveSession(runtime, 't1', agentDir, sessionPath);
+    runtime.parkSession('t1');
+    const outcome = (await routes.invoke('session/prompt', { threadId: 't1', message: '唤醒后发送' })) as { ok: boolean };
+    expect(outcome.ok).toBe(true);
+    const order = sent.map((command) => command.type).filter((type) => type === 'thread/resume' || type === 'prompt');
+    expect(order).toEqual(['thread/resume', 'prompt']);
+    expect(sent.find((command) => command.type === 'prompt')).toMatchObject({ threadId: 't9', message: '唤醒后发送' });
+    // 换 id 整行替换：旧行移除、新行 live（resume 路由 finishResume 链）
+    expect(runtime.registry.get('t1')).toBeNull();
+    expect(runtime.sessions().find((row) => row.threadId === 't9')?.state).toBe('live');
+  });
+
+  test('懒唤醒失败 → resume_failed 且零 prompt；无会话文件的空占位不可恢复（同型拒绝）', async () => {
+    const failed = await makeRoutes((command) => {
+      if (command.type === 'thread/resume') return { ok: false, error: { code: 'io_failed', message: 'read error' } };
+      return { ok: true, data: {} };
+    });
+    const sessionPath = join(failed.agentDir, 'sessions', 't1', 'events.jsonl');
+    seedLiveSession(failed.runtime, 't1', failed.agentDir, sessionPath);
+    failed.runtime.parkSession('t1');
+    const outcome = (await failed.routes.invoke('session/prompt', { threadId: 't1', message: '你好' })) as { ok: boolean; error?: { kind: string } };
+    expect(outcome).toEqual({ ok: false, error: { kind: 'resume_failed' } });
+    expect(failed.sent.some((command) => command.type === 'prompt')).toBe(false);
+
+    const empty = await makeRoutes(() => ({ ok: true, data: {} }));
+    seedLiveSession(empty.runtime, 't2', empty.agentDir, null);
+    empty.runtime.parkSession('t2');
+    const noFile = (await empty.routes.invoke('session/prompt', { threadId: 't2', message: '你好' })) as { ok: boolean; error?: { kind: string } };
+    expect(noFile).toEqual({ ok: false, error: { kind: 'resume_failed' } });
+    expect(empty.sent).toEqual([]);
+  });
+
+  test('症状回归「消息未发送（unknown_thread）」：僵尸视图自愈——按注册表 sessionPath 强制重锚恰一次，以新 id 重投成功', async () => {
+    let promptIndex = 0;
+    const { routes, runtime, agentDir, sent } = await makeRoutes((command) => {
+      if (command.type === 'prompt') {
+        promptIndex += 1;
+        // 首答打旧 id（hub 线程表已忘）：unknown_thread；重投打新 id 放行
+        return promptIndex === 1 ? { ok: false, error: { code: 'unknown_thread', message: 'Unknown threadId' } } : { ok: true, data: null };
+      }
+      if (command.type === 'thread/resume') return { ok: true, data: { threadId: 't2', cwd: '/w', sessionPath: null } };
+      return { ok: true, data: {} };
+    });
+    seedLiveSession(runtime, 't1', agentDir);
+    const outcome = (await routes.invoke('session/prompt', { threadId: 't1', message: '你好' })) as { ok: boolean };
+    expect(outcome.ok).toBe(true);
+    expect(sent.filter((command) => command.type === 'thread/resume')).toHaveLength(1);
+    expect(sent.filter((command) => command.type === 'prompt').map((command) => command.threadId)).toEqual(['t1', 't2']);
+  });
+
+  test('自愈重锚失败/无会话文件：按原 kind 上抛（不无限重试、不发无用 resume）', async () => {
+    const failed = await makeRoutes((command) => {
+      if (command.type === 'prompt') return { ok: false, error: { code: 'unknown_thread', message: 'Unknown threadId' } };
+      if (command.type === 'thread/resume') return { ok: false, error: { code: 'io_failed', message: 'read error' } };
+      return { ok: true, data: {} };
+    });
+    seedLiveSession(failed.runtime, 't1', failed.agentDir);
+    const outcome = (await failed.routes.invoke('session/prompt', { threadId: 't1', message: '你好' })) as { ok: boolean; error?: { kind: string; message?: string } };
+    expect(outcome).toEqual({ ok: false, error: { kind: 'unknown_thread', message: 'Unknown threadId' } });
+    expect(failed.sent.filter((command) => command.type === 'prompt')).toHaveLength(1);
+
+    const noPath = await makeRoutes((command) => {
+      if (command.type === 'prompt') return { ok: false, error: { code: 'unknown_thread', message: 'Unknown threadId' } };
+      return { ok: true, data: {} };
+    });
+    seedLiveSession(noPath.runtime, 't1', noPath.agentDir, null);
+    const noPathOutcome = (await noPath.routes.invoke('session/prompt', { threadId: 't1', message: '你好' })) as { ok: boolean; error?: { kind: string } };
+    expect(noPathOutcome.error).toEqual({ kind: 'unknown_thread', message: 'Unknown threadId' });
+    expect(noPath.sent.some((command) => command.type === 'thread/resume')).toBe(false);
+  });
+
+  test('thread_superseded（fork 换轨）不触发自愈——防复活 fork 前状态：单次 prompt 原样上抛', async () => {
+    const { routes, runtime, agentDir, sent } = await makeRoutes((command) => {
+      if (command.type === 'prompt') return { ok: false, error: { code: 'thread_superseded', message: 'thread superseded by fork' } };
+      return { ok: true, data: {} };
+    });
+    seedLiveSession(runtime, 't1', agentDir);
+    const outcome = (await routes.invoke('session/prompt', { threadId: 't1', message: '你好' })) as { ok: boolean; error?: { kind: string } };
+    expect(outcome).toEqual({ ok: false, error: { kind: 'thread_superseded', message: 'thread superseded by fork' } });
+    expect(sent.filter((command) => command.type === 'prompt')).toHaveLength(1);
+    expect(sent.some((command) => command.type === 'thread/resume')).toBe(false);
+  });
+
+  test('`! ` 于 parked 占位同样先唤活（发送管线统一前置）：resume 后以新 id 执行 bash', async () => {
+    const { routes, runtime, agentDir, sent } = await makeRoutes((command) => {
+      if (command.type === 'thread/resume') return { ok: true, data: { threadId: 't9', cwd: '/w', sessionPath: null } };
+      return { ok: true, data: {} };
+    });
+    const sessionPath = join(agentDir, 'sessions', 't1', 'events.jsonl');
+    seedLiveSession(runtime, 't1', agentDir, sessionPath);
+    runtime.parkSession('t1');
+    const outcome = (await routes.invoke('session/prompt', { threadId: 't1', message: '! pwd' })) as { ok: boolean };
+    expect(outcome.ok).toBe(true);
+    expect(sent.find((command) => command.type === 'bash')).toMatchObject({ type: 'bash', threadId: 't9', command: 'pwd' });
+    expect(sent.some((command) => command.type === 'prompt')).toBe(false);
+  });
+});

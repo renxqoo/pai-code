@@ -3,14 +3,16 @@ import { describe, expect, test } from 'bun:test';
 import type { SessionView } from '@paiapp/contracts';
 
 import { createLiveController } from '../live-controller';
+import { createLazyResume } from '../lazy-resume';
 import { createLiveStore, type LiveStore } from '../store';
 import type { BridgeClient } from '../client-invoke';
 
 /**
- * 懒恢复回归（T16 建立、T27 收窄为「读不唤醒、写才唤醒」）：parked 会话的
- * 选择/bootstrap/回落一律只读激活（零 resume，历史经 host 直读）；resume 只
- * 在写路径发生——发消息兜底（去重、threadId 只信响应、失败不自动重试）、
- * History 打开（hub 无表项必须建表）、trusted 重载串行化。
+ * 懒恢复回归（T16 建立、T27 收窄为「读不唤醒」）：parked 会话的选择/bootstrap/
+ * 回落一律只读激活（零 resume，历史经 host 直读）；发消息的唤醒与 unknown_thread
+ * 自愈已随发送管线主进程化（T41 R1，回归见 main __test__/api-routes.session.test.ts），
+ * 渲染层 resume 只剩显式入口——History 打开（hub 无表项必须建表）、重开链、
+ * trusted 重载串行化；在途去重/乐观登记机器在 lazy-resume 模块单测覆盖。
  */
 
 type Outcome = { ok: true; data: unknown } | { ok: false; reason: string };
@@ -162,81 +164,20 @@ describe('只读激活（T27：读不唤醒）', () => {
   });
 });
 
-describe('写路径兜底（T16 遗产 + T27 收窄）', () => {
-  test('submitDraft(parked) → 先 resume 后 prompt，prompt 用响应 threadId', async () => {
-    const client = makeClient((method) => (method === 'session/resume' ? { ok: true, data: { threadId: 't9' } } : { ok: true, data: null }));
+describe('写路径兜底（显式恢复入口 + 主进程化后的薄投递）', () => {
+  test('submitDraft 薄调用：不发 session/resume（parked 懒唤醒居主进程 session/prompt 管线）', async () => {
+    const client = makeClient((method) => (method === 'session/prompt' ? { ok: true, data: null } : { ok: true, data: null }));
     const store = bootStore([sessionView('t1', 'parked', '/w/s/t1.jsonl')]);
     const controller = createLiveController(client, store);
 
     const reason = await controller.submitDraft('t1', '你好');
 
     expect(reason).toBeNull();
-    const order = client.calls.map((call) => call.method);
-    expect(order.indexOf('session/resume')).toBeLessThan(order.indexOf('session/prompt'));
-    expect(client.calls.find((call) => call.method === 'session/prompt')?.params).toMatchObject({ threadId: 't9', message: '你好' });
-    // 换 id 时同步激活（旧占位由主进程 sessionRemoved 清出）
-    expect(store.getState().activeThreadId).toBe('t9');
+    expect(client.calls.some((call) => call.method === 'session/resume')).toBe(false);
+    expect(client.calls.find((call) => call.method === 'session/prompt')?.params).toMatchObject({ threadId: 't1', message: '你好' });
   });
 
-  test('submitDraft 于 parked 会话：resume 失败返回 resume_failed 且不发 prompt', async () => {
-    const client = makeClient((method) => (method === 'session/resume' ? { ok: false, error: { kind: 'transient', face: 'timeout' } } : { ok: true, data: null }));
-    const store = bootStore([sessionView('t1', 'parked', '/w/s/t1.jsonl')]);
-    const controller = createLiveController(client, store);
-
-    const reason = await controller.submitDraft('t1', '你好');
-
-    expect(reason).toBe('resume_failed');
-    expect(client.calls.some((call) => call.method === 'session/prompt')).toBe(false);
-  });
-
-  test('在途去重（写路径）：响应未落前重复发消息只发一次 resume', async () => {
-    let releaseResume: (outcome: Outcome) => void = () => undefined;
-    const gate = new Promise<Outcome>((resolve) => {
-      releaseResume = resolve;
-    });
-    const client = makeClient((method) => (method === 'session/resume' ? gate : { ok: true, data: null }));
-    const store = bootStore([sessionView('t1', 'parked', '/w/s/t1.jsonl')]);
-    const controller = createLiveController(client, store);
-
-    void controller.submitDraft('t1', '第一条');
-    await waitMs(0);
-    void controller.submitDraft('t1', '第二条');
-    await waitMs(0);
-    expect(resumeCalls(client)).toBe(1);
-
-    releaseResume({ ok: true, data: { threadId: 't1' } });
-    await waitMs(0);
-    expect(resumeCalls(client)).toBe(1);
-    expect(store.getState().activeThreadId).toBe('t1');
-  });
-
-  test('乐观登记：resume 响应先于 sessionUpdated(live) 事件时，重复发消息不再发 resume；host restarting 清空登记', async () => {
-    const sessions = [sessionView('t1', 'parked', '/w/s/t1.jsonl')];
-    const client = makeClient((method) => {
-      if (method === 'session/resume') return { ok: true, data: { threadId: 't1' } };
-      if (method === 'app/bootstrap') return bootstrapOf(sessions);
-      return { ok: true, data: null };
-    });
-    const store = bootStore(sessions);
-    const controller = createLiveController(client, store);
-    await controller.start();
-    await waitMs(0);
-    expect(resumeCalls(client)).toBe(0);
-
-    // 事件尚未折叠（store 仍 parked）：首次发消息 resume 一次；乐观登记窗口内重复投递不重发
-    await controller.submitDraft('t1', '一');
-    await controller.submitDraft('t1', '二');
-    await waitMs(0);
-    expect(resumeCalls(client)).toBe(1);
-
-    // host 重启：乐观登记失效 → 再次发消息会重新 resume
-    client.emitToController({ type: 'host', phase: 'restarting' });
-    await controller.submitDraft('t1', '三');
-    await waitMs(0);
-    expect(resumeCalls(client)).toBe(2);
-  });
-
-  test('submitDraft 空消息于 parked → 零 resume（兜底前置条件）', async () => {
+  test('submitDraft 空消息 → 本地 empty_message 拦截（零 IPC）', async () => {
     const client = makeClient(() => ({ ok: true, data: null }));
     const store = bootStore([sessionView('t1', 'parked', '/w/s/t1.jsonl')]);
     const controller = createLiveController(client, store);
@@ -244,44 +185,80 @@ describe('写路径兜底（T16 遗产 + T27 收窄）', () => {
     const reason = await controller.submitDraft('t1', '   ');
 
     expect(reason).toBe('empty_message');
-    expect(resumeCalls(client)).toBe(0);
+    expect(client.calls).toEqual([]);
   });
+});
 
-  test('bridge 不可用时 parked 会话的 submitDraft 静默返回 bridge_unavailable（不发 resume）', async () => {
-    const client = makeClient((method) => (method === 'session/resume' ? { ok: true, data: { threadId: 't1' } } : { ok: true, data: null }));
-    (client as { available: boolean }).available = false;
-    const store = bootStore([sessionView('t1', 'parked', '/w/s/t1.jsonl')]);
-    const controller = createLiveController(client, store);
+describe('lazy-resume 机器（在途去重/乐观登记——显式恢复入口共用）', () => {
+  function unitClient(script: (method: string) => Outcome | Promise<Outcome>): BridgeClient & { calls: string[] } {
+    const calls: string[] = [];
+    return {
+      calls,
+      available: true,
+      invoke: (method) => {
+        calls.push(method);
+        return Promise.resolve(script(method)).then((outcome) => outcome as never);
+      },
+      subscribe: () => () => undefined,
+    };
+  }
 
-    const reason = await controller.submitDraft('t1', '你好');
-
-    expect(reason).toBe('bridge_unavailable');
-    expect(resumeCalls(client)).toBe(0);
-  });
-
-  test('唤醒完成不劫持在途选择：submitDraft 唤醒在途时用户显式切换 → 换 id 只投递不激活', async () => {
-    let releaseResume: (outcome: Outcome) => void = () => undefined;
+  test('resumeByPath 在途去重：同参数并发只发一次 resume；trusted 分歧串行结算后重发', async () => {
+    let release: (outcome: Outcome) => void = () => undefined;
     const gate = new Promise<Outcome>((resolve) => {
-      releaseResume = resolve;
+      release = resolve;
     });
-    const sessions = [sessionView('t2', 'live', '/w/s/t2.jsonl'), sessionView('t1', 'parked', '/w/s/t1.jsonl')];
-    const client = makeClient((method) => {
-      if (method === 'session/resume') return gate;
-      return { ok: true, data: null };
-    });
-    const store = bootStore(sessions);
-    store.getState().setActiveThread('t1');
-    const controller = createLiveController(client, store);
+    const client = unitClient((method) => (method === 'session/resume' ? gate : { ok: true, data: null }));
+    const lazy = createLazyResume(client, createLiveStore());
 
-    void controller.submitDraft('t1', '你好');
-    await waitMs(0);
-    controller.selectSession('t2'); // 在途切换走（显式选择优先于换 id 激活）
-    releaseResume({ ok: true, data: { threadId: 't9' } });
-    await waitMs(0);
+    const first = lazy.resumeByPath('/w/s/t1.jsonl');
+    const second = lazy.resumeByPath('/w/s/t1.jsonl');
+    release({ ok: true, data: { threadId: 't1' } });
+    expect(await first).toBe('t1');
+    expect(await second).toBe('t1');
+    expect(client.calls.filter((method) => method === 'session/resume')).toHaveLength(1);
 
-    expect(resumeCalls(client)).toBe(1);
-    expect(client.calls.find((call) => call.method === 'session/prompt')?.params).toMatchObject({ threadId: 't9' });
-    expect(store.getState().activeThreadId).toBe('t2');
+    // trusted 分歧：不静默降级信任态——首唤醒结算后以新参数再发
+    const diverged = lazy.resumeByPath('/w/s/t1.jsonl', true);
+    expect(await diverged).toBe('t1');
+    expect(client.calls.filter((method) => method === 'session/resume')).toHaveLength(2);
+  });
+
+  test('ensureLiveSession 乐观登记：resume 已应答而 sessionUpdated 事件未折叠的窗口内不再发 resume；invalidate 后重发', async () => {
+    const client = unitClient((method) => (method === 'session/resume' ? { ok: true, data: { threadId: 't9' } } : { ok: true, data: null }));
+    const store = bootStore([sessionView('t1', 'parked', '/w/s/t1.jsonl')]);
+    const lazy = createLazyResume(client, store);
+
+    expect(await lazy.ensureLiveSession('t1')).toBe('t9');
+    // 事件未折叠（store 仍 parked）：乐观登记窗口内重复唤醒直取已恢复 id
+    expect(await lazy.ensureLiveSession('t1')).toBe('t9');
+    expect(client.calls.filter((method) => method === 'session/resume')).toHaveLength(1);
+
+    // host 进程代际切换：乐观登记失效，重新 resume
+    lazy.invalidate();
+    expect(await lazy.ensureLiveSession('t1')).toBe('t9');
+    expect(client.calls.filter((method) => method === 'session/resume')).toHaveLength(2);
+  });
+
+  test('ensureLiveSession 非 parked 原样返回（live/dead 由 hub 命令自愈）；无会话文件的空占位不可恢复', async () => {
+    const client = unitClient(() => ({ ok: true, data: { threadId: 'x' } }));
+    const store = bootStore([sessionView('t1', 'live', '/w/s/t1.jsonl'), sessionView('t2', 'parked', null)]);
+    const lazy = createLazyResume(client, store);
+
+    expect(await lazy.ensureLiveSession('t1')).toBe('t1');
+    expect(await lazy.ensureLiveSession('ghost')).toBe('ghost');
+    expect(await lazy.ensureLiveSession('t2')).toBeNull();
+    expect(client.calls).toEqual([]);
+  });
+
+  test('discardResumed：stop 后清该路径乐观登记（旧 id 已 dispose）', async () => {
+    const client = unitClient((method) => (method === 'session/resume' ? { ok: true, data: { threadId: 't9' } } : { ok: true, data: null }));
+    const store = bootStore([sessionView('t1', 'parked', '/w/s/t1.jsonl')]);
+    const lazy = createLazyResume(client, store);
+    expect(await lazy.ensureLiveSession('t1')).toBe('t9');
+    lazy.discardResumed('/w/s/t1.jsonl');
+    expect(await lazy.ensureLiveSession('t1')).toBe('t9');
+    expect(client.calls.filter((method) => method === 'session/resume')).toHaveLength(2);
   });
 });
 
@@ -413,7 +390,7 @@ describe('History 打开与占位收敛', () => {
 });
 
 describe('写路径串行化（trusted 重载链）', () => {
-  test('reloadSessionTrusted 串行化：先等在途唤醒结算，再 stop(保行) + resume(trusted)', async () => {
+  test('reloadSessionTrusted 串行化：先等在途恢复结算（reopen 链制造），再 stop(保行) + resume(trusted)', async () => {
     const order: string[] = [];
     let releaseWake: (outcome: Outcome) => void = () => undefined;
     const wakeGate = new Promise<Outcome>((resolve) => {
@@ -439,16 +416,17 @@ describe('写路径串行化（trusted 重载链）', () => {
     const store = bootStore(sessions);
     const controller = createLiveController(client, store);
     await controller.start();
-    // 在途唤醒由写路径（发消息）制造——读路径不再唤醒（T27）
-    void controller.submitDraft('t1', '制造在途唤醒');
+    // 在途恢复由重开链制造（发消息的唤醒已主进程化——渲染层在途 resume 只剩显式入口）
+    void controller.reopenSession('t1');
     await waitMs(0);
     expect(resumeCalls(client)).toBe(1);
     client.calls.length = 0;
+    order.length = 0;
     order.push('toggle');
 
     const reloaded = controller.reloadSessionTrusted('t1', true);
     await waitMs(0);
-    expect(resumeCalls(client)).toBe(0); // 在途唤醒结算前不发新 resume（trusted 分歧串行化）
+    expect(resumeCalls(client)).toBe(0); // 在途恢复结算前不发新 resume（trusted 分歧串行化）
     releaseWake({ ok: true, data: { threadId: 't1' } });
     expect(await reloaded).toBe(true);
 

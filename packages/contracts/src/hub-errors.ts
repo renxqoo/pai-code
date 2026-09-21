@@ -61,6 +61,7 @@ export type AppErrorCode =
   | 'export_failed' | 'dialog_unavailable' | 'editor_not_found' | 'skill_not_found'
   | 'branch_exists' | 'invalid_branch' | 'dirty_worktree' | 'unknown_branch' | 'not_a_repo' | 'git_unavailable'
   | 'empty_message' | 'no_active_session' | 'resume_failed' | 'bootstrap_crashed' | 'compact_images_rejected'
+  | 'bash_images_rejected'
   | 'provider_name_conflict' | 'provider_api_unsupported' | 'provider_baseurl_invalid';
 export type AppError = { kind: AppErrorCode; message?: string };
 
