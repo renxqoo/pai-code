@@ -1,18 +1,15 @@
 import type { ApiError } from '@paiapp/contracts';
 
-/**
- * ApiError → 展示文本（T40 W1 过渡形态，W2 换 kind 查表文案）：
- * `${kind}：${message}`；transient 显示 face（face 是瞬态失败的可读面孔——
- * kind 恒为 'transient' 无区分度）；unregistered_code 显示 code（未登记码
- * 原文不丢——kind 本身无信息量）；message 缺席只显 kind/face/code。
- */
+import { copy } from '@/strings';
 
-export function errorText(error: ApiError): string {
-  if (error.kind === 'transient') {
-    return error.message === undefined ? error.face : `${error.face}：${error.message}`;
-  }
-  if (error.kind === 'unregistered_code') {
-    return error.message.length === 0 ? error.code : `${error.code}：${error.message}`;
-  }
-  return error.message === undefined ? error.kind : `${error.kind}：${error.message}`;
+/**
+ * ApiError → 展示文案（W2 查表收口）：errorCopy 按 kind 分派，键集 = ApiErrorKind
+ * 全集（Record 编译期封闭——新增 kind 不加键不编译）；transient 按 face 细分、
+ * unregistered_code 原文透传均为表内函数值。locale 随 copy 代理按当前语言解析。
+ * 运行时垃圾 kind（仅 IPC 形状腐坏可达）兜底降级，不渲染空。
+ */
+export function copyOfError(error: ApiError): string {
+  const entry = copy.errorCopy[error.kind as ApiError['kind']];
+  if (entry === undefined) return `${String(error.kind)}${'message' in error && error.message !== undefined ? `：${error.message}` : ''}`;
+  return typeof entry === 'function' ? entry(error) : entry;
 }

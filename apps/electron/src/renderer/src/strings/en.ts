@@ -1,5 +1,13 @@
 /** 英文文案表（key 结构 = 唯一真相；zh 表按同形状翻译）。 */
 import { enSettings } from './en-settings';
+import {
+  enErrorCopy,
+  imagesDeniedCopy,
+  imagesTooManyCopy,
+  noActiveSessionCopy,
+  openEditorMissingCopy,
+  resumeFailedCopy,
+} from './en-error-copy';
 export const en = {
   /** 标题行双色文案：名称重字重、产品线后缀轻字重（与设计稿一致） */
   appTitle: { name: 'Pai', suffix: 'Code' },
@@ -67,7 +75,7 @@ export const en = {
       queued: 'Queued',
     },
     openFailed: (reason: string): string => `Failed to open (${reason}).`,
-    openEditorMissing: 'No editor found. Install the code, cursor, or zed CLI and retry.',
+    openEditorMissing: openEditorMissingCopy,
     copyFailed: 'Copy failed. Try again.',
     emptyTitle: 'No messages yet',
     retryHydration: 'Retry',
@@ -136,7 +144,7 @@ export const en = {
     /** 思考档写入被 hub 拒绝（reason 为 hub 错误文案） */
     thinkingRejected: (reason: string): string => `Thinking level not applied: ${reason}.`,
     /** 会话域写动作无定址目标（工作区无任何会话时的空舞台） */
-    noActiveSession: 'No active session — start a new task first (⌘N).',
+    noActiveSession: noActiveSessionCopy,
     /** 会话模型切换被 hub 拒绝（reason 为 hub 错误文案） */
     modelRejected: (reason: string): string => `Model not applied: ${reason}.`,
     /** 子代理状态词（running|idle|stopped → 工作中/空闲/已归档） */
@@ -197,14 +205,14 @@ export const en = {
     /** 回合结算失败（settled ok=false；reason 为 hub/worker 错误文案） */
     turnFailed: (reason: string): string => (reason.length > 0 ? `The reply failed (${reason}).` : 'The reply failed.'),
     forkedImageName: (index: number): string => `Image ${index}`,
-    resumeFailed: 'Resuming the conversation failed. Try again.',
+    resumeFailed: resumeFailedCopy,
     stopConfirmTitle: 'Stop everything?',
     stopConfirmHint: 'This terminates all foreground and background subagents and cannot be undone.',
     stopConfirmYes: 'Stop all',
     stopConfirmNo: 'Cancel',
     bashNoImages: 'Direct commands cannot carry images. Remove them or send as a message.',
-    imagesDenied: 'This model does not accept image attachments. Remove them or switch to a multimodal model.',
-    imagesTooMany: 'Too many image attachments (max 8). Remove some.',
+    imagesDenied: imagesDeniedCopy,
+    imagesTooMany: imagesTooManyCopy,
     bashFailed: (reason: string): string => `Command not run (${reason}).`,
     systemMessageLabel: 'System',
     sendFailed: (reason: string): string => `Message not sent (${reason}). Try again.`,
@@ -290,13 +298,6 @@ export const en = {
     trustedLabel: 'Trust this project',
     trustedHint: 'Trusted sessions load project extensions and project-level agents. Only enable it for repositories you own and review.',
     pickFailed: 'Could not open the directory picker. Try again.',
-    createFailed: (reason: string): string => {
-      if (reason === 'host_unavailable') return 'The agent host is not ready (starting or restarting). Try again shortly.';
-      if (reason.startsWith('Model not found')) return 'The selected model is unavailable. Check the provider configuration in Settings.';
-      if (/thinking/i.test(reason)) return 'The selected thinking level was rejected: the model does not declare reasoning support — turn on the "Reasoning" toggle on its model row in channel settings, or set effort back to Default.';
-      if (/cwd|directory|absolute|exist/i.test(reason)) return 'Could not start the conversation. Check the directory and try again.';
-      return `Could not start the conversation (${reason}). Try again.`;
-    },
   },
   branch: {
     /** 分支面板（两页共用）：可访问名 + 列表分组标题。 */
@@ -308,16 +309,6 @@ export const en = {
     dirtyFiles: (count: number): string => `Uncommitted changes: ${count} ${count === 1 ? 'file' : 'files'}`,
     createBranch: 'Create and checkout new branch…',
     openGraph: 'Git graph',
-    failed: (reason: string): string => {
-      if (reason === 'branch_exists') return 'A branch with that name already exists. Pick another name.';
-      if (reason === 'invalid_branch') return 'That branch name is not valid. Pick another name.';
-      if (reason === 'dirty_worktree') return 'The working tree has uncommitted changes. Commit or stash them before switching branches.';
-      if (reason === 'unknown_branch') return 'That branch no longer exists. Refresh and try again.';
-      if (reason === 'not_a_repo') return 'That folder is not a git repository.';
-      if (reason === 'git_unavailable') return 'git was not found on this system, so branches cannot be changed.';
-      if (reason === 'cwd_not_found') return 'That working directory no longer exists.';
-      return `Branch operation failed (${reason}).`;
-    },
     createTitle: 'Create and checkout new branch',
     createSubtitle: 'Create a new local branch from the current HEAD and switch to it as soon as it is created.',
     createFieldLabel: 'Branch name',
@@ -511,4 +502,5 @@ export const en = {
     searchPlaceholder: 'Search models...',
     empty: 'No matching models',
   },
+  errorCopy: enErrorCopy,
 };

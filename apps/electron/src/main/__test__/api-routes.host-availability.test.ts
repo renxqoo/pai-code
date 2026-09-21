@@ -45,6 +45,7 @@ function makeRoutes(work: string) {
   });
   const monitor = createRuntimeMonitor({
     host: () => null,
+    hub: () => null,
     appMetrics: () => ({ rssBytes: 1, cpuPercent: 0 }),
     systemMemory: () => ({ totalBytes: null, availableBytes: null }),
     idleRecycleMinutes: () => 5,

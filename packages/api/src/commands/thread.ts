@@ -23,9 +23,15 @@ export interface ThreadCommands {
   listSaved(input: { cwd: string }): Promise<HubResult<unknown>>;
   register(input: RegisterInput): Promise<HubResult<unknown>>;
   setKeepalive(input: KeepaliveInput): Promise<HubResult<unknown>>;
-  retire(input: RetireInput): Promise<HubResult<unknown>>;
+  /** ack 命令（hub 成功响应无载荷）：成功恒为 null 视图。 */
+  retire(input: RetireInput): Promise<HubResult<null>>;
   stop(input: StopInput): Promise<HubResult<unknown>>;
   delete(input: DeleteInput): Promise<HubResult<unknown>>;
+}
+
+/** ack 视图：成功无载荷恒折叠 null（帧解码对缺省 data 产出 undefined，消费方契约是 null）。 */
+function ack(result: HubResult<unknown>): HubResult<null> {
+  return result.ok ? { ok: true, data: null } : result;
 }
 
 export function createThreadCommands(send: Transport): ThreadCommands {
@@ -36,7 +42,7 @@ export function createThreadCommands(send: Transport): ThreadCommands {
     listSaved: (input) => send<unknown>({ type: 'thread/list_saved', ...input }, TIMEOUTS.default),
     register: (input) => send<unknown>({ type: 'thread/register', ...input }, TIMEOUTS.default),
     setKeepalive: (input) => send<unknown>({ type: 'thread/set_keepalive', ...input }, TIMEOUTS.default),
-    retire: (input) => send<unknown>({ type: 'thread/retire', ...input }, TIMEOUTS.default),
+    retire: (input) => send<unknown>({ type: 'thread/retire', ...input }, TIMEOUTS.default).then(ack),
     stop: (input) => send<unknown>({ type: 'thread/stop', ...input }, TIMEOUTS.default),
     delete: (input) => send<unknown>({ type: 'thread/delete', ...input }, TIMEOUTS.default),
   };

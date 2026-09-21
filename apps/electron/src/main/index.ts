@@ -133,6 +133,14 @@ void app.whenReady().then(async () => {
           return null;
         }
       },
+      // hub 门面（get_host_info/thread/list 命令面）：start 前窗口 getter 抛——同型收敛 null
+      hub: () => {
+        try {
+          return runtime === null ? null : runtime.hub;
+        } catch {
+          return null;
+        }
+      },
       appMetrics: () => {
         let rssBytes = 0;
         let cpuPercent = 0;

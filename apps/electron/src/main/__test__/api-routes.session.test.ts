@@ -55,7 +55,7 @@ const dirs: string[] = [];
 
 async function makeRoutes(
   reply: (command: PaiCommand, callIndexOfType: number) => HostCommandOutcome,
-  rejectLog?: string[],
+  logSink?: string[],
 ) {
   const work = mkdtempSync(join(tmpdir(), 'pai-session-route-'));
   dirs.push(work);
@@ -76,7 +76,7 @@ async function makeRoutes(
     providers: () => [],
     idleRecycleMinutes: () => 5,
     hubPaths: () => ({ bunPath: 'bun', hubEntry: join(work, 'cli.js') }),
-    logger: { log: () => undefined },
+    logger: { log: (message) => (logSink !== undefined ? logSink.push(message) : undefined) },
     emit: () => undefined,
     createHost: () => host.port,
   });
@@ -91,24 +91,26 @@ async function makeRoutes(
     revealPath: () => undefined,
     pickDirectory: () => Promise.resolve(null),
     exportDiagnosticsBundle: () => work,
-    ...(rejectLog !== undefined ? { onRouteRejected: (message: string) => rejectLog.push(message) } : {}),
-    monitor: createRuntimeMonitor({ host: () => null, appMetrics: () => ({ rssBytes: null, cpuPercent: null }), systemMemory: () => ({ totalBytes: null, availableBytes: null }), idleRecycleMinutes: () => 5, appVersion: () => 'test' }),
+    monitor: createRuntimeMonitor({ host: () => null, hub: () => null, appMetrics: () => ({ rssBytes: null, cpuPercent: null }), systemMemory: () => ({ totalBytes: null, availableBytes: null }), idleRecycleMinutes: () => 5, appVersion: () => 'test' }),
   });
   return { routes, runtime, sent: host.sent, agentDir };
 }
 
 describe('session/prompt 受理窗口竞态（症状：streaming 中发消息偶发失败）', () => {
-  test('症状回归：线上不可观测——start/prompt 路由失败落诊断日志（session_*_rejected）', async () => {
-    const rejectLog: string[] = [];
+  test('症状回归：线上不可观测——start/prompt 失败经 hub onCall 落诊断日志（hub_call_rejected，kind 不折平）', async () => {
+    const logs: string[] = [];
     const { routes } = await makeRoutes((command) => {
       if (command.type === 'prompt' || command.type === 'thread/start') return { ok: false, error: 'no dial' };
       return { ok: true, data: {} };
-    }, rejectLog);
+    }, logs);
     const promptOutcome = (await routes.invoke('session/prompt', { threadId: 't1', message: 'hi' })) as { ok: boolean };
     expect(promptOutcome.ok).toBe(false);
     const startOutcome = (await routes.invoke('session/start', { cwd: '/tmp' })) as { ok: boolean };
     expect(startOutcome.ok).toBe(false);
-    expect(rejectLog).toEqual(['session_prompt_rejected:t1:transient:command_failed:no dial', 'session_start_rejected:transient:command_failed:no dial']);
+    // 手工 session_*_rejected 已删（同一事实一套接口）：transport onCall 统一落
+    // hub_call_rejected:<type>:<threadId>:<token>——kind/face/message 保留可 grep 签名
+    expect(logs).toContain('hub_call_rejected:prompt:t1:transient:command_failed:no dial');
+    expect(logs).toContain('hub_call_rejected:thread/start:-:transient:command_failed:no dial');
   });
 
   test("症状回归：'streamingBehavior required' 恰一次自动降级重试（补 followUp），重试成功不上抛", async () => {

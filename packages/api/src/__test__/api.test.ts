@@ -39,6 +39,28 @@ describe('transport 管线契约（T40 §2.3 审查处置 H1）', () => {
     expect(outcomes).toEqual(['observer-throws']);
   });
 
+  test('onCall 失败分支携带解码后的完整 ApiError（kind/face 不折平为 unknown）', async () => {
+    const observed: Array<{ ok: boolean; error?: unknown }> = [];
+    const send = createTransport({
+      request: () => Promise.resolve({ ok: false, error: 'no dial' }),
+      onCall: (_command, result) => {
+        observed.push(result.ok ? { ok: true } : { ok: false, error: result.error });
+      },
+    });
+    const result = await send<null>({ type: 'prompt' });
+    expect(result).toEqual({ ok: false, error: { kind: 'transient', face: 'command_failed', message: 'no dial' } });
+    expect(observed).toEqual([{ ok: false, error: { kind: 'transient', face: 'command_failed', message: 'no dial' } }]);
+  });
+
+  test('ack 命令（retire/steer）成功恒折叠 null（帧解码缺省 data 为 undefined）', async () => {
+    const hub = createHubApi({
+      request: () => Promise.resolve({ ok: true, data: undefined } as HostCommandOutcome),
+    });
+    expect(await hub.thread.retire({ threadId: 't1' })).toEqual({ ok: true, data: null });
+    expect(await hub.agents.steer({ threadId: 't1', agentId: 'sa-1', message: '快' })).toEqual({ ok: true, data: null });
+    expect(await hub.session.abortBash({ threadId: 't1' })).toEqual({ ok: true, data: null });
+  });
+
   test('hub 对象错误解码为 kind；未登记 code 落兜底族原文透传', async () => {
     const face = scriptHub({
       'thread/set_keepalive': { ok: false, error: { code: 'unknown_thread', message: 'Unknown threadId' } },
@@ -67,11 +89,22 @@ describe('decodeApiError 全函数（永不抛）', () => {
   });
 });
 
-describe('thread 域命令档位与透传', () => {
-  test('命令字面量 + 档位随方法定（prompt 档 10min）；成功 data 透传', async () => {
+describe('域命令档位与透传（档位单一真相 TIMEOUTS——漏档长命命令会被 30s 误杀，全部钉住）', () => {
+  test('default 档 30s：thread/list_saved；成功 data 透传', async () => {
     const face = scriptHub({});
     const hub = createHubApi({ request: face.request });
     expect(await hub.thread.listSaved({ cwd: '/w' })).toEqual({ ok: true, data: null });
     expect(face.calls).toContainEqual({ command: { type: 'thread/list_saved', cwd: '/w' }, timeoutMs: 30_000 });
+  });
+
+  test('prompt 10min / compact 30min / bash 24h 三档特殊面逐命令钉住', async () => {
+    const face = scriptHub({});
+    const hub = createHubApi({ request: face.request });
+    await hub.session.prompt({ threadId: 't1', message: 'hi' });
+    await hub.session.compact({ threadId: 't1' });
+    await hub.session.bash({ threadId: 't1', command: 'ls' });
+    expect(face.calls.find((call) => call.command.type === 'prompt')?.timeoutMs).toBe(600_000);
+    expect(face.calls.find((call) => call.command.type === 'compact')?.timeoutMs).toBe(1_800_000);
+    expect(face.calls.find((call) => call.command.type === 'bash')?.timeoutMs).toBe(86_400_000);
   });
 });

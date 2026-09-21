@@ -5,7 +5,7 @@
  * - 错误解码走 decodeApiError 全函数（永不抛）；
  * - 调用方不传超时——域方法内定档（timeouts.ts 单一真相）。
  */
-import type { HostCommandOutcome, PaiCommand } from '@paiapp/contracts';
+import type { ApiError, HostCommandOutcome, PaiCommand } from '@paiapp/contracts';
 
 import { decodeApiError, type HubResult } from './errors';
 
@@ -16,8 +16,10 @@ export interface HubTransport {
 
 export type Transport = <T>(command: PaiCommand, timeoutMs?: number) => Promise<HubResult<T>>;
 
+/** 调用观测钩子：失败分支携带解码后的完整 ApiError（消费方自行取舍格式化，
+ *  不在观测层折平 kind/face/code）。 */
 export interface CallObserver {
-  (command: PaiCommand, result: { ok: true } | { ok: false; errorKind: string }): void;
+  (command: PaiCommand, result: { ok: true } | { ok: false; error: ApiError }): void;
 }
 
 export function createTransport(deps: { request: HubTransport['request']; onCall?: CallObserver }): Transport {
@@ -37,10 +39,10 @@ export function createTransport(deps: { request: HubTransport['request']; onCall
     return result;
   };
 
-  function observe(command: PaiCommand, result: { ok: true } | { ok: false; errorKind?: string }): void {
+  function observe(command: PaiCommand, result: HubResult<unknown>): void {
     if (deps.onCall === undefined) return;
     try {
-      deps.onCall(command, result.ok ? { ok: true } : { ok: false, errorKind: result.errorKind ?? 'unknown' });
+      deps.onCall(command, result.ok ? { ok: true } : { ok: false, error: result.error });
     } catch {
       // 观测者异常绝不影响命令结果（契约测试钉住）
     }

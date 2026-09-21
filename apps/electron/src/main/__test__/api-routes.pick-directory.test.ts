@@ -52,7 +52,7 @@ function makeRoutes(pickDirectory: (defaultPath: string | null) => Promise<strin
     revealPath: () => undefined,
     pickDirectory,
     exportDiagnosticsBundle: () => work,
-    monitor: createRuntimeMonitor({ host: () => null, appMetrics: () => ({ rssBytes: null, cpuPercent: null }), systemMemory: () => ({ totalBytes: null, availableBytes: null }), idleRecycleMinutes: () => 5, appVersion: () => 'test' }),
+    monitor: createRuntimeMonitor({ host: () => null, hub: () => null, appMetrics: () => ({ rssBytes: null, cpuPercent: null }), systemMemory: () => ({ totalBytes: null, availableBytes: null }), idleRecycleMinutes: () => 5, appVersion: () => 'test' }),
   });
 }
 

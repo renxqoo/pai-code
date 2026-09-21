@@ -1,6 +1,14 @@
 /** 中文文案表（默认语言；key 结构与 en 表逐字段对齐，类型强制同步）。 */
 import { zhSettings } from './zh-settings';
 import type { en } from './en';
+import {
+  zhErrorCopy,
+  imagesDeniedCopy,
+  imagesTooManyCopy,
+  noActiveSessionCopy,
+  openEditorMissingCopy,
+  resumeFailedCopy,
+} from './zh-error-copy';
 
 export const zh: typeof en = {
   appTitle: { name: 'Pai', suffix: 'Code' },
@@ -68,7 +76,7 @@ export const zh: typeof en = {
       queued: '排队中',
     },
     openFailed: (reason: string): string => `打开失败（${reason}）。`,
-    openEditorMissing: '未找到可用的编辑器，可安装 code、cursor 或 zed CLI 后重试。',
+    openEditorMissing: openEditorMissingCopy,
     copyFailed: '复制失败，请重试。',
     emptyTitle: '还没有消息',
     retryHydration: '重试加载',
@@ -137,7 +145,7 @@ export const zh: typeof en = {
     /** 思考档写入被 hub 拒绝（reason 为 hub 错误文案） */
     thinkingRejected: (reason: string): string => `思考档未应用：${reason}。`,
     /** 会话域写动作无定址目标（工作区无任何会话时的空舞台） */
-    noActiveSession: '当前没有进行中的会话，请先新建任务（⌘N）。',
+    noActiveSession: noActiveSessionCopy,
     /** 会话模型切换被 hub 拒绝（reason 为 hub 错误文案） */
     modelRejected: (reason: string): string => `模型未切换：${reason}。`,
     /** 子代理状态词（running|idle|stopped → 工作中/空闲/已归档） */
@@ -194,14 +202,14 @@ export const zh: typeof en = {
     /** 回合结算失败（settled ok=false；reason 为 hub/worker 错误文案） */
     turnFailed: (reason: string): string => (reason.length > 0 ? `本轮回复失败（${reason}）。` : '本轮回复失败。'),
     forkedImageName: (index: number): string => `图片 ${index}`,
-    resumeFailed: '会话恢复失败，请重试。',
+    resumeFailed: resumeFailedCopy,
     stopConfirmTitle: '停止全部任务？',
     stopConfirmHint: '将终止全部前台与后台子智能体，且不可恢复。',
     stopConfirmYes: '全部停止',
     stopConfirmNo: '取消',
     bashNoImages: '直执行命令不支持携带图片，请移除附件或改用消息发送。',
-    imagesDenied: '当前模型不接受图片附件，请移除附件或切换到多模态模型。',
-    imagesTooMany: '图片附件超出限制（最多 8 张），请减少附件。',
+    imagesDenied: imagesDeniedCopy,
+    imagesTooMany: imagesTooManyCopy,
     systemMessageLabel: '系统',
     sendFailed: (reason: string): string => `消息未发送（${reason}），请重试。`,
     toolFailed: (exitCode: number): string => `退出码 ${exitCode}`,
@@ -282,13 +290,6 @@ export const zh: typeof en = {
     trustedLabel: '信任此项目',
     trustedHint: '受信会话会加载项目扩展与项目级 agent。只对你拥有并审阅过的仓库开启。',
     pickFailed: '目录选择器打开失败，请重试。',
-    createFailed: (reason: string): string => {
-      if (reason === 'host_unavailable') return 'agent 宿主未就绪（正在启动或重启），请稍后重试。';
-      if (reason.startsWith('Model not found')) return '所选模型不可用，请在设置中检查 Provider 配置。';
-      if (/thinking/i.test(reason)) return '所选思考档被拒绝：该模型未声明支持思考——在渠道设置的模型行打开「思考」开关，或把思考档调回「默认」。';
-      if (/cwd|directory|absolute|exist/i.test(reason)) return '无法开始会话，请检查目录后重试。';
-      return `无法开始会话（${reason}），请重试。`;
-    },
   },
   branch: {
     /** 分支面板（两页共用）：可访问名 + 列表分组标题。 */
@@ -300,16 +301,6 @@ export const zh: typeof en = {
     dirtyFiles: (count: number): string => `未提交的更改：${count} 个文件`,
     createBranch: '创建并检出新分支…',
     openGraph: 'Git 图谱',
-    failed: (reason: string): string => {
-      if (reason === 'branch_exists') return '同名分支已存在，换一个名称。';
-      if (reason === 'invalid_branch') return '分支名不合法，请换个名称。';
-      if (reason === 'dirty_worktree') return '工作区有未提交改动，先提交或暂存后再切换分支。';
-      if (reason === 'unknown_branch') return '目标分支不存在，请刷新后重试。';
-      if (reason === 'not_a_repo') return '该目录不是 git 仓库。';
-      if (reason === 'git_unavailable') return '系统未找到 git 命令，无法操作分支。';
-      if (reason === 'cwd_not_found') return '工作目录不存在，可能已被移动或删除。';
-      return `分支操作失败（${reason}）。`;
-    },
     createTitle: '创建并检出新分支',
     createSubtitle: '基于当前 HEAD 创建一个新的本地分支，并在创建成功后立即切换过去。',
     createFieldLabel: '分支名',
@@ -502,4 +493,5 @@ export const zh: typeof en = {
     searchPlaceholder: '搜索模型…',
     empty: '没有匹配的模型',
   },
+  errorCopy: zhErrorCopy,
 };

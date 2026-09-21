@@ -89,7 +89,7 @@ async function makeRoutes(work: string, options: { models?: Array<Record<string,
     revealPath: () => undefined,
     pickDirectory: () => Promise.resolve(null),
     exportDiagnosticsBundle: () => work,
-    monitor: createRuntimeMonitor({ host: () => null, appMetrics: () => ({ rssBytes: null, cpuPercent: null }), systemMemory: () => ({ totalBytes: null, availableBytes: null }), idleRecycleMinutes: () => 5, appVersion: () => 'test' }),
+    monitor: createRuntimeMonitor({ host: () => null, hub: () => null, appMetrics: () => ({ rssBytes: null, cpuPercent: null }), systemMemory: () => ({ totalBytes: null, availableBytes: null }), idleRecycleMinutes: () => 5, appVersion: () => 'test' }),
   });
   return { routes, audits, agentDir, home, sent: host?.sent ?? [], runtime };
 }
@@ -138,7 +138,7 @@ describe("api-routes 安全面（C-S2/C-S8/C-S4）", () => {
       api: "openai",
       models: [{ id: "m", reasoning: false, vision: false }],
     })) as { ok: boolean; error?: { kind: string; message?: string } };
-    expect(collide).toEqual({ ok: false, error: { kind: "invalid_params", message: "provider_name_conflict" } });
+    expect(collide).toEqual({ ok: false, error: { kind: "provider_name_conflict" } });
     // 同名更新自身合法
     const self = (await routes.invoke("provider/upsert", {
       name: "a-b",
@@ -165,7 +165,7 @@ describe("api-routes 安全面（C-S2/C-S8/C-S4）", () => {
       api: "pi-messages",
       models: [{ id: "m", reasoning: false, vision: false }],
     })) as { ok: boolean; error?: { kind: string; message?: string } };
-    expect(badApi).toEqual({ ok: false, error: { kind: "invalid_params", message: "provider_api_unsupported" } });
+    expect(badApi).toEqual({ ok: false, error: { kind: "provider_api_unsupported" } });
   });
 
   test("C-S4：host 未启动时 provider/upsert 照常落盘（目录只在 spawn 期读入——保存不依赖 host）；bootstrap 全走 outcome 不 reject；remove 照常", async () => {
@@ -338,7 +338,7 @@ describe("api-routes 门禁（第三波审查补：file/search 与 reveal）", (
       revealPath: (path) => revealed.push(path),
       pickDirectory: () => Promise.resolve(null),
       exportDiagnosticsBundle: () => work,
-      monitor: createRuntimeMonitor({ host: () => null, appMetrics: () => ({ rssBytes: null, cpuPercent: null }), systemMemory: () => ({ totalBytes: null, availableBytes: null }), idleRecycleMinutes: () => 5, appVersion: () => 'test' }),
+      monitor: createRuntimeMonitor({ host: () => null, hub: () => null, appMetrics: () => ({ rssBytes: null, cpuPercent: null }), systemMemory: () => ({ totalBytes: null, availableBytes: null }), idleRecycleMinutes: () => 5, appVersion: () => 'test' }),
     });
     const outside = (await routes.invoke("session/reveal", { sessionPath: "/etc/passwd" })) as {
       ok: boolean;

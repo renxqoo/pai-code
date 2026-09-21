@@ -1,7 +1,7 @@
 import type { PermMode } from '@paiapp/contracts';
 import { isSettableThinkingLevel } from '@paiapp/contracts';
 
-import { errorText } from '@/lib/error-text';
+import { copyOfError } from '@/lib/error-text';
 import type { BridgeClient } from './client-invoke';
 import type { HubSettingsView, LiveStore } from './store';
 
@@ -77,7 +77,7 @@ export function createSettingsPorts({ client, store }: SettingsPortsDeps) {
         ...(patch.permissionDefaultMode != null ? { permissionDefaultMode: patch.permissionDefaultMode } : {}),
         ...(patch.thinkingDefault != null ? { thinkingDefault: patch.thinkingDefault } : {}),
       });
-      if (!outcome.ok) return errorText(outcome.error);
+      if (!outcome.ok) return copyOfError(outcome.error);
       // 写后回读成套刷新（设置页与新任务页共用同一真相）
       await readHubSettingsIntoStore();
       await refreshActivePermissionMode();
@@ -86,7 +86,7 @@ export function createSettingsPorts({ client, store }: SettingsPortsDeps) {
     readSessionPermissionMode,
     async setSessionPermissionMode(threadId: string, mode: PermMode): Promise<string | null> {
       const outcome = await client.invoke('permission/setMode', { threadId, mode });
-      return outcome.ok ? null : errorText(outcome.error);
+      return outcome.ok ? null : copyOfError(outcome.error);
     },
     async readThinkingLevel(threadId: string): Promise<{ level: string; source: 'session' | 'project' | 'user' | 'off' } | null> {
       const outcome = await client.invoke('session/thinkingLevels', { threadId });

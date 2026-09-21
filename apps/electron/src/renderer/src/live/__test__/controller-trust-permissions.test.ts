@@ -5,6 +5,7 @@ import type { ApiError } from '@paiapp/contracts';
 import { createLiveController } from '../live-controller';
 import { createLiveStore, type LiveStore } from '../store';
 import type { BridgeClient } from '../client-invoke';
+import { copyOfError } from '@/lib/error-text';
 
 /** 受信（trusted）与 hub 缺省/会话权限模式控制器回归：参数透传、reload 编排、stop 失败中止。 */
 
@@ -43,7 +44,7 @@ test('hubSettings 读取成功入 store；失败返回 null 且不动旧值', as
   expect(failStore.getState().hubSettings).toBe(hubSettings);
 });
 
-test('hubSettings 写入：载荷只带给定字段，成功回读成套刷新并返回 null；失败透传 errorText', async () => {
+test('hubSettings 写入：载荷只带给定字段，成功回读成套刷新并返回 null；失败透传查表文案', async () => {
   const client = makeClient({
     'app/setHubSettings': { ok: true, data: null },
     'app/hubSettings': { ok: true, data: hubSettings },
@@ -54,7 +55,7 @@ test('hubSettings 写入：载荷只带给定字段，成功回读成套刷新�
   expect(store.getState().hubSettings).toEqual(hubSettings);
 
   const failClient = makeClient({ 'app/setHubSettings': { ok: false, error: { kind: 'io_failed' } } });
-  expect(await createLiveController(failClient, createLiveStore()).writeHubSettings({ permissionDefaultMode: 'plan' })).toBe('io_failed');
+  expect(await createLiveController(failClient, createLiveStore()).writeHubSettings({ permissionDefaultMode: 'plan' })).toBe(copyOfError({ kind: 'io_failed' }));
 });
 
 test('症状回归「hubSettings null 字段把未设置语义发给 hub」：null = 不修改该键（跳过不发）；全空补丁零命令即成功', async () => {
@@ -91,7 +92,7 @@ test('会话权限模式读取/写入透传（permission/mode | permission/setMo
   expect(client.calls).toContainEqual({ method: 'permission/setMode', params: { threadId: 't1', mode: 'fullAuto' } });
 
   const failClient = makeClient({ 'permission/setMode': { ok: false, error: { kind: 'unknown_thread' } } });
-  expect(await createLiveController(failClient, createLiveStore()).setSessionPermissionMode('t1', 'plan')).toBe('unknown_thread');
+  expect(await createLiveController(failClient, createLiveStore()).setSessionPermissionMode('t1', 'plan')).toBe(copyOfError({ kind: 'unknown_thread' }));
 });
 
 test('症状回归：readSessionPermissionMode 引用幂等——内容相同不换引用（防刷新循环击穿模式切换）', async () => {
@@ -225,7 +226,7 @@ test('reloadSessionTrusted：重开前非活跃会话——成功后不劫持 ac
   expect(store.getState().activeThreadId).toBe('t2');
 });
 
-test('agent 定义管理面：upsert/remove 透传 errorText 并刷新快照（身份键 = name+scope+project）', async () => {
+test('agent 定义管理面：upsert/remove 透传查表文案并刷新快照（身份键 = name+scope+project）', async () => {
   const definition: AgentDefinition = { name: 'search', description: 'd', systemPrompt: 'p', tools: null, model: null, scope: 'user', project: null };
   const client = makeClient({
     'agent/definitions': { ok: true, data: [definition] },
@@ -235,8 +236,8 @@ test('agent 定义管理面：upsert/remove 透传 errorText 并刷新快照（�
   const store = createLiveStore();
   const controller = createLiveController(client, store);
   const key = { name: 'search', scope: 'user' as const, project: null };
-  // upsert 失败：errorText 透传（表单内联），不刷新快照
-  expect(await controller.upsertAgentDefinition(definition, null)).toBe('name_conflict');
+  // upsert 失败：查表文案透传（表单内联），不刷新快照
+  expect(await controller.upsertAgentDefinition(definition, null)).toBe(copyOfError({ kind: 'name_conflict' }));
   expect(store.getState().agentDefinitions).toEqual([]);
   // remove 成功：error null + 快照刷新
   expect(await controller.removeAgentDefinition(key)).toBeNull();
@@ -282,7 +283,7 @@ test('createSession：permissionMode/thinkingLevel 是 session/start 原生参�
   expect(client.calls.some((call) => call.method === 'permission/setMode')).toBe(false);
 });
 
-test('createSession：不传可选项时不带可选字段；start 失败透传 errorText', async () => {
+test('createSession：不传可选项时不带可选字段；start 失败透传查表文案', async () => {
   const bare = makeClient({
     'session/start': { ok: true, data: startData },
     'session/entries': { ok: true, data: { items: [], cursor: null } },
@@ -293,7 +294,7 @@ test('createSession：不传可选项时不带可选字段；start 失败透传 
   const failed = makeClient({ 'session/start': { ok: false, error: { kind: 'invalid_input', message: 'cwd_missing' } } });
   expect(await createLiveController(failed, createLiveStore()).createSession({ cwd: '/nope' })).toEqual({
     ok: false,
-    reason: 'invalid_input：cwd_missing',
+    reason: copyOfError({ kind: 'invalid_input', message: 'cwd_missing' }),
   });
 });
 

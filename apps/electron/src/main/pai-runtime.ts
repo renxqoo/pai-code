@@ -3,7 +3,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { createEventMapper, mapDialogRequest, savedSessions, toSessionView } from '@paiapp/adapter';
-import { decodeApiError } from '@paiapp/api';
+import { createHubApi, type HubApi } from '@paiapp/api';
 
 import { errorLogToken } from './error-log-token';
 import { autoTitleCandidateOf } from './auto-title';
@@ -57,6 +57,8 @@ export interface PaiRuntimeDeps {
 
 export interface PaiRuntime {
   readonly host: HostProcessPort;
+  /** hub 门面（buildHost 装配的单实例；port 跨重启稳定故绑定跨重启存活） */
+  readonly hub: HubApi;
   /** 会话文件根目录（agentDir/sessions；session/resume 白名单基准）。 */
   readonly sessionsRoot: string;
   start(): Promise<void>;
@@ -99,6 +101,7 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
   const eventMapper = createEventMapper({ now: () => Date.now() });
   let bootstrapped = false;
   let host: HostProcessPort | null = null;
+  let hubApi: HubApi | null = null;
 
   const emit = (event: UiEvent): void => {
     if (bootstrapped) {
@@ -180,7 +183,8 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
   const scheduleQueueFetch = (threadId: string, retry = false): void => {
     if (queueFetchPending.has(threadId)) return; // 在拉取中：本拍信号并入下一次拉取的结果
     queueFetchPending.add(threadId);
-    void host?.request({ type: 'get_state', threadId })
+    void hubApi?.session
+      .getState({ threadId })
       .then((outcome) => {
         if (outcome.ok) {
           emitQueueOf(outcome.data, threadId);
@@ -276,16 +280,16 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
    * host 进程 cwd，不适用），按注册表去重 cwd 逐目录列举聚合。
    */
   const reconcileSessions = async (): Promise<void> => {
-    const active = host;
-    if (active === null) return;
+    const api = hubApi;
+    if (host === null || api === null) return;
     const rows = registry.list();
     const onDisk = new Set<string>();
     const listedCwds = new Set<string>();
     for (const cwd of new Set(rows.map((row) => row.cwd).filter((value) => value.length > 0))) {
-      const outcome = await active.request({ type: 'thread/list_saved', cwd });
+      const outcome = await api.thread.listSaved({ cwd });
       if (!outcome.ok) {
         // 暂态列举失败不得删行（丢恢复依据）；行保留为占位，真实缺失由 resume 失败显式暴露
-        log(`list_saved_failed:${cwd}:${errorLogToken(decodeApiError(outcome.error))}`);
+        log(`list_saved_failed:${cwd}:${errorLogToken(outcome.error)}`);
         continue;
       }
       listedCwds.add(cwd);
@@ -367,6 +371,10 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
       if (host === null) throw new Error('runtime_not_started');
       return host;
     },
+    get hub(): HubApi {
+      if (hubApi === null) throw new Error('runtime_not_started');
+      return hubApi;
+    },
     get sessionsRoot(): string {
       return sessionsRoot;
     },
@@ -380,8 +388,21 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
         log('hub_entry_missing');
         throw new Error('hub_paths_unconfigured');
       }
-      host = buildHost();
-      await waitForPhase(host, 'ready', READY_TIMEOUT_MS);
+      const built = buildHost();
+      host = built;
+      // hub 门面装配（全进程恰一实例；onCall 观测策略：拒绝必落（带 threadId 定位会话）、
+      // 成功不落、monitor 轮询 observer 命令豁免——防 2s 轮询刷日志；token 带 kind/face/message）。
+      // request 绑定 const 引用：stop()/dispose 后 port.request 解析 {ok:false,'host_disposed'}
+      // ——经 decode 成 transient/host_disposed（port 的 request 永不 reject，无 catch 路径）
+      hubApi = createHubApi({
+        request: (cmd, timeoutMs) => built.request(cmd, timeoutMs),
+        onCall: (command, result) => {
+          if (result.ok || command.type === 'get_host_info' || command.type === 'thread/list') return;
+          const threadId = (command as { threadId?: string }).threadId;
+          log(`hub_call_rejected:${command.type}:${threadId ?? '-'}:${errorLogToken(result.error)}`);
+        },
+      });
+      await waitForPhase(built, 'ready', READY_TIMEOUT_MS);
       await this.reconcileSessions();
     },
     async stop(): Promise<void> {
@@ -444,21 +465,22 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
       registry.upsert({ ...row, keepalive });
       // hub 表项可能不存在（parked 未纳管）：置位失败 → register（零 worker 幂等）后
       // 无条件重试一次 set——register 被 live 占用拒绝（Session already open）或任何
-      // 暂态失败都覆盖；再失败只记日志（注册表是真相，下次 live 化 re-assert）
+      // 暂态失败都覆盖；再失败只记日志（注册表是真相，下次 live 化 re-assert）。
+      // register-then-retry 补偿链是域内业务，留驻本层；两条命令走 hub 域方法。
       void (async () => {
-        let outcome = await host?.request({ type: 'thread/set_keepalive', threadId, keepalive });
+        let outcome = await hubApi?.thread.setKeepalive({ threadId, keepalive });
         if (outcome?.ok) return;
         if (row.sessionPath !== null) {
-          await host?.request({ type: 'thread/register', sessionPath: row.sessionPath, trusted: row.trusted ?? false });
+          await hubApi?.thread.register({ sessionPath: row.sessionPath, trusted: row.trusted ?? false });
         }
-        outcome = await host?.request({ type: 'thread/set_keepalive', threadId, keepalive });
+        outcome = await hubApi?.thread.setKeepalive({ threadId, keepalive });
         if (!outcome?.ok) log(`keepalive_hub_apply_failed:${threadId}`);
       })();
       return 'ok';
     },
     async assertKeepalive(threadId: string): Promise<void> {
-      const outcome = await this.host.request({ type: 'thread/set_keepalive', threadId, keepalive: true });
-      if (!outcome.ok) log(`keepalive_assert_failed:${threadId}:${errorLogToken(decodeApiError(outcome.error))}`);
+      const outcome = await hubApi?.thread.setKeepalive({ threadId, keepalive: true });
+      if (outcome !== undefined && !outcome.ok) log(`keepalive_assert_failed:${threadId}:${errorLogToken(outcome.error)}`);
     },
     reconcileWorkerStates(rows: readonly { threadId: string; state: 'live' | 'parked' | 'dead' }[]): void {
       // 只折叠 hub 报告为非 live 且内存仍 live 的会话（帧丢失兜底）；不广播
@@ -482,8 +504,8 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
       if (view === undefined || view.title !== DEFAULT_TITLE) return;
       const name = autoTitleCandidateOf(message);
       if (name === null) return;
-      const outcome = await this.host.request({ type: 'set_session_name', threadId, name });
-      if (!outcome.ok) return;
+      const outcome = await hubApi?.session.setSessionName({ threadId, name });
+      if (outcome?.ok !== true) return;
       this.renameSession(threadId, name);
     },
   };

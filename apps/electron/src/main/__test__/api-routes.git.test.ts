@@ -57,7 +57,7 @@ function makeRoutes(work: string, git?: GitBranches, graph?: GitGraph) {
     revealPath: () => undefined,
     pickDirectory: () => Promise.resolve(null),
     exportDiagnosticsBundle: () => work,
-    monitor: createRuntimeMonitor({ host: () => null, appMetrics: () => ({ rssBytes: null, cpuPercent: null }), systemMemory: () => ({ totalBytes: null, availableBytes: null }), idleRecycleMinutes: () => 5, appVersion: () => 'test' }),
+    monitor: createRuntimeMonitor({ host: () => null, hub: () => null, appMetrics: () => ({ rssBytes: null, cpuPercent: null }), systemMemory: () => ({ totalBytes: null, availableBytes: null }), idleRecycleMinutes: () => 5, appVersion: () => 'test' }),
     // 本次运行白名单：系统选择器选过的目录（此处直接注入被测目录）
     extraCwds: () => [project],
     ...(git === undefined ? {} : { git }),

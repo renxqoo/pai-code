@@ -6,7 +6,7 @@ import { createLiveController } from '../live-controller';
 import { createLiveStore } from '../store';
 import type { BridgeClient } from '../client-invoke';
 import { copy } from '@/strings';
-import { errorText } from '@/lib/error-text';
+import { copyOfError } from '@/lib/error-text';
 
 /** 会话级操作（compact / rename / thinking）的命令透传与失败原因表驱动回归。 */
 
@@ -173,12 +173,12 @@ test('selectThinking 词表外值：本地拒绝不发命令，thinkingInvalid �
   expect(store.getState().notices.map((notice) => notice.text)).toEqual([copy.flow.thinkingInvalid]);
 });
 
-test('症状回归「思考档被 hub 拒绝但 UI 无反馈」：失败 errorText 进通知条（thinkingRejected）', async () => {
+test('症状回归「思考档被 hub 拒绝但 UI 无反馈」：失败查表文案进通知条（thinkingRejected）', async () => {
   const failure: ApiError = { kind: 'capability_thinking', message: 'level not supported by model' };
   const client = makeClient({ 'session/setThinking': { ok: false, error: failure } });
   const store = createLiveStore();
   await createLiveController(client, store).selectThinking('t1', 'high');
-  expect(store.getState().notices.map((notice) => notice.text)).toEqual([copy.flow.thinkingRejected(errorText(failure))]);
+  expect(store.getState().notices.map((notice) => notice.text)).toEqual([copy.flow.thinkingRejected(copyOfError(failure))]);
 });
 
 test('forkSession 失败带原因不切会话（hub 拒绝原因交上层文案分派）', async () => {
@@ -213,7 +213,7 @@ test('selectModel hub 拒绝：模型未切换通知（选择未生效可见，�
   const store = createLiveStore();
   await createLiveController(client, store).selectModel('t1', 'glm', 'glm-4.7');
   expect(client.calls).toContainEqual({ method: 'session/setModel', params: { threadId: 't1', provider: 'glm', modelId: 'glm-4.7' } });
-  expect(store.getState().notices.map((notice) => notice.text)).toEqual([copy.flow.modelRejected(errorText(failure))]);
+  expect(store.getState().notices.map((notice) => notice.text)).toEqual([copy.flow.modelRejected(copyOfError(failure))]);
 });
 
 test('selectModel 成功：命令透传、无通知', async () => {

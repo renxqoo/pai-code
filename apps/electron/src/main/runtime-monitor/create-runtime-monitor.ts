@@ -1,4 +1,5 @@
 import { hostInfoView, threadListRows } from '@paiapp/adapter';
+import type { HubApi } from '@paiapp/api';
 import type {
   HeartbeatFrame,
   HostInfoView,
@@ -15,7 +16,7 @@ import { parseDiagnosticEvent } from './diagnostic-events';
 
 /**
  * 运行状态监控器（T29）：2s 单定时器轮询 host 本地观测面（thread/list +
- * get_host_info，零 worker 唤醒）+ Electron/os 资源采样 + 心跳帧资源折叠，
+ * get_host_info 经 hub 门面，零 worker 唤醒）+ Electron/os 资源采样 + 心跳帧资源折叠，
  * 组装 app/runtime 快照。hub 挂死时快照仍可用（缓存旧值 + 相位真相）。
  */
 
@@ -28,8 +29,12 @@ const SNAPSHOT_MAX_EVENTS = 50;
 const HEARTBEAT_FRESH_MS = 3_000;
 
 export interface RuntimeMonitorDeps {
-  /** host 未构建（装配失败/未启动）返回 null——监控器降级运行。 */
+  /** host 未构建（装配失败/未启动）返回 null——监控器降级运行（poll 前置守卫与
+   *  diagnostics 快照源：hostPhase/restarts 来自 port 面，非命令面）。 */
   host: () => HostProcessPort | null;
+  /** hub 门面 accessor（get_host_info/thread/list 两命令的调用面；未装配返回 null
+   *  ——命令跳过、样本照推，缓存旧值语义同 hub 挂死）。 */
+  hub: () => HubApi | null;
   /** Electron 自身足迹（app.getAppMetrics 聚合）。 */
   appMetrics(): { rssBytes: number | null; cpuPercent: number | null };
   systemMemory(): { totalBytes: number | null; availableBytes: number | null };
@@ -114,15 +119,14 @@ export function createRuntimeMonitor(deps: RuntimeMonitorDeps): RuntimeMonitor {
       if (polling) return;
       polling = true;
       try {
-        const [infoOutcome, listOutcome] = await Promise.all([
-          host.request({ type: 'get_host_info' }),
-          host.request({ type: 'thread/list' }),
-        ]);
-        if (infoOutcome.ok) hostInfo = hostInfoView(infoOutcome.data);
-        if (listOutcome.ok) workers = threadListRows(listOutcome.data);
+        const hub = deps.hub();
+        const [infoOutcome, listOutcome] =
+          hub === null ? [null, null] : await Promise.all([hub.host.info(), hub.thread.list()]);
+        if (infoOutcome?.ok) hostInfo = hostInfoView(infoOutcome.data);
+        if (listOutcome?.ok) workers = threadListRows(listOutcome.data);
         // workers 证据只在 thread/list 成功时投递——半成功（仅 host_info）投递的
         // 是上一轮缓存行，会被漂移纠正误读为现势
-        if (listOutcome.ok) deps.onWorkersPolled?.([...workers]);
+        if (listOutcome?.ok) deps.onWorkersPolled?.([...workers]);
         pushSample();
       } finally {
         polling = false;

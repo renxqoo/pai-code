@@ -98,6 +98,13 @@ function makeHarness(script: string): Harness {
         return null;
       }
     },
+    hub: () => {
+      try {
+        return runtime.hub;
+      } catch {
+        return null;
+      }
+    },
     appMetrics: () => ({ rssBytes: null, cpuPercent: null }),
     systemMemory: () => ({ totalBytes: null, availableBytes: null }),
     idleRecycleMinutes: () => 5,
@@ -484,6 +491,13 @@ describe('app API × 真 x-harness host-hub（GLM 真门，opt-in）', () => {
       host: () => {
         try {
           return runtime.host;
+        } catch {
+          return null;
+        }
+      },
+      hub: () => {
+        try {
+          return runtime.hub;
         } catch {
           return null;
         }

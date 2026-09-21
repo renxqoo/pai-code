@@ -110,7 +110,8 @@ function ProviderEditor({
     const failure = await onSubmit(payload.input);
     setSaving(false);
     if (failure !== null) {
-      setError(copy.settings.formFailedReason(failure));
+      // failure 已是 controller 侧按 kind 查表的最终文案（provider 专属三 kind 有专门指引句）
+      setError(failure);
       return;
     }
     setApiKey("");

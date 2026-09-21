@@ -1,6 +1,7 @@
 import type { ApiError, ApiMethod, ApiOutcome, ApiParams, ProviderConfigView, SkillView } from '@paiapp/contracts';
 import { isApiFormat, normalizeLegacyPermMode } from '@paiapp/contracts';
 import { appError } from '@paiapp/api';
+import type { SettingsCommands } from '@paiapp/api';
 
 import { HUB_API_FORMATS, envVarNameForProvider } from './models-config';
 import { createProviderProbe } from './provider-probe';
@@ -9,7 +10,7 @@ import type { createFileSettings, ProviderKeyStore } from './file-settings';
 
 /**
  * 设置与目录路由组（api-routes 的本地配置子集）：providers/技能目录/hub 设置/偏好写。
- * 技能清单与启停走 hub 命令（skills/list、skills/set_enabled——hub 是
+ * 技能清单与启停走 hub settings 域（skills/list、skills/set_enabled——hub 是
  * ~/.x-harness/skills 布局与 hub-settings skills.disabled 名单的单一写者）；
  * 视图构建器（providersView/preferencesView）随路由一并产出。
  */
@@ -18,22 +19,13 @@ type Handler<M extends ApiMethod> = (params: ApiParams<M>) => Promise<ApiOutcome
 
 type FileSettings = ReturnType<typeof createFileSettings>;
 
-export type SettingsCommand = (
-  cmd:
-    | { type: 'skills/list' }
-    | { type: 'skills/set_enabled'; name: string; enabled: boolean }
-    | { type: 'settings/get' }
-    | { type: 'settings/set'; key: string; value: unknown }
-    | { type: 'get_models' },
-) => Promise<{ ok: true; data: unknown } | { ok: false; error: ApiError }>;
-
 export type SettingsRoutesDeps = {
   settings: FileSettings;
   keyStore: ProviderKeyStore;
   /** provider 配置变更后重启 host（providers.json 只在启动期读入）。 */
   restartHost: () => Promise<void>;
-  /** hub 命令通道（技能/设置/模型目录命令；host 未启动时各路由显式降级）。 */
-  command: SettingsCommand;
+  /** hub settings 域 accessor（惰性：路由构造早于 runtime.start；host 未启动时各路由显式降级）。 */
+  settingsCommands: () => SettingsCommands;
   /** 拒绝/失败落诊断日志（保存失败零日志曾致排障无据可查）。 */
   onReject?: (message: string) => void;
 };
@@ -70,8 +62,8 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
 
   /** 技能清单（hub skills/list 收窄；host 未启动降级空表）。 */
   const skillsList = async (): Promise<SkillView[]> => {
-    const result = await deps.command({ type: 'skills/list' }).catch(() => null);
-    if (result === null || !result.ok) return [];
+    const result = await deps.settingsCommands().listSkills({});
+    if (!result.ok) return [];
     const raw = (result.data as { skills?: unknown }).skills;
     if (!Array.isArray(raw)) return [];
     const out: SkillView[] = [];
@@ -105,7 +97,7 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
   } = {
     'skills/list': async () => ({ ok: true as const, data: await skillsList() }),
     'skills/setEnabled': async (params) => {
-      const result = await deps.command({ type: 'skills/set_enabled', name: params.name, enabled: params.enabled });
+      const result = await deps.settingsCommands().setSkillEnabled({ name: params.name, enabled: params.enabled });
       if (!result.ok) return fail(result.error);
       return { ok: true as const, data: await skillsList() };
     },
@@ -115,12 +107,12 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
       const collides = deps.settings
         .listProviders()
         .some((provider) => provider.name !== params.name && envVarNameForProvider(provider.name) === envName);
-      if (collides) return failLogged(appError('invalid_params', 'provider_name_conflict'));
+      if (collides) return failLogged(appError('provider_name_conflict'));
       // api 词表校验（providers.json protocol 同源：词表外语形写盘会被目录剔除降级）
-      if (!isApiFormat(params.api)) return failLogged(appError('invalid_params', 'provider_api_unsupported'));
+      if (!isApiFormat(params.api)) return failLogged(appError('provider_api_unsupported'));
       // baseUrl 形状校验（无 scheme 的档案被目录整档剔除且零告警——写前显式拒绝）
       if (!params.baseUrl.startsWith('http://') && !params.baseUrl.startsWith('https://')) {
-        return failLogged(appError('invalid_params', 'provider_baseurl_invalid'));
+        return failLogged(appError('provider_baseurl_invalid'));
       }
       // 同名内置预设 = 用户覆盖（x-harness 整档覆盖语义 + 消歧 custom 优先）：用户
       // 配置胜出、删渠道即恢复内置——不再拒名（T39 实施轮用户裁决：app 无「预设挡人」面）
@@ -146,7 +138,7 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
         : fail(outcome.error);
     },
     'app/hubSettings': async () => {
-      const result = await deps.command({ type: 'settings/get' });
+      const result = await deps.settingsCommands().get({});
       if (!result.ok) return fail(result.error);
       const values = (result.data as { values?: Record<string, unknown> }).values ?? {};
       const mode = values['permission.defaultMode'];
@@ -167,16 +159,14 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
     'app/setHubSettings': async (params) => {
       // null = 不写该键（「未设置」在 hub 侧无协议表达——settings/set 无删除语义）
       if (params.permissionDefaultMode !== undefined && params.permissionDefaultMode !== null) {
-        const result = await deps.command({
-          type: 'settings/set',
+        const result = await deps.settingsCommands().set({
           key: 'permission.defaultMode',
           value: params.permissionDefaultMode,
         });
         if (!result.ok) return fail(result.error);
       }
       if (params.thinkingDefault !== undefined && params.thinkingDefault !== null) {
-        const result = await deps.command({
-          type: 'settings/set',
+        const result = await deps.settingsCommands().set({
           key: 'thinking.default',
           value: params.thinkingDefault,
         });

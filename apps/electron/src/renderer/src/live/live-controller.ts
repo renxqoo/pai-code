@@ -2,7 +2,7 @@ import type { AgentDefinition, CommandView, ImagePayload, PreferencesView, Provi
 import { isSettableThinkingLevel } from '@paiapp/contracts';
 
 import { copy } from '@/strings';
-import { errorText } from '@/lib/error-text';
+import { copyOfError } from '@/lib/error-text';
 import { queuedDrafts } from '@/composer/queued-drafts';
 import type { BridgeClient } from './client-invoke';
 import { createRuntimeController } from './runtime-controller';
@@ -218,7 +218,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       }
       if (disposed) return;
       if (outcome !== null && !outcome.ok) {
-        store.getState().bootstrapFailed(errorText(outcome.error));
+        store.getState().bootstrapFailed(copyOfError(outcome.error));
         return;
       }
       if (outcome === null) return;
@@ -300,7 +300,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
           ? { thinkingLevel: input.thinkingLevel }
           : {}),
       });
-      if (!outcome.ok) return { ok: false, reason: errorText(outcome.error) };
+      if (!outcome.ok) return { ok: false, reason: copyOfError(outcome.error) };
       const { threadId } = outcome.data;
       activate(threadId);
       await hydrateFull(threadId).catch(() => undefined);
@@ -381,8 +381,8 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
         return;
       }
       const outcome = await client.invoke('session/setModel', { threadId, provider, modelId });
-      // hub 拒绝（如模型不在目录）：用户选择未生效，errorText 通报（与思考档同型）
-      if (!outcome.ok) store.getState().pushNotice(copy.flow.modelRejected(errorText(outcome.error)));
+      // hub 拒绝（如模型不在目录）：用户选择未生效，查表文案通报（与思考档同型）
+      if (!outcome.ok) store.getState().pushNotice(copy.flow.modelRejected(copyOfError(outcome.error)));
     },
     async selectThinking(threadId: string, level: string): Promise<void> {
       // 空舞台守卫：无活跃会话时菜单仍可见，点击必须得到可行动反馈而非 schema 密文
@@ -396,8 +396,8 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
         return;
       }
       const outcome = await client.invoke('session/setThinking', { threadId, level });
-      // hub 拒绝（如模型不支持该档位）：用户选择未生效，errorText 通报
-      if (!outcome.ok) store.getState().pushNotice(copy.flow.thinkingRejected(errorText(outcome.error)));
+      // hub 拒绝（如模型不支持该档位）：用户选择未生效，查表文案通报
+      if (!outcome.ok) store.getState().pushNotice(copy.flow.thinkingRejected(copyOfError(outcome.error)));
     },
     ...settingsPorts,
     async steerSubagent(threadId: string, agentId: string, message: string): Promise<string | null> {
@@ -415,13 +415,13 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     },
     async upsertAgentDefinition(definition: AgentDefinition, previous: { name: string; scope: 'user' | 'project'; project: string | null } | null): Promise<string | null> {
       const outcome = await client.invoke('agent/upsert', { definition, previous });
-      if (!outcome.ok) return errorText(outcome.error);
+      if (!outcome.ok) return copyOfError(outcome.error);
       await refreshAgentDefinitions();
       return null;
     },
     async removeAgentDefinition(key: { name: string; scope: 'user' | 'project'; project: string | null }): Promise<string | null> {
       const outcome = await client.invoke('agent/remove', key);
-      if (!outcome.ok) return errorText(outcome.error);
+      if (!outcome.ok) return copyOfError(outcome.error);
       await refreshAgentDefinitions();
       return null;
     },
@@ -436,7 +436,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     },
     async setSkillEnabled(name: string, enabled: boolean): Promise<{ ok: true; data: SkillView[] } | { ok: false; reason: string }> {
       const outcome = await client.invoke('skills/setEnabled', { name, enabled });
-      if (!outcome.ok) return { ok: false, reason: errorText(outcome.error) };
+      if (!outcome.ok) return { ok: false, reason: copyOfError(outcome.error) };
       store.setState({ skills: outcome.data });
       return { ok: true, data: outcome.data };
     },
@@ -526,7 +526,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     checkoutGitBranch: (cwd: string, branch: string, create: boolean) => checkoutGitBranch(client, cwd, branch, create),
     async upsertProvider(input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; apiKey?: string }): Promise<string | null> {
       const outcome = await client.invoke('provider/upsert', input);
-      if (!outcome.ok) return errorText(outcome.error);
+      if (!outcome.ok) return copyOfError(outcome.error);
       store.setState({ providers: outcome.data });
       const models = await client.invoke('model/list', {});
       if (models.ok) store.setState({ models: models.data });
@@ -534,7 +534,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     },
     async removeProvider(name: string): Promise<string | null> {
       const outcome = await client.invoke('provider/remove', { name });
-      if (!outcome.ok) return errorText(outcome.error);
+      if (!outcome.ok) return copyOfError(outcome.error);
       store.setState({ providers: outcome.data });
       const models = await client.invoke('model/list', {});
       if (models.ok) store.setState({ models: models.data });
@@ -548,7 +548,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     },
     async testProvider(name: string, modelId: string | undefined): Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }> {
       const outcome = await client.invoke('provider/test', modelId === undefined ? { name } : { name, modelId });
-      return outcome.ok ? { ok: true, latencyMs: outcome.data.latencyMs } : { ok: false, reason: errorText(outcome.error) };
+      return outcome.ok ? { ok: true, latencyMs: outcome.data.latencyMs } : { ok: false, reason: copyOfError(outcome.error) };
     },
     async refreshStats(threadId: string): Promise<void> {
       const outcome = await client.invoke('session/stats', { threadId });

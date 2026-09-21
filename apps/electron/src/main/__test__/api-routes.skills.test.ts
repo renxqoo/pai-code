@@ -97,6 +97,7 @@ async function makeRoutes(skills: Array<SkillsEntry | string>, options: { startH
     pickDirectory: () => Promise.resolve(null),
     monitor: createRuntimeMonitor({
       host: () => null,
+      hub: () => null,
       appMetrics: () => ({ rssBytes: null, cpuPercent: null }),
       systemMemory: () => ({ totalBytes: null, availableBytes: null }),
       idleRecycleMinutes: () => 5,

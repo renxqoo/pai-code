@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
+import { createHubApi } from '@paiapp/api';
 import type {
   HostCommandOutcome,
   HostDiagnostics,
@@ -55,6 +56,8 @@ function makePort(overrides: Partial<Record<PaiCommand['type'], HostCommandOutco
 function makeDeps(host: HostProcessPort | null, polled: WorkerRowView[] = []): RuntimeMonitorDeps {
   return {
     host: () => host,
+    // hub 绑定 fake port 的 request 面（生产形态：pai-runtime 装配的门面同构）
+    hub: () => (host === null ? null : createHubApi({ request: (cmd, timeoutMs) => host.request(cmd, timeoutMs) })),
     appMetrics: () => ({ rssBytes: 100, cpuPercent: 1.5 }),
     systemMemory: () => ({ totalBytes: 1000, availableBytes: 400 }),
     idleRecycleMinutes: () => 5,

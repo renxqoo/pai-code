@@ -58,13 +58,6 @@ export const enSettings = {
     confirmRemove: 'Confirm remove',
     formIncomplete: 'Name, base URL and at least one model id are required.',
     formFailed: 'Save failed. Check the values and try again.',
-    formFailedReason: (reason: string): string => {
-      if (reason === 'provider_name_conflict') return 'Channel name collides with an existing channel on its key variable — pick another name.';
-      if (reason === 'provider_api_unsupported') return 'Protocol unsupported (Anthropic / OpenAI compatible only).';
-      if (reason === 'provider_baseurl_invalid') return 'Base URL must start with http:// or https://.';
-      if (reason.startsWith('host_unavailable')) return 'Host not ready yet — try again shortly.';
-      return `Save failed (${reason}). Check and retry.`;
-    },
     runtimeTitle: 'Runtime',
     runtimeDesc: 'System monitoring, worker management and diagnostics. Polls live while this section is open.',
     runtimeAttention: 'Attention: host not ready or a worker faulted',

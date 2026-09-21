@@ -12,7 +12,7 @@
     "fmt:check": "oxfmt --check .",
     "typecheck": "bun scripts/typecheck.ts",
     "build": "bun run --filter '@paiapp/electron' build",
-    "test": "bun test",
+    "test": "bun scripts/coverage-gate.ts",
     "ci": "bun run lint && bun run typecheck && bun run build && bun run test"
   },
   "devDependencies": {

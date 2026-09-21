@@ -2,7 +2,7 @@ import type { AgentDefinition, ApiOutcome, CommandView, IdleRecycleMinutes, Imag
 import { thinkingLevelOfLabel } from '@paiapp/contracts';
 
 import { writeClipboard } from '@/lib/write-clipboard';
-import { errorText } from '@/lib/error-text';
+import { copyOfError } from '@/lib/error-text';
 import { copy } from '@/strings';
 import { entrySeqOf } from './entry-seq';
 import { parseModelKey, pickSessionModel } from './pick-session-model';
@@ -207,7 +207,8 @@ export function createWorkspaceActions(): WorkspaceActions {
       permissionMode: input.permissionMode,
     });
     if (!outcome.ok) {
-      pushNotice(copy.newTask.createFailed(outcome.reason));
+      // 失败文案已由 controller.createSession 经 errorCopy 查表定型（含思考档指引/宿主未就绪等分派）
+      pushNotice(outcome.reason);
       return { ok: false };
     }
     // 同目录新建任务 = 解除项目隐藏（移除项目的恢复通路）
@@ -502,7 +503,8 @@ export function createWorkspaceActions(): WorkspaceActions {
       if (cwd.length === 0) return;
       const outcome = await bridgeClient.invoke('shell/open', { cwd, target });
       if (!outcome.ok) {
-        pushNotice(outcome.error.kind === 'editor_not_found' ? copy.thread.openEditorMissing : copy.thread.openFailed(errorText(outcome.error)));
+        // editor_not_found 有更强的独立指引（不套「打开失败」外壳）；其余查表文案进外壳
+        pushNotice(outcome.error.kind === 'editor_not_found' ? copy.thread.openEditorMissing : copy.thread.openFailed(copyOfError(outcome.error)));
       }
     },
     copyText: async (text) => {

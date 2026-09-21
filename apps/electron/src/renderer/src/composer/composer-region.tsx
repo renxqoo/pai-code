@@ -5,7 +5,7 @@ import type { PermMode } from '@paiapp/contracts';
 
 import { CONVERSATION_COLUMN_CLASS } from '@/thread/conversation-column';
 import { baseNameOf } from '@/lib/project-dirs';
-import { errorText } from '@/lib/error-text';
+import { copyOfError } from '@/lib/error-text';
 import { copy } from '@/strings';
 import { queuedDrafts } from '@/composer/queued-drafts';
 import { submitQueuedDraft } from '@/composer/queued-submit';
@@ -119,7 +119,7 @@ function ComposerRegion(): React.JSX.Element {
         busyRef.current = false;
         setCheckingOut(false);
         if (!outcome.ok) {
-          liveStore.getState().pushNotice(copy.branch.failed(errorText(outcome.error)));
+          liveStore.getState().pushNotice(copyOfError(outcome.error));
           return;
         }
         uiStore.getState().bumpBranchRevision();
@@ -142,7 +142,7 @@ function ComposerRegion(): React.JSX.Element {
         busyRef.current = false;
         setCheckingOut(false);
         if (!outcome.ok) {
-          setBranchError(copy.branch.failed(errorText(outcome.error)));
+          setBranchError(copyOfError(outcome.error));
           return;
         }
         setDialog(null);

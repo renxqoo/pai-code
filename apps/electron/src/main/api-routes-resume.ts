@@ -1,6 +1,7 @@
 import type { ApiError, ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
 import type { SessionRow } from '@paiapp/contracts';
 import { appError } from '@paiapp/api';
+import type { ThreadCommands } from '@paiapp/api';
 
 import type { PaiRuntime } from './pai-runtime';
 
@@ -12,15 +13,13 @@ import type { PaiRuntime } from './pai-runtime';
 
 type Handler<M extends ApiMethod> = (params: ApiParams<M>) => Promise<ApiOutcome<M>>;
 
-type Command = Parameters<PaiRuntime['host']['request']>[0];
-
 type RegistryRow = SessionRow | null;
 
 /** 删行族：会话文件不可读/属旧布局/路径逃逸/状态冲突——占位不再反复失败（与对账同语义）。 */
 const VANISH_ERROR_KINDS: ReadonlySet<string> = new Set(['session_unreadable', 'io_failed', 'path_forbidden', 'state_conflict']);
 
 export function resumeRoutes(deps: {
-  command: (cmd: Command, timeoutMs?: number) => Promise<{ ok: true; data: unknown } | { ok: false; error: ApiError }>;
+  threadCommands: () => ThreadCommands;
   fail: (error: ApiError) => { ok: false; error: ApiError };
   runtime: PaiRuntime;
   audit: (message: string) => void;
@@ -32,13 +31,13 @@ export function resumeRoutes(deps: {
   'session/resume': Handler<'session/resume'>;
   'session/register': Handler<'session/register'>;
 } {
-  const { command, fail, runtime, audit, insideSessionsRoot, findRegistryRowByPath, fileMtimeMs, fillSessionMeta } = deps;
+  const { fail, runtime, audit, insideSessionsRoot, findRegistryRowByPath, fileMtimeMs, fillSessionMeta } = deps;
 
   /** thread/list 按 sessionPath 收养既有表项（resume 撞 already open 的回落路径）。 */
   const adoptExistingThread = async (
     sessionPath: string,
   ): Promise<{ threadId: string; cwd: string; sessionPath: string } | null> => {
-    const list = await command({ type: 'thread/list' });
+    const list = await deps.threadCommands().list();
     if (!list.ok) return null;
     const rows = Array.isArray(list.data) ? list.data : [];
     for (const row of rows) {
@@ -83,8 +82,7 @@ export function resumeRoutes(deps: {
       const known = findRegistryRowByPath(params.sessionPath);
       const trusted = params.trusted ?? known?.trusted ?? false;
       if (params.trusted !== undefined || known?.trusted === true) audit(`session_trusted:resume:${params.sessionPath}:${trusted}`);
-      const result = await command({
-        type: 'thread/resume',
+      const result = await deps.threadCommands().resume({
         sessionPath: params.sessionPath,
         trusted,
         ...(params.permissionMode !== undefined ? { permissionMode: params.permissionMode } : {}),
@@ -119,7 +117,7 @@ export function resumeRoutes(deps: {
       const known = findRegistryRowByPath(params.sessionPath);
       if (known === null) return fail(appError('unknown_session'));
       if (known.trusted === true) audit(`session_trusted:register:${params.sessionPath}:true`);
-      const result = await command({ type: 'thread/register', sessionPath: params.sessionPath, trusted: known.trusted ?? false });
+      const result = await deps.threadCommands().register({ sessionPath: params.sessionPath, trusted: known.trusted ?? false });
       // 文件已删（对账之后失效）：与 resume 同语义删行，占位不再反复失败
       if (!result.ok && VANISH_ERROR_KINDS.has(result.error.kind)) runtime.removeSession(known.threadId);
       if (!result.ok) return fail(result.error);

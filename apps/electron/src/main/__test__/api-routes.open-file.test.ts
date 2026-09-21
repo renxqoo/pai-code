@@ -55,7 +55,7 @@ function makeRoutes(work: string, openLocation: OpenLocation, fileRead: FileRead
     revealPath: () => undefined,
     pickDirectory: () => Promise.resolve(null),
     exportDiagnosticsBundle: () => work,
-    monitor: createRuntimeMonitor({ host: () => null, appMetrics: () => ({ rssBytes: null, cpuPercent: null }), systemMemory: () => ({ totalBytes: null, availableBytes: null }), idleRecycleMinutes: () => 5, appVersion: () => 'test' }),
+    monitor: createRuntimeMonitor({ host: () => null, hub: () => null, appMetrics: () => ({ rssBytes: null, cpuPercent: null }), systemMemory: () => ({ totalBytes: null, availableBytes: null }), idleRecycleMinutes: () => 5, appVersion: () => 'test' }),
     extraCwds: () => [project],
     openLocation,
     fileRead,

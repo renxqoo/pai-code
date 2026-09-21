@@ -60,8 +60,12 @@ export type AppErrorCode =
   | 'session_path_forbidden' | 'cwd_not_allowed' | 'cwd_forbidden' | 'cwd_not_found'
   | 'export_failed' | 'dialog_unavailable' | 'editor_not_found' | 'skill_not_found'
   | 'branch_exists' | 'invalid_branch' | 'dirty_worktree' | 'unknown_branch' | 'not_a_repo' | 'git_unavailable'
-  | 'empty_message' | 'no_active_session' | 'resume_failed' | 'bootstrap_crashed' | 'compact_images_rejected';
+  | 'empty_message' | 'no_active_session' | 'resume_failed' | 'bootstrap_crashed' | 'compact_images_rejected'
+  | 'provider_name_conflict' | 'provider_api_unsupported' | 'provider_baseurl_invalid';
 export type AppError = { kind: AppErrorCode; message?: string };
 
 /** 跨 IPC 的统一错误判别联合（渲染层文案查表按 kind 分派——Record 键集编译期封闭） */
 export type ApiError = HubError | UnregisteredCodeError | TransientError | AppError;
+
+/** ApiError 判别键全集（渲染层文案查表 Record 的键集：新增 kind 不加键不编译） */
+export type ApiErrorKind = ApiError['kind'];
