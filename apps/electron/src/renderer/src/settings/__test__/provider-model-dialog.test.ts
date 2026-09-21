@@ -221,7 +221,7 @@ describe("数字输入契约（留空回落默认 / 正整数）", () => {
 });
 
 describe("保存装配（buildProviderModel）", () => {
-  test("新建：id 取 trim 值，reasoning 缺省 false，留空数字不写键", () => {
+  test("症状回归「无法开始会话（model does not support thinking）」：新建缺省 reasoning=true（x-harness 目录缺省同值——悲观缺省会把真支持思考的模型写成能力缺失）", () => {
     expect(
       buildProviderModel({
         initial: null,
@@ -232,15 +232,15 @@ describe("保存装配（buildProviderModel）", () => {
       }),
     ).toEqual({
       id: "glm-5",
-      reasoning: false,
+      reasoning: true,
       vision: true,
     });
   });
 
-  test("编辑：reasoning 原样保留，非空数字写入对应键", () => {
+  test("编辑：reasoning 原样保留（显式关不因缺省翻转），非空数字写入对应键", () => {
     expect(
       buildProviderModel({
-        initial: { id: "glm-4.6", reasoning: true, vision: false },
+        initial: { id: "glm-4.6", reasoning: false, vision: false },
         id: "glm-4.6",
         contextWindow: "1000000",
         maxTokens: "128000",
@@ -248,7 +248,7 @@ describe("保存装配（buildProviderModel）", () => {
       }),
     ).toEqual({
       id: "glm-4.6",
-      reasoning: true,
+      reasoning: false,
       vision: true,
       contextWindow: 1000000,
       maxTokens: 128000,

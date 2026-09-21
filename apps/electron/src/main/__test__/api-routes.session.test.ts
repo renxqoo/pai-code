@@ -53,7 +53,10 @@ function makeProgrammableHost(reply: (command: PaiCommand, callIndexOfType: numb
 
 const dirs: string[] = [];
 
-async function makeRoutes(reply: (command: PaiCommand, callIndexOfType: number) => HostCommandOutcome) {
+async function makeRoutes(
+  reply: (command: PaiCommand, callIndexOfType: number) => HostCommandOutcome,
+  rejectLog?: string[],
+) {
   const work = mkdtempSync(join(tmpdir(), 'pai-session-route-'));
   dirs.push(work);
   const agentDir = join(work, 'agent');
@@ -88,12 +91,26 @@ async function makeRoutes(reply: (command: PaiCommand, callIndexOfType: number) 
     revealPath: () => undefined,
     pickDirectory: () => Promise.resolve(null),
     exportDiagnosticsBundle: () => work,
+    ...(rejectLog !== undefined ? { onRouteRejected: (message: string) => rejectLog.push(message) } : {}),
     monitor: createRuntimeMonitor({ host: () => null, appMetrics: () => ({ rssBytes: null, cpuPercent: null }), systemMemory: () => ({ totalBytes: null, availableBytes: null }), idleRecycleMinutes: () => 5, appVersion: () => 'test' }),
   });
   return { routes, runtime, sent: host.sent, agentDir };
 }
 
 describe('session/prompt 受理窗口竞态（症状：streaming 中发消息偶发失败）', () => {
+  test('症状回归：线上不可观测——start/prompt 路由失败落诊断日志（session_*_rejected）', async () => {
+    const rejectLog: string[] = [];
+    const { routes } = await makeRoutes((command) => {
+      if (command.type === 'prompt' || command.type === 'thread/start') return { ok: false, error: 'no dial' };
+      return { ok: true, data: {} };
+    }, rejectLog);
+    const promptOutcome = (await routes.invoke('session/prompt', { threadId: 't1', message: 'hi' })) as { ok: boolean };
+    expect(promptOutcome.ok).toBe(false);
+    const startOutcome = (await routes.invoke('session/start', { cwd: '/tmp' })) as { ok: boolean };
+    expect(startOutcome.ok).toBe(false);
+    expect(rejectLog).toEqual(['session_prompt_rejected:t1:no dial', 'session_start_rejected:no dial']);
+  });
+
   test("症状回归：'streamingBehavior required' 恰一次自动降级重试（补 followUp），重试成功不上抛", async () => {
     const { routes, sent } = await makeRoutes((command, index) => {
       if (command.type === 'prompt') {

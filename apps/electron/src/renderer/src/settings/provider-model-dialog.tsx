@@ -26,7 +26,8 @@ type ProviderModelDialogProps = {
 
 /**
  * 表单态 → ProviderModel：id 取 trim 后值；留空数字不写键（= 不设置，回落运行时默认）；
- * reasoning 原样保留（行上开关维护，不在弹窗内）；调用前须先过 canSave 校验。
+ * reasoning 新建缺省 true（与 x-harness 目录缺省同值——能力事实乐观缺省；显式关由
+ * 行上开关维护并经 initial 原样保留）；vision 在弹窗内维护；调用前须先过 canSave 校验。
  */
 export function buildProviderModel(input: {
   initial: ProviderModel | null;
@@ -39,7 +40,7 @@ export function buildProviderModel(input: {
   const maxTokens = parsePositiveIntOrEmpty(input.maxTokens);
   return {
     id: input.id.trim(),
-    reasoning: input.initial?.reasoning ?? false,
+    reasoning: input.initial?.reasoning ?? true,
     vision: input.vision,
     ...(contextWindow.ok && contextWindow.value !== undefined
       ? { contextWindow: contextWindow.value }

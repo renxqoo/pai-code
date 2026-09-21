@@ -81,8 +81,20 @@ function ThreadStage(): React.JSX.Element {
           now={now}
           loading={executing}
           bottomInset={bottomInset}
-          emptyTitle={thread.hydrateFailed ? copy.flow.hydrateFailedTitle : copy.thread.emptyTitle}
-          emptyHint={thread.hydrateFailed ? copy.flow.hydrateFailedHint : copy.thread.emptyHint}
+          emptyTitle={
+            activeSession === undefined
+              ? copy.thread.noSessionTitle
+              : thread.hydrateFailed
+                ? copy.flow.hydrateFailedTitle
+                : copy.thread.emptyTitle
+          }
+          emptyHint={
+            activeSession === undefined
+              ? copy.thread.noSessionHint
+              : thread.hydrateFailed
+                ? copy.flow.hydrateFailedHint
+                : copy.thread.emptyHint
+          }
           onRetryHydrate={thread.hydrateFailed ? workspaceActions.retryHydration : undefined}
           retryLabel={copy.thread.retryHydration}
           onOpenDiff={onOpenDiff}

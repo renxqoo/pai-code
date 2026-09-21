@@ -46,5 +46,11 @@ describe('提交失败通知（D15：images 硬拒的友好文案）', () => {
     expect(await workspaceActions.submitDraft('文', [])).toBe('Unknown threadId');
     expect(store.getState().notices.at(-1)?.text).toBe(copy.flow.sendFailed('Unknown threadId'));
   });
+
+  test('空舞台投递（no_active_session）→ noActiveSession 可行动文案，不透传 schema 密文', async () => {
+    jest.spyOn(controller, 'submitDraft').mockResolvedValueOnce('no_active_session');
+    expect(await workspaceActions.submitDraft('写个脚本', [])).toBe('no_active_session');
+    expect(store.getState().notices.map((notice) => notice.text)).toEqual([copy.flow.noActiveSession]);
+  });
 });
 

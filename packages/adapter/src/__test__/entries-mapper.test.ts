@@ -28,6 +28,48 @@ describe('mapEntries（x-harness WAL 转写真相源）', () => {
     expect(cursor).toBe(2);
   });
 
+  test('症状回归「首条消息前泄漏快照信封」：内核尾部快照帧整帧跳过（cursor 仍推进），首条用户消息成为第一个条目', () => {
+    const envelope = [
+      '<snapshot kind="agent-types">',
+      'This snapshot supersedes earlier snapshots of this kind.',
+      '<system-reminder>',
+      'Available agent types:',
+      '- claude — 兜底通用代理。',
+      '</system-reminder>',
+      '</snapshot>',
+    ].join('\n');
+    const { items, cursor } = mapEntries({
+      entries: [
+        row(1, 100, { type: 'user/message', turn: 0, step: 0, surfaceOp: 'append', content: [{ type: 'text', text: envelope }] }),
+        row(2, 200, { type: 'user/message', turn: 1, step: 0, surfaceOp: 'append', content: [{ type: 'text', text: '你好' }] }),
+      ],
+    });
+    expect(items).toEqual([
+      { kind: 'user', id: 'seq-2', text: '你好', origin: 'user', images: [], at: 200 },
+    ]);
+    expect(cursor).toBe(2);
+  });
+
+  test('快照过滤 kind 无关（date/尾部重注入副本同跳过）；信封形但次行无作废声明的用户消息不误吞', () => {
+    const dateEnvelope = [
+      '<snapshot kind="date">',
+      'This snapshot supersedes earlier snapshots of this kind.',
+      "Today's date: 2026-09-21 (UTC+8)",
+      '</snapshot>',
+    ].join('\n');
+    const fakeEnvelope = ['<snapshot kind="agent-types">', '看起来像信封的用户消息', '</snapshot>'].join('\n');
+    const { items } = mapEntries({
+      entries: [
+        row(1, 1, { type: 'user/message', turn: 0, step: 0, surfaceOp: 'append', content: [{ type: 'text', text: dateEnvelope }] }),
+        row(2, 2, { type: 'user/message', turn: 1, step: 0, surfaceOp: 'append', content: [{ type: 'text', text: '你好' }] }),
+        row(3, 3, { type: 'user/message', turn: 2, step: 0, surfaceOp: 'append', content: [{ type: 'text', text: dateEnvelope }] }),
+        row(4, 4, { type: 'user/message', turn: 3, step: 0, surfaceOp: 'append', content: [{ type: 'text', text: fakeEnvelope }] }),
+      ],
+    });
+    expect(items.map((item) => item.id)).toEqual(['seq-2', 'seq-4']);
+    expect(items[1]?.kind === 'user' && items[1]['text']).toBe(fakeEnvelope);
+  });
+
   test('垃圾图片块丢弃（data/mediaType 空缺），文本不受影响', () => {
     const { items } = mapEntries({
       entries: [

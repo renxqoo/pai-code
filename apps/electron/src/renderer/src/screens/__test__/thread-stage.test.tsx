@@ -62,4 +62,13 @@ describe('ThreadStage 空态（T27：水化失败不静默）', () => {
     expect(view.container.textContent).not.toContain(copy.thread.retryHydration);
     view.unmount();
   });
+
+  test('无会话空舞台：新建任务引导文案，不承诺「描述即可开始」（发送无定址目标）', () => {
+    const view = render(<ThreadStage />);
+    expect(view.container.textContent).toContain(copy.thread.noSessionTitle);
+    expect(view.container.textContent).toContain(copy.thread.noSessionHint);
+    // 「描述…即可开始」只属于真实会话的空轮次；无会话状态下它是空头支票
+    expect(view.container.textContent).not.toContain(copy.thread.emptyHint);
+    view.unmount();
+  });
 });

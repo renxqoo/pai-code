@@ -73,6 +73,9 @@ export const zh: typeof en = {
     emptyTitle: '还没有消息',
     retryHydration: '重试加载',
     emptyHint: '描述一个改动、一个问题或一个任务，即可开始。',
+    /** 无会话空舞台（工作区无任何会话）：输入卡的全部会话域动作都无定址目标 */
+    noSessionTitle: '还没有会话',
+    noSessionHint: '新建任务（⌘N）开始第一段对话。',
     reloadTrusted: '以受信模式重开',
     reloadUntrusted: '以非受信模式重开',
     reloadTrustFailed: '重开会话失败，请重试。',
@@ -133,6 +136,10 @@ export const zh: typeof en = {
     thinkingInvalid: '该思考档不可用。',
     /** 思考档写入被 hub 拒绝（reason 为 hub 错误文案） */
     thinkingRejected: (reason: string): string => `思考档未应用：${reason}。`,
+    /** 会话域写动作无定址目标（工作区无任何会话时的空舞台） */
+    noActiveSession: '当前没有进行中的会话，请先新建任务（⌘N）。',
+    /** 会话模型切换被 hub 拒绝（reason 为 hub 错误文案） */
+    modelRejected: (reason: string): string => `模型未切换：${reason}。`,
     /** 子代理状态词（running|idle|stopped → 工作中/空闲/已归档） */
     subagentBusy: '工作中',
     subagentIdle: '空闲',
@@ -278,6 +285,7 @@ export const zh: typeof en = {
     createFailed: (reason: string): string => {
       if (reason === 'host_unavailable') return 'agent 宿主未就绪（正在启动或重启），请稍后重试。';
       if (reason.startsWith('Model not found')) return '所选模型不可用，请在设置中检查 Provider 配置。';
+      if (/thinking/i.test(reason)) return '所选思考档被拒绝：该模型未声明支持思考——在渠道设置的模型行打开「思考」开关，或把思考档调回「默认」。';
       if (/cwd|directory|absolute|exist/i.test(reason)) return '无法开始会话，请检查目录后重试。';
       return `无法开始会话（${reason}），请重试。`;
     },

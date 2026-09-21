@@ -13,6 +13,9 @@ export interface LazyResume {
   readonly resumeByPath: (sessionPath: string, trusted?: boolean) => Promise<string | null>;
   /** parked 占位 → 恢复返回可用 threadId；非 parked 原样返回（dead 由 hub 写命令自愈）；失败 null。 */
   readonly ensureLiveSession: (threadId: string) => Promise<string | null>;
+  /** 强制重锚：绕过乐观登记直接 resume（hub 对已打开文件回 already open，由主进程
+   *  resume 路由收养既有表项——两条出路都得到可用 id）。僵尸视图自愈专用。 */
+  readonly forceResume: (sessionPath: string) => Promise<string | null>;
   /** 显式激活会话（只读激活同一入口；唤醒换 id 的激活由 submitDraft 处理）。 */
   readonly activate: (threadId: string) => void;
   /** host 进程消亡：乐观登记的「已恢复」随 worker 全灭失效。 */
@@ -75,6 +78,7 @@ export function createLazyResume(client: BridgeClient, store: LiveStore): LazyRe
   return {
     resumeByPath,
     ensureLiveSession,
+    forceResume: (sessionPath: string) => attemptResume(sessionPath),
     activate,
     invalidate: () => {
       resumedByPath.clear();

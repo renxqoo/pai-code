@@ -74,7 +74,8 @@ export interface ApiRouteDeps {
   monitor: RuntimeMonitor;
   /** 档位 hub 同步失败落档钩子（监督日志 → 监控时间线）。 */
   onPolicySyncFailed?: (minutes: number, reason: string) => void;
-  /** 设置路由拒绝/失败落诊断日志（api-routes 装配层接主进程 log）。 */
+  /** 路由拒绝/失败落诊断日志（api-routes 装配层接主进程 log；设置域与
+   *  会话创建/投递域共用的可观测面——线上症状取证单一入口）。 */
   onRouteRejected?: (message: string) => void;
   /** 诊断包落盘（装配层注入：真实 fs + reveal；测试注入替身）。 */
   exportDiagnosticsBundle: () => string;
@@ -270,7 +271,10 @@ export function createApiRoutes(deps: ApiRouteDeps) {
         ...(params.permissionMode !== undefined ? { permissionMode: params.permissionMode } : {}),
         ...(params.thinkingLevel !== undefined ? { thinkingLevel: params.thinkingLevel } : {}),
       });
-      if (!result.ok) return fail(result.reason);
+      if (!result.ok) {
+        deps.onRouteRejected?.(`session_start_rejected:${result.reason}`);
+        return fail(result.reason);
+      }
       const data = result.data as { threadId?: string; cwd?: string; sessionPath?: string | null };
       const threadId = data.threadId ?? '';
       if (threadId.length === 0) return fail('malformed_response');
@@ -327,7 +331,10 @@ export function createApiRoutes(deps: ApiRouteDeps) {
       if (!result.ok && params.streamingBehavior === undefined && /streamingBehavior required/.test(result.reason)) {
         result = await send('followUp');
       }
-      if (!result.ok) return fail(result.reason);
+      if (!result.ok) {
+        deps.onRouteRejected?.(`session_prompt_rejected:${params.threadId}:${result.reason}`);
+        return fail(result.reason);
+      }
       void runtime.autoTitleOnPrompt(params.threadId, params.message).catch(() => undefined);
       return { ok: true as const, data: null };
     },

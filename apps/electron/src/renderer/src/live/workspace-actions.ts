@@ -170,6 +170,11 @@ function notifySubmitFailure(reason: string | null): void {
     pushNotice(copy.flow.resumeFailed);
     return;
   }
+  // 空舞台（无活跃会话）投递：给可行动去向，不透传 schema 密文
+  if (reason === 'no_active_session') {
+    pushNotice(copy.flow.noActiveSession);
+    return;
+  }
   // hub 能力门/量限的友好文案（细节原文对用户无行动价值；其余 reason 原样透传）
   if (reason.startsWith('invalid images: model does not accept images')) {
     pushNotice(copy.flow.imagesDenied);
@@ -409,6 +414,11 @@ export function createWorkspaceActions(): WorkspaceActions {
     checkoutGitBranch: (cwd, branch, create) => controller.checkoutGitBranch(cwd, branch, create),
     runBash: async (command) => {
       const reason = await controller.runBash(activeThreadOf(), command);
+      // 空舞台（无活跃会话）直执行：给可行动去向，不透传 schema 密文
+      if (reason === 'no_active_session') {
+        pushNotice(copy.flow.noActiveSession);
+        return reason;
+      }
       if (reason !== null) pushNotice(copy.flow.bashFailed(reason));
       return reason;
     },

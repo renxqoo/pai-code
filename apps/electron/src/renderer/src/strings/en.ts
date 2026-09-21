@@ -72,6 +72,9 @@ export const en = {
     emptyTitle: 'No messages yet',
     retryHydration: 'Retry',
     emptyHint: 'Describe a change, a question, or a task to get started.',
+    /** 无会话空舞台（工作区无任何会话）：输入卡的全部会话域动作都无定址目标 */
+    noSessionTitle: 'No sessions yet',
+    noSessionHint: 'Start a new task (⌘N) to begin.',
     reloadTrusted: 'Reload as trusted',
     reloadUntrusted: 'Reload as untrusted',
     reloadTrustFailed: 'Reloading the conversation failed. Try again.',
@@ -132,6 +135,10 @@ export const en = {
     thinkingInvalid: 'That thinking level is not available.',
     /** 思考档写入被 hub 拒绝（reason 为 hub 错误文案） */
     thinkingRejected: (reason: string): string => `Thinking level not applied: ${reason}.`,
+    /** 会话域写动作无定址目标（工作区无任何会话时的空舞台） */
+    noActiveSession: 'No active session — start a new task first (⌘N).',
+    /** 会话模型切换被 hub 拒绝（reason 为 hub 错误文案） */
+    modelRejected: (reason: string): string => `Model not applied: ${reason}.`,
     /** 子代理状态词（running|idle|stopped → 工作中/空闲/已归档） */
     subagentBusy: 'Working',
     subagentIdle: 'Idle',
@@ -286,6 +293,7 @@ export const en = {
     createFailed: (reason: string): string => {
       if (reason === 'host_unavailable') return 'The agent host is not ready (starting or restarting). Try again shortly.';
       if (reason.startsWith('Model not found')) return 'The selected model is unavailable. Check the provider configuration in Settings.';
+      if (/thinking/i.test(reason)) return 'The selected thinking level was rejected: the model does not declare reasoning support — turn on the "Reasoning" toggle on its model row in channel settings, or set effort back to Default.';
       if (/cwd|directory|absolute|exist/i.test(reason)) return 'Could not start the conversation. Check the directory and try again.';
       return `Could not start the conversation (${reason}). Try again.`;
     },

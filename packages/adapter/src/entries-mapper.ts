@@ -3,6 +3,7 @@ import type { HistoryItem } from '@paiapp/contracts';
 import { assistantText, assistantThinking, assistantToolCalls, flattenUserText, toolResultText, userImages } from './content';
 import { previewArgs } from './args-preview';
 import { diffFromWriteArgs } from './diff-extract';
+import { isSnapshotFrame } from './snapshot-frame';
 import { subagentsField } from './subagent-spawns';
 
 /**
@@ -12,10 +13,12 @@ import { subagentsField } from './subagent-spawns';
  * 分组语义：tool/result 事件并入其 callId 所属的前一条 assistant 条目（tool/call
  * 与 assistant/message 的 tool_use 块同源——tool_use 已带完整参数，tool/call 到达时
  * 仅补齐尚未落 message 的调用面）；直执行 bash 以 user 消息信封
- * （`[bash] $ <cmd>\n<output>`）落 WAL，按前缀还原；其余事件（turn/*、step/*、
- * system/message、request/*、llm/retry、agent/inbox/spliced、autocompact/*、
- * todo/snapshot、session/meta、session/end-seed、compaction/*、command/*）为
- * 元数据/账本域，不产生渲染条目（cursor 仍推进——按行消费，不按渲染条目消费）。
+ * （`[bash] $ <cmd>\n<output>`）落 WAL，按前缀还原；user/message 域内的内核尾部
+ * 快照信封帧（模型上下文而非对话内容，谓词见 snapshot-frame.ts）整帧跳过；
+ * 其余事件（turn/*、step/*、system/message、request/*、llm/retry、
+ * agent/inbox/spliced、autocompact/*、todo/snapshot、session/meta、
+ * session/end-seed、compaction/*、command/*）为元数据/账本域，不产生渲染条目
+ * （cursor 仍推进——按行消费，不按渲染条目消费）。
  */
 
 const BASH_ENVELOPE = '[bash] $ ';
@@ -46,6 +49,9 @@ export function mapEntries(data: unknown): { items: HistoryItem[]; cursor: numbe
     const type = event['type'];
 
     if (type === 'user/message') {
+      // 内核尾部快照信封帧（agent-types/date/project-instructions/技能清单）：模型上下文
+      // 非对话内容，整帧跳过（cursor 已推进；与内核 isSnapshotNode 同谓词，kind 无关）
+      if (isSnapshotFrame(event)) continue;
       const text = flattenUserText(event['content']);
       const bashItem = bashItemOf(id, at, text);
       const item = bashItem ?? { kind: 'user', id, text, origin: 'user', at, images: userImages(event['content']) } as HistoryItem;

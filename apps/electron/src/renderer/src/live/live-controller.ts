@@ -1,4 +1,4 @@
-import type { AgentDefinition, CommandView, ImagePayload, PermMode, PreferencesView, ProviderModel, SkillView, UiEvent } from '@paiapp/contracts';
+import type { AgentDefinition, CommandView, ImagePayload, PreferencesView, ProviderModel, SkillView, UiEvent } from '@paiapp/contracts';
 import { isSettableThinkingLevel } from '@paiapp/contracts';
 
 import { copy } from '@/strings';
@@ -10,9 +10,10 @@ import { createEntryHydration, createReadonlyHydration } from './entry-hydration
 import { createDialogTimers } from './dialog-timers';
 import { createLazyResume } from './lazy-resume';
 import { createReadPorts } from './read-ports';
+import { createSettingsPorts } from './settings-ports';
 import { checkoutGitBranch, listGitBranches, listGitGraph, searchFiles } from './git-actions';
 import type { CreateSessionInput, CreateSessionOutcome, LiveController } from './live-controller-types';
-import type { HubSettingsView, LiveStore } from './store';
+import type { LiveStore } from './store';
 
 /**
  * live 编排：事件订阅 → store 折叠；轮次边界的条目对账（真相源）；
@@ -52,10 +53,13 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
 
   /** 懒恢复机制（在途去重/乐观登记）独立模块。 */
   const lazy = createLazyResume(client, store);
-  const { resumeByPath, ensureLiveSession, activate } = lazy;
+  const { resumeByPath, ensureLiveSession, forceResume, activate } = lazy;
 
   /** 收敛读口（能力探测缓存属本控制器实例：渲染层重载即新实例，宿主代际变化显式失效）。 */
   const ports = createReadPorts(client);
+
+  /** 配置面读写口（目录刷新/hub 缺省/会话级权限与思考档读口——单一职责模块）。 */
+  const settingsPorts = createSettingsPorts({ client, store });
 
   /** 直执行 bash 的收尾探测（协议无终态帧 → 输出静默后读口确认收尾；仍在跑时有界重排）。
    *  声明须先于 readonlyHydration（后者注入 ports）。 */
@@ -95,21 +99,6 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
 
   /** 对话框兜底定时器（属主线程随行回收；单一真相 live/dialog-timers） */
   const dialogTimers = createDialogTimers();
-
-  /** hub 缺省真相更新后刷新活跃会话的生效视图（权限模式随 hub settings 变化的回读）。 */
-  const refreshActivePermissionMode = async (): Promise<void> => {
-    const active = store.getState().activeThreadId;
-    if (active === null) return;
-    await controller.readSessionPermissionMode(active).catch(() => undefined);
-  };
-
-  /** 只拉 hub 用户级缺省（app/hubSettings；新任务页权限控件与设置页共用的数据源）。 */
-  const readHubSettings = async (): Promise<HubSettingsView | null> => {
-    const outcome = await client.invoke('app/hubSettings', {});
-    if (!outcome.ok) return null;
-    store.setState({ hubSettings: outcome.data });
-    return outcome.data;
-  };
 
   /** 对话框本地结算：ui_response 只有 ack 无事件回执，宿主侧超时/未知 id 均静默——弹窗关闭由客户端自治。 */
   const settleDialog = (requestId: string): void => {
@@ -234,7 +223,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       if (outcome === null) return;
       store.getState().bootstrap(outcome.data);
       // hub 用户级缺省启动即载（新任务页权限控件的数据源；此前仅设置页进入时拉取）
-      void readHubSettings();
+      void settingsPorts.readHubSettings();
       // bootstrap 自动选中的 parked 会话保持只读激活（历史经直读水化），
       // 发消息才唤醒 worker（T27：读不唤醒）
     },
@@ -253,6 +242,9 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       const text = message.trim();
       // 纯图消息合法投递（fork 重试带图）：文本与图片都空才是空消息
       if (text.length === 0 && (images === undefined || images.length === 0)) return 'empty_message';
+      // 空舞台守卫：无活跃会话时 threadId 为空串，定址命令只会换回 schema 拒绝的
+      // invalid_params 密文——先行拒绝并给用户可行动的去向
+      if (threadId.length === 0) return 'no_active_session';
       const session = store.getState().sessions[threadId];
       if (session?.state === 'parked' && !client.available) return 'bridge_unavailable';
       // 懒恢复兜底：目标会话还是 parked 占位（启动对账/重启回落）时先唤活再投递；
@@ -266,15 +258,30 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       // 投递裁决交给 hub 的原子语义（prompt+streamingBehavior）：空闲立即发送、
       // 流式中按模式入队并在轮末自动消费。不得以本地 streaming 镜像选路——
       // 镜像滞留 true 时会把空闲会话的消息投进永远不会被消费的队列。
-      const outcome = await client.invoke('session/prompt', {
-        threadId: liveId,
-        message: text,
-        streamingBehavior: mode === 'steer' ? 'steer' : 'followUp',
-        ...withImages,
-      });
+      const send = (target: string) =>
+        client.invoke('session/prompt', {
+          threadId: target,
+          message: text,
+          streamingBehavior: mode === 'steer' ? 'steer' : 'followUp',
+          ...withImages,
+        });
+      let outcome = await send(liveId);
+      if (!outcome.ok && outcome.reason === 'Unknown threadId') {
+        // 僵尸视图自愈：视图 live 而 hub 线程表已忘掉该 id（host 代际切换窗口/换轨
+        // 在飞残留——「Unknown threadId」正是内核为陈旧 id 设计的结算信号）。
+        // 会话文件是持久真相：按路径强制重锚一次再投递；仍败按原 reason 上抛
+        const session = store.getState().sessions[liveId] ?? store.getState().sessions[threadId];
+        const reanchored = session?.sessionPath != null ? await forceResume(session.sessionPath) : null;
+        if (reanchored !== null) {
+          if (reanchored !== threadId && store.getState().activeThreadId === threadId) activate(reanchored);
+          outcome = await send(reanchored);
+        }
+      }
       return outcome.ok ? null : outcome.reason;
     },
     async stopActiveTurn(threadId: string): Promise<void> {
+      // 空舞台守卫：无目标会话即无在飞轮次——停止天然幂等，静默返回
+      if (threadId.length === 0) return;
       store.getState().stopIntent(threadId);
       await client.invoke('session/abort', { threadId });
     },
@@ -364,9 +371,21 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       await client.invoke('dialog/respond', { requestId, payload: { cancelled: true } }).catch(() => undefined);
     },
     async selectModel(threadId: string, provider: string, modelId: string): Promise<void> {
-      await client.invoke('session/setModel', { threadId, provider, modelId });
+      // 空舞台守卫：无活跃会话时菜单仍可见，点击必须得到可行动反馈而非 schema 密文
+      if (threadId.length === 0) {
+        store.getState().pushNotice(copy.flow.noActiveSession);
+        return;
+      }
+      const outcome = await client.invoke('session/setModel', { threadId, provider, modelId });
+      // hub 拒绝（如模型不在目录）：用户选择未生效，reason 通报（与思考档同型）
+      if (!outcome.ok) store.getState().pushNotice(copy.flow.modelRejected(outcome.reason));
     },
     async selectThinking(threadId: string, level: string): Promise<void> {
+      // 空舞台守卫：无活跃会话时菜单仍可见，点击必须得到可行动反馈而非 schema 密文
+      if (threadId.length === 0) {
+        store.getState().pushNotice(copy.flow.noActiveSession);
+        return;
+      }
       // 词表校验先行（词表外值 hub 静默忽略——渲染层拒绝发送并提示）
       if (!isSettableThinkingLevel(level)) {
         store.getState().pushNotice(copy.flow.thinkingInvalid);
@@ -376,62 +395,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       // hub 拒绝（如模型不支持该档位）：用户选择未生效，reason 通报
       if (!outcome.ok) store.getState().pushNotice(copy.flow.thinkingRejected(outcome.reason));
     },
-    async refreshSaved(): Promise<void> {
-      const outcome = await client.invoke('session/listSaved', {});
-      if (outcome.ok) {
-        // saved 列表直接进 store（避免与 bootstrap 动作耦合）
-        store.setState({ saved: outcome.data });
-      }
-    },
-    async refreshModels(): Promise<void> {
-      const outcome = await client.invoke('model/list', {});
-      if (outcome.ok) store.setState({ models: outcome.data });
-    },
-    async readHubSettings(): Promise<HubSettingsView | null> {
-      return readHubSettings();
-    },
-    async writeHubSettings(patch: { permissionDefaultMode?: PermMode | null; thinkingDefault?: string | null }): Promise<string | null> {
-      // 思考档词表校验（词表外值 hub 静默忽略——渲染层先行拒绝，不发空载荷）
-      if (patch.thinkingDefault !== undefined && patch.thinkingDefault !== null && !isSettableThinkingLevel(patch.thinkingDefault)) {
-        return 'thinkingInvalid';
-      }
-      // null = 不修改该键（「未设置」在 hub 侧无协议表达，settings/set 无删除语义）——
-      // undefined 与 null 同为跳过，全空补丁直接成功不发命令
-      if (patch.permissionDefaultMode == null && patch.thinkingDefault == null) return null;
-      const outcome = await client.invoke('app/setHubSettings', {
-        ...(patch.permissionDefaultMode != null ? { permissionDefaultMode: patch.permissionDefaultMode } : {}),
-        ...(patch.thinkingDefault != null ? { thinkingDefault: patch.thinkingDefault } : {}),
-      });
-      if (!outcome.ok) return outcome.reason;
-      // 写后回读成套刷新（设置页与新任务页共用同一真相）
-      await readHubSettings();
-      await refreshActivePermissionMode();
-      return null;
-    },
-    async readSessionPermissionMode(threadId: string): Promise<{ mode: string; source: 'session' | 'project' | 'user' | 'default' } | null> {
-      const outcome = await client.invoke('permission/mode', { threadId });
-      if (!outcome.ok) return null;
-      // 判活：请求在途期间活跃会话已切换则丢弃（防旧会话模式覆盖新会话视图；与目录刷新同型）
-      if (store.getState().activeThreadId !== threadId) return null;
-      // 引用幂等：内容相同不换引用（下游菜单依赖引用，防刷新循环击穿用户交互）
-      const current = store.getState().sessionPermissionMode;
-      if (current !== null && current.mode === outcome.data.mode && current.source === outcome.data.source) {
-        return current;
-      }
-      store.setState({ sessionPermissionMode: outcome.data });
-      return outcome.data;
-    },
-    async setSessionPermissionMode(threadId: string, mode: PermMode): Promise<string | null> {
-      const outcome = await client.invoke('permission/setMode', { threadId, mode });
-      return outcome.ok ? null : outcome.reason;
-    },
-    async readThinkingLevel(threadId: string): Promise<{ level: string; source: 'session' | 'project' | 'user' | 'off' } | null> {
-      const outcome = await client.invoke('session/thinkingLevels', { threadId });
-      if (!outcome.ok) return null;
-      if (store.getState().activeThreadId !== threadId) return null;
-      store.setState({ thinkingLevel: outcome.data });
-      return outcome.data;
-    },
+    ...settingsPorts,
     async steerSubagent(threadId: string, agentId: string, message: string): Promise<string | null> {
       const text = message.trim();
       if (text.length === 0) return 'empty_message';
@@ -512,6 +476,8 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     async runBash(threadId: string, command: string): Promise<string | null> {
       const text = command.trim();
       if (text.length === 0) return 'empty_command';
+      // 空舞台守卫：无活跃会话时直执行 bash 无定址目标（与 submitDraft 同口径）
+      if (threadId.length === 0) return 'no_active_session';
       const cursorBefore = store.getState().threads[threadId]?.cursor ?? null;
       store.getState().bashStarted(threadId);
       try {
@@ -532,6 +498,8 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       }
     },
     async abortBash(threadId: string): Promise<void> {
+      // 空舞台守卫：无目标会话即无在跑命令——中止天然幂等，静默返回
+      if (threadId.length === 0) return;
       await client.invoke('session/abortBash', { threadId });
     },
     async revealSession(sessionPath: string): Promise<void> {
