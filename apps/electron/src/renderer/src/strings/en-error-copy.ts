@@ -66,6 +66,8 @@ export const enErrorCopy = {
   provider_name_conflict: 'Channel name collides with an existing channel on its key variable — pick another name.',
   provider_api_unsupported: 'Protocol unsupported (Anthropic / OpenAI compatible only).',
   provider_baseurl_invalid: 'Base URL must start with http:// or https://.',
+  provider_baseurl_changed: 'The base URL changed — re-enter this channel\'s API key so the stored one is not sent to the new host.',
+  settings_unavailable: 'The local settings file could not be read; the save was cancelled to protect existing configuration. Please retry.',
   invalid_params: 'Invalid parameters. Check them and try again.',
   internal_error: 'An internal error occurred. Try again.',
   unknown_method: 'Unknown method.',

@@ -64,6 +64,8 @@ export const zhErrorCopy = {
   provider_name_conflict: '渠道名与现有渠道的环境变量名冲突，请换个名字。',
   provider_api_unsupported: '协议不受支持（仅 Anthropic / OpenAI 兼容）。',
   provider_baseurl_invalid: '接口地址需以 http:// 或 https:// 开头。',
+  provider_baseurl_changed: '接口地址变更后需重新录入该渠道的密钥（防止存量密钥被发往新地址）。',
+  settings_unavailable: '本地设置文件暂时无法读取，已取消本次保存以保护现有配置，请重试。',
   invalid_params: '参数不合法，请检查后重试。',
   internal_error: '内部错误，请重试。',
   unknown_method: '未知方法。',

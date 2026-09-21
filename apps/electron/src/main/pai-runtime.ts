@@ -251,7 +251,9 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
         return;
       case 'thread_parked': {
         // worker 被收编（闲置/手动/RSS）：视图转 parked 折叠 streaming 镜像；注册表行
-        // 保留（发消息自动唤醒）——与 thread_died 同型的终态折叠
+        // 保留（发消息自动唤醒）——与 thread_died 同型的终态折叠；流式累积态随终结
+        // 清理（无界增长防线，唤醒后由新帧重建）
+        eventMapper.dispose(frame.threadId);
         const parkedView = sessions.get(frame.threadId);
         // 事件与折叠同守卫（状态转移恰好广播一次；重复帧/未知线程零副作用）
         if (parkedView !== undefined && parkedView.state !== 'parked') {
@@ -261,8 +263,10 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
         return;
       }
       case 'thread_died': {
+        // 死亡终态必须折叠 streaming 镜像：侧栏活动指示消费该字段，滞留会永久转圈；
+        // 流式累积态随终结清理（无界增长防线）
+        eventMapper.dispose(frame.threadId);
         const view = sessions.get(frame.threadId);
-        // 死亡终态必须折叠 streaming 镜像：侧栏活动指示消费该字段，滞留会永久转圈
         if (view !== undefined) upsertSession({ ...view, state: 'dead', streaming: false });
         emit({ type: 'sessionDied', threadId: frame.threadId, reason: frame.reason });
         return;
@@ -441,10 +445,12 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
     removeSession(threadId: string): void {
       sessions.delete(threadId);
       registry.remove(threadId);
+      eventMapper.dispose(threadId);
       emit({ type: 'sessionRemoved', threadId });
     },
     detachSession(threadId: string): void {
       sessions.delete(threadId);
+      eventMapper.dispose(threadId);
       emit({ type: 'sessionRemoved', threadId });
     },
     parkSession(threadId: string): void {

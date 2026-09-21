@@ -14,7 +14,7 @@ import { createReadPorts } from './read-ports';
 import { createSettingsPorts } from './settings-ports';
 import { checkoutGitBranch, listGitBranches, listGitGraph, searchFiles } from './git-actions';
 import type { CreateSessionInput, CreateSessionOutcome, LiveController } from './live-controller-types';
-import type { LiveStore } from './store';
+import { isLiveSession, type LiveStore } from './store';
 
 /**
  * live 编排：事件订阅 → store 折叠；轮次边界的条目对账（真相源）；
@@ -70,6 +70,8 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     probe: (threadId) => ports.inflight(threadId),
     isDisposed: () => disposed,
     onSettled: (threadId) => {
+      // 迟到回包 × 会话已移除：不得把已修剪的线程复活（幽灵线程）
+      if (!isLiveSession(store.getState(), threadId)) return;
       store.getState().bashSettled(threadId);
       const cursor = store.getState().threads[threadId]?.cursor ?? null;
       void fetchEntries(threadId, cursor, false).catch(() => undefined);
@@ -165,6 +167,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
         .inflight(event.threadId)
         .then((view) => {
           if (disposed || view === null) return;
+          if (!isLiveSession(store.getState(), event.threadId)) return;
           if ((store.getState().threads[event.threadId]?.turnsSettled ?? 0) !== settledAtTurnStart) return;
           store.getState().hydrate(event.threadId, { kind: 'hydrate/inflight', view, at: Date.now() });
           if (view.bash !== null) bashProbe.arm(event.threadId);
@@ -233,6 +236,9 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     dispose(): void {
       disposed = true;
       dialogTimers.clearAll();
+      // bash 探测定时器随控制器消亡回收（start 可重入复原 disposed——旧世代定时器
+      // 不得在新世代继续探测并对共享 store 触发 onSettled 链）
+      bashProbe.clearAll();
       unsubscribe?.();
       unsubscribe = null;
     },

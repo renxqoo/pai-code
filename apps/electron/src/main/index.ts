@@ -117,6 +117,36 @@ void app.whenReady().then(async () => {
   let directoryPickerInFlight = false;
   // 本次运行中经系统选择器选过的目录：新任务页对尚无会话的目录也要能读分支/切分支
   const pickedDirectories = new Set<string>();
+
+  // 退出时序：先停 host（stdin EOF 落盘退出）再退 app；只执行一次。
+  // 注册先于装配（waitForPhase 最长 30s 的 await 窗口内退出也要走停机链）；
+  // runtime 未构建（装配失败降级开窗）时同样收口到 quit——可选链会短路整条
+  // promise 链使 quit 永不执行，必须显式兜底为已决议的 Promise。
+  let quitting = false;
+  const shutdownThenQuit = (): void => {
+    if (quitting) return;
+    quitting = true;
+    monitor?.stop();
+    const stopHost = runtime !== null ? runtime.stop().catch(() => undefined) : Promise.resolve();
+    void stopHost.finally(() => {
+      app.quit();
+    });
+  };
+  app.on('before-quit', (event) => {
+    if (quitting) return;
+    event.preventDefault();
+    shutdownThenQuit();
+  });
+  // 信号兜底：外部 kill/系统关机走同一条停机链（detached host 不会随主进程死亡，
+  // 无此兜底则绕过 dispose 泄漏 hub 进程）；app.quit 触发的 before-quit 因
+  // quitting 已置位而直通。
+  process.on('SIGTERM', () => {
+    shutdownThenQuit();
+  });
+  process.on('SIGINT', () => {
+    shutdownThenQuit();
+  });
+
   try {
     const keyStore = createProviderKeyStore(paths.providerKeysFile);
     const settings = createFileSettings(paths.settingsFile, keyStore);
@@ -342,17 +372,5 @@ void app.whenReady().then(async () => {
       mainWindow = createMainWindow();
     }
   });
-
-  // 退出时序：先停 host（stdin EOF 落盘退出）再退 app；只执行一次
-  let quitting = false;
-  app.on('before-quit', (event) => {
-    if (quitting) return;
-    event.preventDefault();
-    quitting = true;
-    monitor?.stop();
-    void runtime
-      ?.stop()
-      .catch(() => undefined)
-      .finally(() => app.quit());
-  });
 });
+

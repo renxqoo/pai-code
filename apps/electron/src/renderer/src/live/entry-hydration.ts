@@ -4,7 +4,7 @@ import type { PendingDialogView } from '@paiapp/contracts';
 import type { BridgeClient } from './client-invoke';
 import type { ReadPorts } from './read-ports';
 import type { LiveThreadState } from './live-thread-state';
-import type { LiveStore } from './store';
+import { isLiveSession, type LiveStore } from './store';
 
 /**
  * 会话条目水化的三条拉取路径（controller 内编排使用）：
@@ -156,6 +156,10 @@ export function createReadonlyHydration(input: {
       ports.threadState(targetId),
     ]);
     if (isDisposed()) return;
+    // 在途读 × 会话移除：四路回包落地前复检存活——threads/dialogs 的写入口对
+    // 已修剪线程无守卫（事件折叠入口的宽容语义不适用于读回包），此处不拦会复活
+    // 幽灵线程乃至死会话的全屏模态弹窗
+    if (!isLiveSession(store.getState(), threadId)) return;
     const applyInflightView = inflight !== null && snapshotFresh(threadId, settledBefore);
     if (applyInflightView && inflight !== null) {
       store.getState().hydrate(threadId, { kind: 'hydrate/inflight', view: inflight, at: now });

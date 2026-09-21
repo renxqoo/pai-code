@@ -42,7 +42,10 @@ export function createTransport(deps: { request: HubTransport['request']; onCall
   function observe(command: PaiCommand, result: HubResult<unknown>): void {
     if (deps.onCall === undefined) return;
     try {
-      deps.onCall(command, result.ok ? { ok: true } : { ok: false, error: result.error });
+      const observed = deps.onCall(command, result.ok ? { ok: true } : { ok: false, error: result.error }) as unknown;
+      // 观测者签名是 void，但 TS 允许赋入 async 函数（返回 Promise）——同步 throw
+      // 之外，async 观测者的 reject 同样不得逃逸为 unhandled rejection
+      if (observed instanceof Promise) void observed.catch(() => undefined);
     } catch {
       // 观测者异常绝不影响命令结果（契约测试钉住）
     }

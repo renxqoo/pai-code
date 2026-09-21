@@ -43,15 +43,38 @@ interface StreamBuffer {
 /** 映射器实例的流式累积域（per-mapper 状态；calls = callId→工具名，tool/result 无名字段——diff 提取靠它回查）。 */
 interface StreamState {
   streams: Map<string, StreamBuffer>;
-  calls: Map<string, string>;
-  /** callId → 工具输出累积（agent/tool-stream 增量批的快照化；result 冲净） */
-  toolStreams: Map<string, string>;
+  /** callId → 工具名（按 owner 隔离：主会话与各子代理各持一桶——子代理后台跨父轮
+   *  运行，父轮结算不得清子的累积，与 hub 桥侧 owner 键语义对齐） */
+  calls: Map<string, Map<string, string>>;
+  /** callId → 工具输出累积（agent/tool-stream 增量批；owner 隔离同上） */
+  toolStreams: Map<string, Map<string, string>>;
   counter: number;
+}
+
+/** owner 桶键：主会话 = t:<threadId>；子代理 = s:<threadId>:<agentId>。 */
+const mainKeyOf = (threadId: string): string => `t:${threadId}`;
+const subagentKeyOf = (threadId: string, agentId: string): string => `s:${threadId}:${agentId}`;
+
+function ownerBucket<V>(table: Map<string, Map<string, V>>, ownerKey: string): Map<string, V> {
+  const existing = table.get(ownerKey);
+  if (existing !== undefined) return existing;
+  const created = new Map<string, V>();
+  table.set(ownerKey, created);
+  return created;
+}
+
+/** 该线程的全部 owner 桶键（主会话 + 所有子代理）——会话终结清理用。 */
+function threadBucketKeys(state: StreamState, threadId: string): string[] {
+  const main = `t:${threadId}`;
+  const prefix = `s:${threadId}:`;
+  return [...state.toolStreams.keys(), ...state.calls.keys()].filter((key) => key === main || key.startsWith(prefix));
 }
 
 export interface EventMapper {
   /** event 帧（name/payload 展开 + 子代理中继身份）→ UiEvent 列表。 */
   mapEvent(frame: { threadId: string; name: string; payload: Record<string, unknown>; agentName?: string }): UiEvent[];
+  /** 会话终结（移除/强退/收编/worker 死亡）：清该线程的全部流式累积态（无界增长防线）。 */
+  dispose(threadId: string): void;
 }
 
 /** session 域帧归属键（主会话谓词单一真相）：payload.session 为字符串即归属
@@ -65,6 +88,13 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
   const state: StreamState = { streams: new Map(), calls: new Map(), toolStreams: new Map(), counter: 0 };
 
   return {
+    dispose(threadId: string): void {
+      state.streams.delete(threadId);
+      for (const key of threadBucketKeys(state, threadId)) {
+        state.toolStreams.delete(key);
+        state.calls.delete(key);
+      }
+    },
     mapEvent(frame): UiEvent[] {
       const { threadId, name, payload } = frame;
       if (frame.agentName !== undefined && frame.agentName !== '') {
@@ -102,7 +132,7 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
           const toolName = str(payload.name);
           const args = argsOf(payload.arguments);
           const callId = str(payload.callId);
-          if (callId.length > 0) state.calls.set(callId, toolName);
+          if (callId.length > 0) ownerBucket(state.calls, mainKeyOf(threadId)).set(callId, toolName);
           return [
             {
               type: 'toolCallAdded',
@@ -115,7 +145,7 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
         }
         case 'tool/result': {
           const callId = str(payload.callId);
-          state.toolStreams.delete(callId);
+          ownerBucket(state.toolStreams, mainKeyOf(threadId)).delete(callId);
           return [
             {
               type: 'toolEnded',
@@ -134,18 +164,18 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
           // 协议边界按 callId 累积（tool/result 结算时冲净，见下）
           const callId = str(payload.callId);
           const delta = str(payload.delta);
-          const accumulated = (state.toolStreams.get(callId) ?? '') + delta;
-          state.toolStreams.set(callId, accumulated);
+          const bucket = ownerBucket(state.toolStreams, mainKeyOf(threadId));
+          const accumulated = (bucket.get(callId) ?? '') + delta;
+          bucket.set(callId, accumulated);
           return [{ type: 'toolUpdated', threadId, callId, output: accumulated }];
         }
         case 'settled':
           state.streams.delete(threadId);
-          // 轮结算清记忆表（callId→工具名 / callId→累积输出）：跨轮 callId 不复用，
-          // 长会话生命周期内无界增长即泄漏
-          for (const callId of state.calls.keys()) {
-            if (!state.toolStreams.has(callId)) state.calls.delete(callId);
-          }
-          state.toolStreams.clear();
+          // 轮结算清本线程主会话的记忆桶（callId→工具名 / callId→累积输出）：跨轮
+          // callId 不复用，长会话生命周期内无界增长即泄漏。只清主会话桶——子代理
+          // 后台跨父轮运行，其累积由自身 tool/result 与会话终结（dispose）清理
+          state.toolStreams.delete(mainKeyOf(threadId));
+          state.calls.delete(mainKeyOf(threadId));
           return [
             {
               type: 'turnSettled',
@@ -248,8 +278,9 @@ function mapSubagent(state: StreamState, threadId: string, name: string, payload
     }
     case 'agent/tool-stream': {
       const callId = str(payload.callId);
-      const accumulated = (state.toolStreams.get(callId) ?? '') + str(payload.delta);
-      state.toolStreams.set(callId, accumulated);
+      const bucket = ownerBucket(state.toolStreams, subagentKeyOf(threadId, agentId));
+      const accumulated = (bucket.get(callId) ?? '') + str(payload.delta);
+      bucket.set(callId, accumulated);
       return [
         {
           type: 'subagentTool',
@@ -275,7 +306,7 @@ function mapSubagent(state: StreamState, threadId: string, name: string, payload
       ];
     }
     case 'tool/result':
-      state.toolStreams.delete(str(payload.callId));
+      ownerBucket(state.toolStreams, subagentKeyOf(threadId, agentId)).delete(str(payload.callId));
       return [
         {
           type: 'subagentTool',

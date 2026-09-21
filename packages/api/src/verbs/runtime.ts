@@ -10,7 +10,7 @@ import type { ThreadCommands } from '../commands/thread';
 import { errorLogToken } from './error-log-token';
 
 /** 设置面端口（patch 按使用面） */
-interface SettingsPatchPort { patch(patch: Record<string, unknown>): void; get(): { idleRecycleMinutes?: number }; }
+interface SettingsPatchPort { patch(patch: Record<string, unknown>): { ok: true; data: unknown } | { ok: false; reason: 'settings_unreadable' }; get(): { idleRecycleMinutes?: number }; }
 
 /**
  * T29 运行状态路由族（app/runtime / 档位 / 回收三命令 / 诊断包）：
@@ -42,8 +42,10 @@ export function runtimeRoutes(deps: RuntimeRoutesDeps): { [M in Extract<ApiMetho
     'app/setIdleRecycle': async (params) => {
       // 档位唯一写路径：settings 持久（spawn env 一致性）+ set_idle_retire_ms 运行期生效。
       // hub 命令失败时 settings 已落（下次宿主重启 env 生效）——半成功不静默：
-      // 记监督事件（监控页时间线可见 effective 值滞后）
-      deps.settings.patch({ idleRecycleMinutes: params.minutes });
+      // 记监督事件（监控页时间线可见 effective 值滞后）；settings 不可写（坏档保护）
+      // 则整体拒绝——运行期生效而磁盘不落会在下次宿主重启时静默回档
+      const persisted = deps.settings.patch({ idleRecycleMinutes: params.minutes });
+      if (!persisted.ok) return fail(appError('settings_unavailable'));
       const outcome = await deps.settingsCommands().setIdleRetireMs({ value: params.minutes * 60_000 });
       if (!outcome.ok) deps.onPolicySyncFailed?.(params.minutes, errorLogToken(outcome.error));
       return { ok: true as const, data: { minutes: params.minutes } };

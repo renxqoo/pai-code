@@ -147,15 +147,10 @@ export function createFrameDecoder(onFrame: (frame: HubFrame) => void, options: 
         scanned = 0;
       } else {
         buffer += chunk;
-        // 超限提前判定：基线是「未完成行起点」（scanned），跨 chunk 无换行堆积
-        // 同样累积计数——基线若重置为整个尾巴，无换行小 chunk 流可无限增长
-        if (buffer.length - scanned > maxLineChars) {
-          enterDiscarding();
-          return;
-        }
       }
       // 行提取用偏移游标推进、chunk 处理完一次性压缩尾巴：单 chunk 含 k 行时
-      // 复制成本从 O(k×chunk) 降为每 chunk 一次（流式高频小 delta 帧是热路径）
+      // 复制成本从 O(k×chunk) 降为每 chunk 一次（流式高频小 delta 帧是热路径）；
+      // 超限完整行只丢弃该行——同 chunk 内其后的完整合法帧仍逐行处理（「整行丢弃」契约）
       let start = scanned;
       for (;;) {
         const index = buffer.indexOf('\n', scanned);
@@ -174,6 +169,11 @@ export function createFrameDecoder(onFrame: (frame: HubFrame) => void, options: 
       // 的超限判定与搜索使用（未完成尾巴每 chunk 重扫一次 indexOf，尾巴长度
       // 受 maxLineChars 上限约束）
       scanned = 0;
+      // 未完成尾巴超限才进入丢弃态（换行前持续丢弃、不再累积）：跨 chunk 无换行
+      // 堆积同样受检——压缩后 buffer.length 即未完成行长度，无换行小 chunk 流不可无限增长
+      if (!discarding && buffer.length > maxLineChars) {
+        enterDiscarding();
+      }
     },
     finish(): void {
       const tail = buffer;
@@ -185,8 +185,10 @@ export function createFrameDecoder(onFrame: (frame: HubFrame) => void, options: 
         return;
       }
       if (tail.length === 0) return;
-      // 尾巴超限在 push 的提前判定已不可能（未完成行以 scanned 为基线持续受检，
-      // 压缩后尾巴长度 ≤ 上限恒成立）——无需重复防线
+      if (tail.length > maxLineChars) {
+        options.onDropped?.('line_too_long');
+        return;
+      }
       handleLine(tail);
     },
   };

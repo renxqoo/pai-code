@@ -116,6 +116,13 @@ export interface LiveStoreActions {
 
 export type LiveStore = ReturnType<typeof createLiveStore>;
 
+/** 会话存活判定（异步读回包落地前的复检谓词，单一真相）：活跃或已登记。
+ *  事件流先于登记到达是协议常态（hub 同管道先发事件帧后发 response——直发下
+ *  事件恒先于 invoke 结果），故本谓词只用于「读口回包」侧的写回复检（bash 收尾
+ *  探测/converge/轮首 inflight 读），不用于事件折叠入口（那里必须宽容预登记）。 */
+export const isLiveSession = (state: LiveStoreState, threadId: string): boolean =>
+  threadId === state.activeThreadId || threadId in state.sessions;
+
 export function createLiveStore() {
   const store = createStore<LiveStoreState & LiveStoreActions>()((set) => {
     const threadOf = (state: LiveStoreState, threadId: string): LiveThreadState => state.threads[threadId] ?? initialThreadState;

@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 import { safeStorage } from 'electron';
@@ -35,12 +35,16 @@ export function createProviderKeyStore(providerKeysFile: string): ProviderKeySto
 
   const writeFile = (file: KeyFile): void => {
     mkdirSync(dirname(providerKeysFile), { recursive: true });
-    writeFileSync(providerKeysFile, JSON.stringify(file), { mode: 0o600 });
+    // 原子写：先落临时文件再同卷 rename——直写的中途崩溃/断电产生截断档，
+    // 重启后 catch 折空档，下一次 setKey 以空档为基线把其他渠道的 key 静默清掉
+    const tempFile = `${providerKeysFile}.tmp`;
+    writeFileSync(tempFile, JSON.stringify(file), { mode: 0o600 });
     try {
-      chmodSync(providerKeysFile, 0o600);
+      chmodSync(tempFile, 0o600);
     } catch {
       // 平台不支持 chmod（如部分 Windows）：内容本身是 safeStorage 密文
     }
+    renameSync(tempFile, providerKeysFile);
   };
 
   return {

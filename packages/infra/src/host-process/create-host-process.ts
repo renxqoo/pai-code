@@ -106,6 +106,20 @@ export function createHostProcess(deps: HostProcessDeps): HostProcessPort {
     pending.clear();
   };
 
+  /** 主进程 exit 兜底：detached host 不随主进程死亡——经 process.exit/信号后的
+   *  正常退出路径若未走 dispose，这里同步击杀进程组，防 hub 连同 worker 孙进程
+   *  孤儿化（持会话文件句柄；重开应用形成双写者）。kill -9 主进程无 handler，不可防。 */
+  const killGroupOnExit = (): void => {
+    if (child?.pid === undefined) return;
+    try {
+      if (process.platform === 'win32') child.kill();
+      else process.kill(-child.pid, 'SIGKILL');
+    } catch {
+      // 进程已死：无操作
+    }
+  };
+  process.on('exit', killGroupOnExit);
+
   const killGroup = (): void => {
     const target = child;
     child = null;
@@ -320,6 +334,8 @@ export function createHostProcess(deps: HostProcessDeps): HostProcessPort {
     async dispose(): Promise<void> {
       if (disposed) return;
       disposed = true;
+      // 优雅停机接管：exit 兜底击杀钩随行摘除（SIGKILL 兜底只在 finishTimer 超时启用）
+      process.off('exit', killGroupOnExit);
       if (watchdog !== null) {
         clearInterval(watchdog);
         watchdog = null;

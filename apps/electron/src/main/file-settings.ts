@@ -3,7 +3,6 @@ import {
   writeFileSync,
   mkdirSync,
   existsSync,
-  truncateSync,
   statSync,
   appendFileSync,
   renameSync,
@@ -30,22 +29,39 @@ export interface ProviderKeyStore {
   readonly keyNames: readonly string[];
 }
 
+/** 设置写结果：磁盘不可读（坏档保护）时拒绝写并显式失败，不静默丢用户数据。 */
+export type SettingsWrite<T> = { ok: true; data: T } | { ok: false; reason: "settings_unreadable" };
+
 export function createFileSettings(settingsFile: string, keyStore: ProviderKeyStore) {
   let cached: Settings | null = null;
 
+  /** 磁盘真值读取（绕过缓存）。文件不在 = 合法空真值；文件在但读/解析失败 =
+   *  ok:false——写路径据此拒写（契约「坏档不清空磁盘、仅本次运行用缺省」：
+   *  降级缺省绝不作为写基线，否则瞬态读失败后的首次保存会把缺省整体落盘、
+   *  静默清空磁盘上的全部 provider/偏好）。 */
+  const readDisk = (): { ok: true; settings: Settings } | { ok: false } => {
+    try {
+      if (!existsSync(settingsFile)) return { ok: true, settings: parseSettings({}) };
+      return { ok: true, settings: parseSettings(JSON.parse(readFileSync(settingsFile, "utf8")) as unknown) };
+    } catch {
+      return { ok: false };
+    }
+  };
+
   const read = (): Settings => {
     if (cached !== null) return cached;
-    let parsed: unknown = {};
-    try {
-      if (existsSync(settingsFile)) {
-        parsed = JSON.parse(readFileSync(settingsFile, "utf8")) as unknown;
-      }
-    } catch {
-      parsed = {};
-    }
-    // 宽容读取：旧形态（models 为 string[]）升级、坏形状整体降级默认值
-    cached = parseSettings(parsed);
+    const disk = readDisk();
+    // 读失败不缓存降级结果：本次返回缺省（契约），下一次读重试磁盘——缓存降级值
+    // 会让「瞬态读失败」（AV 锁/EACCES/外部原子替换窗口）固化为本次运行的常驻视图
+    if (!disk.ok) return parseSettings({});
+    cached = disk.settings;
     return cached;
+  };
+
+  /** 写基线：磁盘可读即以磁盘为基线（读失败窗口自愈）；不可读 → null（调用方拒写）。 */
+  const writeBase = (): Settings | null => {
+    const disk = readDisk();
+    return disk.ok ? disk.settings : null;
   };
 
   const write = (next: Settings): void => {
@@ -62,18 +78,21 @@ export function createFileSettings(settingsFile: string, keyStore: ProviderKeySt
     get(): Settings {
       return read();
     },
-    patch(patch: Partial<Settings>): Settings {
-      const next = SettingsSchema.parse({ ...read(), ...patch });
+    patch(patch: Partial<Settings>): SettingsWrite<Settings> {
+      const base = writeBase();
+      if (base === null) return { ok: false, reason: "settings_unreadable" };
+      const next = SettingsSchema.parse({ ...base, ...patch });
       write(next);
-      return next;
+      return { ok: true, data: next };
     },
     listProviders(): ProviderConfig[] {
       return read().providers;
     },
-    upsertProvider(input: ProviderConfig & { apiKey?: string }): ProviderConfig[] {
-      const current = read();
+    upsertProvider(input: ProviderConfig & { apiKey?: string }): SettingsWrite<ProviderConfig[]> {
+      const base = writeBase();
+      if (base === null) return { ok: false, reason: "settings_unreadable" };
       const providers = [
-        ...current.providers.filter((provider) => provider.name !== input.name),
+        ...base.providers.filter((provider) => provider.name !== input.name),
         {
           name: input.name,
           baseUrl: input.baseUrl,
@@ -81,17 +100,18 @@ export function createFileSettings(settingsFile: string, keyStore: ProviderKeySt
           models: input.models.map((model) => ({ ...model })),
         },
       ].sort((a, b) => a.name.localeCompare(b.name));
-      write({ ...current, providers });
+      write({ ...base, providers });
       if (input.apiKey !== undefined)
         keyStore.setKey(input.name, input.apiKey.length > 0 ? input.apiKey : null);
-      return providers;
+      return { ok: true, data: providers };
     },
-    removeProvider(name: string): ProviderConfig[] {
-      const current = read();
-      const providers = current.providers.filter((provider) => provider.name !== name);
-      write({ ...current, providers });
+    removeProvider(name: string): SettingsWrite<ProviderConfig[]> {
+      const base = writeBase();
+      if (base === null) return { ok: false, reason: "settings_unreadable" };
+      const providers = base.providers.filter((provider) => provider.name !== name);
+      write({ ...base, providers });
       keyStore.setKey(name, null);
-      return providers;
+      return { ok: true, data: providers };
     },
   };
 }
@@ -105,8 +125,8 @@ export function createFileLogger(logFile: string, maxBytes = 1_024 * 1_024) {
     log(message: string): void {
       try {
         ensureDir();
+        // 超限整档改名归档（保留全部历史供排障/审计——先截断再改名会让归档恒为空文件）
         if (existsSync(logFile) && statSync(logFile).size > maxBytes) {
-          truncateSync(logFile, 0);
           renameSync(logFile, `${logFile}.1`);
         }
         // 控制字符清洗（回车换行与 C0 控制区）：审计 message 可能含渲染层可控串，防伪造日志行

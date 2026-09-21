@@ -110,8 +110,22 @@ export function createGitBranches(run: GitExec): GitBranches {
   const listInFlight = new Map<string, Promise<GitBranchesOutcome>>();
   /** 全局 checkout 串行尾节点（跨 cwd 也串行：不同 cwd 可能指向同一仓库）。 */
   let checkoutTail: Promise<unknown> = Promise.resolve();
+  /** checkout 完成计数（epoch）：list 在途期间 epoch 变化 = 读到了撕裂快照，重读。 */
+  let checkoutEpoch = 0;
 
   const readBranches = async (cwd: string): Promise<GitBranchesOutcome> => {
+    // list 四连读与 checkout 并发时会撕裂（前两笔旧世代、后两笔新世代——UI 显示
+    // 当前分支不在列表里）；epoch 不一致即重读一次，频繁切换的极端交错下第二次
+    // 照实返回（有界重试，不活锁）
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const startedAt = checkoutEpoch;
+      const outcome = await readBranchesOnce(cwd);
+      if (checkoutEpoch === startedAt) return outcome;
+    }
+    return readBranchesOnce(cwd);
+  };
+
+  const readBranchesOnce = async (cwd: string): Promise<GitBranchesOutcome> => {
     const probe = await run(['rev-parse', '--git-dir'], cwd);
     if (probe.error !== null) return { ok: false, error: failureError(probe) };
     if (probe.code !== 0) {
@@ -191,10 +205,18 @@ export function createGitBranches(run: GitExec): GitBranches {
         () => undefined,
         () => undefined,
       );
-      // 切换成功后失效列表单飞缓存：否则紧随的 list 会复用切换前的在途快照，界面停在旧分支
-      void task.then((outcome) => {
-        if (outcome.ok) listInFlight.delete(cwd);
-      });
+      // 切换成功后失效列表单飞缓存并推进 epoch：否则紧随的 list 会复用切换前的
+      // 在途快照，界面停在旧分支。全量清空（不限同字符串 cwd）——同一仓库可经
+      // 符号链接别名访问，按原始字符串键控会让别名下的刷新复活切换前快照
+      void task.then(
+        (outcome) => {
+          if (outcome.ok) {
+            checkoutEpoch += 1;
+            listInFlight.clear();
+          }
+        },
+        () => undefined,
+      );
       return task;
     },
   };

@@ -139,14 +139,21 @@ describe("api-routes 安全面（C-S2/C-S8/C-S4）", () => {
       models: [{ id: "m", reasoning: false, vision: false }],
     })) as { ok: boolean; error?: { kind: string; message?: string } };
     expect(collide).toEqual({ ok: false, error: { kind: "provider_name_conflict" } });
-    // 同名更新自身合法
+    // 同名更新自身合法（baseUrl 不变；换端点必须重录 key——provider_baseurl_changed 拒绝）
     const self = (await routes.invoke("provider/upsert", {
       name: "a-b",
-      baseUrl: "https://a2.example.com",
+      baseUrl: "https://a.example.com",
       api: "openai",
       models: [{ id: "m2", reasoning: true, vision: false }],
     })) as { ok: boolean };
     expect(self.ok).toBe(true);
+    const endpointChanged = (await routes.invoke("provider/upsert", {
+      name: "a-b",
+      baseUrl: "https://a2.example.com",
+      api: "openai",
+      models: [{ id: "m2", reasoning: true, vision: false }],
+    })) as { ok: boolean; error?: { kind: string } };
+    expect(endpointChanged).toEqual({ ok: false, error: { kind: "provider_baseurl_changed" } });
   });
 
   test("撞内置预设名 = 用户覆盖放行（x-harness 整档覆盖 + 消歧 custom 优先——app 无「预设挡人」面）；api 词表外拒绝", async () => {

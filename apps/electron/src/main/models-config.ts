@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { ProviderConfig } from "@paiapp/contracts";
@@ -35,7 +35,11 @@ export function writeModelsConfig(
     const key = keyStore.getKey(provider.name);
     if (key !== null) env[envVarNameForProvider(provider.name)] = key;
   }
-  writeFileSync(join(agentDir, "providers.json"), serializeProvidersConfig(providers));
+  // 原子写（tmp+rename）：直写的崩溃窗口产生截断档，本次 spawn 的模型面整档缺失零告警
+  const target = serializeProvidersConfig(providers);
+  const tempFile = join(agentDir, "providers.json.tmp");
+  writeFileSync(tempFile, target);
+  renameSync(tempFile, join(agentDir, "providers.json"));
   // 旧目录文件（my-agent 期产物）清扫：新写者只认 providers.json，孤儿留存徒增排障噪音
   rmSync(join(agentDir, "models.json"), { force: true });
   return { env };

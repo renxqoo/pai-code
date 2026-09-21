@@ -18,13 +18,14 @@ import { createProviderProbe } from './provider-probe';
 
 type Handler<M extends ApiMethod> = (params: ApiParams<M>) => Promise<ApiOutcome<M>>;
 
-/** 设置存储端口（verbs 消费面：providers CRUD + 偏好读写——provider 行用 contracts 真形） */
+/** 设置存储端口（verbs 消费面：providers CRUD + 偏好读写——provider 行用 contracts 真形；
+ *  写路径返回判别联合：磁盘不可读时拒绝写（settings_unreadable），不静默丢数据） */
 interface SettingsStorePort {
   listProviders(): ProviderConfig[];
-  upsertProvider(input: unknown): ProviderConfig[];
-  removeProvider(name: string): ProviderConfig[];
+  upsertProvider(input: ProviderConfig & { apiKey?: string }): { ok: true; data: ProviderConfig[] } | { ok: false; reason: 'settings_unreadable' };
+  removeProvider(name: string): { ok: true; data: ProviderConfig[] } | { ok: false; reason: 'settings_unreadable' };
   get(): PreferencesView;
-  patch(patch: Record<string, unknown>): unknown;
+  patch(patch: Record<string, unknown>): { ok: true; data: unknown } | { ok: false; reason: 'settings_unreadable' };
 }
 interface KeyStorePort { getKey(name: string): string | null; }
 
@@ -123,20 +124,28 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
       if (!params.baseUrl.startsWith('http://') && !params.baseUrl.startsWith('https://')) {
         return failLogged(appError('provider_baseurl_invalid'));
       }
+      // baseUrl 变更强制重录 key：换端点 = 换服务方，「省略 apiKey = 保留存量」的 UX
+      // 只对不换端点的改动成立——否则存量 key 会被后续 provider/test 无声发往新主机
+      const existing = deps.settings.listProviders().find((provider) => provider.name === params.name);
+      if (existing !== undefined && existing.baseUrl !== params.baseUrl && params.apiKey === undefined) {
+        return failLogged(appError('provider_baseurl_changed'));
+      }
       // 同名内置预设 = 用户覆盖（x-harness 整档覆盖语义 + 消歧 custom 优先）：用户
       // 配置胜出、删渠道即恢复内置——不再拒名（T39 实施轮用户裁决：app 无「预设挡人」面）
-      deps.settings.upsertProvider({
+      const upserted = deps.settings.upsertProvider({
         name: params.name,
         baseUrl: params.baseUrl,
         api: params.api,
         models: params.models.map((model) => ({ ...model })),
         apiKey: params.apiKey,
       });
+      if (!upserted.ok) return failLogged(appError('settings_unavailable'));
       await deps.restartHost();
       return { ok: true as const, data: providersView() };
     },
     'provider/remove': async (params) => {
-      deps.settings.removeProvider(params.name);
+      const removed = deps.settings.removeProvider(params.name);
+      if (!removed.ok) return failLogged(appError('settings_unavailable'));
       await deps.restartHost();
       return { ok: true as const, data: providersView() };
     },
@@ -183,7 +192,7 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
       }
       return { ok: true as const, data: null };
     },
-    'app/setPreference': (params) => {
+    'app/setPreference': async (params) => {
       const patch: Parameters<SettingsStorePort['patch']>[0] = {};
       if (params.defaultModel !== undefined) patch.defaultModel = params.defaultModel;
       if (params.onboarded !== undefined) patch.onboarded = params.onboarded;
@@ -192,8 +201,9 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
       if (params.trustedDefault !== undefined) patch.trustedDefault = params.trustedDefault;
       if (params.hiddenProjects !== undefined) patch.hiddenProjects = [...params.hiddenProjects];
       if (params.archivedSessions !== undefined) patch.archivedSessions = [...params.archivedSessions];
-      deps.settings.patch(patch);
-      return Promise.resolve({ ok: true as const, data: preferencesView() });
+      const outcome = deps.settings.patch(patch);
+      if (!outcome.ok) return failLogged(appError('settings_unavailable'));
+      return { ok: true as const, data: preferencesView() };
     },
   };
 

@@ -44,6 +44,11 @@ export function createBashEndProbe(input: {
   };
 
   const schedule = (threadId: string, ms: number): void => {
+    // 覆盖表项前清旧句柄：rearm 会在现行探测的定时器已到期、在途回包未落时再排
+    // （arm 也会经 bashOutput 重触发）——不清则泄漏句柄照常到期，其回调里的
+    // timers.delete 还会误删后挂的新句柄，级联使 clear() 失效
+    const stale = timers.get(threadId);
+    if (stale !== undefined) clearTimeout(stale);
     timers.set(
       threadId,
       setTimeout(() => {

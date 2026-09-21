@@ -62,7 +62,8 @@ export type AppErrorCode =
   | 'branch_exists' | 'invalid_branch' | 'dirty_worktree' | 'unknown_branch' | 'not_a_repo' | 'git_unavailable'
   | 'empty_message' | 'no_active_session' | 'resume_failed' | 'bootstrap_crashed' | 'compact_images_rejected'
   | 'bash_images_rejected'
-  | 'provider_name_conflict' | 'provider_api_unsupported' | 'provider_baseurl_invalid';
+  | 'provider_name_conflict' | 'provider_api_unsupported' | 'provider_baseurl_invalid'
+  | 'provider_baseurl_changed' | 'settings_unavailable';
 export type AppError = { kind: AppErrorCode; message?: string };
 
 /** 跨 IPC 的统一错误判别联合（渲染层文案查表按 kind 分派——Record 键集编译期封闭） */
