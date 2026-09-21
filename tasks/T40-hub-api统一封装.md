@@ -1,224 +1,192 @@
-# T40：packages/api 统一 host-hub 接口封装（方案 v2 · 已定稿）
+# T40：packages/api 统一 host-hub 接口封装（方案 v3 · 三路对抗审查处置后）
 
-> 定稿记录（2026-09-21，用户三轮亲审后确认「最优架构设计，外部好使用，好测试，易于维护，扩展」）：
-> - K1 采纳推荐：adapter 并入 packages/api（W3 删包）。
-> - K2 采纳推荐：事件面（frame-decoder/event-mapper）同入。
-> - K3 采纳推荐：错误封装做协议层（W0 改 x-harness 错误通道为 {code, message}）。
-> - 波次粒度：五波。
-> - 交付约束修正：**W0 与 W1 必须双侧原子交付**——dev 拓扑下 app 从旁级 x-harness 检出
->   的当前源码 spawn hub，hub 单侧改错误形状会让运行中的 app 立即失去 reason 解析；
->   私有协议无兼容层，两侧一次切换、一次验证（T39 单原子序列先例）。
-> - 对抗审查：按用户既定指示（先不跑）跳过子代理审查，用户亲审代位；如实标注。
+> v3 记录（2026-09-21）：三路并行子代理审查（协议/契约面、架构/迁移面、消费/使用面）全量处置。
+> 处置索引见 §7（每条 H/M → 落点）。v2 的架构主干部（协议层错误结构化 + transport 单点 +
+> 七域门面 + 三圈使用面）经审查与代码事实相容，保留；以下为本版修正要点：
+> ①ApiError = HubError | AppError 双联合（三路独立撞车的最大缺口）；②错误发射点实为 ~104
+> 处且含非机械映射面（packages 层词表需内层 code 穿透）；③解码链三层 + hub 内部中继层进
+> 原子集（漏则落地即全量折平 command_failed）；④api↔infra 依赖环 → 方向翻转裁决；
+> ⑤跨仓原子交付 runbook；⑥thread_superseded ≠ unknown_thread 拆词（fork 换轨防误自愈）；
+> ⑦超时四档（补 bash 24h）；⑧双侧码表对拍机制（握手暴露 + 启动期断言）。
 
-> v2 要点：按用户两条支柱重排——①错误统一封装推到**协议层**（hub 错误通道结构化，
-> 类型安全跨进程到达，app 不再正则猜字符串）；②统一接口调用 = 单一调用约定 +
-> transport 管线（超时/分类/观测钩子全命令一致）。
+## 0. 现状底账（审查修正版）
 
-## 0. 现状底账与病灶证据（2026-09-21 盘点）
+**正则消费面实为 10 处**（v2 记 9，漏 4 补入、2 处死 matcher 修正）：
 
-已有三层收敛（保留不动）：contracts 56 条命令闭集（编译期双向绑定）；渲染层零直连 hub（zod ApiSchemas 注册表单入口）；主进程 `command()` 单点包装（44 处）。
+| # | 消费点 | 匹配 | 处置 |
+|---|---|---|---|
+| 1 | read-ports.ts:37 | `/unknown command\|unsupported capability\|unknown method/i` | →kind |
+| 2 | api-routes.ts:331 | `/streamingBehavior required/` | →kind（保留 `streamingBehavior===undefined` 前置） |
+| 3 | live-controller.ts:269 | `=== 'Unknown threadId'` | →kind=unknown_thread（且排除 thread_superseded） |
+| 4 | workspace-actions.ts:179/183 | images/too many startsWith | →kind；**#183 是死 matcher**（hub 实串 `invalid images: too many images`，startsWith 永不命中）——行为修复带回归用例 |
+| 5 | strings zh/en createFailed | `/thinking/` 等 | →kind 查表；**startsWith('Model not found') 是死 matcher**（hub 实串 `unknown model preset:`）——同上 |
+| 6 | workspace-actions.ts fork 文案 | 含 `thread is streaming` | →kind |
+| 7 | api-routes.ts:351 | `invalid since cursor` | →kind=cursor_stale |
+| 8 | api-routes-resume.ts:102/121 | vanish 正则族（**v2 漏记**，驱动 removeSession 删行） | →kind（session_unreadable 族单独成族，不与 io_failed 混） |
+| 9 | api-routes-thread-ops.ts:35 | `/not user-defined\|unknown agent type/`（**漏记**） | →kind |
+| 10 | entry-hydration.ts:196 | `/not readable\|thread_id_mismatch/`（**漏记**；hub 串与 app 本地 token 混判） | 拆两支：hub→kind，app token→AppError |
 
-**病灶 A——错误是裸字符串，app 用正则猜**（9 处实证，grep 可核）：
+**错误发射点 ~104**（93 respond + worker-pool emitFailure 7 + host.ts 4），四类**非机械**：
+catch-all `String(error)` ≥10 处（需 internal 族）；"Session file not readable" 6 处（删行语义，
+单设 session_unreadable）；capacity/limit 4 串；bash admission + 协议级（parse failure/shutting
+down/invalid id/worker died）；packages 层开放词表（compaction 5 条、archive `corrupt:`）需
+**内层 Error 带 code 穿透**（小型重构）。双侧测试断言换形 ~70 处入 W0 触面。
 
-| 消费点 | 现在的字符串匹配 | 用途 |
-|---|---|---|
-| read-ports | `/unknown command\|unsupported capability\|unknown method/i` | 能力降级缓存 |
-| api-routes prompt | `/streamingBehavior required/` | 受理窗口恰一次降级重试 |
-| live-controller 自愈 | `reason === 'Unknown threadId'` | 僵尸视图重锚 |
-| notifySubmitFailure | `startsWith('invalid images: model does not accept images')`、`startsWith('too many images')` | 友好文案 |
-| newTask.createFailed | `/thinking/`、`startsWith('Model not found')`、`/cwd\|directory\|absolute\|exist/i` | 失败指引分派 |
-| forkFromEntry | 含 `thread is streaming` | 「先停再分叉」文案 |
-| entries 兜底 | `invalid since cursor` | 游标失效全量重拉 |
-| resume 收养 | already open 判定 | 表项收养路径 |
-
-hub 侧错误源 ~80 处（30 模板串 + 50 字面串），但**错误族 ≈20**（unknown thread / streaming window / unknown command / capability / invalid input / model unavailable / already open / cursor stale / path forbidden / trust / io / transient…）。
-
-**病灶 B——调用形态不统一**：主进程 6 处直连 `host.request`（keepalive×2、对账 list_saved、队列 get_state、自动标题、monitor 轮询 get_host_info+thread/list）绕过超时档/错误折叠/日志面；日志是我上一批手工逐路由加的（`session_*_rejected`）——每加一条命令就要人记得加日志，这正是没有统一管线的代价。
-
-**病灶 C**——响应收窄散在 adapter 10 文件（消费方 6 文件全在主进程，渲染层零依赖）；`packages/api` 已有空壳（deps 已声明 contracts/core/infra）。
+**调用面事实修正**：直连 host.request 实为 **7 处**（pai-runtime :180/:282/:446/:449/:451/:457/:482
++ monitor :118-119 两条）；adapter 消费方 = 主进程 3 文件 + **infra 1 文件**（frame-decoder，
+v2 记「全在主进程」有误）+ 矩阵/测试 3 处；超时档实为**四档**（缺省 30s/prompt 10min/
+compact 30min/**bash 24h**）。
 
 ## 1. 目标与非目标
 
-**目标**
-1. **错误统一封装（协议级）**：x-harness 错误通道结构化 `error: { code, message }`——code 是闭集词表（x-harness 单一真相，app contracts 镜像 + 封闭断言）；message 保留自然语言细节。app↔hub 是**私有协议、同仓共同部署**（app 从旁级检出 spawn hub），改协议无双轨无兼容（仓库规矩：不写兼容代码）。
-2. **统一接口调用**：`packages/api` 单一门面——同一调用约定 `(input) => Promise<HubResult<T>>`，全部经 transport 管线：**超时档 → 错误分类 → 观测钩子**。所有命令自动获得统一日志（替代手工 per-route logging），后续加遥测只动管线一处。
-3. 「一个命令的所有知识在一处」：typed 方法 + 入参类型（contracts 判别联合抽取）+ 超时档 + 错误族；收窄映射平移并入（views/）；事件面同入（events/）。
+**目标**：同 v2（错误协议层结构化 / 统一调用管线 / 知识一处 / 事件面同入），另加：
+- **ApiError 双联合**：`ApiError = HubError | AppError`——app 本地错误（IPC 层 invalid_payload/
+  unknown_method、路由 invalid_params/internal_error、业务闭集 token、git 族 7 词、renderer 本地
+  词）是独立闭集 AppError，不污染协议词表；语义可对齐的并族（session_path_forbidden≈
+  path_forbidden）。renderer 内部通道（submitDraft `Promise<string|null>`）同步重定型。
+- **双侧码表机器对拍**（v2「封闭断言」无机制的补强）：hub 握手/get_host_info 暴露
+  `errorCodes` 码表；app 启动期断言集合相等（新增码 → 启动红）；集成门逐码抽样旅程。
 
-**非目标**：不改渲染层 invoke 面（ApiSchemas/UiEvent 不变）；api-routes 的 app 业务（注册表/信任态/收养/白名单）留驻；不做 56 条全量封装（消费子集 ≈34 条 + 闭集对照断言）。
+**非目标**（范围声明，v2 表述过强的修正）：错误类型安全限定**命令响应面**——事件携带的
+错误文本（turnSettled errorMessage、sessionParked/sessionDied frame.reason、hub_error 帧的
+message）维持自由文本，不入词表。
 
-## 2. 架构（v2）
+## 2. 架构（v3）
 
-```
-renderer ──IPC/zod── api-routes（app 业务，退薄；错误文案按 kind 分派，删正则）
-                        │
-                 packages/api ← HubApi 门面
-                   ├─ transport.ts   # 唯一 request 持有点 + 管线：超时→错误分类→onCall 观测钩子
-                   ├─ errors.ts      # HubErrorCode → HubError 判别联合解码；未登记 code 兜底 hub_error{code,message}（原文不丢）
-                   ├─ timeouts.ts    # default/prompt/compact 三档单一真相
-                   ├─ commands/      # 七域：thread/session/models/permissions/agents/settings/host
-                   ├─ views/         # adapter 收窄映射平移（同目录测试随行）
-                   ├─ events/        # frame-decoder + event-mapper + HUB_EVENT_NAMES 消费面
-                   └─ index.ts       # createHubApi({ request, onCall? }): HubApi（freeze、零 class、可裸测）
-                        │
-                 contracts（+镜像 HubErrorCode 闭集与封闭断言）
-                        │
-                 infra（HostProcessPort——不动）          x-harness（W0：错误通道结构化）
-```
-
-**错误封装三层形态**：
+### 2.1 错误词表（码↔kind 一一对应，消除 v2 有码无 kind的错位）
 
 ```ts
-// x-harness protocol/errors.ts（单一真相）——错误族词表，按消费用途定族（≈20 族，不是 80 个）
-export const HUB_ERROR_CODES = [
-  'unknown_thread', 'streaming_window', 'unknown_command',        // 自愈/降级重试/能力面
-  'capability_thinking', 'capability_images', 'images_too_many',  // 能力拒绝（设置指引）
-  'invalid_input', 'model_unavailable', 'already_open',           // 表单回填/设置指引/收养
-  'cursor_stale', 'path_forbidden', 'trust_required',             // 全量重拉/白名单/信任 UI
-  'state_conflict', 'io_failed', 'name_conflict',                 // 其余族
+// x-harness protocol/errors.ts（单一真相）——24 族
+HUB_ERROR_CODES = [
+  // 线程寻址与生命周期
+  'unknown_thread',        // 表真缺失/逐出（app 自愈重锚只认它）
+  'thread_superseded',     // fork 重键/单会话守卫结算在飞旧 id（自愈禁触发——防复活 fork 前状态）
+  'thread_not_live', 'session_unreadable',   // 后者：resume/register 可删行语义（6 站点独立成族）
+  'already_open', 'thread_limit',            // capacity 族（too many live threads / in-flight / bash 并发 / response too large）
+  // 受理与输入
+  'streaming_window', 'invalid_input', 'unknown_command',
+  // 能力
+  'capability_thinking', 'capability_images', 'images_too_many', 'model_unavailable',
+  // 会话状态
+  'cursor_stale', 'state_conflict', 'name_conflict', 'trust_required', 'path_forbidden',
+  // 基础设施与兜底
+  'io_failed', 'internal',        // internal：String(error) catch-all（≥10 站点）
+  'bash_denied', 'protocol',      // bash admission；parse failure/shutting down/invalid id/worker died
+  'compact_rejected',             // compaction 词表 5 条（内层 code 穿透）
 ] as const;
-// respond(rt, { id, command, error: { code: 'unknown_thread', message: 'Unknown threadId' } })
+// app 侧 errors.ts：每码一个 kind，一一对应；未登记 code → {kind:'unregistered_code', code, message}
+//（v2 兜底族名 hub_error 与帧级 hub_error 撞名，改 unregistered_code）
+// transient face 对齐 infra 串全集（create-host-process.ts 为单一真相 + 对照断言）：
+//   busy | timeout | host_unavailable | host_restarting | host_failed | host_not_running
+//   | host_disposed | write_failed | command_failed | bridge_unavailable
 ```
+
+packages 层穿透：compaction/archive 的内层错误改 `Error.cause` 携 code，dispatch 层发射时
+提取——W0 内完成（小型重构，非机械）。
+
+### 2.2 ApiError 双联合与通道
 
 ```ts
-// packages/api/src/errors.ts —— 解码为判别联合；兜底族保原文（弱形态禁令：不丢信息）
-export type HubError =
-  | { kind: 'unknown_thread' } | { kind: 'streaming_window' } | { kind: 'unknown_command' }
-  | { kind: 'capability'; face: 'thinking' | 'images' } | { kind: 'images_too_many' }
-  | { kind: 'invalid_input'; message: string } | { kind: 'model_unavailable'; message: string }
-  | { kind: 'already_open' } | { kind: 'cursor_stale' } | { kind: 'path_forbidden' }
-  | { kind: 'trust_required' } | { kind: 'state_conflict'; message: string }
-  | { kind: 'transient'; face: 'busy' | 'timeout' | 'host_unavailable' | 'host_restarting' | 'host_failed' }
-  | { kind: 'hub_error'; code: string; message: string };  // 未登记 code：原文完整透传
-
-export type HubResult<T> = { ok: true; data: T } | { ok: false; error: HubError };
+export type ApiError = HubError | AppError;
+// AppError：app 本地闭集（invalid_params / internal_error / unknown_method / session_path_forbidden
+//（并 path_forbidden 同文案）/ cwd_not_allowed / cwd_forbidden / malformed_response / thread_id_mismatch
+// / unknown_session / export_failed / dialog_unavailable / git 族 7 词 / empty_message /
+// no_active_session / resume_failed / bridge_unavailable(并 transient 同文案) / skill_not_found / editor_not_found）
+// ApiOutcome: {ok:false, error: ApiError}（zod outcome error schema 为新增校验面）
+// renderer submitDraft 通道: Promise<ApiError | null>；notifySubmitFailure/createFailed → COPY_BY_KIND 查表
+// COPY_BY_KIND: Record<HubErrorKind | AppErrorKind, string | ((e)=>string)>——Record 键集即编译期封闭，
+// 兜底 unregistered_code = (e) => 原文透传（code+message 不丢，e2e 断言可见）
 ```
 
-**统一调用管线**（transport 单点）：
+### 2.3 transport 契约（v2 草案的实现级修正）
 
-```ts
-export function createTransport(deps: { request: HubTransport['request']; onCall?: CallObserver }) {
-  return async <T>(command: PaiCommand, timeoutMs?: number): Promise<HubResult<T>> => {
-    try {
-      const outcome = await deps.request(command, timeoutMs);
-      // 统一观测钩子：全部命令自动落 <command>:<code> 日志（取代手工 session_*_rejected）
-      const result = outcome.ok
-        ? { ok: true as const, data: outcome.data as T }
-        : { ok: false as const, error: decodeHubError(outcome.error) };
-      deps.onCall?.(command, result);
-      return result;
-    } catch { /* 桥异常 → {kind:'transient', face:'host_unavailable'}，onCall 同样可见 */ }
-  };
-}
-```
+- `catch` 显式 `return {ok:false, error:{kind:'transient', face:'host_unavailable'}}`。
+- **onCall 独立 try/catch 隔离**：观测者抛错只记诊断，绝不影响命令结果；decode 也在隔离段外、
+  全函数（任意输入落 unregistered_code，永不抛）。
+- 签名**删除可选 timeoutMs**（约定②「调用方不传」的违宪后门）；域方法内定档，
+  **四档**：default 30s / prompt 10min / compact 30min / bash 24h。
+- onCall 日志策略：**拒绝必落、成功不落**、observer 类命令（monitor 轮询 get_host_info/
+  thread/list）豁免——防每天 8.6 万行噪音。
+- decode 输入双形状（infra 错误串 ∪ hub {code,message}）；`HostCommandOutcome.error` 类型
+  同批改 `string | {code,message}`（contracts/ports.ts）。
+- 契约测试钉住以上五条（onCall 抛错不影响结果 / catch 返回形 / decode 全函数 / 前缀归类）。
 
-**消费面改造**（正则全部退场）：
+### 2.4 依赖方向裁决（W3，防 api↔infra 环）
 
-```ts
-// 自愈：error.kind === 'unknown_thread' → 重锚重投
-// prompt 降级重试：error.kind === 'streaming_window'
-// read-ports 能力缓存：error.kind === 'unknown_command'
-// 文案分派：kind → zh/en 映射表（capability_thinking → 「渠道设置开思考开关」指引）
-```
+现状：infra→adapter（frame-decoder）；api 空壳已声明 core+infra 依赖。裁决：
+- **api deps 只留 contracts**（HostProcessPort 在 contracts/ports.ts，不需要 infra/core）；
+- frame-decoder 搬入 api 后 **infra→api** 单向；
+- WORKSPACE_MATRIX（oxlint 宪法）同批修：api 行删 infra/core、infra 行 adapter→api，
+  锁定测试（no-cross-package-imports.test.ts）与 bun.lock 再生同波；顺带删 testkit 行的
+  陈旧 adapter 条目。
 
-## 2c. 外部如何统一使用（装配点 + 三圈消费面）
+### 2.5 跨仓原子交付 runbook（W0+W1）
 
-**装配：全进程恰一个 HubApi 实例**。pai-runtime 在 buildHost 时创建（transport 绑定
-host port 的 request 面——host 就地 restart 不换 port 对象，hub 实例跨重启稳定存活），
-经依赖注入分发；消费方永远不自己 new、不自己拼命令：
+1. 两工作树**同时改完**，在合并树上跑双侧四门 + 集成门 + e2e:llm 冒烟；
+2. **先 commit x-harness，后 commit agent-app**，app 提交信息钉死 x-harness commit hash；
+3. 窗口声明：两提交之间（以及任何混合检出）不可用——**断档签名：一切 hub 错误折平为
+   `command_failed` = 两侧版本错配**（frame-decoder optString 丢对象 + infra `?? 'command_failed'`
+   的静默链）；正在运行的 dev 实例旧 hub 进程存活期不受影响，重启即触雷；
+4. 回滚单位 = 两仓**成对 revert**（先 app 后 x-harness）；
+5. 原子集必须含**解码链三层 + hub 内部中继层**：contracts hub-protocol.ts ResponseFrame.error、
+   adapter frame-decoder.ts optString、infra create-host-process.ts 折叠、x-harness
+   worker-frames.ts:96 / worker-control.ts / frames.ts / frame-classify.ts responseLine。
 
-```ts
-// pai-runtime.ts（装配点，唯一 createHubApi 调用）
-const hub = createHubApi({
-  request: (cmd, timeoutMs) => host.request(cmd, timeoutMs),
-  onCall: (command, result) => log(`hub:${command.type}:${result.ok ? 'ok' : result.error.kind}`),
-});
-// 暴露：runtime.hub —— index.ts 装配时注入 api-routes(deps.hub) 与 runtime-monitor(deps.hub)
-```
+### 2.6 双侧码表对拍
 
-**圈1 主进程服务（唯一直接触 hub 的运行面）**——所有消费点同一形态：
+hub `get_host_info` 增加 `errorCodes: HUB_ERROR_CODES` 快照；app 启动期断言
+`set equality(contracts 镜像, hub 暴露)`——x-harness 新增码未镜像即启动红（真·双侧封闭）；
+集成门逐码抽样旅程断言 kind 解码正确。
 
-```ts
-// api-routes：业务留驻，命令调用 + kind 分派
-'session/start': async (params) => {
-  const result = await hub.thread.start({ cwd: params.cwd, modelId: params.modelId, trusted: params.trusted });
-  if (!result.ok) return fail(result.error);            // 统一：error 是 HubError 判别联合
-  return { ok: true, data: runtime.applyStartOutcome(...) };  // data 已是收窄视图
-},
+## 2c. 外部使用面（修订）
 
-// pai-runtime（原 6 处直连 host.request 全部换型）：
-await hub.thread.setKeepalive({ threadId, keepalive });
-const saved = await hub.thread.listSaved({ cwd });       // 已收窄，不再手工解 outcome.data
+同 v2 三圈结构，修正四点：
+- **装配时序**：routes 构造早于 runtime.start——deps.hub 为**惰性 accessor**
+  `() => HubApi`（对齐 monitor 现有 host() accessor 形态）；pre-start 请求折叠 transient
+  （现状 host_unavailable 降级语义保持）。
+- **monitor**：保留 `host()` accessor 作 poll 前置守卫与快照数据源（hostPhase/restarts 来自
+  port.diagnostics()，非命令面）；hub 只替换 get_host_info/thread/list 两条命令调用。
+- **keepalive 编排留驻 pai-runtime**：register-then-retry 容忍链是域内补偿业务，
+  hub.thread.setKeepalive 是单命令薄封装；失败日志保留「host 空窗不告警」语义。
+- **子路由组按域窄接口注入**（settings/thread-ops/runtime/resume 各拿所需域接口类型，
+  不拿整只 HubApi——窄类型缝不倒退）。
+- 自愈归属明写：unknown_thread 重锚在 **renderer**（需 activate/store），协议补偿
+  （streaming_window→followUp）在 main——两分有语义依据。
 
-// runtime-monitor 轮询：
-const [info, workers] = await Promise.all([hub.host.info(), hub.thread.list()]);
+## 3. 波次（v3 重切）
 
-// 错误处理唯一约定（自愈/重试/降级全部 kind 判定，字面量退场）：
-if (!result.ok && result.error.kind === 'unknown_thread') { /* 重锚 */ }
-if (!result.ok && result.error.kind === 'streaming_window') { /* followUp 重试 */ }
-```
+- **W0+W1（原子，跨仓 runbook §2.5）**：x-harness 错误通道结构化（104 站点含四类非机械面 +
+  packages 内层穿透 + 中继层）+ 码表握手暴露；app：transport 契约/errors(ApiError 双联合)/
+  timeouts 四档/createHubApi + thread 域 + **直连收编所需最小方法集**（thread 域 9 +
+  get_state + set_session_name + get_host_info + thread/list——直连 7 处跨域问题由最小集化解）+
+  解码链三层 + ApiOutcome 升级 + 自愈改 kind（thread_superseded 防误触发）。
+- **W2**：其余域封装 + 10 处正则全退场（含 2 死 matcher 行为修复带回归用例）+ 文案查表
+  （Record 编译封闭 + unregistered_code 兜底）+ onPolicySyncFailed 等隐性 reason 通道改形。
+- **W3**：adapter 并入 + 依赖翻转（§2.4）+ 帧级 hub_error 与兜底族解耦收尾。
+- **W4**：码表对拍断言 + 集成门逐码抽样 + 覆盖率强制机制核实（见 §5）+ 收口。
 
-约定四条：① 只写 `hub.<域>.<动词>(input)`，命令字面量（`{type:'thread/start'}`）全仓
-仅 packages/api 出现；② 超时档在域方法内定档，调用方不传；③ 不手写命令日志——onCall
-管线统一落；④ 期待值恒为 `HubResult<T>`，`!ok` 分支按 `error.kind` 判别联合收窄。
+## 4. 风险与对策（增补版）
 
-**圈2 渲染层——永不触 hub，但收到同一种错误形状**。app 自己的 IPC 通道同步升级：
-`ApiOutcome` 的 `{ok:false, reason:string}` 改为 `{ok:false, error: HubError}`（可序列化
-POJO 判别联合，zod ApiSchemas 同步）——否则 UI 文案还是拿字符串猜，类型安全就断在
-最后一公里：
+v2 表保留，新增：解码链漏改→落地即折平（runbook 第 5 条硬清单）；混合窗口静默失效→断档
+签名 + 提交序 + 成对回滚；依赖环→矩阵修宪同波；packages 词表穿透重构→W0 内完成并带单测；
+测试断言 ~70 处换形 + renderer fixture ~50 处双面改写→量入 W0/W2 触面如实估工；
+makeProgrammableHost 与 scriptHub 裁定**唯一假面**（scriptHub 为 api 包单测面，主/集成门
+继续走 fake port，二者职责分工写明）。
 
-```ts
-// renderer（notifySubmitFailure / createFailed 的正则分派全部退场，改查表）：
-const COPY_BY_KIND: Record<HubErrorKind, string | ((e: HubError) => string)> = {
-  capability: (e) => e.face === 'thinking' ? copy.flow.thinkingCapability : copy.flow.imagesDenied,
-  transient: () => copy.flow.hostRetryLater,
-  /* …每族一条，zh/en 同表 */
-};
-if (!outcome.ok) pushNotice(copyOf(outcome.error));
-```
+## 5. 验证口径（修正）
 
-**圈3 测试——两种统一装置**：
+每波四门 + 集成门；W0+W1 合并树双验。覆盖率：**前置独立项**——app `bunfig.toml` 声明
+function 0.9 但实测 81.24 报绿，阈值未被真实强制；W4 收口前必须先核实/修复强制机制
+（哪个命令、什么分母），否则「只升不降」无机器背书。此项单独向用户报告。
 
-```ts
-// 单测（无进程）：剧本注入
-const hub = createHubApi({ request: scriptHub({ 'thread/start': { ok: true, data: { threadId: 't1' } } }) });
-// 集成门：真 hub + script provider 旅程不变（app 已有装置，仅断言面换 kind）
-```
+## 6. 原裁决记录
 
-**消费方改造清单（W1/W2 逐项核销）**
+K1/K2/K3 采纳推荐（v2 定稿）；v3 无翻案。
 
-| 消费方 | 现状 | 终态 |
+## 7. 三路审查处置索引
+
+| 级别 | 发现（路） | 处置落点 |
 |---|---|---|
-| api-routes ×6 文件 | `command({type:…})` 44 处 + 手工 fail 日志 | `hub.*` + onCall 自动日志 |
-| pai-runtime | 直连 host.request ×6 | `hub.thread.*` / `hub.host.*` |
-| runtime-monitor | 直连 ×2 | `hub.host.info()` / `hub.thread.list()` |
-| renderer 文案分派 | 正则 ×9 处 | kind 查表（zh/en） |
-| ApiOutcome IPC 契约 | reason: string | error: HubError（判别联合贯穿到底） |
-
-## 3. 波次（W0+W1 双侧原子交付；其余每波双侧四门）
-
-- **W0+W1（原子）错误通道结构化 + app 骨架**：x-harness protocol/errors.ts 词表 + respond 全站点 code 化 + 双侧封闭断言；app 侧 transport 管线/errors 解码/timeouts/createHubApi + thread 域 9 条 + **6 处直连收编** + ApiOutcome 升级 `error: HubError` + 自愈/收养改 kind。一次切换一次验证（双侧四门 + 集成门 + e2e:llm 冒烟）。
-- **W2（app）五域 + 文案 kind 化**：session/models/permissions/agents/settings 封装切换；**9 处字符串匹配全部退场**（read-ports/prompt 重试/notifySubmitFailure/createFailed/fork/entries 兜底改 kind）；zh/en 错误文案表落 contracts 消费面。收口：grep 正则分派零残留。
-- **W3（app）adapter 并入**：views/+events/ 平移（含同目录测试）、消费方改 import、**adapter 包删除**；纯搬移零逻辑变更。
-- **W4 收口**：消费子集 vs HUB_COMMAND_TYPES、HubErrorCode 双侧对照断言；覆盖率只升不降；文档。
-
-## 4. 风险与对策
-
-| 风险 | 对策 |
-|---|---|
-| W0 触面大（~80 站点） | 纯机械 code 映射 + message 不动；词表先定族再扫站点；x-harness 四门 + 既有 e2e 全量钉行为 |
-| 族归错（如 io 误归 invalid_input） | 消费语义反推：每族对应一个 app 行为；W0 审计表逐族列站点，审查子代理对照 |
-| 未登记 code 静默折平 | errors.ts 兜底族保留 code+message 原文 + 测试断言兜底路径不丢字 |
-| 搬移破窗（W3） | 测试同目录平移；lint/typecheck 拦跨包 __test__ 引用 |
-| 行为漂移 | W3 纯搬移；每波 grep 收口断言（直连零残留/正则零残留） |
-
-## 5. 验证口径
-
-每波四门 + 集成门（真 hub script provider）；W0 后跑 e2e:llm 冒烟；W4 全量 + 假绿抽查。
-覆盖率：x-harness ≥90/85 只升不降；app funcs ≥81.33 / lines ≥89.10 只升不降。
-
-## 6. 待裁决
-
-1. **K1** adapter 并入 packages/api（推荐）or 保留两包？
-2. **K2** 事件面同入（推荐）or 只收命令面？
-3. **K3（新增，本方案的根）**：错误封装做在协议层（W0 改 x-harness 错误通道，推荐——类型安全跨进程到达，9 处正则才有根除可言）or 仅在 app 层建字符串分类注册表（不动 hub，弱形态）？
-4. 波次粒度：五波（推荐，W0 可独立先合）or 压缩？
+| H×9 | 解码链三层+中继层漏（协议路 H1/架构路）；词表四类非机械+缺 4 族（协议路 H2）；ApiOutcome 本地词表（三路撞车）；镜像断言无机制（协议路 H4）；transport catch/onCall（架构路）；transient face 缺 4+1（架构/消费路）；api↔infra 环（架构路）；跨仓原子无机制（架构路）；fork 换轨歧义（消费路） | §2.1–§2.6、§3 |
+| M×15 | 死 matcher×2 + 漏记×4（协议/消费路）；码 kind 错位（协议路）；W1 跨域（协议路→最小集）；断言 70 处（协议路）；56→7 映射表（协议路）；HostCommandOutcome 双形状（架构路）；onCall 噪音（架构路）；timeoutMs 后门（架构路）；直连 7 处（架构路）；keepalive 归宿（架构路）；monitor 空窗（架构路）；装配时序（架构路）；覆盖率强制（架构路→§5 前置）；onPolicySyncFailed（消费路）；hub_error 撞名/Record 封闭（消费路） | §0/§2/§2c/§3/§4/§5 |
+| L×6 | 断档签名；T39 先例修正（实为 x-harness 加法先行 + app 单提交）；事件面范围声明；cursor_stale 良性扩展钉测；scriptHub 落点；testkit 矩阵陈旧条目 | §1/§2.4/§2.5/§4 |
