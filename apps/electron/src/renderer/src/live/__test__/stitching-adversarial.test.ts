@@ -169,7 +169,7 @@ describe('同步折叠性能探针（无定时器/批延迟参与合并）', () 
     expect(text?.text.endsWith('x')).toBe(true);
     // 非条目事件（queueChanged）返回的 items 引用稳定——排队镜像刷新不触发消息列表重渲
     const itemsRef = s.items;
-    s = ev({ type: 'queueChanged', threadId: T, steering: [], followUp: ['q'] }, s);
+    s = ev({ type: 'queueChanged', threadId: T, steering: [], followUp: [{ id: 'q-1', text: 'q' }] }, s);
     expect(s.items).toBe(itemsRef);
     // 孤儿 toolUpdated 同样不重建 items（真 no-op）
     const before = s.items;

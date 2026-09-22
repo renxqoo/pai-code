@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useStore } from 'zustand';
 
-import type { PermMode } from '@paiapp/contracts';
+import type { PermMode, QueueEntry } from '@paiapp/contracts';
 
 import { CONVERSATION_COLUMN_CLASS } from '@/thread/conversation-column';
 import { baseNameOf } from '@/lib/project-dirs';
@@ -33,8 +33,8 @@ import { summarizeAgents } from '@/thread/panel-summary';
 import { store as liveStore, workspaceActions } from '@/live/workspace-runtime';
 import { uiStore } from '@/ui/ui-store';
 
-/** 排队列表的空态恒定引用（hub 队列镜像的 followUp 文本；后台线程排队不进本区域订阅面）。 */
-const EMPTY_QUEUED: readonly string[] = [];
+/** 排队列表的空态恒定引用（hub 队列镜像的 followUp 条目；后台线程排队不进本区域订阅面）。 */
+const EMPTY_QUEUED: readonly QueueEntry[] = [];
 
 /** 本区域互斥浮层：分支面板 → 创建分支弹窗 / 图谱弹窗（同一时刻至多一个）。 */
 type ComposerDialog = 'branch' | 'create-branch' | 'graph' | null;
@@ -62,7 +62,7 @@ function ComposerRegion(): React.JSX.Element {
   const drafts = useStore(uiStore, (s) => s.drafts);
   const composerRestore = useStore(uiStore, (s) => s.composerRestore);
   const branchRevision = useStore(uiStore, (s) => s.branchRevision);
-  /** 排队中消息（hub 队列镜像：queueChanged 事件折叠的 followUp 文本；事件时差内为空态） */
+  /** 排队中消息（hub 队列镜像：queueChanged 事件折叠的 followUp 条目；事件时差内为空态） */
   const queuedMessages = threadState?.queue.followUp ?? EMPTY_QUEUED;
   /** 待答 confirm（只呈现发起会话的——内联确认条随输入卡走，切会话自然不在场）。
    *  两片输入各自引用稳定后经 useMemo 合成：useSyncExternalStore 的 selector 恒返
@@ -232,7 +232,18 @@ function ComposerRegion(): React.JSX.Element {
                       />,
                     ]
                   : []),
-                ...queuedMessages.map((text, index) => <QueuedMessageCard key={`${index}:${text}`} text={text} />),
+                ...queuedMessages.map((entry) => (
+                  <QueuedMessageCard
+                    key={entry.id}
+                    text={entry.text}
+                    sendNowLabel={copy.composer.queuedSendNow}
+                    editLabel={copy.composer.queuedEdit}
+                    removeLabel={copy.composer.queuedRemove}
+                    onSendNow={generating ? () => workspaceActions.sendQueuedMessageNow(entry.id) : undefined}
+                    onEdit={() => workspaceActions.editQueuedMessage(entry.id)}
+                    onRemove={() => workspaceActions.removeQueuedMessage(entry.id)}
+                  />
+                )),
               ]
         }
         input={

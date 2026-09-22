@@ -202,6 +202,13 @@ export const zh: typeof en = {
     forkStreaming: '会话正在回复中，请先停止会话再分叉。',
     /** 回合结算失败（settled ok=false；reason 为 hub/worker 错误文案） */
     turnFailed: (reason: string): string => (reason.length > 0 ? `本轮回复失败（${reason}）。` : '本轮回复失败。'),
+    /** 队列单条操作落空（queue/drop、queue/send_now 撞上条目已入轮/已清空的竞态——中性表述，
+     *  入轮与 abort 清空两条路径都成立） */
+    queuedEntryConsumed: '该消息已不在排队中。',
+    /** 立即改向落空（无运行中的轮次可注入；条目留在队列随下轮消费） */
+    queuedSendNowUnavailable: '当前没有进行中的回复，消息仍留在排队中。',
+    /** 队列单条操作其余失败（传输/暂态等；不猜测条目现状） */
+    queueOpFailed: '操作失败，请重试。',
     forkedImageName: (index: number): string => `图片 ${index}`,
     resumeFailed: resumeFailedCopy,
     stopConfirmTitle: '停止全部任务？',
@@ -234,6 +241,10 @@ export const zh: typeof en = {
   composer: {
     placeholder: '随便问；@ 引用文件，/ 选择命令或技能',
     queuePlaceholder: '继续输入以排队后续修改',
+    /** 排队消息卡片动作位 */
+    queuedSendNow: '立即',
+    queuedEdit: '编辑这条排队消息',
+    queuedRemove: '删除这条排队消息',
     attach: '添加图片与文件',
     send: '发送消息',
     stop: '停止生成',

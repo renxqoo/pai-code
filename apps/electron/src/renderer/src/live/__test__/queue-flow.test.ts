@@ -139,8 +139,8 @@ describe('排队全流程（流式中发消息 → 队列镜像 → 结算消费
     expect(script.prompts).toEqual([{ threadId: 't1', message: '排队消息-1', streamingBehavior: 'followUp' }]);
 
     // hub 队列镜像到达（排队卡片数据源）
-    emit({ type: 'queueChanged', threadId: 't1', steering: [], followUp: ['排队消息-1'] });
-    expect(thread(store)?.queue).toEqual({ steering: [], followUp: ['排队消息-1'] });
+    emit({ type: 'queueChanged', threadId: 't1', steering: [], followUp: [{ id: 'q-1', text: '排队消息-1' }] });
+    expect(thread(store)?.queue).toEqual({ steering: [], followUp: [{ id: 'q-1', text: '排队消息-1' }] });
 
     // 结算：队列随轮清空
     emit({ type: 'turnSettled', threadId: 't1', ok: true, usage: null });
@@ -173,13 +173,13 @@ describe('排队全流程（流式中发消息 → 队列镜像 → 结算消费
       prompts: [],
       entriesItems: [],
       promptResult: { ok: true, data: {} },
-      threadStateQueue: { steering: [], followUp: ['刷新前排队的消息'] },
+      threadStateQueue: { steering: [], followUp: [{ id: 'q-0', text: '刷新前排队的消息' }] },
       inflight: emptyInflight,
     };
     const { store, controller } = await boot(script);
     await controller.ensureHydrated('t1');
     await waitMs(20);
-    expect(store.getState().threads['t1']?.queue.followUp).toEqual(['刷新前排队的消息']);
+    expect(store.getState().threads['t1']?.queue.followUp).toEqual([{ id: 'q-0', text: '刷新前排队的消息' }]);
     controller.dispose();
   });
 

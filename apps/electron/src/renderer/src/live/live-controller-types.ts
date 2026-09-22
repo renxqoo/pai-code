@@ -30,6 +30,10 @@ export type CreateSessionInput = {
 /** 会话创建结果：成功带新 threadId（调用方据此把首条消息/草稿寻址到新会话）。 */
 export type CreateSessionOutcome = { ok: true; threadId: string } | { ok: false; reason: string };
 
+/** 单条队列操作结果（hub 错误码 → 消费方文案分派的类别）：
+ *  ok = 受理；consumed = 条目已不在队（已入轮/已清空）；window = 无可注入的运行中轮；failed = 其余失败。 */
+export type QueueOpOutcome = 'ok' | 'consumed' | 'window' | 'failed';
+
 export interface LiveController {
   readonly start: () => Promise<void>;
   readonly dispose: () => void;
@@ -43,6 +47,8 @@ export interface LiveController {
   /** 会话选择：一律直接激活（parked 只读浏览，历史经 host 直读水化——T27 读不唤醒）。 */
   readonly selectSession: (threadId: string) => void;
   readonly stopActiveTurn: (threadId: string) => Promise<void>;
+  queueDrop: (threadId: string, entryId: string) => Promise<QueueOpOutcome>;
+  queueSendNow: (threadId: string, entryId: string) => Promise<QueueOpOutcome>;
   readonly createSession: (input: CreateSessionInput) => Promise<CreateSessionOutcome>;
   readonly openSavedSession: (sessionPath: string, trusted?: boolean) => Promise<boolean>;
   /** 会话信任切换 = stop(await) → 同文件 resume(trusted) → 激活新 threadId；stop 失败即中止不动原会话。 */

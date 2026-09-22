@@ -1,4 +1,4 @@
-import type { HistoryItem, InflightToolView, InflightView } from '@paiapp/contracts';
+import type { HistoryItem, InflightToolView, InflightView, QueueEntry } from '@paiapp/contracts';
 import type { ThreadItem, SubagentModel } from '@/thread/thread-model';
 
 /**
@@ -6,7 +6,7 @@ import type { ThreadItem, SubagentModel } from '@/thread/thread-model';
  * 轮次边界以 turnStarted/turnSettled 对账：settle 后条目对账替换 live 轮次。
  */
 
-export type QueueState = { steering: readonly string[]; followUp: readonly string[] };
+export type QueueState = { steering: readonly QueueEntry[]; followUp: readonly QueueEntry[] };
 
 /** 自动重试进行中（attempt 为重试序号；hub 不暴露上限）。 */
 export type RetryState = { attempt: number; errorMessage: string };

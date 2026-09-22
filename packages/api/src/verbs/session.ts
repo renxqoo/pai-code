@@ -82,6 +82,8 @@ export function sessionRoutes(deps: {
   'session/reveal': Handler<'session/reveal'>;
   'session/bash': Handler<'session/bash'>;
   'session/clearQueue': Handler<'session/clearQueue'>;
+  'session/queueDrop': Handler<'session/queueDrop'>;
+  'session/queueSendNow': Handler<'session/queueSendNow'>;
   'session/abortBash': Handler<'session/abortBash'>;
   'model/list': Handler<'model/list'>;
   'permission/mode': Handler<'permission/mode'>;
@@ -221,6 +223,16 @@ export function sessionRoutes(deps: {
     'session/clearQueue': async (params) => {
       // clear_queue 响应携带被清队列文本快照（hub 先取后清）——路由契约是 null，载荷不透传
       const result = await sc().clearQueue({ threadId: params.threadId });
+      return result.ok ? { ok: true as const, data: null } : fail(result.error);
+    },
+    'session/queueDrop': async (params) => {
+      // 单条移除：entryId 已消费/已清空（state_conflict）与 hub 拒绝原样上抛，消费方按码出文案
+      const result = await sc().queueDrop(params);
+      return result.ok ? { ok: true as const, data: null } : fail(result.error);
+    },
+    'session/queueSendNow': async (params) => {
+      // 立即改向：无运行中轮（streaming_window）与拒绝原样上抛（客户端条目仍在队列）
+      const result = await sc().queueSendNow(params);
       return result.ok ? { ok: true as const, data: null } : fail(result.error);
     },
     'session/abortBash': async (params) => {

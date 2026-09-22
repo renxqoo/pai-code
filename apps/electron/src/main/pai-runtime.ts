@@ -180,11 +180,18 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
     }
   };
 
+  /** hub 队列投影的防御读取（条目 = {id, text}；id 是 queue/drop、queue/send_now 寻址键）。 */
+  const queueEntriesOf = (value: unknown): { id: string; text: string }[] => {
+    if (!Array.isArray(value)) return [];
+    return value.flatMap((item) => {
+      const entry = item as { id?: unknown; text?: unknown };
+      return typeof entry.id === 'string' && entry.id.length > 0 && typeof entry.text === 'string' ? [{ id: entry.id, text: entry.text }] : [];
+    });
+  };
+
   const emitQueueOf = (data: unknown, threadId: string): void => {
     const queue = (data as { queue?: { steering?: unknown; followUp?: unknown } }).queue ?? {};
-    const steering = Array.isArray(queue.steering) ? queue.steering.filter((item): item is string => typeof item === 'string') : [];
-    const followUp = Array.isArray(queue.followUp) ? queue.followUp.filter((item): item is string => typeof item === 'string') : [];
-    emit({ type: 'queueChanged', threadId, steering, followUp });
+    emit({ type: 'queueChanged', threadId, steering: queueEntriesOf(queue.steering), followUp: queueEntriesOf(queue.followUp) });
   };
 
   // 队列面镜像（去抖/恰一次重试/在途守卫的回归在 __test__/queue-mirror）
@@ -218,10 +225,10 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
           return;
         }
         if (frame.name === 'agent/inbox/spliced') {
-          // 队列结构信号：载荷为 op 词表（insert/claim/clear，entries 携带文本快照），
-          // 本侧只当触发器（读 threadId），拉 get_state.queue 合成 queueChanged（文本
-          // 快照与读命令同源）。合并去抖 + 失败恰一次重试（瞬态 busy/超时不丢队列面
-          // ——失败即悬挂到下一信号是缺陷）
+          // 队列结构信号：载荷为 op 词表（insert/claim/clear/drop/retarget，entries 携带
+          // 条目快照），本侧只当触发器（读 threadId），拉 get_state.queue 合成 queueChanged
+          // （快照与读命令同源）。合并去抖 + 在途并发信号补拉 + 失败恰一次重试（瞬态
+          // busy/超时不丢队列面——失败即悬挂到下一信号是缺陷）
           queueMirror.signal(frame.threadId);
           return;
         }

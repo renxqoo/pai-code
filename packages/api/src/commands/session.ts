@@ -17,6 +17,10 @@ export interface SessionCommands {
   abortBash(input: Input<'abort_bash'>): Promise<HubResult<null>>;
   /** 响应携带被清队列文本快照（hub 先取后清）——载荷原样透传，消费方按需收窄。 */
   clearQueue(input: Input<'clear_queue'>): Promise<HubResult<unknown>>;
+  /** 单条移除排队消息（entryId 寻址；已消费/已清空 → hub state_conflict）。 */
+  queueDrop(input: Input<'queue/drop'>): Promise<HubResult<null>>;
+  /** 排队消息立即改向当前轮（仅 followUp 条目；无运行中轮 → hub streaming_window）。 */
+  queueSendNow(input: Input<'queue/send_now'>): Promise<HubResult<null>>;
   fork(input: Input<'fork'>): Promise<HubResult<unknown>>;
   bash(input: Input<'bash'>): Promise<HubResult<unknown>>;
   compact(input: Input<'compact'>): Promise<HubResult<unknown>>;
@@ -41,6 +45,8 @@ export function createSessionCommands(send: Transport): SessionCommands {
     abort: (input) => send<unknown>({ type: 'abort', ...input }, TIMEOUTS.default),
     abortBash: (input) => send<unknown>({ type: 'abort_bash', ...input }, TIMEOUTS.default).then(ack),
     clearQueue: (input) => send<unknown>({ type: 'clear_queue', ...input }, TIMEOUTS.default),
+    queueDrop: (input) => send<unknown>({ type: 'queue/drop', ...input }, TIMEOUTS.default).then(ack),
+    queueSendNow: (input) => send<unknown>({ type: 'queue/send_now', ...input }, TIMEOUTS.default).then(ack),
     fork: (input) => send<unknown>({ type: 'fork', ...input }, TIMEOUTS.default),
     bash: (input) => send<unknown>({ type: 'bash', ...input }, TIMEOUTS.bash),
     compact: (input) => send<unknown>({ type: 'compact', ...input }, TIMEOUTS.compact),

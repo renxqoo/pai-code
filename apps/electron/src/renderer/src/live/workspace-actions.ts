@@ -8,6 +8,7 @@ import { copy } from '@/strings';
 import { entrySeqOf } from './entry-seq';
 import { parseModelKey, pickSessionModel } from './pick-session-model';
 import { apiClient, controller, store } from './workspace-runtime';
+import { uiStore } from '@/ui/ui-store';
 import { statsTargetsOf } from './stats-targets';
 
 /**
@@ -19,6 +20,12 @@ import { statsTargetsOf } from './stats-targets';
 export type WorkspaceActions = {
   readonly submitDraft: (message: string, images?: readonly ImagePayload[], mode?: 'auto' | 'steer' | 'followUp') => Promise<string | null>;
   readonly stopActiveTurn: () => void;
+  /** 移除排队消息（entryId 寻址 hub inbox 条目）。已消费/已清空 → 消费提示。 */
+  readonly removeQueuedMessage: (entryId: string) => void;
+  /** 编辑排队消息：移除条目并把文本回填输入框草稿（可改后重发）。失败不回填。 */
+  readonly editQueuedMessage: (entryId: string) => void;
+  /** 排队消息立即改向当前轮（仅生成中可行动；空闲条目留在队列）。 */
+  readonly sendQueuedMessageNow: (entryId: string) => void;
   readonly selectSession: (threadId: string) => void;
   readonly createSession: (input: {
     cwd: string
@@ -240,6 +247,43 @@ export function createWorkspaceActions(): WorkspaceActions {
       return reason;
     },
     stopActiveTurn: () => void controller.stopActiveTurn(activeThreadOf()),
+    removeQueuedMessage: (entryId) => {
+      const threadId = activeThreadOf();
+      if (threadId.length === 0) return;
+      void controller.queueDrop(threadId, entryId).then((outcome) => {
+        // 条目已入轮/已被清空（点击竞态）：镜像由 queueChanged 收敛，提示解释卡片为何未消失
+        if (outcome === 'consumed') pushNotice(copy.flow.queuedEntryConsumed);
+        else if (outcome === 'failed') pushNotice(copy.flow.queueOpFailed);
+      });
+    },
+    editQueuedMessage: (entryId) => {
+      const threadId = activeThreadOf();
+      if (threadId.length === 0) return;
+      const text = store.getState().threads[threadId]?.queue.followUp.find((entry) => entry.id === entryId)?.text;
+      void controller.queueDrop(threadId, entryId).then((outcome) => {
+        if (outcome === 'consumed') {
+          pushNotice(copy.flow.queuedEntryConsumed);
+          return;
+        }
+        if (outcome !== 'ok') {
+          pushNotice(copy.flow.queueOpFailed);
+          return;
+        }
+        // 回填草稿（非空草稿追加，不覆盖在编内容）；镜像收敛由 queueChanged 到达
+        const current = uiStore.getState().drafts[threadId] ?? '';
+        uiStore.getState().setDraft(threadId, current.length > 0 ? `${current}\n${text ?? ''}` : (text ?? ''));
+      });
+    },
+    sendQueuedMessageNow: (entryId) => {
+      const threadId = activeThreadOf();
+      if (threadId.length === 0) return;
+      void controller.queueSendNow(threadId, entryId).then((outcome) => {
+        // 无可注入的运行中轮：条目留在队列（下轮 step0 消费），提示不对「已改向」说谎
+        if (outcome === 'window') pushNotice(copy.flow.queuedSendNowUnavailable);
+        else if (outcome === 'consumed') pushNotice(copy.flow.queuedEntryConsumed);
+        else if (outcome === 'failed') pushNotice(copy.flow.queueOpFailed);
+      });
+    },
     selectSession: (threadId) => controller.selectSession(threadId),
     createSession: async (input) => (await openSession(input)).ok,
     startTask: async (input) => {

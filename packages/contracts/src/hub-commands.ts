@@ -3,7 +3,7 @@ import type { PermMode } from './permissions';
 import type { ThinkingLevel } from './thinking-levels';
 
 /**
- * host-hub 命令入参形状（56 命令；从 hub-protocol 拆出保持行数预算）。
+ * host-hub 命令入参形状（58 命令；从 hub-protocol 拆出保持行数预算）。
  * 规格真相源 = x-harness 仓库 src/protocol/commands.ts 与各 handler 实现。
  */
 
@@ -106,6 +106,20 @@ export interface AbortCmd {
 export interface ClearQueueCmd {
   type: 'clear_queue';
   threadId: string;
+}
+
+export interface QueueDropCmd {
+  type: 'queue/drop';
+  threadId: string;
+  /** inbox entry id（get_state.queue 投影携带的单条寻址键；与请求回执 id 不同名） */
+  entryId: string;
+}
+
+export interface QueueSendNowCmd {
+  type: 'queue/send_now';
+  threadId: string;
+  /** inbox entry id（仅 followUp 队列条目可改向当前轮） */
+  entryId: string;
 }
 
 export interface CompactCmd {
@@ -388,6 +402,8 @@ export type HubCommand =
   | (FollowUpCmd & { id?: string })
   | (AbortCmd & { id?: string })
   | (ClearQueueCmd & { id?: string })
+  | (QueueDropCmd & { id?: string })
+  | (QueueSendNowCmd & { id?: string })
   | (CompactCmd & { id?: string })
   | (GetStateCmd & { id?: string })
   | (GetMessagesCmd & { id?: string })
@@ -431,7 +447,7 @@ export type HubCommand =
   | (SkillsRemoveCmd & { id?: string })
   | (SubagentSteerCmd & { id?: string });
 
-/** 命令词表（与 host-hub COMMAND_NAMES 逐一对应——56 条；测试做封闭断言）。 */
+/** 命令词表（与 host-hub COMMAND_NAMES 逐一对应——58 条；测试做封闭断言）。 */
 export const HUB_COMMAND_TYPES = [
   'thread/start',
   'thread/resume',
@@ -447,6 +463,8 @@ export const HUB_COMMAND_TYPES = [
   'follow_up',
   'abort',
   'clear_queue',
+  'queue/drop',
+  'queue/send_now',
   'compact',
   'get_state',
   'get_messages',

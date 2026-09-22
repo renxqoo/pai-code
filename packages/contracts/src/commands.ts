@@ -23,6 +23,8 @@ export type PaiCommandType =
   | 'prompt'
   | 'abort'
   | 'clear_queue'
+  | 'queue/drop'
+  | 'queue/send_now'
   | 'get_state'
   | 'get_entries'
   | 'get_inflight'
@@ -67,6 +69,8 @@ export const PAI_COMMAND_TYPES = [
   'prompt',
   'abort',
   'clear_queue',
+  'queue/drop',
+  'queue/send_now',
   'get_state',
   'get_entries',
   'get_inflight',

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { queueEntry } from './queue-views';
+
 /**
  * 渲染层事件词表：adapter 把 host-hub 帧折叠成这些正规化事件，
  * 渲染层只认识本词表，永不接触协议字面量。
@@ -125,8 +127,9 @@ const uiEventDefs = {
   queueChanged: z.object({
     type: z.literal('queueChanged'),
     threadId,
-    steering: z.array(z.string()),
-    followUp: z.array(z.string()),
+    /** hub inbox entry 投影（id 是 queue/drop、queue/send_now 的寻址键） */
+    steering: z.array(queueEntry),
+    followUp: z.array(queueEntry),
   }),
   /** isStreaming 由 turnStarted/turnSettled 派生（agent 运行窗口），不设独立事件。 */
   compacting: z.object({ type: z.literal('compacting'), threadId, active: z.boolean() }),

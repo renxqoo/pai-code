@@ -1,4 +1,5 @@
 import type { WalEvent } from './hub-protocol';
+import type { QueueEntry } from './queue-views';
 
 /**
  * host-hub 常用响应 data 形状（adapter 收窄的输入镜像；从 hub-protocol 拆出
@@ -25,7 +26,7 @@ export interface StateData {
   sessionName: string;
   sessionFile: string;
   messageCount: number;
-  queue: { steering: string[]; followUp: string[] };
+  queue: { steering: QueueEntry[]; followUp: QueueEntry[] };
 }
 
 /** get_models 目录条目（reasoning 恒在场；input 条件在场——携图能力判据）。 */

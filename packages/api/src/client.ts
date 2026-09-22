@@ -45,6 +45,8 @@ function createSessionDomain(t: ApiClientTransport) {
     abortBash: call(t, 'session/abortBash'),
     bash: call(t, 'session/bash'),
     clearQueue: call(t, 'session/clearQueue'),
+    queueDrop: call(t, 'session/queueDrop'),
+    queueSendNow: call(t, 'session/queueSendNow'),
     entries: call(t, 'session/entries'),
     inflight: call(t, 'session/inflight'),
     pendingDialogs: call(t, 'session/pendingDialogs'),

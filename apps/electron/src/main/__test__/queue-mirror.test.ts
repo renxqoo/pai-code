@@ -4,8 +4,9 @@ import { createQueueMirror, type QueueStateOutcome } from '../queue-mirror';
 
 /**
  * 队列镜像链回归（对抗审查 P2）：spliced 信号 → get_state 拉取 → queueChanged 合成。
- * 覆盖：在途合并去抖、恰一次重试、重试在飞守卫（回归：旧实现 .finally 在递归重试
- * 在飞时误删 pending 标记，守卫失效起并发拉取）、异常路径释放。
+ * 覆盖：在途合并 + dirty 补拍（快照后并发写不丢——drop/send_now 的 UI 收敛依赖）、
+ * 恰一次重试、重试在飞守卫（回归：旧实现 .finally 在递归重试在飞时误删 pending 标记，
+ * 守卫失效起并发拉取）、异常路径释放。
  */
 
 interface Deferred<T> {
@@ -30,30 +31,50 @@ const wait = (ms: number): Promise<void> =>
   });
 
 describe('createQueueMirror 队列面镜像', () => {
-  test('在途信号合并去抖：拉取在飞时 N 连信号只一拉', async () => {
-    const gate = deferred<QueueStateOutcome>();
+  test('在途信号合并 + dirty 补拍：拉取在飞时 N 连信号只并一拍，完成后恰一补拉（快照后并发写不丢）', async () => {
+    const first = deferred<QueueStateOutcome>();
+    const second = deferred<QueueStateOutcome>();
+    const gates = [first, second];
     let calls = 0;
     const emitted: Array<[unknown, string]> = [];
     const mirror = createQueueMirror({
       fetchState: () => {
         calls += 1;
-        return gate.promise;
+        return (gates[calls - 1] ?? deferred<QueueStateOutcome>()).promise;
       },
       emitQueue: (data, threadId) => emitted.push([data, threadId]),
     });
     mirror.signal('t1');
-    mirror.signal('t1');
+    mirror.signal('t1'); // 在途：快照已定格，并入 dirty
     mirror.signal('t1');
     await wait(10);
-    expect(calls).toBe(1);
-    gate.resolve(ok({ queue: { followUp: ['a'] } }));
+    expect(calls).toBe(1); // 在途不并发拉取
+    first.resolve(ok({ queue: { followUp: ['旧快照'] } }));
     await wait(10);
-    expect(calls).toBe(1);
-    expect(emitted).toEqual([[{ queue: { followUp: ['a'] } }, 't1']]);
+    expect(calls).toBe(2); // dirty 补拍恰一拍（不吞并发写）
+    expect(emitted[0]).toEqual([{ queue: { followUp: ['旧快照'] } }, 't1']);
+    second.resolve(ok({ queue: { followUp: ['新快照'] } }));
+    await wait(10);
+    expect(calls).toBe(2); // 补拍后无残留标记
+    expect(emitted[1]).toEqual([{ queue: { followUp: ['新快照'] } }, 't1']);
     // 链终结后新信号再拉
     mirror.signal('t1');
     await wait(10);
-    expect(calls).toBe(2);
+    expect(calls).toBe(3);
+  });
+
+  test('无并发信号的普通拉取：完成后不补拍（dirty 位只在在途信号时置位）', async () => {
+    let calls = 0;
+    const mirror = createQueueMirror({
+      fetchState: () => {
+        calls += 1;
+        return Promise.resolve(ok({ queue: { followUp: ['a'] } }));
+      },
+      emitQueue: () => undefined,
+    });
+    mirror.signal('t1');
+    await wait(10);
+    expect(calls).toBe(1);
   });
 
   test('恰一次重试：首败后重试成功合成队列面', async () => {
@@ -72,7 +93,7 @@ describe('createQueueMirror 队列面镜像', () => {
     expect(emitted).toEqual([{ queue: { followUp: ['b'] } }]);
   });
 
-  test('回归：重试在飞时守卫连续——新信号不得起并发拉取（旧实现 .finally 误删标记）', async () => {
+  test('回归：重试在飞时守卫连续——新信号并入 dirty，不并发起拉取（旧实现 .finally 误删标记）', async () => {
     const first = deferred<QueueStateOutcome>();
     const retryGate = deferred<QueueStateOutcome>();
     let calls = 0;
@@ -88,13 +109,13 @@ describe('createQueueMirror 队列面镜像', () => {
     first.resolve(fail()); // 触发恰一次重试（retryGate 在飞）
     await wait(10);
     expect(calls).toBe(2);
-    mirror.signal('t1'); // 重试在飞：必须并入，不得第三拉
+    mirror.signal('t1'); // 重试在飞：并入 dirty，不得立即第三拉
     mirror.signal('t1');
     await wait(10);
     expect(calls).toBe(2);
     retryGate.resolve(ok({ queue: { followUp: [] } }));
     await wait(10);
-    expect(calls).toBe(2);
+    expect(calls).toBe(3); // 重试成功后按 dirty 恰一补拍
   });
 
   test('两次都失败：标记释放，悬挂至下一信号；异常路径同样释放', async () => {

@@ -59,7 +59,7 @@ describe('toSessionView · 缺省兜底', () => {
 });
 
 describe('threadStateView（get_state）', () => {
-  test('model {provider, model} 收窄 + queue 面（非字符串项过滤）', () => {
+  test('model {provider, model} 收窄 + queue 面（条目形状，缺 id/text 的垃圾项过滤）', () => {
     expect(
       threadStateView({
         model: { provider: 'glm', model: 'glm-5.3' },
@@ -67,7 +67,10 @@ describe('threadStateView（get_state）', () => {
         isCompacting: false,
         sessionName: 'n',
         messageCount: 7,
-        queue: { steering: ['插一句'], followUp: ['接着问', 3] },
+        queue: {
+          steering: [{ id: 'e1', text: '插一句' }],
+          followUp: [{ id: 'e2', text: '接着问' }, { text: '缺id' }, { id: 'e3' }, 3],
+        },
       }),
     ).toEqual({
       model: { provider: 'glm', model: 'glm-5.3' },
@@ -75,7 +78,7 @@ describe('threadStateView（get_state）', () => {
       isCompacting: false,
       sessionName: 'n',
       messageCount: 7,
-      queue: { steering: ['插一句'], followUp: ['接着问'] },
+      queue: { steering: [{ id: 'e1', text: '插一句' }], followUp: [{ id: 'e2', text: '接着问' }] },
     });
   });
 

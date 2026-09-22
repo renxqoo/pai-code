@@ -110,16 +110,16 @@ describe('live store（对话框/通知/bootstrap 合并）', () => {
     store.getState().applyEvent({ type: 'sessionDied', threadId: 't1', reason: 'crash' }, 5);
     expect(store.getState().threads['t1']?.crashed).toBe(true);
     // 未知线程的对话流事件兜底建线程（不崩溃）
-    store.getState().applyEvent({ type: 'queueChanged', threadId: 'ghost', steering: [], followUp: ['m'] }, 6);
-    expect(store.getState().threads['ghost']?.queue.followUp).toEqual(['m']);
+    store.getState().applyEvent({ type: 'queueChanged', threadId: 'ghost', steering: [], followUp: [{ id: 'qg', text: 'm' }] }, 6);
+    expect(store.getState().threads['ghost']?.queue.followUp).toEqual([{ id: 'qg', text: 'm' }]);
   });
 
   test('症状回归：host restarting/failed 就地终态全部线程在途面（宿主死亡后空闲会话新消息不再进排队）', () => {
     const store = createLiveStore();
     store.getState().bootstrap(bootstrapOf([session('t1'), session('t2')]));
     store.getState().applyEvent({ type: 'turnStarted', threadId: 't1', at: 2 }, 2);
-    store.getState().applyEvent({ type: 'queueChanged', threadId: 't1', steering: [], followUp: ['等轮末'] }, 3);
-    store.getState().applyEvent({ type: 'queueChanged', threadId: 't2', steering: ['插入'], followUp: [] }, 4);
+    store.getState().applyEvent({ type: 'queueChanged', threadId: 't1', steering: [], followUp: [{ id: 'q1', text: '等轮末' }] }, 3);
+    store.getState().applyEvent({ type: 'queueChanged', threadId: 't2', steering: [{ id: 'q2', text: '插入' }], followUp: [] }, 4);
     // 宿主挂死重启：全部线程的运行面随进程消亡（不会有 turnSettled/queueChanged）
     store.getState().applyEvent({ type: 'host', phase: 'restarting' }, 5);
     expect(store.getState().threads['t1']?.streaming).toBe(false);

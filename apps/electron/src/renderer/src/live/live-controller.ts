@@ -13,7 +13,7 @@ import { createLazyResume } from './lazy-resume';
 import { createReadPorts } from './read-ports';
 import { createSettingsPorts } from './settings-ports';
 import { checkoutGitBranch, listGitBranches, listGitGraph, searchFiles } from './git-actions';
-import type { CreateSessionInput, CreateSessionOutcome, LiveController } from './live-controller-types';
+import type { CreateSessionInput, CreateSessionOutcome, LiveController, QueueOpOutcome } from './live-controller-types';
 import { isLiveSession, type LiveStore } from './store';
 
 /**
@@ -280,6 +280,21 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       if (threadId.length === 0) return;
       store.getState().stopIntent(threadId);
       await api.session.abort({ threadId });
+    },
+    async queueDrop(threadId: string, entryId: string): Promise<QueueOpOutcome> {
+      // 成功后队列镜像随 agent/inbox/spliced 触发的 queueChanged 收敛，此处无需回写
+      const outcome = threadId.length === 0 || entryId.length === 0 ? null : await api.session.queueDrop({ threadId, entryId });
+      if (outcome === null) return 'failed';
+      if (outcome.ok) return 'ok';
+      return outcome.error.kind === 'state_conflict' ? 'consumed' : 'failed';
+    },
+    async queueSendNow(threadId: string, entryId: string): Promise<QueueOpOutcome> {
+      const outcome = threadId.length === 0 || entryId.length === 0 ? null : await api.session.queueSendNow({ threadId, entryId });
+      if (outcome === null) return 'failed';
+      if (outcome.ok) return 'ok';
+      if (outcome.error.kind === 'state_conflict') return 'consumed';
+      if (outcome.error.kind === 'streaming_window') return 'window';
+      return 'failed';
     },
     async createSession(input: CreateSessionInput): Promise<CreateSessionOutcome> {
       // 权限模式与思考档是 session/start 的原生参数（hub 建线程即生效，无后置应用窗口）

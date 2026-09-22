@@ -5,6 +5,7 @@ import type {
   InflightView,
   ModelInfoView,
   PendingDialogView,
+  QueueEntry,
   SavedSessionView,
   SessionStatsView,
   SessionView,
@@ -61,14 +62,20 @@ export function threadStateView(data: unknown): ThreadStateView {
   };
 }
 
-/** 排队面：垃圾形状回落两个空数组（无队列后端即此形态）。 */
-function queueView(value: unknown): { steering: string[]; followUp: string[] } {
+/** 排队面（entry id + 文本——id 是单条队列命令寻址键）：垃圾形状回落两个空数组（无队列后端即此形态）。 */
+function queueView(value: unknown): { steering: QueueEntry[]; followUp: QueueEntry[] } {
   const q = recordOf(value);
-  return { steering: stringList(q.steering), followUp: stringList(q.followUp) };
+  return { steering: entryList(q.steering), followUp: entryList(q.followUp) };
 }
 
-function stringList(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+function entryList(value: unknown): QueueEntry[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    const record = recordOf(item);
+    const id = record.id;
+    const text = record.text;
+    return typeof id === 'string' && id !== '' && typeof text === 'string' ? [{ id, text }] : [];
+  });
 }
 
 /**

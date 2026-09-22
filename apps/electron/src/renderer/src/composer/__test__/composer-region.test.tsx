@@ -200,18 +200,45 @@ describe('ComposerRegion 交互', () => {
     view.unmount();
   });
 
-  test('排队卡片数据源 = hub 队列镜像：followUp 文本渲染卡片堆（只读，无单条动作位）；队列清空即消失', () => {
-    seedLive({ threads: { t1: { streaming: true, queue: { steering: [], followUp: ['排队的消息'] } } } });
+  test('排队卡片数据源 = hub 队列镜像：followUp 条目渲染卡片堆（立即/编辑/移除按 id 寻址）；队列清空即消失；空闲会话无立即位', () => {
+    seedLive({
+      threads: { t1: { streaming: true, queue: { steering: [], followUp: [{ id: 'q1', text: '排队的消息' }] } } },
+    });
+    const sendNow = jest.spyOn(workspaceActions, 'sendQueuedMessageNow');
+    const edit = jest.spyOn(workspaceActions, 'editQueuedMessage');
+    const remove = jest.spyOn(workspaceActions, 'removeQueuedMessage');
     const view = render(<ComposerRegion />);
     expect(view.container.textContent).toContain('排队的消息');
-    // hub 队列无单条操作（协议仅 clear_queue）：镜像卡片不带立即/编辑/移除动作
-    expect([...view.container.querySelectorAll('button')].some((b) => b.getAttribute('aria-label')?.includes('排队消息'))).toBe(false);
-    expect([...view.container.querySelectorAll('button')].some((b) => b.textContent?.trim() === '立即')).toBe(false);
+    // 立即改向（生成中注入当前轮）+ 编辑回填 + 移除，全部以 entryId 寻址
+    expect([...view.container.querySelectorAll('button')].some((b) => b.textContent?.trim() === copy.composer.queuedSendNow)).toBe(true);
+    React.act(() => {
+      [...view.container.querySelectorAll('button')].find((b) => b.getAttribute('aria-label') === copy.composer.queuedEdit)?.click();
+    });
+    React.act(() => {
+      [...view.container.querySelectorAll('button')].find((b) => b.getAttribute('aria-label') === copy.composer.queuedRemove)?.click();
+    });
+    React.act(() => {
+      [...view.container.querySelectorAll('button')].find((b) => b.textContent?.trim() === copy.composer.queuedSendNow)?.click();
+    });
+    expect(edit).toHaveBeenCalledWith('q1');
+    expect(remove).toHaveBeenCalledWith('q1');
+    expect(sendNow).toHaveBeenCalledWith('q1');
     // queueChanged 折叠清空 → 卡片随之消失（事件时差内的空态）
     React.act(() => {
       liveStore.getState().applyEvent({ type: 'queueChanged', threadId: 't1', steering: [], followUp: [] }, Date.now());
     });
     expect(view.container.textContent).not.toContain('排队的消息');
+    view.unmount();
+  });
+
+  test('空闲会话的排队卡片无立即位（无运行中轮可改向）：编辑与移除仍可用', () => {
+    seedLive({ threads: { t1: { streaming: false, queue: { steering: [], followUp: [{ id: 'q2', text: '空闲排队' }] } } } });
+    const sendNow = jest.spyOn(workspaceActions, 'sendQueuedMessageNow');
+    const view = render(<ComposerRegion />);
+    expect(view.container.textContent).toContain('空闲排队');
+    expect([...view.container.querySelectorAll('button')].some((b) => b.textContent?.trim() === copy.composer.queuedSendNow)).toBe(false);
+    expect([...view.container.querySelectorAll('button')].some((b) => b.getAttribute('aria-label') === copy.composer.queuedRemove)).toBe(true);
+    expect(sendNow).not.toHaveBeenCalled();
     view.unmount();
   });
 
@@ -385,7 +412,7 @@ describe('重渲边界回归（B-keystroke）', () => {
     });
     // 后台线程队列折叠（queueChanged：threads 表换引用，活跃线程条目引用不变）
     React.act(() => {
-      liveStore.getState().applyEvent({ type: 'queueChanged', threadId: 'bg-thread', steering: [], followUp: ['后台排队'] }, Date.now());
+      liveStore.getState().applyEvent({ type: 'queueChanged', threadId: 'bg-thread', steering: [], followUp: [{ id: 'bg-1', text: '后台排队' }] }, Date.now());
     });
     expect(commits).toBe(0); // §1.3 预算：无关线程事件不进区域订阅面
     view.unmount();

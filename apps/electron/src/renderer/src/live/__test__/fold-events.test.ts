@@ -339,8 +339,8 @@ describe('foldEvents · 水化与对账', () => {
 describe('foldEvents · 队列/压缩/崩溃', () => {
   test('queueChanged / compacting / sessionDied → turnStarted 清除', () => {
     let s = initialThreadState;
-    s = foldThreadEvent(s, ev({ type: 'queueChanged', threadId: 't', steering: ['改一下'], followUp: ['然后'] }), T);
-    expect(s.queue).toEqual({ steering: ['改一下'], followUp: ['然后'] });
+    s = foldThreadEvent(s, ev({ type: 'queueChanged', threadId: 't', steering: [{ id: 'q1', text: '改一下' }], followUp: [{ id: 'q2', text: '然后' }] }), T);
+    expect(s.queue).toEqual({ steering: [{ id: 'q1', text: '改一下' }], followUp: [{ id: 'q2', text: '然后' }] });
     s = foldThreadEvent(s, ev({ type: 'compacting', threadId: 't', active: true }), T);
     expect(s.compacting).toBe(true);
     s = foldThreadEvent(s, ev({ type: 'sessionDied', threadId: 't', reason: 'x' }), T);
@@ -358,7 +358,7 @@ describe('foldEvents · 队列/压缩/崩溃', () => {
       retrying: { attempt: 1, errorMessage: 'x' },
       bashRunning: true,
       bashTail: 'partial',
-      queue: { steering: ['插入'], followUp: ['下一条'] },
+      queue: { steering: [{ id: 'q1', text: '插入' }], followUp: [{ id: 'q2', text: '下一条' }] },
     };
     s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(0) }), tick(0));
     s = foldThreadEvent(s, ev({ type: 'subagentStarted', threadId: 't', agentId: 's1', agentName: 'explore', task: '扫描' }), tick(1));

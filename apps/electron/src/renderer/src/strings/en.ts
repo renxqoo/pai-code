@@ -205,6 +205,12 @@ export const en = {
     forkStreaming: 'The conversation is still streaming. Stop it before forking.',
     /** 回合结算失败（settled ok=false；reason 为 hub/worker 错误文案） */
     turnFailed: (reason: string): string => (reason.length > 0 ? `The reply failed (${reason}).` : 'The reply failed.'),
+    /** 队列单条操作落空（queue/drop、queue/send_now 撞上条目已入轮/已清空的竞态——中性表述） */
+    queuedEntryConsumed: 'That message is no longer queued.',
+    /** 立即改向落空（无运行中的轮次可注入；条目留在队列随下轮消费） */
+    queuedSendNowUnavailable: 'No reply is running right now; the message stays queued.',
+    /** 队列单条操作其余失败（传输/暂态等；不猜测条目现状） */
+    queueOpFailed: 'The operation failed. Please try again.',
     forkedImageName: (index: number): string => `Image ${index}`,
     resumeFailed: resumeFailedCopy,
     stopConfirmTitle: 'Stop everything?',
@@ -242,6 +248,10 @@ export const en = {
   composer: {
     placeholder: 'Ask anything, @tag files/folders, or / for commands and skills',
     queuePlaceholder: 'Type to queue a follow-up…',
+    /** 排队消息卡片动作位 */
+    queuedSendNow: 'Now',
+    queuedEdit: 'Edit this queued message',
+    queuedRemove: 'Remove this queued message',
     attach: 'Attach images and files',
     send: 'Send message',
     stop: 'Stop generating',

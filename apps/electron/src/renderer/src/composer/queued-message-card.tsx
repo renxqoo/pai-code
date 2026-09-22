@@ -17,8 +17,8 @@ type QueuedMessageCardProps = {
   onRemove?: () => void
 }
 
-/** 生成中的排队消息卡片：拖拽手柄（装饰）+ 单行预览 + 动作位（可选——hub 队列
- *  镜像来源只读呈现，无单条操作；本地可操作来源才带立即改向 / 编辑 / 移除）。
+/** 排队消息卡片：拖拽手柄（装饰）+ 单行预览 + 单条动作位（立即改向 / 编辑回填 /
+ *  移除——entryId 寻址 hub 队列；动作是否渲染由调用方按可选 props 决定）。
  *  灰底横条贴输入卡顶部渲染，多条时纵向堆叠（旧→新，最新一条贴输入框）。 */
 function QueuedMessageCard({ text, sendNowLabel, editLabel, removeLabel, onSendNow, onEdit, onRemove }: QueuedMessageCardProps) {
   return (
