@@ -108,6 +108,18 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
           return [{ type: 'turnStarted', threadId, at: num(payload.time, deps.now()) }];
         case 'llm/chunk':
           return mapChunk(state, threadId, payload, deps);
+        case 'agent/assistant-stream': {
+          // 主会话 attempt 边界（内核 runAttempt 流失败重试在同 turn/step 内从头发
+          // 第二段流——llm/chunk 面无重开标记）：phase:'start' 重置流缓冲并广播
+          // streamRestarted，fold 清空当前流块，失败 attempt 的半截文本被替换不叠加
+          const streamFrame = recordOf(payload.frame);
+          if (streamFrame['phase'] !== 'start') return [];
+          const buffer = state.streams.get(threadId);
+          if (buffer === undefined) return [];
+          buffer.text = '';
+          buffer.thinking = '';
+          return [{ type: 'streamRestarted', threadId, messageId: buffer.messageId }];
+        }
         case 'assistant/message': {
           // 步坐标以 WAL 权威事件为准更新缓冲（E-H4：无文本步不复用陈旧缓冲——
           // 事件自带 turn/step，比对后重置；thinking 是内核顶层字段非 content 块）

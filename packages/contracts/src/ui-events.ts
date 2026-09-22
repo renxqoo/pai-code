@@ -77,6 +77,9 @@ const uiEventDefs = {
   /** 流式正文增量：只拼 delta，权威内容见 messageFinal。 */
   textDelta: z.object({ type: z.literal('textDelta'), threadId, messageId: z.string(), delta: z.string() }),
   thinkingDelta: z.object({ type: z.literal('thinkingDelta'), threadId, messageId: z.string(), delta: z.string() }),
+  /** attempt 重开（内核 runAttempt 同 turn/step 内流失败重试）：该消息的流式
+   *  text/thinking 块清空重来——新 attempt 从头累积，不与中断残留叠加。 */
+  streamRestarted: z.object({ type: z.literal('streamRestarted'), threadId, messageId: z.string() }),
   /** 模型侧工具调用定形（tool/start 携完整参数）；执行进度走 toolUpdated/toolEnded。 */
   toolCallAdded: z.object({
     type: z.literal('toolCallAdded'),

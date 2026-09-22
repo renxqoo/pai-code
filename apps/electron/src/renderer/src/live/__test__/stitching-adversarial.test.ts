@@ -201,6 +201,23 @@ function rebuildItems(): HistoryItem[] {
   ] as unknown as HistoryItem[];
 }
 
+describe('attempt 重开（流式中断重试不叠加）', () => {
+  test('streamRestarted 清空当前流块：重试内容替换中断残留，thinking 同步清空', () => {
+    let s = initialThreadState;
+    s = ev({ type: 'turnStarted', threadId: T, at: 1 }, s);
+    s = ev({ type: 'messageStarted', threadId: T, messageId: 'm1', at: 2 }, s);
+    s = ev({ type: 'thinkingDelta', threadId: T, messageId: 'm1', delta: '中断的思考' }, s);
+    s = ev({ type: 'textDelta', threadId: T, messageId: 'm1', delta: '中断前的半句' }, s);
+    s = ev({ type: 'streamRestarted', threadId: T, messageId: 'm1' }, s);
+    s = ev({ type: 'textDelta', threadId: T, messageId: 'm1', delta: '重试后的正文' }, s);
+    expect(blocksOf(s, ['text'])).toBe('text:重试后的正文'); // 修复前：text:中断前的半句重试后的正文
+    expect(blocksOf(s, ['thinking'])).toBe('thinking:'); // 思考流一并清空（新 attempt 从头）
+    // 权威替换语义不变：messageFinal 到达照常整体替换
+    s = ev({ type: 'messageFinal', threadId: T, message: { id: 'm1', text: '权威', thinking: '', toolCalls: [], usage: null } }, s);
+    expect(blocksOf(s, ['text'])).toBe('text:权威');
+  });
+});
+
 describe('迟到 messageFinal 跨轮守卫的三个边界（对抗审查 F1/F2 回归）', () => {
   test('F1：settle→rebuild→新轮后，旧轮迟到 final 不得以 owner undefined 直通污染新轮', () => {
     let s = initialThreadState;

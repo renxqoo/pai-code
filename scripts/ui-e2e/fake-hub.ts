@@ -86,10 +86,25 @@ async function runTurn(thread: ThreadState, echoText: string): Promise<void> {
     emit(thread, 'llm/chunk', { turn, step, chunk: { type: 'thinking-delta', text: piece } });
     await sleep(BEAT);
   }
+  // 正文流按真内核 attempt 链形态：第一段流中断（部分文本 + attempt 失败帧），
+  // 重试同 turn/step 从头发第二段（assistant-stream phase:'start' 是重开边界）
+  const streamFrame = (phase: string, extra: Record<string, unknown> = {}): void => {
+    emit(thread, 'agent/assistant-stream', { session: thread.threadId, turn, step, frame: { phase, ...extra } });
+  };
+  streamFrame('start');
+  for (const piece of ['收到「', echoText.slice(0, 6)]) {
+    emit(thread, 'llm/chunk', { turn, step, chunk: { type: 'text-delta', text: piece } });
+    await sleep(BEAT);
+  }
+  streamFrame('end', { kind: 'attempt' });
+  await sleep(BEAT);
+  streamFrame('start');
   for (const piece of ['收到「', echoText.slice(0, 6), '」，开始分析。']) {
     emit(thread, 'llm/chunk', { turn, step, chunk: { type: 'text-delta', text: piece } });
     await sleep(BEAT);
   }
+  // attempt 成功后到落账间的真实停顿（中间件/调度）：流式终态的可采样窗口
+  await sleep(6 * BEAT);
 
   const callId = `call-${turn}`;
   emit(thread, 'tool/call', { turn, step, callId, name: 'bash', arguments: JSON.stringify({ command: 'ls -la' }) });
@@ -284,7 +299,9 @@ function handle(command: Record<string, unknown>): void {
       respond(id, {
         turnStartSeq: thread.transcript.at(-1)?.seq ?? null,
         turnStartedAt: Date.now() - 2000,
-        message: { role: 'assistant', content: [{ type: 'thinking', text: '用户问的是队列与消息渲染，我先检查渲染管线' }, { type: 'text', text: '收到「' }] },
+        // 真形（role+content blocks）但内容按 turnStarted converge 时点的真实形态：
+        // 流尚未起步 partial 为空（写死非空会被 converge 当独立块合入 live 轮=伪叠加）
+        message: { role: 'assistant', content: [] },
         toolOutputs: [],
         bash: null,
       });

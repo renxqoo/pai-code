@@ -428,6 +428,7 @@ function samplePerUiEvent(): UiEvent[] {
     { type: 'messageStarted', threadId: t, messageId: 'a1', at: 1 },
     { type: 'textDelta', threadId: t, messageId: 'a1', delta: 'he' },
     { type: 'thinkingDelta', threadId: t, messageId: 'a1', delta: '...' },
+    { type: 'streamRestarted', threadId: t, messageId: 'a1' },
     { type: 'toolCallAdded', threadId: t, messageId: 'a1', call: { id: 'tc1', name: 'bash', argsPreview: 'ls' }, diff: null },
     { type: 'toolUpdated', threadId: t, callId: 'tc1', output: 'partial' },
     { type: 'toolEnded', threadId: t, callId: 'tc1', output: 'done', isError: false, durationMs: 12, diff: null },

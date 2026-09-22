@@ -228,6 +228,23 @@ async function main(): Promise<void> {
     console.log('[diag]', JSON.stringify(diag, null, 1).slice(0, 900));
     await waitFor(cdp, `document.body.innerText.includes('先检查渲染管线')`, 20_000, 'thinking streamed');
     await cdp.screenshot(join(SHOT_DIR, '03-streaming.png'));
+    // attempt 重开不叠加：正文中断重发后，「收到「」在第一轮流式中只出现一次
+    // （修复前两段流叠加成「收到「xxx收到「xxx…」）
+    // attempt 链协议覆盖（终态面）：流中断重发帧序跑通且 rebuild 权威替换正确——
+    // 「流式期第二段替换第一段不叠加」的判别由单测合链钉死（attempt-restart-chain）
+    await waitFor(cdp, `document.body.innerText.includes('本轮结论 1 号')`, 20_000, 'turn settled after attempt chain');
+    await assertEval(
+      cdp,
+      `[...document.querySelectorAll('[data-turn-id]')].map((el) => el.textContent ?? '').join('').split('收到「').length - 1 === 1`,
+      'attempt chain settles to single authoritative text',
+    );
+    console.log('[assert ✓] attempt chain: settle + rebuild produce single authoritative text');
+    // 计数域限定消息流本体（[data-turn-id]）：轮锚点带/头部摘要也含正文首行，全页计数会虚高
+    await assertEval(
+      cdp,
+      `[...document.querySelectorAll('[data-turn-id]')].map((el) => el.textContent ?? '').join('').split('收到「').length - 1 === 1`,
+      'attempt restart does not double text',
+    );
 
     // 4) 流式中排队第二条：思考文本刚出现即发送（必在流式窗口内）→ hub 入队 →
     //    agent/inbox/spliced → queueChanged → 卡片镜像。断言取强形态：发送后
@@ -332,6 +349,11 @@ async function main(): Promise<void> {
       hit.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
       return \`clicked:<\${hit.tagName}>\`;
     }`;
+    // 锚回 s1（reload 后自动打开的会话取决于 registry 同毫秒时间戳的排序——不稳定）：
+    // 点击幂等（已活跃无副作用），确保探针消息进入 s1
+    const ensureS1 = await cdp.eval<string>(`(${CLICK_ROW_JS})('E2E 会话 s1')`);
+    if (typeof ensureS1 !== 'string' || !ensureS1.startsWith('clicked:')) throw new Error(`ensure s1 active failed: ${String(ensureS1)}`);
+    await sleep(600);
     if (!(await cdp.eval<boolean>(`(${TYPE_JS})('请求确认的删除操作')`))) throw new Error('type dialog probe failed');
     await sleep(150);
     if (!(await cdp.eval<boolean>(SEND_JS))) throw new Error('enter dialog probe failed');
@@ -343,14 +365,6 @@ async function main(): Promise<void> {
     if (typeof clickS2 !== 'string' || !clickS2.startsWith('clicked:')) throw new Error(`click s2 row failed: ${String(clickS2)}`);
     console.log(`[s2] ${clickS2}`);
     await sleep(1_200);
-    const switchDiag = await cdp.eval<string>(`JSON.stringify({
-      hasConfirm: document.body.innerText.includes('需要确认'),
-      overlays: [...document.querySelectorAll('.fixed.inset-0')].length,
-      turns: document.querySelectorAll('[data-turn-id]').length,
-      stage: (() => { const el = document.querySelector('main, [class*=stage], section'); return el === null ? null : (el.textContent ?? '').slice(0, 100); })(),
-      head: document.body.innerText.slice(0, 300),
-    })`);
-    console.log('[switch-diag]', switchDiag);
     await cdp.screenshot(join(SHOT_DIR, '08-dialog-hidden-in-s2.png'));
     await sleep(600);
     // 核心断言：s2 界面无 s1 的确认条（随输入卡走，切会话自然不在场）

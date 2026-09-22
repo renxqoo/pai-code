@@ -28,6 +28,22 @@ describe('createEventMapper · 主线程事件', () => {
     ]);
   });
 
+  test('attempt 重开（assistant-stream phase:start）→ streamRestarted + 缓冲清空（同 turn/step 重试不叠加）', () => {
+    const mapper = createEventMapper(deps);
+    mapper.mapEvent(chunk(0, 0, 'text-delta', { text: '中断前半句' }));
+    expect(mapper.mapEvent(frame('agent/assistant-stream', { session: 't', turn: 0, step: 0, frame: { phase: 'start' } }))).toEqual([
+      { type: 'streamRestarted', threadId: 't', messageId: 'stream-1' },
+    ]);
+    // 重开后的增量从空累积（不与中断残留叠加）
+    expect(mapper.mapEvent(chunk(0, 0, 'text-delta', { text: '重试后' }))).toEqual([
+      { type: 'textDelta', threadId: 't', messageId: 'stream-1', delta: '重试后' },
+    ]);
+    // 无缓冲的首个 start（步首边界先于首增量）为 no-op
+    expect(createEventMapper(deps).mapEvent(frame('agent/assistant-stream', { session: 't', turn: 0, step: 0, frame: { phase: 'start' } }))).toEqual([]);
+    // 非 start 相位（chunk/end）不在主会话面处理
+    expect(mapper.mapEvent(frame('agent/assistant-stream', { session: 't', turn: 0, step: 0, frame: { phase: 'end', kind: 'attempt' } }))).toEqual([]);
+  });
+
   test('首个 text-delta → messageStarted 开缓冲 + 增量同批（messageId 计数生成）', () => {
     const mapper = createEventMapper(deps);
     expect(mapper.mapEvent(chunk(0, 0, 'text-delta', { text: '你好' }))).toEqual([

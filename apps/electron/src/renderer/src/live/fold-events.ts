@@ -55,6 +55,8 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
       return appendDelta(state, resolveMessageId(state, event.messageId), 'text', event.delta, now);
     case 'thinkingDelta':
       return appendDelta(state, resolveMessageId(state, event.messageId), 'thinking', event.delta, now);
+    case 'streamRestarted':
+      return restartStreamBlocks(state, resolveMessageId(state, event.messageId));
     case 'toolCallAdded': {
       const withTurn = ensureLiveTurn(state, now);
       const turn = findTurn(withTurn, withTurn.liveTurnId);
@@ -306,6 +308,25 @@ function onMessageFinal(
     // 消息定形（message_end）：该消息的思考段权威收束，流式态熄灭
     return { ...current, blocks, streamingThinkingBlockId: null };
   });
+}
+
+/** attempt 重开：该消息的流式 text/thinking 块清空（新引用），块结构保留——
+ *  后续增量从空重新累积（内核流失败重试从头发第二段，不与中断残留叠加）。 */
+function restartStreamBlocks(state: LiveThreadState, messageId: string): LiveThreadState {
+  const turn = findTurn(state, state.liveTurnId);
+  if (turn === null) return state;
+  const textId = `text-${messageId}`;
+  const thinkId = `think-${messageId}`;
+  const hit = turn.blocks.some((block) => (block.kind === 'text' && block.id === textId) || (block.kind === 'thinking' && block.id === thinkId));
+  if (!hit) return state;
+  return updateTurn(state, turn.id, (current) => ({
+    ...current,
+    blocks: current.blocks.map((block) => {
+      if (block.kind === 'text' && block.id === textId) return { ...block, text: '' };
+      if (block.kind === 'thinking' && block.id === thinkId) return { ...block, text: '' };
+      return block;
+    }),
+  }));
 }
 
 function appendDelta(state: LiveThreadState, messageId: string, kind: 'text' | 'thinking', delta: string, now: number): LiveThreadState {
