@@ -82,16 +82,16 @@ async function runTurn(thread: ThreadState, echoText: string): Promise<void> {
   emit(thread, 'turn/start', { time: Date.now(), turn, step });
   await sleep(BEAT);
 
-  for (const piece of ['用户问的是', '队列与消息渲染，', '我先检查渲染管线']) {
-    emit(thread, 'llm/chunk', { turn, step, chunk: { type: 'thinking-delta', text: piece } });
-    await sleep(BEAT);
-  }
-  // 正文流按真内核 attempt 链形态：第一段流中断（部分文本 + attempt 失败帧），
-  // 重试同 turn/step 从头发第二段（assistant-stream phase:'start' 是重开边界）
+  // 真内核 attempt 链形态：runAttempt 先发 phase:'start'（整段 attempt 的开头，
+  // 早于一切 delta），流中断时 end(attempt) + 重试再 start 从头发第二段
   const streamFrame = (phase: string, extra: Record<string, unknown> = {}): void => {
     emit(thread, 'agent/assistant-stream', { session: thread.threadId, turn, step, frame: { phase, ...extra } });
   };
   streamFrame('start');
+  for (const piece of ['用户问的是', '队列与消息渲染，', '我先检查渲染管线']) {
+    emit(thread, 'llm/chunk', { turn, step, chunk: { type: 'thinking-delta', text: piece } });
+    await sleep(BEAT);
+  }
   for (const piece of ['收到「', echoText.slice(0, 6)]) {
     emit(thread, 'llm/chunk', { turn, step, chunk: { type: 'text-delta', text: piece } });
     await sleep(BEAT);

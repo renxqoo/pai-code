@@ -24,10 +24,10 @@ const chunkFrame = (type: string, text: string): Frame => ({
   payload: { turn: 1, step: 0, chunk: { type, text } },
 });
 
-const streamFrame = (phase: string, extra: Record<string, unknown> = {}): Frame => ({
+const streamFrame = (phase: string, extra: Record<string, unknown> = {}, step = 0): Frame => ({
   threadId: T,
   name: 'agent/assistant-stream',
-  payload: { session: T, turn: 1, step: 0, frame: { phase, ...extra } },
+  payload: { session: T, turn: 1, step, frame: { phase, ...extra } },
 });
 
 describe('attempt 重开全链（mapper × fold）', () => {
@@ -70,6 +70,40 @@ describe('attempt 重开全链（mapper × fold）', () => {
     const settled = state.items.at(-1);
     const settledText = settled?.kind === 'turn' ? settled.turn.blocks.find((block) => block.kind === 'text') : undefined;
     expect(settledText !== undefined && settledText.kind === 'text' ? settledText.text : '').toBe('权威正文');
+  });
+
+  test('下一 step 的 start（工具循环步边界）不清当前缓冲、不抹已权威替换的正文', () => {
+    // 用户症状回归：step 0 权威完成后 step 1 的 runAttempt 也发 phase:'start'——
+    // 帧的 step 坐标是下一步。旧实现无步坐标校验，清了 step 0 的缓冲并广播
+    // streamRestarted → fold 抹掉已权威替换的正文/思考块（思考与正文「消失」）
+    const mapper = createEventMapper({ now: () => NOW });
+    let state = initialThreadState;
+    const apply = (frame: Frame): void => {
+      for (const event of mapper.mapEvent(frame as never) as UiEvent[]) {
+        state = foldThreadEvent(state, event, NOW);
+      }
+    };
+
+    apply({ threadId: T, name: 'turn/start', payload: { turn: 1, step: 0, time: 1 } });
+    apply(streamFrame('start'));
+    apply(chunkFrame('thinking-delta', '先想'));
+    apply(chunkFrame('text-delta', '第一步结论'));
+    // step 0 权威落账（工具循环的 assistant/message）
+    apply({
+      threadId: T,
+      name: 'assistant/message',
+      payload: { turn: 1, step: 0, content: [{ type: 'text', text: '第一步结论' }], thinking: '先想' },
+    });
+    // 工具环后 step 1 的 attempt 开始（start 帧带 step=1——与缓冲的 step 0 不同步）
+    apply(streamFrame('start', {}, 1));
+    // step 1 的首个 delta 正常开新缓冲新块
+    apply({ threadId: T, name: 'llm/chunk', payload: { turn: 1, step: 1, chunk: { type: 'text-delta', text: '第二步' } } });
+
+    const turn = state.items.at(-1);
+    const texts = turn?.kind === 'turn' ? turn.turn.blocks.filter((block) => block.kind === 'text').map((block) => (block as { text: string }).text) : [];
+    expect(texts).toEqual(['第一步结论', '第二步']); // 修复前：第一步结论被 start(step1) 抹成空
+    const thinkings = turn?.kind === 'turn' ? turn.turn.blocks.filter((block) => block.kind === 'thinking').map((block) => (block as { text: string }).text) : [];
+    expect(thinkings).toEqual(['先想']);
   });
 
   test('无 start 边界的同段续流：append 语义不变（回归对照）', () => {

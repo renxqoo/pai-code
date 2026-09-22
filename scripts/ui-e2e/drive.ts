@@ -258,6 +258,9 @@ async function main(): Promise<void> {
       10_000,
       'queue card mirrored',
     );
+    // 流式渲染回归探针（用户症状：思考/正文消失）：排队时点消息流必须有思考与正文
+    const streamingForm = await cdp.eval<string>(`(() => { const t = [...document.querySelectorAll('[data-turn-id]')].map((el) => el.textContent ?? '').join(''); return JSON.stringify({ hasThinking: t.includes('我先检查渲染管线'), hasText: t.includes('收到「'), len: t.length }); })()`);
+    console.log('[streaming-form]', streamingForm);
     // 排队卡片本体：GripVertical 手柄 + 文本 span（灰底横条，截断样式下 innerText 仍全文）
     await assertEval(
       cdp,

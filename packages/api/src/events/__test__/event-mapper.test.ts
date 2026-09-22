@@ -40,6 +40,14 @@ describe('createEventMapper · 主线程事件', () => {
     ]);
     // 无缓冲的首个 start（步首边界先于首增量）为 no-op
     expect(createEventMapper(deps).mapEvent(frame('agent/assistant-stream', { session: 't', turn: 0, step: 0, frame: { phase: 'start' } }))).toEqual([]);
+    // 下一 step 的 start（步坐标与缓冲不同步）是工具循环步边界不是重开：不清缓冲、不产事件
+    const stepMapper = createEventMapper(deps);
+    stepMapper.mapEvent(chunk(0, 0, 'text-delta', { text: '第一步' }));
+    expect(stepMapper.mapEvent(frame('agent/assistant-stream', { session: 't', turn: 0, step: 1, frame: { phase: 'start' } }))).toEqual([]);
+    // 同一步的 start 才是重开（清空后新段从头累积）
+    expect(stepMapper.mapEvent(frame('agent/assistant-stream', { session: 't', turn: 0, step: 0, frame: { phase: 'start' } }))).toEqual([
+      { type: 'streamRestarted', threadId: 't', messageId: 'stream-1' },
+    ]);
     // 非 start 相位（chunk/end）不在主会话面处理
     expect(mapper.mapEvent(frame('agent/assistant-stream', { session: 't', turn: 0, step: 0, frame: { phase: 'end', kind: 'attempt' } }))).toEqual([]);
   });

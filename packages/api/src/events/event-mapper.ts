@@ -110,12 +110,16 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
           return mapChunk(state, threadId, payload, deps);
         case 'agent/assistant-stream': {
           // 主会话 attempt 边界（内核 runAttempt 流失败重试在同 turn/step 内从头发
-          // 第二段流——llm/chunk 面无重开标记）：phase:'start' 重置流缓冲并广播
-          // streamRestarted，fold 清空当前流块，失败 attempt 的半截文本被替换不叠加
+          // 第二段流——llm/chunk 面无重开标记）：phase:'start' 与当前缓冲同一步时
+          // 才是重开——重置流缓冲并广播 streamRestarted，fold 清空当前流块，失败
+          // attempt 的半截文本被替换不叠加。工具循环下一 step 的 start（步坐标不
+          // 同步）是正常步边界：旧步块已由 messageFinal 权威替换，不得触碰，新步
+          // 缓冲由 mapChunk 的步坐标边界自行开
           const streamFrame = recordOf(payload.frame);
           if (streamFrame['phase'] !== 'start') return [];
           const buffer = state.streams.get(threadId);
           if (buffer === undefined) return [];
+          if (buffer.turn !== num(payload.turn, -1) || buffer.step !== num(payload.step, -1)) return [];
           buffer.text = '';
           buffer.thinking = '';
           return [{ type: 'streamRestarted', threadId, messageId: buffer.messageId }];
