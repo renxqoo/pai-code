@@ -35,12 +35,6 @@ export type TurnEndReason =
   | { kind: 'max-tokens' }
   | { kind: 'interrupted' };
 
-/** agent/inbox/spliced 载荷（判别联合——队列结构信号，触发拉 get_state）。 */
-export type InboxSplice =
-  | { op: 'insert'; target: string; entries: unknown[] }
-  | { op: 'claim'; target: string; turn: number; claimed: number[] }
-  | { op: 'clear'; reason: string };
-
 /** agent/spawned|finished 载荷（键 agentId；spawned 的 work = 任务摘要，复活发射可能缺席）。 */
 export interface AgentSpawnedEvent {
   parent: string;

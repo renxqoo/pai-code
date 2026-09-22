@@ -55,6 +55,38 @@ test('renameSession trim 后为空直接拒绝且不发出命令', async () => {
   expect(client.calls.filter((call) => call.method === 'session/setName')).toEqual([]);
 });
 
+test('queueDrop：成功 ok、state_conflict → consumed（hub 码 → 类别塌缩的真实方法体覆盖）', async () => {
+  const client = makeClient({});
+  const controller = createLiveController(client, createLiveStore());
+  expect(await controller.queueDrop('t1', 'msg_1')).toBe('ok');
+  expect(client.calls.find((call) => call.method === 'session/queueDrop')?.params).toEqual({ threadId: 't1', entryId: 'msg_1' });
+  const consumed = createLiveController(
+    makeClient({ 'session/queueDrop': { ok: false, error: { kind: 'state_conflict' } } }),
+    createLiveStore(),
+  );
+  expect(await consumed.queueDrop('t1', 'msg_1')).toBe('consumed');
+  const failed = createLiveController(makeClient({ 'session/queueDrop': { ok: false, error: { kind: 'io_failed' } } }), createLiveStore());
+  expect(await failed.queueDrop('t1', 'msg_1')).toBe('failed');
+});
+
+test('queueSendNow：streaming_window → window、state_conflict → consumed、其余 failed', async () => {
+  const mk = (error: ApiError) =>
+    createLiveController(makeClient({ 'session/queueSendNow': { ok: false, error } }), createLiveStore());
+  expect(await mk({ kind: 'streaming_window' }).queueSendNow('t1', 'e1')).toBe('window');
+  expect(await mk({ kind: 'state_conflict' }).queueSendNow('t1', 'e1')).toBe('consumed');
+  expect(await mk({ kind: 'io_failed' }).queueSendNow('t1', 'e1')).toBe('failed');
+});
+
+test('queueDrop/queueSendNow 空 threadId 或 entryId：不发命令直接 failed', async () => {
+  const client = makeClient({});
+  const controller = createLiveController(client, createLiveStore());
+  expect(await controller.queueDrop('', 'e')).toBe('failed');
+  expect(await controller.queueDrop('t1', '')).toBe('failed');
+  expect(await controller.queueSendNow('', 'e')).toBe('failed');
+  expect(await controller.queueSendNow('t1', '')).toBe('failed');
+  expect(client.calls).toEqual([]);
+});
+
 test('submitDraft 携带 images 透传（prompt 单一通路）；纯图消息合法投递、全空拒绝', async () => {
   const images = [{ type: 'image' as const, data: 'aGk=', mediaType: 'image/png' }];
   const client = makeClient({});

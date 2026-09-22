@@ -15,7 +15,8 @@ export interface SessionCommands {
   abort(input: Input<'abort'>): Promise<HubResult<unknown>>;
   /** ack 命令（hub 成功响应无载荷）：成功恒为 null 视图。 */
   abortBash(input: Input<'abort_bash'>): Promise<HubResult<null>>;
-  /** 响应携带被清队列文本快照（hub 先取后清）——载荷原样透传，消费方按需收窄。 */
+  /** 响应携带被清队列文本快照（hub 先取后清）——session/clearQueue 路由折叠为 null，
+   *  需要快照的消费方直接走 hub 域方法。 */
   clearQueue(input: Input<'clear_queue'>): Promise<HubResult<unknown>>;
   /** 单条移除排队消息（entryId 寻址；已消费/已清空 → hub state_conflict）。 */
   queueDrop(input: Input<'queue/drop'>): Promise<HubResult<null>>;

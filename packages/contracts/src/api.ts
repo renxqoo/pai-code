@@ -249,11 +249,11 @@ export const ApiSchemas = {
     result: SessionViewSchema,
   },
   'session/queueDrop': {
-    params: z.object({ threadId: z.string().min(1), entryId: z.string().min(1) }).strict(),
+    params: z.object({ threadId: z.string().min(1), entryId: z.string().min(1).max(128) }).strict(),
     result: z.null(),
   },
   'session/queueSendNow': {
-    params: z.object({ threadId: z.string().min(1), entryId: z.string().min(1) }).strict(),
+    params: z.object({ threadId: z.string().min(1), entryId: z.string().min(1).max(128) }).strict(),
     result: z.null(),
   },
   'session/stop': {

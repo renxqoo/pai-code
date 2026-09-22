@@ -239,9 +239,9 @@ function ComposerRegion(): React.JSX.Element {
                     sendNowLabel={copy.composer.queuedSendNow}
                     editLabel={copy.composer.queuedEdit}
                     removeLabel={copy.composer.queuedRemove}
-                    onSendNow={generating ? () => workspaceActions.sendQueuedMessageNow(entry.id) : undefined}
-                    onEdit={() => workspaceActions.editQueuedMessage(entry.id)}
-                    onRemove={() => workspaceActions.removeQueuedMessage(entry.id)}
+                    onSendNow={generating ? () => workspaceActions.sendQueuedMessageNow(activeThreadId, entry.id) : undefined}
+                    onEdit={() => workspaceActions.editQueuedMessage(activeThreadId, entry.id)}
+                    onRemove={() => workspaceActions.removeQueuedMessage(activeThreadId, entry.id)}
                   />
                 )),
               ]

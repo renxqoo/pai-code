@@ -220,9 +220,9 @@ describe('ComposerRegion 交互', () => {
     React.act(() => {
       [...view.container.querySelectorAll('button')].find((b) => b.textContent?.trim() === copy.composer.queuedSendNow)?.click();
     });
-    expect(edit).toHaveBeenCalledWith('q1');
-    expect(remove).toHaveBeenCalledWith('q1');
-    expect(sendNow).toHaveBeenCalledWith('q1');
+    expect(edit).toHaveBeenCalledWith('t1', 'q1');
+    expect(remove).toHaveBeenCalledWith('t1', 'q1');
+    expect(sendNow).toHaveBeenCalledWith('t1', 'q1');
     // queueChanged 折叠清空 → 卡片随之消失（事件时差内的空态）
     React.act(() => {
       liveStore.getState().applyEvent({ type: 'queueChanged', threadId: 't1', steering: [], followUp: [] }, Date.now());

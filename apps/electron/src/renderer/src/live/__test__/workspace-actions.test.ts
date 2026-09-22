@@ -30,7 +30,7 @@ describe('排队消息单条操作', () => {
   test('移除：以活跃线程 + entryId 寻址 queue/drop；成功无通知', async () => {
     seedQueue();
     const drop = jest.spyOn(controller, 'queueDrop').mockResolvedValue('ok');
-    workspaceActions.removeQueuedMessage('q1');
+    workspaceActions.removeQueuedMessage('t1', 'q1');
     await Promise.resolve();
     expect(drop).toHaveBeenCalledWith('t1', 'q1');
     expect(store.getState().notices).toEqual([]);
@@ -39,7 +39,7 @@ describe('排队消息单条操作', () => {
   test('移除撞已消费竞态（hub state_conflict）：queuedEntryConsumed 提示解释卡片未消失', async () => {
     seedQueue();
     jest.spyOn(controller, 'queueDrop').mockResolvedValue('consumed');
-    workspaceActions.removeQueuedMessage('q1');
+    workspaceActions.removeQueuedMessage('t1', 'q1');
     await Promise.resolve();
     expect(store.getState().notices.map((notice) => notice.text)).toEqual([copy.flow.queuedEntryConsumed]);
   });
@@ -47,7 +47,7 @@ describe('排队消息单条操作', () => {
   test('编辑回填：移除成功后把条目文本写回草稿槽（空草稿直填）', async () => {
     seedQueue();
     jest.spyOn(controller, 'queueDrop').mockResolvedValue('ok');
-    workspaceActions.editQueuedMessage('q1');
+    workspaceActions.editQueuedMessage('t1', 'q1');
     await Promise.resolve();
     expect(uiStore.getState().drafts.t1).toBe('排队的消息');
   });
@@ -56,12 +56,12 @@ describe('排队消息单条操作', () => {
     seedQueue();
     uiStore.getState().setDraft('t1', '正在写的内容');
     jest.spyOn(controller, 'queueDrop').mockResolvedValueOnce('ok');
-    workspaceActions.editQueuedMessage('q1');
+    workspaceActions.editQueuedMessage('t1', 'q1');
     await Promise.resolve();
     expect(uiStore.getState().drafts.t1).toBe('正在写的内容\n排队的消息');
 
     jest.spyOn(controller, 'queueDrop').mockResolvedValueOnce('consumed');
-    workspaceActions.editQueuedMessage('q1');
+    workspaceActions.editQueuedMessage('t1', 'q1');
     await Promise.resolve();
     expect(uiStore.getState().drafts.t1).toBe('正在写的内容\n排队的消息'); // 失败不追加
     expect(store.getState().notices.map((notice) => notice.text)).toEqual([copy.flow.queuedEntryConsumed]);
@@ -70,21 +70,31 @@ describe('排队消息单条操作', () => {
   test('立即改向失败（无运行中轮）：queuedSendNowUnavailable 提示，条目留在队列', async () => {
     seedQueue();
     jest.spyOn(controller, 'queueSendNow').mockResolvedValue('window');
-    workspaceActions.sendQueuedMessageNow('q1');
+    workspaceActions.sendQueuedMessageNow('t1', 'q1');
     await Promise.resolve();
     expect(store.getState().notices.map((notice) => notice.text)).toEqual([copy.flow.queuedSendNowUnavailable]);
   });
 
-  test('空舞台守卫：无活跃会话不触 controller', async () => {
-    store.setState({ activeThreadId: null });
-    const drop = jest.spyOn(controller, 'queueDrop');
-    const sendNow = jest.spyOn(controller, 'queueSendNow');
-    workspaceActions.removeQueuedMessage('q1');
-    workspaceActions.editQueuedMessage('q1');
-    workspaceActions.sendQueuedMessageNow('q1');
+  test('空 threadId 守卫不触 controller；纯图条目（空文本）编辑 = 仅移除不回填', async () => {
+    const drop = jest.spyOn(controller, 'queueDrop').mockResolvedValue('ok');
+    const sendNow = jest.spyOn(controller, 'queueSendNow').mockResolvedValue('ok');
+    workspaceActions.removeQueuedMessage('', 'q1');
+    workspaceActions.editQueuedMessage('', 'q1');
+    workspaceActions.sendQueuedMessageNow('', 'q1');
     await Promise.resolve();
     expect(drop).not.toHaveBeenCalled();
     expect(sendNow).not.toHaveBeenCalled();
+
+    // 空文本条目（纯图）：drop 成功但不写草稿（回填空串 = 无意义的裸换行）
+    store.setState({
+      activeThreadId: 't1',
+      threads: { t1: { ...initialThreadState, queue: { steering: [], followUp: [{ id: 'q-img', text: '' }] } } },
+    });
+    jest.spyOn(controller, 'queueDrop').mockResolvedValueOnce('ok');
+    uiStore.getState().setDraft('t1', '已有内容');
+    workspaceActions.editQueuedMessage('t1', 'q-img');
+    await Promise.resolve();
+    expect(uiStore.getState().drafts.t1).toBe('已有内容');
   });
 });
 
