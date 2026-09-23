@@ -8,6 +8,7 @@ import type { HostCommandOutcome, HostPhase, HostProcessPort, HubFrame, PaiComma
 import { createApiRoutes } from "../api-routes";
 import { createSettingsRoutes } from '@paiapp/api';
 import { createAgentDefinitionsStore } from "../agent-definitions-store";
+import { createSkillImporter } from "../skill-import";
 import { createFileSettings, type ProviderKeyStore } from "../file-settings";
 import { createPaiRuntime } from "../pai-runtime";
 import { createRuntimeMonitor } from '@paiapp/infra';
@@ -88,6 +89,7 @@ async function makeRoutes(work: string, options: { models?: Array<Record<string,
     agentDir,
     revealPath: () => undefined,
     pickDirectory: () => Promise.resolve(null),
+    skillImporter: createSkillImporter({ homeDir: home }),
     exportDiagnosticsBundle: () => work,
     monitor: createRuntimeMonitor({ host: () => null, hub: () => null, appMetrics: () => ({ rssBytes: null, cpuPercent: null }), systemMemory: () => ({ totalBytes: null, availableBytes: null }), idleRecycleMinutes: () => 5, appVersion: () => 'test' }),
   });
@@ -120,6 +122,33 @@ describe("api-routes 安全面（C-S2/C-S8/C-S4）", () => {
       error?: { kind: string; face?: string };
     };
     expect(inside).toEqual({ ok: false, error: { kind: "transient", face: "host_unavailable" } });
+  });
+
+  test("C-S 技能源白名单：批准根之外的 sourcePath 拒绝（candidates/import 双口；防把 ~/.ssh 拷进技能根）", async () => {
+    const work = mkdtempSync(join(tmpdir(), "pai-sec-skill-"));
+    const { routes, home } = await makeRoutes(work, { models: [] });
+    const outside = join(work, "secrets");
+    mkdirSync(outside, { recursive: true });
+    writeFileSync(join(outside, "SKILL.md"), "---\nname: evil\ndescription: d\n---\n");
+    // 真实路径归一后不在批准根（home 下三个内置源根）之下 → 双口皆拒
+    const candidates = (await routes.invoke("skills/candidates", { sourcePath: outside })) as {
+      ok: boolean;
+      error?: { kind: string };
+    };
+    expect(candidates.ok).toBe(false);
+    expect(candidates.error?.kind).toBe("skill_source_invalid");
+    const imported = (await routes.invoke("skills/import", { sourcePath: outside, overwrite: false })) as {
+      ok: boolean;
+      error?: { kind: string };
+    };
+    expect(imported.ok).toBe(false);
+    expect(imported.error?.kind).toBe("skill_source_invalid");
+    // 穿越形态同样拒绝（realpath 归一挡 `..`）
+    const traversal = (await routes.invoke("skills/import", {
+      sourcePath: join(home, ".agents", "skills", "..", "..", "..", "secrets"),
+      overwrite: false,
+    })) as { ok: boolean; error?: { kind: string } };
+    expect(traversal.error?.kind).toBe("skill_source_invalid");
   });
 
   test("C-S8：provider 名 sanitize 碰撞拒绝（a-b 与 a_b 同映射 PAI_KEY_A_B）", async () => {

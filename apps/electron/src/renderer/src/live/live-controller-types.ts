@@ -6,6 +6,7 @@ import type {
   PermMode,
   PreferencesView,
   ProviderModel,
+  SkillCandidateView,
   SkillView,
 } from '@paiapp/contracts';
 
@@ -28,6 +29,16 @@ export type CreateSessionInput = {
 }
 
 /** 会话创建结果：成功带新 threadId（调用方据此把首条消息/草稿寻址到新会话）。 */
+/** 技能导入请求（目标名缺省 = 候选建议名；overwrite = 显式覆盖同名）。 */
+export type SkillImportRequest = { sourcePath: string; name?: string; overwrite: boolean };
+
+/** 批量导入汇总（逐条隔离的失败明细 + 批末重开失败数）。 */
+export type SkillImportSummary = {
+  imported: number;
+  failed: ReadonlyArray<{ name: string; reason: string }>;
+  reopenFailures: number;
+};
+
 export type CreateSessionOutcome = { ok: true; threadId: string } | { ok: false; reason: string };
 
 /** 单条队列操作结果（hub 错误码 → 消费方文案分派的类别）：
@@ -91,6 +102,13 @@ export interface LiveController {
   readonly setSkillEnabled: (name: string, enabled: boolean) => Promise<{ ok: true; data: SkillView[] } | { ok: false; reason: string }>;
   /** 技能开关完整编排：写 + 串行重开全部 live 会话（链式排队，交错不叠加）；失败返回重开失败数。 */
   readonly applySkillToggle: (name: string, enabled: boolean) => Promise<{ ok: true; reopenFailures: number } | { ok: false; reason: string }>;
+  /** 技能候选扫描（导入对话框数据源；sourcePath 缺省 = 三个内置源根；判定 = hub skills/inspect）。 */
+  readonly scanSkillCandidates: (sourcePath?: string) => Promise<{ ok: true; candidates: SkillCandidateView[] } | { ok: false; reason: string }>;
+  /** 批量技能导入（T42 D5/D6）：串行逐条（失败逐条隔离）→ 清 skills.disabled 名单 →
+   *  写后清单回读 → **批末单次重开**全部 live 会话；挂在与 applySkillToggle 同一条串行链。 */
+  readonly importSkills: (items: readonly SkillImportRequest[]) => Promise<SkillImportSummary>;
+  /** 删除用户级技能（hub 删整技能目录——含捆绑文件）；成功后单次重开生效。 */
+  readonly removeSkill: (name: string) => Promise<{ ok: true; reopenFailures: number } | { ok: false; reason: string }>;
   /** 同文件重开会话（不指定 trusted，保持既有信任态）：技能/资源开关生效通路。 */
   readonly reopenSession: (threadId: string) => Promise<boolean>;
   /** 项目文件搜索（@ 引用；cwd 门禁在主进程，失败返回 null）。 */

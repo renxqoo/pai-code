@@ -8,6 +8,7 @@ import { ApiSchemas, type UiEvent } from '@paiapp/contracts';
 import { appError } from '@paiapp/api';
 
 import { createApiRoutes } from './api-routes';
+import { createSkillImporter } from './skill-import';
 import { createAgentDefinitionsStore } from './agent-definitions-store';
 import { createFileLogger, createFileSettings } from './file-settings';
 import { resolveHubPaths } from './hub-paths';
@@ -232,6 +233,8 @@ void app.whenReady().then(async () => {
       agentDefinitions: createAgentDefinitionsStore(),
       agentDir: paths.agentDir,
       revealPath: (path) => shell.showItemInFolder(path),
+      // 技能源面：批准根 = 三个内置源根 ∪ 对话框批准目录（pickedDirectories 复用）
+      skillImporter: createSkillImporter({ pickedRoots: () => [...pickedDirectories] }),
       extraCwds: () => [...pickedDirectories],
       // 对话框单飞：在途时再调用直接按取消返回（防被攻陷渲染层并发叠弹多个模态面板）
       pickDirectory: async (defaultPath) => {

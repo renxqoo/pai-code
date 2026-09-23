@@ -3,7 +3,7 @@ import type { PermMode } from './permissions';
 import type { ThinkingLevel } from './thinking-levels';
 
 /**
- * host-hub 命令入参形状（58 命令；从 hub-protocol 拆出保持行数预算）。
+ * host-hub 命令入参形状（60 命令；从 hub-protocol 拆出保持行数预算）。
  * 规格真相源 = x-harness 仓库 src/protocol/commands.ts 与各 handler 实现。
  */
 
@@ -379,6 +379,49 @@ export interface SkillsRemoveCmd {
   name: string;
 }
 
+/**
+ * 技能候选形态检查（SKILL-INSTALL §1.2）：对给定技能目录批量判定三态
+ * ready/rename/blocked（blocked 携问题码闭集——宿主按码本地化文案）。
+ */
+export interface SkillsInspectCmd {
+  type: 'skills/inspect';
+  /** 技能目录绝对路径（SKILL.md 父目录）；1..SKILL_INSPECT_MAX_PATHS。 */
+  sourcePaths: string[];
+}
+
+/**
+ * 技能安装（SKILL-INSTALL §1.3）：全树拷贝到用户技能根下一级；name = 目标名
+ * （只改副本的 name 行）；overwrite 显式覆盖（缺省拒 = name_conflict）。
+ */
+export interface SkillsInstallCmd {
+  type: 'skills/install';
+  sourcePath: string;
+  name?: string;
+  overwrite?: boolean;
+}
+
+/** 拒注册问题码闭集（镜像 x-harness packages/skill/src/inspect.ts SkillProblem）。 */
+export type SkillProblemCode =
+  | 'not_found'
+  | 'unreadable'
+  | 'not_regular_file'
+  | 'too_large'
+  | 'no_frontmatter'
+  | 'frontmatter_not_flat'
+  | 'missing_fields';
+
+/** skills/inspect 应答单项（state 判别联合；blocked 只携问题码）。 */
+export type SkillInspectedCandidate =
+  | { sourcePath: string; state: 'ready'; name: string; description: string }
+  | { sourcePath: string; state: 'rename'; name: string; description: string }
+  | { sourcePath: string; state: 'blocked'; problem: SkillProblemCode };
+
+/** skills/inspect 应答（结果与入参同序同数）。 */
+export type SkillsInspectData = { results: SkillInspectedCandidate[] };
+
+/** skills/install 应答（path = 副本 SKILL.md 绝对路径；skippedEntries = 未复制条目数）。 */
+export type SkillsInstallData = { name: string; path: string; skippedEntries: number };
+
 /** 向运行中的子 agent 注入 steer（轮边界投递；非驻留/非 busy 拒绝；寻址键 agentId）。 */
 export interface SubagentSteerCmd {
   type: 'subagent/steer';
@@ -445,9 +488,11 @@ export type HubCommand =
   | (SkillsListCmd & { id?: string })
   | (SkillsSetEnabledCmd & { id?: string })
   | (SkillsRemoveCmd & { id?: string })
+  | (SkillsInspectCmd & { id?: string })
+  | (SkillsInstallCmd & { id?: string })
   | (SubagentSteerCmd & { id?: string });
 
-/** 命令词表（与 host-hub COMMAND_NAMES 逐一对应——58 条；测试做封闭断言）。 */
+/** 命令词表（与 host-hub COMMAND_NAMES 逐一对应——60 条；测试做封闭断言）。 */
 export const HUB_COMMAND_TYPES = [
   'thread/start',
   'thread/resume',
@@ -503,7 +548,9 @@ export const HUB_COMMAND_TYPES = [
   'agents/list',
   'agents/create',
   'agents/remove',
+  'skills/inspect',
   'skills/list',
+  'skills/install',
   'skills/set_enabled',
   'skills/remove',
   'subagent/steer',

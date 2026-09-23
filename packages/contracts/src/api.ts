@@ -171,6 +171,28 @@ export const SkillViewSchema = z
   .strict();
 export type SkillView = z.infer<typeof SkillViewSchema>;
 
+/**
+ * 技能候选视图（skills/candidates；导入对话框数据源）。
+ * state 三态取自 hub skills/inspect；problem = 中性诊断码（hub SkillProblem 闭集，
+ * rename 补 'name_mismatch'）——文案在 strings 按码查表，判定语义不进 app。
+ */
+export const SkillCandidateViewSchema = z
+  .object({
+    /** 建议目标名 = 源声明名（缺省）/ 源目录名（无法读 frontmatter 时）。 */
+    name: z.string(),
+    description: z.string(),
+    /** 源技能目录绝对路径（SKILL.md 的父目录）。 */
+    sourcePath: z.string(),
+    /** 来源根标签：agents|pi|claude = 内置源根；picked = 用户手动选择目录。 */
+    origin: z.enum(['agents', 'pi', 'claude', 'picked']),
+    /** ready = 可直接导入；rename = name≠源目录名（导入时自动校正）；blocked = 装载器必拒。 */
+    state: z.enum(['ready', 'rename', 'blocked']),
+    /** blocked/rename 的诊断码（SkillProblemCode ∪ 'name_mismatch'）；ready 恒 null。 */
+    problem: z.string().nullable(),
+  })
+  .strict();
+export type SkillCandidateView = z.infer<typeof SkillCandidateViewSchema>;
+
 export const ProviderConfigViewSchema = z.object({
   name: z.string(),
   baseUrl: z.string(),
@@ -447,6 +469,34 @@ export const ApiSchemas = {
   /** 技能启用/禁用（写 hub skills.disabled 名单；结果为写后的完整清单）。 */
   'skills/setEnabled': {
     params: z.object({ name: z.string().min(1), enabled: z.boolean() }).strict(),
+    result: z.array(SkillViewSchema),
+  },
+  /** 技能候选扫描（导入对话框数据源）：无 sourcePath = 扫固定源根；有 = 扫该目录（须在批准根之下）。 */
+  'skills/candidates': {
+    params: z.object({ sourcePath: z.string().min(1).optional() }).strict(),
+    result: z.object({ candidates: z.array(SkillCandidateViewSchema) }).strict(),
+  },
+  /** 导入单个技能（经 hub skills/install；name = 目标名，副本 frontmatter name 行同步改写；结果为写后完整清单）。 */
+  'skills/import': {
+    params: z
+      .object({
+        sourcePath: z.string().min(1),
+        /** 目标目录名；缺省 = 源 SKILL.md 的 frontmatter name（装载器要求二者一致）。 */
+        name: z.string().min(1).optional(),
+        /** 同名已存在时是否覆盖（缺省 false = 拒）。 */
+        overwrite: z.boolean().default(false),
+      })
+      .strict(),
+    result: z
+      .object({
+        skills: z.array(SkillViewSchema),
+        imported: z.object({ name: z.string(), path: z.string() }).strict(),
+      })
+      .strict(),
+  },
+  /** 删除用户级技能（hub skills/remove；删整技能目录——含捆绑文件）。 */
+  'skills/remove': {
+    params: z.object({ name: z.string().min(1) }).strict(),
     result: z.array(SkillViewSchema),
   },
   /** 清空排队消息（协议仅全清，无单条操作）。 */

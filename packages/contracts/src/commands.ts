@@ -38,8 +38,11 @@ export type PaiCommandType =
   | 'permission/get_mode'
   | 'settings/get'
   | 'settings/set'
+  | 'skills/inspect'
+  | 'skills/install'
   | 'skills/list'
   | 'skills/set_enabled'
+  | 'skills/remove'
   | 'get_session_stats'
   | 'set_session_name'
   | 'get_commands'
@@ -84,8 +87,11 @@ export const PAI_COMMAND_TYPES = [
   'permission/get_mode',
   'settings/get',
   'settings/set',
+  'skills/inspect',
+  'skills/install',
   'skills/list',
   'skills/set_enabled',
+  'skills/remove',
   'get_session_stats',
   'set_session_name',
   'get_commands',

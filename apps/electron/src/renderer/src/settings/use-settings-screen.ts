@@ -1,6 +1,7 @@
 import * as React from 'react';
 
-import type { AgentDefinition, IdleRecycleMinutes, PermMode, ProviderConfigView, ProviderModel, SkillView, ThinkingLevel } from '@paiapp/contracts';
+import type { AgentDefinition, IdleRecycleMinutes, PermMode, ProviderConfigView, ProviderModel, SkillCandidateView, SkillView, ThinkingLevel } from '@paiapp/contracts';
+import type { SkillImportRequest, SkillImportSummary } from '@/live/live-controller-types';
 import { AGENT_TOOL_IDS } from '@paiapp/contracts';
 import type { Theme } from '@/components/theme-context';
 import { useTheme } from '@/components/use-theme';
@@ -86,7 +87,19 @@ export type SettingsScreenProps = {
     ) => Promise<string | null>;
     onRemove: (key: { name: string; scope: 'user' | 'project'; project: string | null }) => Promise<string | null>;
   };
-  skills: { list: readonly SkillView[]; onToggle: (name: string, enabled: boolean) => Promise<boolean>; onRefresh: () => void };
+  skills: {
+    list: readonly SkillView[];
+    onToggle: (name: string, enabled: boolean) => Promise<boolean>;
+    onRefresh: () => void;
+    /** 候选扫描（导入对话框数据源；失败 null）。 */
+    onScanCandidates: (sourcePath?: string) => Promise<readonly SkillCandidateView[] | null>;
+    /** 批量导入（逐条隔离；返回汇总含逐条失败明细）。 */
+    onImportSkills: (items: readonly SkillImportRequest[]) => Promise<SkillImportSummary>;
+    /** 系统目录选择（导入对话框「选择文件夹…」）。 */
+    onPickFolder: () => Promise<string | null>;
+    /** 删除用户级技能（两步确认后调用）。 */
+    onRemove: (name: string) => Promise<boolean>;
+  };
   history: {
     saved: readonly SavedSession[];
     pinned: ReadonlySet<string>;
@@ -215,7 +228,15 @@ export function useSettingsScreen({ open, onClose, initialSection }: UseSettings
       onSave: (definition, previous) => actions.upsertAgentDefinition(definition, previous),
       onRemove: (key) => actions.removeAgentDefinition(key),
     },
-    skills: { list: skills, onToggle: actions.setSkillEnabled, onRefresh: actions.refreshSkills },
+    skills: {
+      list: skills,
+      onToggle: actions.setSkillEnabled,
+      onRefresh: actions.refreshSkills,
+      onScanCandidates: actions.scanSkillCandidates,
+      onImportSkills: actions.importSkills,
+      onPickFolder: () => actions.pickDirectory(null),
+      onRemove: actions.removeSkill,
+    },
     history: {
       saved: saved,
       pinned,

@@ -1,6 +1,6 @@
 
 
-import type { ApiError, ApiMethod, ApiOutcome, ApiParams, PreferencesView, ProviderConfig, ProviderConfigView, SkillView } from '@paiapp/contracts';
+import type { ApiError, ApiMethod, ApiOutcome, ApiParams, PreferencesView, ProviderConfig, ProviderConfigView } from '@paiapp/contracts';
 import { isApiFormat, normalizeLegacyPermMode } from '@paiapp/contracts';
 import { appError } from '../errors';
 import type { SettingsCommands } from '../commands/settings';
@@ -10,9 +10,8 @@ import { errorLogToken } from './error-log-token';
 import { createProviderProbe } from './provider-probe';
 
 /**
- * 设置与目录路由组（api-routes 的本地配置子集）：providers/技能目录/hub 设置/偏好写。
- * 技能清单与启停走 hub settings 域（skills/list、skills/set_enabled——hub 是
- * ~/.x-harness/skills 布局与 hub-settings skills.disabled 名单的单一写者）；
+ * 设置与目录路由组（api-routes 的本地配置子集）：providers/hub 设置/偏好写。
+ * 技能域已拆至 verbs/skills.ts（T42 §4：一域一文件；清单/启停/候选/导入）；
  * 视图构建器（providersView/preferencesView）随路由一并产出。
  */
 
@@ -70,25 +69,6 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
     };
   };
 
-  /** 技能清单（hub skills/list 收窄；host 未启动降级空表）。 */
-  const skillsList = async (): Promise<SkillView[]> => {
-    const result = await deps.settingsCommands().listSkills({});
-    if (!result.ok) return [];
-    const raw = (result.data as { skills?: unknown }).skills;
-    if (!Array.isArray(raw)) return [];
-    const out: SkillView[] = [];
-    for (const item of raw) {
-      if (typeof item !== 'object' || item === null) continue;
-      const entry = item as Record<string, unknown>;
-      const name = typeof entry['name'] === 'string' ? entry['name'] : '';
-      if (name.length === 0) continue;
-      const source = entry['source'] === 'project' ? 'project' : entry['source'] === 'user' ? 'user' : null;
-      if (source === null) continue;
-      out.push({ name, enabled: entry['disabled'] !== true, source });
-    }
-    return out;
-  };
-
   // 连接探活（HTTP 直发不经 hub；渠道与 key 取本路由组的 settings/keyStore 端口，key 不进日志）
   const probe = createProviderProbe({
     getProvider: (name) => deps.settings.listProviders().find((provider) => provider.name === name),
@@ -96,8 +76,6 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
   }).probe;
 
   const routes: {
-    'skills/list': Handler<'skills/list'>;
-    'skills/setEnabled': Handler<'skills/setEnabled'>;
     'provider/upsert': Handler<'provider/upsert'>;
     'provider/remove': Handler<'provider/remove'>;
     'provider/test': Handler<'provider/test'>;
@@ -105,12 +83,6 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
     'app/setHubSettings': Handler<'app/setHubSettings'>;
     'app/setPreference': Handler<'app/setPreference'>;
   } = {
-    'skills/list': async () => ({ ok: true as const, data: await skillsList() }),
-    'skills/setEnabled': async (params) => {
-      const result = await deps.settingsCommands().setSkillEnabled({ name: params.name, enabled: params.enabled });
-      if (!result.ok) return fail(result.error);
-      return { ok: true as const, data: await skillsList() };
-    },
     'provider/upsert': async (params) => {
       // env 变量名碰撞防护：不同名字 sanitize 后同名会导致 key 互串（a-b 与 a_b 同映射 PAI_KEY_A_B）
       const envName = envVarNameForProvider(params.name);
@@ -210,7 +182,6 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
   return {
     providersView,
     preferencesView,
-    skillsList,
     routes,
   };
 }

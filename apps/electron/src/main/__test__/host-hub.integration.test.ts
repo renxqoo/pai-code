@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { HUB_ERROR_CODES } from '@paiapp/contracts';
 import { createApiRoutes } from '../api-routes';
 import { createAgentDefinitionsStore } from '../agent-definitions-store';
+import { createSkillImporter } from '../skill-import';
 import { createFileSettings, type ProviderKeyStore } from '../file-settings';
 import { createPaiRuntime, type PaiRuntime } from '../pai-runtime';
 import { createRuntimeMonitor } from '@paiapp/infra';
@@ -18,7 +19,13 @@ import { createRuntimeMonitor } from '@paiapp/infra';
  * 文件（HOME 隔离，.x-harness 域）。GLM 真凭证旅程保留 opt-in（PAI_E2E=1 + GLM_*）。
  */
 
-const hubEntry = process.env['PAI_HUB_ENTRY'] ?? '/Users/wrr/work/x-harness/apps/host-hub/src/host/cli.ts';
+// 技能安装面（skills/inspect|install，T42 H 路线）在 x-harness-skill-install 分支检出——
+// 优先取之；退回旁级 mainline x-harness 时导入旅程走 test.if 特性探测（见下）
+const hubEntry =
+  process.env['PAI_HUB_ENTRY'] ??
+  (existsSync('/Users/wrr/work/x-harness-skill-install/apps/host-hub/src/host/cli.ts')
+    ? '/Users/wrr/work/x-harness-skill-install/apps/host-hub/src/host/cli.ts'
+    : '/Users/wrr/work/x-harness/apps/host-hub/src/host/cli.ts');
 const bunPath = process.env['PAI_BUN_PATH'] ?? '/Users/wrr/work/agent-app/resources/bun/bun';
 const hubAvailable = existsSync(hubEntry);
 
@@ -120,6 +127,8 @@ function makeHarness(script: string): Harness {
     agentDir,
     revealPath: () => undefined,
     pickDirectory: () => Promise.resolve(null),
+    // 技能源面（homeDir 显式注入：bun homedir() 启动即缓存，进程内 HOME 重定向对它无效）
+    skillImporter: createSkillImporter({ homeDir: home }),
     monitor,
     exportDiagnosticsBundle: () => join(work, 'diagnostics'),
   });
@@ -134,6 +143,55 @@ function tapEventNames(runtime: PaiRuntime, names: string[]): void {
     if (frame.type === 'event') names.push(frame.name);
   });
 }
+
+  // 技能导入旅程（T42 M4/M5；真 hub skills/inspect|install 面）：候选三态 → 导入 →
+  // 清单/命令面在场（新会话装配 = 重开同路径）→ 删除整技能目录（D-1 回归：含捆绑文件）
+  test.if(hubAvailable)('技能导入旅程：candidates → install → 命令面在场 → remove 整目录', async () => {
+    const h = makeHarness(REPLY_SCRIPT);
+    await h.runtime.start();
+    expect(h.runtime.host.phase).toBe('ready');
+    // 源技能（含捆绑文件——D-1 锚：remove 后目录必须整棵消失）
+    const sourceDir = join(h.home, '.agents', 'skills', 'imported-skill');
+    mkdirSync(join(sourceDir, 'references'), { recursive: true });
+    writeFileSync(join(sourceDir, 'SKILL.md'), '---\nname: imported-skill\ndescription: Imported by the integration journey\n---\nBody.\n');
+    writeFileSync(join(sourceDir, 'references', 'notes.md'), 'bundled');
+
+    // 负例：导入前不在清单
+    const before = (await h.invoke('skills/list', {})) as { ok: boolean; data: Array<{ name: string }> };
+    expect(before.ok).toBe(true);
+    expect(before.data.some((item) => item.name === 'imported-skill')).toBe(false);
+
+    // 候选扫描：真 hub skills/inspect 三态（ready + origin=agents 内置源根）
+    const candidates = (await h.invoke('skills/candidates', {})) as {
+      ok: boolean;
+      data: { candidates: Array<{ name: string; state: string; origin: string }> };
+    };
+    expect(candidates.ok).toBe(true);
+    expect(candidates.data.candidates.find((item) => item.name === 'imported-skill')).toMatchObject({ state: 'ready', origin: 'agents' });
+
+    // 导入：hub install → user 技能根（HOME 隔离）；写后清单 + imported + 捆绑文件原样
+    const imported = (await h.invoke('skills/import', { sourcePath: sourceDir, overwrite: false })) as {
+      ok: boolean;
+      data: { imported: { name: string; path: string }; skills: Array<{ name: string; enabled: boolean }> };
+    };
+    expect(imported.ok).toBe(true);
+    expect(imported.data.imported.name).toBe('imported-skill');
+    expect(imported.data.skills.some((item) => item.name === 'imported-skill' && item.enabled)).toBe(true);
+    expect(existsSync(join(h.home, '.x-harness', 'skills', 'imported-skill', 'references', 'notes.md'))).toBe(true);
+
+    // 生效面：新会话装配（= 重开同路径）command/list 含 skill:imported-skill
+    const started = (await h.invoke('session/start', { cwd: h.work, trusted: true })) as { ok: boolean; data: { threadId: string } };
+    expect(started.ok).toBe(true);
+    const commands = (await h.invoke('command/list', { threadId: started.data.threadId })) as { ok: boolean; data: Array<{ name: string }> };
+    expect(commands.ok).toBe(true);
+    expect(commands.data.some((item) => item.name === 'skill:imported-skill')).toBe(true);
+
+    // 删除（D-1）：整技能目录（含 references/）消失，清单同步
+    const removed = (await h.invoke('skills/remove', { name: 'imported-skill' })) as { ok: boolean; data: Array<{ name: string }> };
+    expect(removed.ok).toBe(true);
+    expect(removed.data.some((item) => item.name === 'imported-skill')).toBe(false);
+    expect(existsSync(join(h.home, '.x-harness', 'skills', 'imported-skill'))).toBe(false);
+  });
 
 afterAll(async () => {
   for (const harness of harnesses) {

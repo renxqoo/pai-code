@@ -41,8 +41,8 @@ describe('词表封闭（双向）', () => {
     );
   });
 
-  test('hub 命令词表 == 58（x-harness host-hub COMMAND_NAMES 镜像；queue/drop、queue/send_now 为单条队列操作面）', () => {
-    expect(HUB_COMMAND_TYPES.length).toBe(58);
+  test('hub 命令词表 == 60（x-harness host-hub COMMAND_NAMES 镜像；queue/drop、queue/send_now 为单条队列操作面；skills/inspect|install 为技能安装面）', () => {
+    expect(HUB_COMMAND_TYPES.length).toBe(60);
     expect(HUB_COMMAND_TYPES).toContain('thread/delete');
     expect(HUB_COMMAND_TYPES).toContain('queue/drop');
     expect(HUB_COMMAND_TYPES).toContain('queue/send_now');
@@ -64,7 +64,7 @@ describe('词表封闭（双向）', () => {
         'workspace/trust',
         'models/add', 'models/remove',
         'agents/list', 'agents/create', 'agents/remove',
-        'skills/list', 'skills/set_enabled', 'skills/remove',
+        'skills/inspect', 'skills/install', 'skills/list', 'skills/set_enabled', 'skills/remove',
         'subagent/steer',
       ].sort(byStr),
     );

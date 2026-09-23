@@ -17,6 +17,7 @@ import { runGit } from './git-exec';
 import { createOpenLocation, type OpenLocation } from './open-location';
 import { createLocalRoutes } from '@paiapp/api';
 import { createSettingsRoutes } from '@paiapp/api';
+import { createSkillRoutes, failClosedSkillSources, type SkillSourcePort } from '@paiapp/api';
 import { promptRoutes } from '@paiapp/api';
 import type { AgentDefinitionsStore } from './agent-definitions-store';
 import type { ApiError } from '@paiapp/contracts';
@@ -68,6 +69,9 @@ export interface ApiRouteDeps {
   revealPath: (path: string) => void;
   /** 系统目录选择对话框（装配层注入 Electron dialog；缺省返回「不可用」）。 */
   pickDirectory: (defaultPath: string | null) => Promise<string | null>;
+  /** 技能源面（装配层注入 skill-import 实现：批准根白名单 + 候选发现）。
+   *  缺省 fail-closed（门恒拒、扫描恒空）——未接线不放大能力面，可测性同 revealPath 范式。 */
+  skillImporter?: SkillSourcePort;
   /** 本地 git 分支能力（装配层可注入执行器替身；缺省走真实 git）。 */
   git?: GitBranches;
   /** 本地 git 图谱读口（同上，可注入替身）。 */
@@ -241,7 +245,14 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     settingsCommands: () => hub().settings,
     ...(deps.onRouteRejected !== undefined ? { onReject: deps.onRouteRejected } : {}),
   });
-  const { providersView, preferencesView, skillsList } = settings;
+  const { providersView, preferencesView } = settings;
+  // 技能域（清单/启停/候选/导入；H 路线落盘经 hub skills/install|inspect）
+  const skills = createSkillRoutes({
+    settingsCommands: () => hub().settings,
+    sources: deps.skillImporter ?? failClosedSkillSources,
+    ...(deps.onRouteRejected !== undefined ? { onReject: deps.onRouteRejected } : {}),
+  });
+  const { skillsList, routes: skillRoutes } = skills;
 
   type RouteTable = { [M in ApiMethod]?: (params: ApiParams<M>) => Outcome<M> };
 
@@ -257,6 +268,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
   const routes: RouteTable = {
     ...localRoutes,
     ...settings.routes,
+    ...skillRoutes,
     ...threadOpsRoutes({
       agentCommands: () => hub().agents,
       threadCommands: () => hub().thread,

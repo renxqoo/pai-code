@@ -93,6 +93,9 @@ function createSkillsDomain(t: ApiClientTransport) {
   return domain({
     list: call(t, 'skills/list'),
     setEnabled: call(t, 'skills/setEnabled'),
+    candidates: call(t, 'skills/candidates'),
+    import: call(t, 'skills/import'),
+    remove: call(t, 'skills/remove'),
   });
 }
 

@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import type { ProviderConfigView, SkillView } from '@paiapp/contracts';
+import type { ProviderConfigView, SkillCandidateView, SkillView } from '@paiapp/contracts';
+import type { SkillImportSummary } from '@/live/live-controller-types';
 import { copy } from '@/strings';
 import { SettingsScreen } from '../settings-screen';
 import type { SettingsScreenProps } from '../use-settings-screen';
@@ -14,6 +15,15 @@ function noop(): void {}
 function ok(): Promise<boolean> {
   return Promise.resolve(true);
 }
+/** 技能域动作替身（导入对话框渲染冒烟用；行为由 skills-import/dialog 纯函数测试覆盖）。 */
+const skillsActions = {
+  onToggle: ok,
+  onRefresh: noop,
+  onScanCandidates: (): Promise<readonly SkillCandidateView[] | null> => Promise.resolve([]),
+  onImportSkills: (): Promise<SkillImportSummary> => Promise.resolve({ imported: 0, failed: [], reopenFailures: 0 }),
+  onPickFolder: (): Promise<string | null> => Promise.resolve(null),
+  onRemove: ok,
+};
 
 function makeProps(overrides: Partial<SettingsScreenProps> = {}): SettingsScreenProps {
   return {
@@ -46,7 +56,7 @@ function makeProps(overrides: Partial<SettingsScreenProps> = {}): SettingsScreen
       onSaveDefaults: ok,
     },
     agents: { definitions: [], knownProjects: [], modelOptions: [], toolIds: [], onRefresh: noop, onSave: () => Promise.resolve(null), onRemove: () => Promise.resolve(null) },
-    skills: { list: [], onToggle: ok, onRefresh: noop },
+    skills: { list: [], ...skillsActions },
     history: {
       saved: [],
       pinned: new Set<string>(),
@@ -105,14 +115,16 @@ describe('设置页渲染冒烟', () => {
     expect(html).toContain(copy.settings.onboardingCardAction);
   });
 
-  test('技能分区：搜索框 + 技能卡（启用开关 + 关闭徽章）', () => {
+  test('技能分区：搜索框 + 导入入口 + 技能卡（启用开关 + 关闭徽章 + 删除入口）', () => {
     const html = renderToStaticMarkup(
-      <SettingsScreen {...makeProps({ section: 'skills', skills: { list: skills, onToggle: ok, onRefresh: noop } })} />,
+      <SettingsScreen {...makeProps({ section: 'skills', skills: { list: skills, ...skillsActions } })} />,
     );
     expect(html).toContain(copy.settings.searchSkills);
+    expect(html).toContain(copy.settings.skillsImportButton);
     expect(html).toContain('feature-dev');
     expect(html).toContain(copy.settings.skillToggleLabel('humanizer'));
     expect(html).toContain(copy.settings.skillDisabledHint);
+    expect(html).toContain(copy.settings.skillDeleteLabel('humanizer'));
   });
 
   test('七个分区各自渲染出大标题与特征内容', () => {

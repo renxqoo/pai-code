@@ -62,6 +62,8 @@ export type AppErrorCode =
   | 'branch_exists' | 'invalid_branch' | 'dirty_worktree' | 'unknown_branch' | 'not_a_repo' | 'git_unavailable'
   | 'empty_message' | 'no_active_session' | 'resume_failed' | 'bootstrap_crashed' | 'compact_images_rejected'
   | 'bash_images_rejected'
+  | 'skill_source_invalid' | 'skill_invalid' | 'skill_name_invalid' | 'skill_exists'
+  | 'skill_write_failed' | 'skill_not_registered' | 'skill_not_supported'
   | 'provider_name_conflict' | 'provider_api_unsupported' | 'provider_baseurl_invalid'
   | 'provider_baseurl_changed' | 'settings_unavailable';
 export type AppError = { kind: AppErrorCode; message?: string };

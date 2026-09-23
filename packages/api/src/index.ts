@@ -47,6 +47,21 @@ export { resumeRoutes } from './verbs/resume';
 export { runtimeRoutes } from './verbs/runtime';
 export { createLocalRoutes, type LocalRoutesDeps } from './verbs/local';
 export { createSettingsRoutes } from './verbs/settings';
+export { createSkillRoutes, failClosedSkillSources, type SkillRoutesDeps, type SkillSourcePort } from './verbs/skills';
+export {
+  combineCandidate,
+  discoverSkillDirs,
+  isInstallableSkillName,
+  isPathInside,
+  mapSkillInspectError,
+  mapSkillInstallError,
+  planImport,
+  skillProblemKind,
+  type ImportPlan,
+  type ScanDirent,
+  type ScanFs,
+} from './verbs/skills-import';
+export { createSkillInstallPort, type SkillInstallPort } from './verbs/skill-install-port';
 export { compactInvocationOf, interceptsCompact } from './verbs/compact-lexing';
 export { errorLogToken } from './verbs/error-log-token';
 export { envVarNameForProvider } from './verbs/env-name';

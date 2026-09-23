@@ -1,4 +1,4 @@
-import type { AgentDefinition, ApiOutcome, CommandView, IdleRecycleMinutes, ImagePayload, PermMode, ProviderModel, RuntimeSnapshotView } from '@paiapp/contracts';
+import type { AgentDefinition, ApiOutcome, CommandView, IdleRecycleMinutes, ImagePayload, PermMode, ProviderModel, RuntimeSnapshotView, SkillCandidateView } from '@paiapp/contracts';
 import { thinkingLevelOfLabel } from '@paiapp/contracts';
 
 import { writeClipboard } from '@/lib/write-clipboard';
@@ -6,6 +6,7 @@ import { copyOfError } from '@/lib/error-text';
 import { isTransientFace } from '@/strings/zh-error-copy';
 import { copy } from '@/strings';
 import { entrySeqOf } from './entry-seq';
+import type { SkillImportRequest, SkillImportSummary } from './live-controller-types';
 import { parseModelKey, pickSessionModel } from './pick-session-model';
 import { apiClient, controller, store } from './workspace-runtime';
 import { uiStore } from '@/ui/ui-store';
@@ -83,6 +84,12 @@ export type WorkspaceActions = {
   readonly fetchCommandPreview: () => Promise<CommandView[]>;
   /** 技能启停：落盘后重开全部活跃会话使新设置生效（失败 notice）。 */
   readonly setSkillEnabled: (name: string, enabled: boolean) => Promise<boolean>;
+  /** 技能候选扫描（导入对话框数据源；失败 null + notice）。 */
+  readonly scanSkillCandidates: (sourcePath?: string) => Promise<SkillCandidateView[] | null>;
+  /** 批量技能导入：返回逐条失败明细供汇总渲染（重开失败 notice）。 */
+  readonly importSkills: (items: readonly SkillImportRequest[]) => Promise<SkillImportSummary>;
+  /** 删除用户级技能（删整技能目录；失败 notice）。 */
+  readonly removeSkill: (name: string) => Promise<boolean>;
   readonly searchFiles: (query: string) => Promise<string[] | null>;
   /** 指定目录的 @ 文件搜索（新任务页无活跃会话，按所选目录搜索）。 */
   readonly searchFilesIn: (cwd: string, query: string) => Promise<string[] | null>;
@@ -455,6 +462,28 @@ export function createWorkspaceActions(): WorkspaceActions {
       }
       if (outcome.ok && outcome.reopenFailures > 0) pushNotice(copy.settings.skillReopenFailed);
       return outcome.ok;
+    },
+    scanSkillCandidates: async (sourcePath) => {
+      const outcome = await controller.scanSkillCandidates(sourcePath);
+      if (!outcome.ok) {
+        pushNotice(copy.settings.skillScanFailed);
+        return null;
+      }
+      return outcome.candidates;
+    },
+    importSkills: async (items) => {
+      const summary = await controller.importSkills(items);
+      if (summary.reopenFailures > 0) pushNotice(copy.settings.skillReopenFailed);
+      return summary;
+    },
+    removeSkill: async (name) => {
+      const outcome = await controller.removeSkill(name);
+      if (!outcome.ok) {
+        pushNotice(copy.settings.skillDeleteFailed);
+        return false;
+      }
+      if (outcome.reopenFailures > 0) pushNotice(copy.settings.skillReopenFailed);
+      return true;
     },
     searchFiles: (query) => {
       const state = store.getState();

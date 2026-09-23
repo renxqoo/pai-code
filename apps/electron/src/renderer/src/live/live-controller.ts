@@ -1,5 +1,5 @@
 import { createApiClient } from '@paiapp/api/client';
-import type { AgentDefinition, CommandView, ImagePayload, PreferencesView, ProviderModel, SkillView, UiEvent } from '@paiapp/contracts';
+import type { AgentDefinition, CommandView, ImagePayload, PreferencesView, ProviderModel, SkillCandidateView, SkillView, UiEvent } from '@paiapp/contracts';
 import { isSettableThinkingLevel } from '@paiapp/contracts';
 
 import { copy } from '@/strings';
@@ -13,7 +13,7 @@ import { createLazyResume } from './lazy-resume';
 import { createReadPorts } from './read-ports';
 import { createSettingsPorts } from './settings-ports';
 import { checkoutGitBranch, listGitBranches, listGitGraph, searchFiles } from './git-actions';
-import type { CreateSessionInput, CreateSessionOutcome, LiveController, QueueOpOutcome } from './live-controller-types';
+import type { CreateSessionInput, CreateSessionOutcome, LiveController, QueueOpOutcome, SkillImportRequest, SkillImportSummary } from './live-controller-types';
 import { isLiveSession, type LiveStore } from './store';
 
 /**
@@ -31,8 +31,16 @@ export type { CreateSessionInput, CreateSessionOutcome, LiveController } from '.
 export function createLiveController(client: BridgeClient, store: LiveStore): LiveController {
   let unsubscribe: (() => void) | null = null;
   let disposed = true;
-  /** 技能开关编排链（串行化，防多次开关的重开循环交错） */
+  /** 技能编排链（串行化：开关/导入/删除共用，防重开循环交错） */
   let skillToggleChain: Promise<void> = Promise.resolve();
+  const chainSkills = <T>(run: () => Promise<T>): Promise<T> => {
+    const chained = skillToggleChain.then(run, run);
+    skillToggleChain = chained.then(
+      () => undefined,
+      () => undefined,
+    );
+    return chained;
+  };
   /** 对账在途标记（每线程一个），防止重复拉取。 */
   const reconciling = new Set<string>();
 
@@ -458,12 +466,60 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
         }
         return { ok: true, reopenFailures };
       };
-      const chained = skillToggleChain.then(run, run);
-      skillToggleChain = chained.then(
-        () => undefined,
-        () => undefined,
-      );
-      return chained;
+      return chainSkills(run);
+    },
+    async scanSkillCandidates(sourcePath?: string): Promise<{ ok: true; candidates: SkillCandidateView[] } | { ok: false; reason: string }> {
+      const outcome = await api.skills.candidates(sourcePath !== undefined ? { sourcePath } : {});
+      if (!outcome.ok) return { ok: false, reason: copyOfError(outcome.error) };
+      return { ok: true, candidates: outcome.data.candidates };
+    },
+    /** 批量导入（T42 D5/D6）：串行逐条（失败逐条隔离）→ 清 skills.disabled 名单 → 批末单次重开。 */
+    async importSkills(items: readonly SkillImportRequest[]): Promise<SkillImportSummary> {
+      return chainSkills(async () => {
+        const failed: Array<{ name: string; reason: string }> = [];
+        let imported = 0;
+        for (const item of items) {
+          const label = item.name ?? item.sourcePath.split('/').filter(Boolean).pop() ?? item.sourcePath;
+          const outcome = await api.skills.import(item);
+          if (!outcome.ok) {
+            failed.push({ name: label, reason: copyOfError(outcome.error) });
+            continue;
+          }
+          // 生效闭环①：导入即启用——名在 skills.disabled 名单则清名单（否则导入即显示「已关闭」）
+          const landed = outcome.data.skills.find((skill) => skill.name === outcome.data.imported.name && skill.source === 'user');
+          if (landed !== undefined && !landed.enabled) {
+            const enabled = await api.skills.setEnabled({ name: landed.name, enabled: true });
+            store.setState({ skills: enabled.ok ? enabled.data : outcome.data.skills });
+          } else {
+            store.setState({ skills: outcome.data.skills });
+          }
+          imported += 1;
+        }
+        // D5：批末单次重开（不是每技能一次）
+        let reopenFailures = 0;
+        if (imported > 0) {
+          for (const session of Object.values(store.getState().sessions)) {
+            if (session.state !== 'live') continue;
+            const reopened = await this.reopenSession(session.threadId);
+            if (!reopened) reopenFailures += 1;
+          }
+        }
+        return { imported, failed, reopenFailures };
+      });
+    },
+    async removeSkill(name: string): Promise<{ ok: true; reopenFailures: number } | { ok: false; reason: string }> {
+      return chainSkills(async () => {
+        const outcome = await api.skills.remove({ name });
+        if (!outcome.ok) return { ok: false, reason: copyOfError(outcome.error) };
+        store.setState({ skills: outcome.data });
+        let reopenFailures = 0;
+        for (const session of Object.values(store.getState().sessions)) {
+          if (session.state !== 'live') continue;
+          const reopened = await this.reopenSession(session.threadId);
+          if (!reopened) reopenFailures += 1;
+        }
+        return { ok: true, reopenFailures };
+      });
     },
     async reopenSession(threadId: string): Promise<boolean> {
       const sessionPath = store.getState().sessions[threadId]?.sessionPath ?? null;
