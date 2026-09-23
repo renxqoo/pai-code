@@ -18,7 +18,8 @@ import { subagentsField } from '../views/subagent-spawns';
  * 显式忽略清单（渲染无直接消费，或由别的事件/对账路径覆盖）：
  * llm/chunk 的 tool-call-delta/finish（toolCallAdded 源 = WAL tool/call——参数
  *   集齐即现；步终局以 WAL assistant/message 为准）
- * turn/end（终态以 settled 为准——worker 死亡 host 合成，无悬挂）
+ * turn/end（主会话轮终局兜底：合成 turnSettled——内部驱动轮（delegation notify）
+ *   无 hub settled 债务，不合成则 loading 永挂；驱动轮的 settled 随后被去重吞掉）
  * agent/inbox/spliced（结构信号：主进程层拉取 get_state.queue 合成 queueChanged）
  * permission/decided（审计事件；对话框交互面是 ui_request 帧）
  * user/message、step/start|end、system/message、assistant/attempt、request/*、
@@ -48,6 +49,8 @@ interface StreamState {
   calls: Map<string, Map<string, string>>;
   /** callId → 工具输出累积（agent/tool-stream 增量批；owner 隔离同上） */
   toolStreams: Map<string, Map<string, string>>;
+  /** threadId → 已由 turn/end 合成结算（同轮后续 settled 帧吞掉防双结算） */
+  settledSynth: Set<string>;
   counter: number;
 }
 
@@ -85,11 +88,12 @@ export function payloadSessionOf(payload: Record<string, unknown>): string | und
 }
 
 export function createEventMapper(deps: EventMapDeps): EventMapper {
-  const state: StreamState = { streams: new Map(), calls: new Map(), toolStreams: new Map(), counter: 0 };
+  const state: StreamState = { streams: new Map(), calls: new Map(), toolStreams: new Map(), settledSynth: new Set(), counter: 0 };
 
   return {
     dispose(threadId: string): void {
       state.streams.delete(threadId);
+      state.settledSynth.delete(threadId);
       for (const key of threadBucketKeys(state, threadId)) {
         state.toolStreams.delete(key);
         state.calls.delete(key);
@@ -105,7 +109,21 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
       if (session !== undefined && session !== threadId) return [];
       switch (name) {
         case 'turn/start':
+          state.settledSynth.delete(threadId);
           return [{ type: 'turnStarted', threadId, at: num(payload.time, deps.now()) }];
+        case 'turn/end': {
+          // 内部驱动轮（delegation notify 等）无 hub settled：turn/end 权威终局就地合成
+          // turnSettled（error/blocked → ok:false，reason 透传），loading 不再悬挂。
+          // 驱动轮的 settled 帧随后到达时被 settledSynth 吞掉——fold 的 settle 幂等，
+          // 双结算虽无害但失败通报/窗口重建会双跑，去重更稳。门闩随 turn/start 重置。
+          state.streams.delete(threadId);
+          state.settledSynth.add(threadId);
+          const reason = recordOf(payload.reason);
+          const kind = str(reason['kind']);
+          const ok = kind !== 'error' && kind !== 'blocked';
+          const detail = kind === 'error' ? str(reason['message']) : kind === 'blocked' ? str(reason['reason']) : '';
+          return [{ type: 'turnSettled', threadId, ok, ...(ok ? {} : detail.length > 0 ? { reason: detail } : { reason: kind }), usage: null }];
+        }
         case 'llm/chunk':
           return mapChunk(state, threadId, payload, deps);
         case 'agent/assistant-stream': {
@@ -186,6 +204,7 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
           return [{ type: 'toolUpdated', threadId, callId, output: accumulated }];
         }
         case 'settled':
+          if (state.settledSynth.delete(threadId)) return []; // turn/end 已合成过本轮结算
           state.streams.delete(threadId);
           // 轮结算清本线程主会话的记忆桶（callId→工具名 / callId→累积输出）：跨轮
           // callId 不复用，长会话生命周期内无界增长即泄漏。只清主会话桶——子代理

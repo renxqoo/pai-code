@@ -270,6 +270,37 @@ describe('createEventMapper · 主线程事件', () => {
     ]);
   });
 
+  test('turn/end → 合成 turnSettled（内部驱动轮兜底；settled 帧去重；turn/start 重置门闩）', () => {
+    const mapper = createEventMapper(deps);
+    // completed → ok:true（无 reason）
+    expect(mapper.mapEvent(frame('turn/end', { session: 't', turn: 0, reason: { kind: 'completed' } }))).toEqual([
+      { type: 'turnSettled', threadId: 't', ok: true, usage: null },
+    ]);
+    // 同轮后续真实 settled 帧（驱动轮双路径）被吞——不双结算
+    expect(mapper.mapEvent(frame('settled', { sendId: 'x', ok: true }))).toEqual([]);
+    // 新一轮 turn/start 重置门闩
+    mapper.mapEvent(frame('turn/start', { time: 1 }));
+    expect(mapper.mapEvent(frame('settled', { ok: true }))).toEqual([{ type: 'turnSettled', threadId: 't', ok: true, usage: null }]);
+
+    // error → ok:false + message 透传
+    const err = createEventMapper(deps);
+    expect(err.mapEvent(frame('turn/end', { session: 't', reason: { kind: 'error', message: 'llm died', code: 'E503' } }))).toEqual([
+      { type: 'turnSettled', threadId: 't', ok: false, reason: 'llm died', usage: null },
+    ]);
+    // blocked → ok:false + reason 透传
+    expect(err.mapEvent(frame('turn/start', { time: 1 }))).toEqual([{ type: 'turnStarted', threadId: 't', at: 1 }]);
+    expect(err.mapEvent(frame('turn/end', { session: 't', reason: { kind: 'blocked', reason: 'policy' } }))).toEqual([
+      { type: 'turnSettled', threadId: 't', ok: false, reason: 'policy', usage: null },
+    ]);
+    // 垃圾 reason 形态：kind 缺席按 ok:true，无 reason 兜底 kind 串也不出现
+    expect(err.mapEvent(frame('turn/start', { time: 1 }))).toEqual([{ type: 'turnStarted', threadId: 't', at: 1 }]);
+    expect(err.mapEvent(frame('turn/end', { session: 't', reason: {} }))).toEqual([
+      { type: 'turnSettled', threadId: 't', ok: true, usage: null },
+    ]);
+    // 子会话 turn/end（session ≠ threadId）不进主时间线
+    expect(err.mapEvent(frame('turn/end', { session: 'child-1', reason: { kind: 'error', message: 'x' } }))).toEqual([]);
+  });
+
   test('compaction/landed → compacting(false) + compacted（replacedNodes → replacedCount 映射；缺省回落 0）', () => {
     expect(createEventMapper(deps).mapEvent(frame('compaction/landed', { replacedNodes: 12 }))).toEqual([
       { type: 'compacting', threadId: 't', active: false },
@@ -333,7 +364,6 @@ describe('createEventMapper · 主线程事件', () => {
   test('忽略清单：结构信号/审计/前向兼容事件 → 空', () => {
     const mapper = createEventMapper(deps);
     for (const [name, payload] of [
-      ['turn/end', { reason: { kind: 'completed' } }],
       ['agent/inbox/spliced', { op: 'insert', target: 'queue', entries: [] }],
       ['permission/decided', { decision: 'allow', toolName: 'bash' }],
       ['user/message', { content: [{ type: 'text', text: 'hi' }] }],

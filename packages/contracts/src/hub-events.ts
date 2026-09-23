@@ -64,7 +64,9 @@ export interface AgentStreamFrame {
 
 /** app 消费的事件名词表（x-harness 还会发 request/*、system/message、
  *  assistant/attempt、session/*、todo/snapshot、command/run|done、autocompact/*、
- *  compaction/served-window|diagnostic、agent/error、step/start|end——一律忽略）。 */
+ *  compaction/served-window|diagnostic、agent/error、step/start|end——一律忽略）。
+ *  turn/end：主会话轮终局兜底源（内部驱动轮无 settled 债务——event-mapper 就地
+ *  合成 turnSettled；驱动轮的 settled 帧随后到达被去重）。 */
 export type HubEventName =
   | 'turn/start'
   | 'turn/end'
