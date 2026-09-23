@@ -23,6 +23,9 @@ export interface SettingsCommands {
   removePlugin(input: Input<'plugins/remove'>): Promise<HubResult<unknown>>;
   hotInstallPlugin(input: Input<'plugins/hot_install'>): Promise<HubResult<unknown>>;
   hotUninstallPlugin(input: Input<'plugins/hot_uninstall'>): Promise<HubResult<unknown>>;
+  listPluginProposals(input: Input<'plugins/trusted_source/list'>): Promise<HubResult<unknown>>;
+  confirmPluginProposal(input: Input<'plugins/trusted_source/confirm'>): Promise<HubResult<unknown>>;
+  rejectPluginProposal(input: Input<'plugins/trusted_source/reject'>): Promise<HubResult<unknown>>;
   setIdleRetireMs(input: Input<'set_idle_retire_ms'>): Promise<HubResult<unknown>>;
 }
 
@@ -43,6 +46,9 @@ export function createSettingsCommands(send: Transport): SettingsCommands {
     removePlugin: (input) => send<unknown>({ type: 'plugins/remove', ...input }, TIMEOUTS.default),
     hotInstallPlugin: (input) => send<unknown>({ type: 'plugins/hot_install', ...input }, TIMEOUTS.default),
     hotUninstallPlugin: (input) => send<unknown>({ type: 'plugins/hot_uninstall', ...input }, TIMEOUTS.default),
+    listPluginProposals: (input) => send<unknown>({ type: 'plugins/trusted_source/list', ...input }, TIMEOUTS.default),
+    confirmPluginProposal: (input) => send<unknown>({ type: 'plugins/trusted_source/confirm', ...input }, TIMEOUTS.default),
+    rejectPluginProposal: (input) => send<unknown>({ type: 'plugins/trusted_source/reject', ...input }, TIMEOUTS.default),
     setIdleRetireMs: (input) => send<unknown>({ type: 'set_idle_retire_ms', ...input }, TIMEOUTS.default),
   };
 }

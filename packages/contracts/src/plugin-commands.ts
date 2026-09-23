@@ -17,6 +17,8 @@ export interface PluginsInstallCmd {
   sourcePath: string;
   overwrite?: boolean;
   origin?: 'manual' | 'agent';
+  /** agent 源必带：已确认提案 id（一次性消费——防重放与伪造） */
+  proposalId?: string;
 }
 
 /** 卸载（热卸活跃 thread + 清 registry；vendor 专属——builtin 走 set_enabled）。 */
@@ -77,4 +79,33 @@ export type PluginInspectedCandidate =
 export type PluginsInspectData = { results: PluginInspectedCandidate[] };
 
 export type PluginsInstallData = { plugin: { name: string; path: string; sha256: string; skippedEntries: number } };
+
+/** agent 注册链（plugin-runtime §5）：提案面板三命令。 */
+export interface PluginsTrustedSourceListCmd {
+  type: 'plugins/trusted_source/list';
+}
+
+export interface PluginsTrustedSourceConfirmCmd {
+  type: 'plugins/trusted_source/confirm';
+  proposalId: string;
+}
+
+export interface PluginsTrustedSourceRejectCmd {
+  type: 'plugins/trusted_source/reject';
+  proposalId: string;
+}
+
+/** 提案行（agent propose 登记态；UI 审批面板数据源）。 */
+export interface PluginProposalRow {
+  proposalId: string;
+  sourcePath: string;
+  name: string;
+  description: string;
+  requestedCapabilities: readonly string[];
+  sha256: string;
+  createdAt: number;
+  confirmed: boolean;
+}
+
+export type PluginsTrustedSourceListData = { proposals: PluginProposalRow[] };
 

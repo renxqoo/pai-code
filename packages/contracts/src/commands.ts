@@ -63,7 +63,10 @@ export type PaiCommandType =
   | 'plugins/set_enabled'
   | 'plugins/remove'
   | 'plugins/hot_install'
-  | 'plugins/hot_uninstall';
+  | 'plugins/hot_uninstall'
+  | 'plugins/trusted_source/list'
+  | 'plugins/trusted_source/confirm'
+  | 'plugins/trusted_source/reject';
 
 export type PaiCommand = Extract<HubCommand, { type: PaiCommandType }>;
 

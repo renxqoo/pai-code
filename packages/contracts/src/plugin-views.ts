@@ -57,6 +57,8 @@ export const PluginMethodsSchema = {
       .object({
         sourcePath: z.string().min(1),
         overwrite: z.boolean().default(false),
+        /** agent 源必带：已确认提案 id（hub 侧硬门消费） */
+        proposalId: z.string().min(1).optional(),
       })
       .strict(),
     result: z

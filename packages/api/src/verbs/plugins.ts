@@ -171,6 +171,7 @@ export function createPluginRoutes(deps: PluginRoutesDeps) {
         sourcePath: params.sourcePath,
         ...(params.overwrite ? { overwrite: true } : {}),
         ...(gate.origin === 'agent' ? { origin: 'agent' as const } : {}),
+        ...(params.proposalId !== undefined ? { proposalId: params.proposalId } : {}),
       });
       if (!installed.ok) return fail(mapPluginError(installed.error, (e) => e));
       const raw = (installed.data as { plugin?: { name?: unknown; sha256?: unknown } }).plugin;
