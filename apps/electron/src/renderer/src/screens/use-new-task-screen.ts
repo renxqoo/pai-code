@@ -41,7 +41,8 @@ export function useNewTaskScreen(enterCwd: string): NewTaskScreenProps {
   const hostPhase = useStore(liveStore, (s) => s.hostPhase);
   const activeCwd = useStore(liveStore, (s) => (s.activeThreadId === null ? '' : s.sessions[s.activeThreadId]?.cwd ?? ''));
 
-  /** 预会话命令目录（`/` 补全数据源）：每次打开重拉（技能启停/目录变化即时生效） */
+  /** 预会话命令目录（`/` 补全数据源）：每次打开重拉（技能启停/目录变化即时生效）；
+   *  hostPhase 入 deps——host 起动/重启窗口拉取失败（静默空表）随就绪重拉自愈 */
   const [commands, setCommands] = React.useState<readonly CommandView[]>([]);
   React.useEffect(() => {
     let cancelled = false;
@@ -51,7 +52,7 @@ export function useNewTaskScreen(enterCwd: string): NewTaskScreenProps {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [hostPhase]);
 
   /** 已知项目目录（活跃会话 + 已保存会话 cwd 去重，最近优先） */
   const knownDirs = React.useMemo(
