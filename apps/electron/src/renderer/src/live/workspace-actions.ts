@@ -1,4 +1,4 @@
-import type { AgentDefinition, ApiOutcome, CommandView, IdleRecycleMinutes, ImagePayload, PermMode, PluginCandidateView, ProviderModel, RuntimeSnapshotView, SkillCandidateView } from '@paiapp/contracts';
+import type { AgentDefinition, ApiOutcome, CommandView, IdleRecycleMinutes, ImagePayload, PermMode, PluginCandidateView, PluginProposalRow, ProviderModel, RuntimeSnapshotView, SkillCandidateView } from '@paiapp/contracts';
 import { thinkingLevelOfLabel } from '@paiapp/contracts';
 
 import { writeClipboard } from '@/lib/write-clipboard';
@@ -101,6 +101,12 @@ export type WorkspaceActions = {
   readonly importPlugins: (items: readonly PluginImportRequest[]) => Promise<PluginImportSummary>;
   /** 移除 vendor 件（热卸 + 删目录；失败 notice）。 */
   readonly removePlugin: (name: string) => Promise<boolean>;
+  /** agent 提案面板（登记态直读；失败 null）。 */
+  readonly listPluginProposals: () => Promise<PluginProposalRow[] | null>;
+  /** 确认提案（host 内存置位）。 */
+  readonly confirmPluginProposal: (proposalId: string) => Promise<boolean>;
+  /** 拒绝提案。 */
+  readonly rejectPluginProposal: (proposalId: string) => Promise<boolean>;
   readonly searchFiles: (query: string) => Promise<string[] | null>;
   /** 指定目录的 @ 文件搜索（新任务页无活跃会话，按所选目录搜索）。 */
   readonly searchFilesIn: (cwd: string, query: string) => Promise<string[] | null>;

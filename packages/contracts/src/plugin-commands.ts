@@ -1,4 +1,7 @@
 /** 插件管理域命令与应答形状（plugin-runtime §M3；从 hub-commands 拆出——文件行数宪法）。 */
+import type { PluginProposalRow } from './plugin-views';
+
+export type { PluginProposalRow };
 /** 插件清单（builtin + vendor 合并视图；状态含 apiVersion 拒载原因）。 */
 export interface PluginsListCmd {
   type: 'plugins/list';
@@ -95,17 +98,7 @@ export interface PluginsTrustedSourceRejectCmd {
   proposalId: string;
 }
 
-/** 提案行（agent propose 登记态；UI 审批面板数据源）。 */
-export interface PluginProposalRow {
-  proposalId: string;
-  sourcePath: string;
-  name: string;
-  description: string;
-  requestedCapabilities: readonly string[];
-  sha256: string;
-  createdAt: number;
-  confirmed: boolean;
-}
+
 
 export type PluginsTrustedSourceListData = { proposals: PluginProposalRow[] };
 

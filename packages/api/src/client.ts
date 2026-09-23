@@ -110,6 +110,9 @@ function createPluginsDomain(t: ApiClientTransport) {
     remove: call(t, 'plugins/remove'),
     hotInstall: call(t, 'plugins/hotInstall'),
     hotUninstall: call(t, 'plugins/hotUninstall'),
+    proposals: call(t, 'plugins/proposals'),
+    confirmProposal: call(t, 'plugins/confirmProposal'),
+    rejectProposal: call(t, 'plugins/rejectProposal'),
   });
 }
 

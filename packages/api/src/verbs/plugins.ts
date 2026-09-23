@@ -5,7 +5,7 @@
  * P2 审批语义：import 的 UI 面必须明示「确认安装 = 授予插件全部平台能力」——
  * 文案层职责（M4 strings），此处错误/数据形状不弱化该语义。
  */
-import type { ApiError, ApiMethod, ApiOutcome, ApiParams, PluginCandidateView, PluginView } from '@paiapp/contracts';
+import type { ApiError, ApiMethod, ApiOutcome, ApiParams, PluginCandidateView, PluginProposalRow, PluginView } from '@paiapp/contracts';
 
 import type { SettingsCommands } from '../commands/settings';
 import { appError } from '../errors';
@@ -133,6 +133,9 @@ export function createPluginRoutes(deps: PluginRoutesDeps) {
     'plugins/remove': Handler<'plugins/remove'>;
     'plugins/hotInstall': Handler<'plugins/hotInstall'>;
     'plugins/hotUninstall': Handler<'plugins/hotUninstall'>;
+    'plugins/proposals': Handler<'plugins/proposals'>;
+    'plugins/confirmProposal': Handler<'plugins/confirmProposal'>;
+    'plugins/rejectProposal': Handler<'plugins/rejectProposal'>;
   } = {
     'plugins/list': async () => ({ ok: true as const, data: await pluginsList() }),
     'plugins/setEnabled': async (params) => {
@@ -202,6 +205,41 @@ export function createPluginRoutes(deps: PluginRoutesDeps) {
       const result = await commands().hotUninstallPlugin({ threadId: params.threadId, name: params.name, ...(params.force ? { force: true } : {}) });
       if (!result.ok) return fail(mapPluginError(result.error, (e) => e));
       return { ok: true as const, data: { name: params.name } };
+    },
+    // agent 提案面板：登记态直读（P2 文案面——UI 展示能力声明与哈希）
+    'plugins/proposals': async () => {
+      const result = await commands().listPluginProposals({});
+      if (!result.ok) return fail(mapPluginError(result.error, (e) => e));
+      const raw = (result.data as { proposals?: unknown }).proposals;
+      if (!Array.isArray(raw)) return { ok: false as const, error: { kind: 'malformed_response' as const } };
+      const proposals = raw.flatMap((item: unknown): PluginProposalRow[] => {
+        if (typeof item !== 'object' || item === null) return [];
+        const entry = item as Record<string, unknown>;
+        if (typeof entry['proposalId'] !== 'string' || typeof entry['sourcePath'] !== 'string' || typeof entry['name'] !== 'string') return [];
+        if (typeof entry['description'] !== 'string' || typeof entry['sha256'] !== 'string' || typeof entry['createdAt'] !== 'number' || typeof entry['confirmed'] !== 'boolean') return [];
+        if (!Array.isArray(entry['requestedCapabilities'])) return [];
+        return [{
+          proposalId: entry['proposalId'],
+          sourcePath: entry['sourcePath'],
+          name: entry['name'],
+          description: entry['description'],
+          requestedCapabilities: entry['requestedCapabilities'].filter((cap): cap is string => typeof cap === 'string'),
+          sha256: entry['sha256'],
+          createdAt: entry['createdAt'],
+          confirmed: entry['confirmed'],
+        }];
+      });
+      return { ok: true as const, data: { proposals } };
+    },
+    'plugins/confirmProposal': async (params) => {
+      const result = await commands().confirmPluginProposal({ proposalId: params.proposalId });
+      if (!result.ok) return fail(mapPluginError(result.error, (e) => e));
+      return { ok: true as const, data: null };
+    },
+    'plugins/rejectProposal': async (params) => {
+      const result = await commands().rejectPluginProposal({ proposalId: params.proposalId });
+      if (!result.ok) return fail(mapPluginError(result.error, (e) => e));
+      return { ok: true as const, data: null };
     },
   };
 

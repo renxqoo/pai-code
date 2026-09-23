@@ -5,6 +5,19 @@ import { z } from 'zod';
 
 const empty = z.object({}).strict();
 
+/** agent 提案行（plugin_propose 登记态；UI 审批面板数据源）。 */
+export const PluginProposalRowSchema = z.object({
+  proposalId: z.string(),
+  sourcePath: z.string(),
+  name: z.string(),
+  description: z.string(),
+  requestedCapabilities: z.array(z.string()),
+  sha256: z.string(),
+  createdAt: z.number(),
+  confirmed: z.boolean(),
+}).strict();
+export type PluginProposalRow = z.infer<typeof PluginProposalRowSchema>;
+
 /** 插件视图（plugins/list；source 两值——「第三方」语义由 origin 承载）。 */
 export const PluginViewSchema = z
   .object({
@@ -82,6 +95,23 @@ export const PluginMethodsSchema = {
   'plugins/hotInstall': {
     params: z.object({ threadId: z.string().min(1), name: z.string().min(1) }).strict(),
     result: z.object({ name: z.string(), mode: z.string() }).strict(),
+  },
+  /** agent 提案面板（plugin_propose 登记态；确认走 hub trusted_source/confirm）。 */
+  'plugins/proposals': {
+    params: empty,
+    result: z.object({
+      proposals: z.array(PluginProposalRowSchema),
+    }).strict(),
+  },
+  /** 确认提案（host 内存置位——文件伪造不可达；确认后 agent 链 install 可消费）。 */
+  'plugins/confirmProposal': {
+    params: z.object({ proposalId: z.string().min(1) }).strict(),
+    result: z.null(),
+  },
+  /** 拒绝提案（确认态清除；登记保留至 TTL）。 */
+  'plugins/rejectProposal': {
+    params: z.object({ proposalId: z.string().min(1) }).strict(),
+    result: z.null(),
   },
   /** 热卸（活跃 thread world 内即时卸载）。 */
   'plugins/hotUninstall': {

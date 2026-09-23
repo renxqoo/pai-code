@@ -6,7 +6,7 @@
  * 失败降级「重开生效」——与技能面「恒重开」刻意不同（插件支持热装）。
  */
 import type { ApiClient } from '@paiapp/api/client';
-import type { PluginCandidateView, PluginView } from '@paiapp/contracts';
+import type { PluginCandidateView, PluginProposalRow, PluginView } from '@paiapp/contracts';
 
 import { copyOfError } from '@/lib/error-text';
 
@@ -24,6 +24,12 @@ export interface PluginsActionsDeps {
 
 export interface PluginsActions {
   refreshPlugins(): Promise<void>;
+  /** agent 提案面板（plugin_propose 登记态直读） */
+  listPluginProposals(): Promise<{ ok: true; proposals: PluginProposalRow[] } | { ok: false; reason: string }>;
+  /** 确认提案（host 内存置位——文件伪造不可达） */
+  confirmPluginProposal(proposalId: string): Promise<{ ok: true } | { ok: false; reason: string }>;
+  /** 拒绝提案 */
+  rejectPluginProposal(proposalId: string): Promise<{ ok: true } | { ok: false; reason: string }>;
   setPluginEnabled(name: string, enabled: boolean): Promise<{ ok: true; data: PluginView[] } | { ok: false; reason: string }>;
   applyPluginToggle(name: string, enabled: boolean): Promise<{ ok: true; hotFailures: number } | { ok: false; reason: string }>;
   scanPluginCandidates(sourcePath?: string): Promise<{ ok: true; candidates: PluginCandidateView[] } | { ok: false; reason: string }>;
@@ -70,6 +76,21 @@ export function createPluginsActions(deps: PluginsActionsDeps): PluginsActions {
     async refreshPlugins(): Promise<void> {
       const outcome = await api.plugins.list({});
       if (outcome.ok) store.setState({ plugins: outcome.data });
+    },
+    async listPluginProposals(): Promise<{ ok: true; proposals: PluginProposalRow[] } | { ok: false; reason: string }> {
+      const outcome = await api.plugins.proposals({});
+      if (!outcome.ok) return { ok: false, reason: copyOfError(outcome.error) };
+      return { ok: true, proposals: outcome.data.proposals };
+    },
+    async confirmPluginProposal(proposalId): Promise<{ ok: true } | { ok: false; reason: string }> {
+      const outcome = await api.plugins.confirmProposal({ proposalId });
+      if (!outcome.ok) return { ok: false, reason: copyOfError(outcome.error) };
+      return { ok: true };
+    },
+    async rejectPluginProposal(proposalId): Promise<{ ok: true } | { ok: false; reason: string }> {
+      const outcome = await api.plugins.rejectProposal({ proposalId });
+      if (!outcome.ok) return { ok: false, reason: copyOfError(outcome.error) };
+      return { ok: true };
     },
     setPluginEnabled,
     async applyPluginToggle(name, enabled): Promise<{ ok: true; hotFailures: number } | { ok: false; reason: string }> {

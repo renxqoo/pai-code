@@ -242,7 +242,21 @@ void app.whenReady().then(async () => {
       revealPath: (path) => shell.showItemInFolder(path),
       // 技能源面：批准根 = 三个内置源根 ∪ 对话框批准目录（pickedDirectories 复用）
       skillImporter: createSkillImporter({ pickedRoots: () => [...pickedDirectories] }),
-      pluginImporter: createPluginImporter({ pickedRoots: () => [...pickedDirectories] }),
+      pluginImporter: createPluginImporter({
+        pickedRoots: () => [...pickedDirectories],
+        agentProposalRoots: async () => {
+          // agent propose 链的源目录（提案登记面——只取源目录 dirname 集合做批准根）
+          if (runtime === null) return [];
+          const outcome = await runtime.hub.settings.listPluginProposals({});
+          if (!outcome.ok) return [];
+          const raw = (outcome.data as { proposals?: unknown }).proposals;
+          if (!Array.isArray(raw)) return [];
+          return raw
+            .map((item) => (typeof item === 'object' && item !== null ? (item as { sourcePath?: unknown }).sourcePath : undefined))
+            .filter((path): path is string => typeof path === 'string' && path.startsWith('/'))
+            .map((path) => path.split('/').slice(0, -1).join('/') || '/');
+        },
+      }),
       extraCwds: () => [...pickedDirectories],
       // 对话框单飞：在途时再调用直接按取消返回（防被攻陷渲染层并发叠弹多个模态面板）
       pickDirectory: async (defaultPath) => {

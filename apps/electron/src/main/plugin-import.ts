@@ -18,8 +18,11 @@ export interface PluginImporterFs {
 }
 
 export interface PluginImporterDeps {
-  /** 用户批准的本地目录（对话框选中集合 + agent propose 登记集合的惰性快照）。 */
+  /** 用户批准的本地目录（对话框选中集合的惰性快照）。 */
   pickedRoots?: () => readonly string[];
+  /** agent propose 链登记的源目录（hub plugins/trusted_source/list 的提案源——
+   *  批准根第二腿：提案确认后的 install 经此门放行 origin:agent 链）。 */
+  agentProposalRoots?: () => Promise<readonly string[]>;
   /** fs 面（缺省 node:fs/promises）。 */
   fs?: PluginImporterFs;
 }
@@ -29,7 +32,7 @@ export function createPluginImporter(deps: PluginImporterDeps = {}): PluginSourc
 
   /** 批准根 realpath 归一（缺失根缺席——不存在的根不可能包含任何东西）。 */
   const approvedRoots = async (): Promise<string[]> => {
-    const roots = deps.pickedRoots?.() ?? [];
+    const roots = [...(deps.pickedRoots?.() ?? []), ...(await deps.agentProposalRoots?.().catch(() => []) ?? [])];
     const out: string[] = [];
     for (const root of roots) {
       const realPath = await fs.realpath(root).catch(() => undefined);

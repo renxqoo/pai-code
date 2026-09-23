@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import type { AgentDefinition, IdleRecycleMinutes, PermMode, PluginCandidateView, PluginView, ProviderConfigView, ProviderModel, SkillCandidateView, SkillView, ThinkingLevel } from '@paiapp/contracts';
+import type { AgentDefinition, IdleRecycleMinutes, PermMode, PluginCandidateView, PluginProposalRow, PluginView, ProviderConfigView, ProviderModel, SkillCandidateView, SkillView, ThinkingLevel } from '@paiapp/contracts';
 import type { PluginImportRequest, PluginImportSummary, SkillImportRequest, SkillImportSummary } from '@/live/live-controller-types';
 import { AGENT_TOOL_IDS } from '@paiapp/contracts';
 import type { Theme } from '@/components/theme-context';
@@ -112,6 +112,12 @@ export type SettingsScreenProps = {
     onPickFolder: () => Promise<string | null>;
     /** 移除 vendor 件（两步确认后调用）。 */
     onRemove: (name: string) => Promise<boolean>;
+    /** agent 提案面板（登记态直读；进入分区与刷新时拉取）。 */
+    onListProposals: () => Promise<readonly PluginProposalRow[] | null>;
+    /** 确认提案（host 内存置位——文件伪造不可达）。 */
+    onConfirmProposal: (proposalId: string) => Promise<boolean>;
+    /** 拒绝提案。 */
+    onRejectProposal: (proposalId: string) => Promise<boolean>;
   };
   history: {
     saved: readonly SavedSession[];
@@ -259,6 +265,9 @@ export function useSettingsScreen({ open, onClose, initialSection }: UseSettings
       onImportPlugins: actions.importPlugins,
       onPickFolder: () => actions.pickDirectory(null),
       onRemove: actions.removePlugin,
+      onListProposals: actions.listPluginProposals,
+      onConfirmProposal: actions.confirmPluginProposal,
+      onRejectProposal: actions.rejectPluginProposal,
     },
     history: {
       saved: saved,

@@ -84,5 +84,26 @@ export function resourceActions(deps: ResourceActionsDeps) {
       if (outcome.ok && outcome.hotFailures > 0) pushNotice(copy.settings.pluginHotFailed);
       return true;
     },
+    listPluginProposals: async () => {
+      const outcome = await controller.listPluginProposals();
+      if (!outcome.ok) return null;
+      return outcome.proposals;
+    },
+    confirmPluginProposal: async (proposalId: string): Promise<boolean> => {
+      const outcome = await controller.confirmPluginProposal(proposalId);
+      if (!outcome.ok) {
+        pushNotice(copy.settings.pluginToggleFailed);
+        return false;
+      }
+      return true;
+    },
+    rejectPluginProposal: async (proposalId: string): Promise<boolean> => {
+      const outcome = await controller.rejectPluginProposal(proposalId);
+      if (!outcome.ok) {
+        pushNotice(copy.settings.pluginToggleFailed);
+        return false;
+      }
+      return true;
+    },
   };
 }

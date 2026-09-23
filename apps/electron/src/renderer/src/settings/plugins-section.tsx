@@ -4,7 +4,7 @@
 import * as React from 'react';
 import { Puzzle, RefreshCw, FolderInput } from 'lucide-react';
 
-import type { PluginCandidateView, PluginView } from '@paiapp/contracts';
+import type { PluginCandidateView, PluginProposalRow, PluginView } from '@paiapp/contracts';
 import { ActionButton, IconButton, ToggleSwitch } from '@paiapp/ui';
 
 import { copy } from '@/strings';
@@ -15,6 +15,7 @@ import { SettingsPageHeader } from './settings-page-header';
 import { SettingsSearchInput } from './settings-search-input';
 import { PluginImportDialog } from './plugin-import-dialog';
 import { PluginRemoveButton } from './plugin-remove-button';
+import { PluginProposalsPanel } from './plugin-proposals-panel';
 
 type PluginsSectionProps = {
   list: readonly PluginView[]
@@ -30,6 +31,12 @@ type PluginsSectionProps = {
   onPickFolder: () => Promise<string | null>
   /** 移除 vendor 件（两步内联确认后调用；builtin 件不可移除）。 */
   onRemove: (name: string) => Promise<boolean>
+  /** agent 提案面板（登记态直读）。 */
+  onListProposals: () => Promise<readonly PluginProposalRow[] | null>
+  /** 确认提案（P2：确认 = 授予全部平台能力——按钮文案明示）。 */
+  onConfirmProposal: (proposalId: string) => Promise<boolean>
+  /** 拒绝提案。 */
+  onRejectProposal: (proposalId: string) => Promise<boolean>
 }
 
 /** 插件来源徽章文案（builtin = 词表内件；vendor = 第三方件）。 */
@@ -50,11 +57,16 @@ function pluginMatchesQuery(plugin: PluginView, query: string): boolean {
   return (plugin.description ?? '').toLowerCase().includes(q);
 }
 
-function PluginsSection({ list, onToggle, onRefresh, onScanCandidates, onImportPlugins, onPickFolder, onRemove }: PluginsSectionProps) {
+function PluginsSection({ list, onToggle, onRefresh, onScanCandidates, onImportPlugins, onPickFolder, onRemove, onListProposals, onConfirmProposal, onRejectProposal }: PluginsSectionProps) {
   const [query, setQuery] = React.useState('');
   const [importOpen, setImportOpen] = React.useState(false);
   const [candidates, setCandidates] = React.useState<readonly PluginCandidateView[] | null>(null);
+  const [proposals, setProposals] = React.useState<readonly PluginProposalRow[] | null>(null);
   const visible = list.filter((plugin) => pluginMatchesQuery(plugin, query));
+
+  React.useEffect(() => {
+    void onListProposals().then((rows) => setProposals(rows ?? []));
+  }, [onListProposals]);
 
   const scan = (sourcePath?: string): void => {
     setCandidates(null);
@@ -85,6 +97,7 @@ function PluginsSection({ list, onToggle, onRefresh, onScanCandidates, onImportP
           </IconButton>
         </div>
         <p className="max-w-[640px] text-[12px] leading-[17px] text-muted-foreground">{copy.settings.pluginsHint}</p>
+        <PluginProposalsPanel proposals={proposals ?? []} onConfirm={onConfirmProposal} onReject={onRejectProposal} />
         {list.length === 0 ? (
           <p className="text-[12.5px] leading-[18px] text-muted-foreground">{copy.settings.pluginsEmpty}</p>
         ) : visible.length === 0 ? (

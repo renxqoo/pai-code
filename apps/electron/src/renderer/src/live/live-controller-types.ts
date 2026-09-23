@@ -5,6 +5,7 @@ import type {
   ImagePayload,
   PermMode,
   PluginCandidateView,
+  PluginProposalRow,
   PreferencesView,
   ProviderModel,
   SkillCandidateView,
@@ -126,6 +127,12 @@ export interface LiveController {
   readonly refreshPlugins: () => Promise<void>;
   /** 移除 vendor 件（热卸活跃会话 + 删 vendor 目录与 registry 条目）。 */
   readonly removePlugin: (name: string) => Promise<{ ok: true; hotFailures: number } | { ok: false; reason: string }>;
+  /** agent 提案面板（登记态直读）。 */
+  readonly listPluginProposals: () => Promise<{ ok: true; proposals: PluginProposalRow[] } | { ok: false; reason: string }>;
+  /** 确认提案（host 内存置位）。 */
+  readonly confirmPluginProposal: (proposalId: string) => Promise<{ ok: true } | { ok: false; reason: string }>;
+  /** 拒绝提案。 */
+  readonly rejectPluginProposal: (proposalId: string) => Promise<{ ok: true } | { ok: false; reason: string }>;
   /** 同文件重开会话（不指定 trusted，保持既有信任态）：技能/资源开关生效通路。 */
   readonly reopenSession: (threadId: string) => Promise<boolean>;
   /** 项目文件搜索（@ 引用；cwd 门禁在主进程，失败返回 null）。 */

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import type { PluginCandidateView, PluginView } from '@paiapp/contracts';
+import type { PluginCandidateView, PluginProposalRow, PluginView } from '@paiapp/contracts';
 import { copy } from '@/strings';
 import { buildPluginImportItems, PluginImportContent } from '../plugin-import-content';
 import { PluginImportDialog } from '../plugin-import-dialog';
@@ -156,5 +156,43 @@ describe('移除钮两步确认', () => {
     const html = renderToStaticMarkup(<PluginRemoveButton name="mine" onRemove={() => Promise.resolve(true)} />);
     expect(html).toContain(copy.settings.pluginDeleteLabel('mine'));
     expect(html).not.toContain(copy.settings.confirmRemove);
+  });
+});
+
+describe('agent 提案面板（M5 对抗审查 3d 补全）', () => {
+  const proposal = (over: Partial<PluginProposalRow>): PluginProposalRow => ({
+    proposalId: 'pp-1',
+    sourcePath: '/work/demo',
+    name: 'demo',
+    description: 'agent 写的插件',
+    requestedCapabilities: ['session'],
+    sha256: 'abcd1234abcd1234',
+    createdAt: 1,
+    confirmed: false,
+    ...over,
+  });
+
+
+  test('提案行渲染（面板组件）：确认/拒绝双钮 + P2 文案在场', async () => {
+    const { PluginProposalsPanel } = await import('../plugin-proposals-panel');
+    const html = renderToStaticMarkup(
+      <PluginProposalsPanel
+        proposals={[proposal({}), proposal({ name: 'other', proposalId: 'pp-2', confirmed: true })]}
+        onConfirm={() => Promise.resolve(true)}
+        onReject={() => Promise.resolve(true)}
+      />,
+    );
+    expect(html).toContain(copy.settings.pluginProposalsTitle);
+    expect(html).toContain(copy.settings.pluginProposalConfirmLabel('demo'));
+    expect(html).toContain(copy.settings.pluginProposalRejectLabel('other'));
+    expect(html).toContain(copy.settings.pluginProposalCapabilities(['session']));
+    expect(html).toContain(copy.settings.pluginProposalHash('abcd1234abcd1234'));
+  });
+
+  test('空面板零渲染', async () => {
+    const { PluginProposalsPanel } = await import('../plugin-proposals-panel');
+    expect(renderToStaticMarkup(
+      <PluginProposalsPanel proposals={[]} onConfirm={() => Promise.resolve(true)} onReject={() => Promise.resolve(true)} />,
+    )).toBe('');
   });
 });
