@@ -3,6 +3,7 @@ import type { AgentDefinitionsPort, RuntimePort } from './ports';
 import type { ApiError, ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
 import { appError } from '../errors';
 import type { AgentCommands } from '../commands/agents';
+import { splitModelRef } from './agent-definition';
 import type { ThreadCommands } from '../commands/thread';
 
 
@@ -42,11 +43,13 @@ export function threadOpsRoutes(deps: {
       if (params.definition.scope === 'user') {
         const existed = await deps.agentCommands().removeAgent({ name: params.previous !== null ? params.previous.name : params.definition.name });
         if (!existed.ok && existed.error.kind !== 'state_conflict' && existed.error.kind !== 'invalid_input') return fail(existed.error);
+        // model 拆 `provider/model` 复合串成两字段传 hub（串线修复——UI 选择器值恒复合串）
+        const composite = params.definition.model !== null ? splitModelRef(params.definition.model) : null;
         const created = await deps.agentCommands().createAgent({
           name: params.definition.name,
           description: params.definition.description,
           systemPrompt: params.definition.systemPrompt,
-          ...(params.definition.model !== null ? { model: params.definition.model } : {}),
+          ...(composite !== null ? { model: composite.model, provider: composite.provider } : params.definition.model !== null ? { model: params.definition.model } : {}),
           ...(params.definition.tools !== null ? { tools: params.definition.tools } : {}),
         });
         if (!created.ok) return fail(created.error);

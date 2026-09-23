@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { parseAgentDefinition, serializeAgentDefinition } from '../agent-definition';
+import { parseAgentDefinition, serializeAgentDefinition, splitModelRef } from '../agent-definition';
 
 /**
  * 定义文件编解码回归：写侧 = host-hub renderAgentTypeMd 同构（无 name 字段——
@@ -28,6 +28,37 @@ describe('agent 定义 md 编解码', () => {
       tools: ['read', 'bash'],
       model: 'glm-4.7',
     });
+  });
+
+  test('复合串 model（UI 选择器值）拆开写 model+provider 两字段（串线修复）', () => {
+    const text = serializeAgentDefinition({
+      name: 'cross',
+      description: '跨渠道子代理',
+      systemPrompt: 'p',
+      tools: null,
+      model: 'deepseek/deepseek-flash',
+    });
+    expect(text).toContain('model: deepseek-flash');
+    expect(text).toContain('provider: deepseek');
+    expect(text).not.toContain('model: deepseek/deepseek-flash');
+    // round-trip：读侧合并回复合串（UI 形态不变）
+    expect(parseAgentDefinition(text, 'cross')?.model).toBe('deepseek/deepseek-flash');
+  });
+
+  test('裸模型名原样写（不误拆）+ 手写 provider 字段合并回复合串', () => {
+    const text = serializeAgentDefinition({ name: 'a', description: 'd', systemPrompt: 'p', tools: null, model: 'glm-5.3' });
+    expect(text).toContain('model: glm-5.3');
+    expect(text).not.toContain('provider:');
+    // 手写文件：model 裸名 + provider 字段 → 合并回复合串（枚举面 UI 形态）
+    const handWritten = ['---', 'name: h', 'description: d', 'model: deepseek-flash', 'provider: deepseek', '---', 'body', ''].join('\n');
+    expect(parseAgentDefinition(handWritten)?.model).toBe('deepseek/deepseek-flash');
+  });
+
+  test('splitModelRef：退化形态不拆（空段/裸名）', () => {
+    expect(splitModelRef('/m')).toBeNull();
+    expect(splitModelRef('p/')).toBeNull();
+    expect(splitModelRef('bare')).toBeNull();
+    expect(splitModelRef('p/m')).toEqual({ provider: 'p', model: 'm' });
   });
 
   test('tools/model 为 null 时字段整体不写（= hub 运行期继承语义）', () => {

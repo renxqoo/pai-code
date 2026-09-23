@@ -358,7 +358,10 @@ export interface AgentsCreateCmd {
   description: string;
   /** 非空正文。 */
   systemPrompt: string;
+  /** 裸模型 id（不带 provider 前缀——provider/model 拆开写，防 hub 拨号串线）。 */
   model?: string;
+  /** 模型归属渠道（与 model 拆开；缺省 = hub 运行期继承/目录反查）。 */
+  provider?: string;
   tools?: string[];
 }
 

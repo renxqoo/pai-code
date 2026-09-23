@@ -99,6 +99,18 @@ describe('agent-definitions-store 落位与生命周期', () => {
     expect(text).toContain('你是搜索专员。');
   });
 
+  test('复合串 model 拆开写 model+provider 两行（串线修复）；round-trip 枚举合并回复合串', () => {
+    const { store, userDir } = makeStore();
+    expect(store.upsert(makeDef({ name: 'cross', model: 'deepseek/deepseek-flash' }), null, PROJECTS)).toEqual({ ok: true });
+    const text = readFileSync(join(userDir, 'cross.md'), 'utf8');
+    expect(text).toContain('model: deepseek-flash');
+    expect(text).toContain('provider: deepseek');
+    expect(text).not.toContain('model: deepseek/deepseek-flash');
+    // 枚举读回：UI 形态恒复合串
+    const listed = store.list(PROJECTS).find((def) => def.name === 'cross');
+    expect(listed?.model).toBe('deepseek/deepseek-flash');
+  });
+
   test('project 级写入 <项目>/.x-harness/agents/<name>.md（目录不存在时创建）', () => {
     const work = mkdtempSync(join(tmpdir(), 'pai-agent-store-'));
     const project = join(work, 'proj');

@@ -1,8 +1,8 @@
 /**
  * 子 agent 定义文件（markdown）编解码。
  * 写侧 = x-harness renderAgentType 同构（round-trip 由 hub 装载器保证）：
- * frontmatter name/description/model?/tools?（逗号分隔）+ 正文 = systemPrompt；
- * name 非空无 `/` 无换行、description 单行且非字段形态行。
+ * frontmatter name/description/model?/provider?/tools?（逗号分隔）+ 正文 =
+ * systemPrompt；name 非空无 `/` 无换行、description 单行且非字段形态行。
  * 读侧比写侧宽容（无/单/双引号标量、尾注释、块列表/逗号串/flow 数组——手写文件
  * 仍可枚举），name 缺省回落文件名主干；未知字段忽略。
  */
@@ -11,14 +11,32 @@ export type AgentDefinitionFile = {
   description: string;
   systemPrompt: string;
   tools: string[] | null;
+  /** 裸模型 id（`provider/model` 复合串在 serializeAgentDefinition 内拆开写两字段——
+   *  hub 拨号按 provider+model 各自落位，防「model 换了 provider 没换」串线）。 */
   model: string | null;
+  /** 复合串拆出的渠道段（round-trip 合并回 `provider/model`；独立裸名原样保留）。 */
+  provider?: string | null;
 };
 
+/** `provider/model` 复合串拆解（首个 '/' 切分；裸名/退化形态返回 null——不误拆）。
+ *  与 renderer 的 parseModelKey 同一词法（UI 选择器值即复合串）。 */
+export function splitModelRef(ref: string): { provider: string; model: string } | null {
+  const index = ref.indexOf('/');
+  if (index <= 0 || index === ref.length - 1) return null;
+  return { provider: ref.slice(0, index), model: ref.slice(index + 1) };
+}
+
 /** 序列化为 md 文本（x-harness renderAgentType 同构：name 入档 + tools 逗号分隔）；
- *  tools/model 为 null 或空时整个字段不写（= hub 运行期继承语义）。 */
+ *  tools/model 为 null 或空时整个字段不写（= hub 运行期继承语义）。
+ *  model 为 `provider/model` 复合串时拆开写 model+provider 两字段（串线修复）；
+ *  显式 provider 字段恒胜（复合串拆解值不覆盖显式声明）。 */
 export function serializeAgentDefinition(def: AgentDefinitionFile): string {
   const lines: string[] = ['---', `name: ${def.name}`, `description: ${def.description}`];
-  if (def.model !== null && def.model.length > 0) lines.push(`model: ${def.model}`);
+  const composite = def.model !== null ? splitModelRef(def.model) : null;
+  const model = composite?.model ?? def.model;
+  const provider = def.provider ?? composite?.provider ?? null;
+  if (model !== null && model.length > 0) lines.push(`model: ${model}`);
+  if (provider !== null && provider.length > 0) lines.push(`provider: ${provider}`);
   if (def.tools !== null && def.tools.length > 0) lines.push(`tools: ${def.tools.join(',')}`);
   lines.push('---', '', def.systemPrompt, '');
   return `${lines.join('\n')}`;
@@ -104,6 +122,7 @@ export function parseAgentDefinition(text: string, stemFallback?: string): Agent
   let name: string | null = null;
   let description: string | null = null;
   let model: string | null = null;
+  let provider: string | null = null;
   let toolsList: string[] | null = null;
   let toolsInline: string | null = null;
   let toolsInlineSeen = false;
@@ -124,6 +143,7 @@ export function parseAgentDefinition(text: string, stemFallback?: string): Agent
     if (parsed.key === 'name') name = parsed.value;
     else if (parsed.key === 'description') description = parsed.value;
     else if (parsed.key === 'model') model = parsed.value;
+    else if (parsed.key === 'provider') provider = parsed.value;
     else if (parsed.key === 'tools') {
       if (parsed.flow !== null) {
         toolsList = parsed.flow;
@@ -146,12 +166,17 @@ export function parseAgentDefinition(text: string, stemFallback?: string): Agent
   else if (toolsInlineSeen && toolsInline !== null && toolsInline.length > 0) {
     tools = toolsInline.split(',').map((tool) => tool.trim()).filter((tool) => tool.length > 0);
   }
+  const bareModel = model !== null && model.length > 0 ? model : null;
+  const bareProvider = provider !== null && provider.length > 0 ? provider : null;
   return {
     name: resolvedName,
     description,
     systemPrompt: parts[1].replace(/^\r?\n/, ''),
     tools: tools !== null && tools.length > 0 ? tools : null,
-    model: model !== null && model.length > 0 ? model : null,
+    // UI 形态恒复合串：文件拆写的 model+provider 在读侧合并回（round-trip）；
+    // 裸 model 无 provider 原样保留（hub 端目录反查兜底）
+    model: bareModel !== null && bareProvider !== null ? `${bareProvider}/${bareModel}` : bareModel,
+    ...(bareProvider !== null && bareModel === null ? { provider: bareProvider } : {}),
   };
 }
 

@@ -415,6 +415,28 @@ describe("api-routes agent 定义面（T20）", () => {
       name: "search",
       description: "d",
     });
+    // 复合串 model 拆开传 hub（串线修复——UI 选择器值恒 `provider/model`）
+    const upsertComposite = (await routes.invoke("agent/upsert", {
+      definition: { ...definition, name: "cross", model: "deepseek/deepseek-flash" },
+      previous: null,
+    })) as { ok: boolean };
+    expect(upsertComposite.ok).toBe(true);
+    expect(sent.find((command) => command.type === "agents/create" && (command as { name?: string }).name === "cross")).toMatchObject({
+      type: "agents/create",
+      name: "cross",
+      model: "deepseek-flash",
+      provider: "deepseek",
+    });
+    // 裸模型名不拆（无 provider 字段透传）
+    const upsertBare = (await routes.invoke("agent/upsert", {
+      definition: { ...definition, name: "bare", model: "glm-5.3" },
+      previous: null,
+    })) as { ok: boolean };
+    expect(upsertBare.ok).toBe(true);
+    expect(sent.find((command) => command.type === "agents/create" && (command as { name?: string }).name === "bare")).toMatchObject({
+      type: "agents/create",
+      model: "glm-5.3",
+    });
     // host 未启动 → 已知项目集合为空 → project 作用域一律拒绝
     const rejected = (await routes.invoke("agent/upsert", {
       definition: { ...definition, scope: "project", project: "/nowhere" },
