@@ -323,6 +323,33 @@ describe('surfaceOp replace（压缩区间折叠——docs/COMPACTION.md §2.A�
       '[summary] 前情摘要',
       '新消息',
     ]);
+    // 压缩摘要非用户发言：replace 型归系统条，append 型保持用户条（assistant 非用户条占位空串）
+    expect(items.map((item) => (item.kind === 'user' ? item.origin : ''))).toEqual(['', 'system', 'user']);
+  });
+
+  test('症状回归「autocompact/checkpoint 消息在 UI 当用户消息展示」：replace 型 user/message 压缩摘要归系统条，append 型用户消息不受影响', () => {
+    const checkpointSummary = [
+      '## Goal',
+      '- 继续压缩链路的收尾验证。',
+      '',
+      '## Progress',
+      '### Done',
+      '- [x] 摘要落账',
+      '',
+      'The message above is an automatic continuation summary generated mid-task. Continue the current work directly.',
+    ].join('\n');
+    const { items } = mapEntries({
+      entries: [
+        row(1, 1, { type: 'user/message', turn: 0, step: 0, surfaceOp: 'append', content: [{ type: 'text', text: '问题一' }] }),
+        row(2, 2, { type: 'assistant/message', turn: 0, step: 0, content: [{ type: 'text', text: '回答一' }] }),
+        row(3, 3, { type: 'user/message', turn: 1, step: 0, content: [{ type: 'text', text: checkpointSummary }], surfaceOp: { op: 'replace', startSeq: 1, endSeq: 2 } }),
+        row(4, 4, { type: 'user/message', turn: 2, step: 0, surfaceOp: 'append', content: [{ type: 'text', text: '问题二' }] }),
+      ],
+    });
+    expect(items).toEqual([
+      { kind: 'user', id: 'seq-3', text: checkpointSummary, origin: 'system', images: [], at: 3 },
+      { kind: 'user', id: 'seq-4', text: '问题二', origin: 'user', images: [], at: 4 },
+    ]);
   });
 
   test('turn/end reason 判别穷举（六 kind 均不产渲染条目——cursor 推进）', () => {

@@ -15,7 +15,8 @@ import { subagentsField } from './subagent-spawns';
  * 仅补齐尚未落 message 的调用面）；直执行 bash 以 user 消息信封
  * （`[bash] $ <cmd>\n<output>`）落 WAL，按前缀还原；user/message 域内的内核尾部
  * 快照信封帧（模型上下文而非对话内容，谓词见 snapshot-frame.ts）整帧跳过；
- * 其余事件（turn/*、step/*、system/message、request/*、llm/retry、
+ * replace 型 user/message（compaction/autocompact L2 压缩摘要）归系统条
+ * （origin=system）；其余事件（turn/*、step/*、system/message、request/*、llm/retry、
  * agent/inbox/spliced、autocompact/*、todo/snapshot、session/meta、
  * session/end-seed、compaction/*、command/*）为元数据/账本域，不产生渲染条目
  * （cursor 仍推进——按行消费，不按渲染条目消费）。
@@ -54,7 +55,10 @@ export function mapEntries(data: unknown): { items: HistoryItem[]; cursor: numbe
       if (isSnapshotFrame(event)) continue;
       const text = flattenUserText(event['content']);
       const bashItem = bashItemOf(id, at, text);
-      const item = bashItem ?? { kind: 'user', id, text, origin: 'user', at, images: userImages(event['content']) } as HistoryItem;
+      // replace 型 user/message 是内核压缩摘要（compaction/autocompact L2 的区间落账）：
+      // 历史的压缩形态而非用户发言，归系统条展示，不进用户气泡
+      const origin: 'user' | 'system' = isReplaceOp(event['surfaceOp']) ? 'system' : 'user';
+      const item = bashItem ?? { kind: 'user', id, text, origin, at, images: userImages(event['content']) } as HistoryItem;
       applySurfaceOp(items, seqOfItem, event['surfaceOp'], seq, item);
       pendingTools.clear();
       continue;
@@ -150,6 +154,13 @@ export function mapEntries(data: unknown): { items: HistoryItem[]; cursor: numbe
   }
 
   return { items, cursor };
+}
+
+/** surfaceOp replace 判别：replace 型 user/message 的唯一产生者是内核压缩摘要落账
+ *  （compaction/autocompact L2——与内核 findLastSummary 同款结构特征），按协议字段
+ *  判别，非文本嗅探。 */
+function isReplaceOp(surfaceOp: unknown): boolean {
+  return recordOf(surfaceOp)['op'] === 'replace';
 }
 
 /** surfaceOp 应用（压缩区间折叠）：append 追加；replace 先剔除 [startSeq,endSeq]
