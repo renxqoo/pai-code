@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { isTurnRunning, turnElapsedMs, visibleTurnBlocks } from '../turn-state';
+import { isTurnRunning, turnElapsedMs, turnEndedAbnormally, visibleTurnBlocks } from '../turn-state';
+import type { TurnBlock } from '../thread-model';
 import { turnTextContent } from '../turn-text';
 
 describe('turnElapsedMs', () => {
@@ -79,5 +80,21 @@ describe('turnTextContent', () => {
 
   test('无文本块时输出空字符串', () => {
     expect(turnTextContent({ blocks: [] })).toBe('');
+  });
+});
+
+describe('turnEndedAbnormally（症状回归：异常结束的轮不折叠消息展示）', () => {
+  const failure: TurnBlock = { kind: 'turnFailure', id: 'f', stopReason: 'error', message: 'boom' };
+  const aborted: TurnBlock = { kind: 'turnFailure', id: 'f', stopReason: 'aborted', message: null };
+
+  test('用户停止 / 回收打断（stopped）与轮末异常提示块（报错/中止）都算异常结束', () => {
+    expect(turnEndedAbnormally({ status: 'stopped', blocks: [] })).toBe(true);
+    expect(turnEndedAbnormally({ status: 'completed', blocks: [failure] })).toBe(true);
+    expect(turnEndedAbnormally({ status: 'stopped', blocks: [aborted] })).toBe(true);
+  });
+
+  test('正常完成与运行中不算异常', () => {
+    expect(turnEndedAbnormally({ status: 'completed', blocks: [{ kind: 'text', id: 't', text: 'done' }] })).toBe(false);
+    expect(turnEndedAbnormally({ status: 'running', blocks: [failure] })).toBe(false);
   });
 });

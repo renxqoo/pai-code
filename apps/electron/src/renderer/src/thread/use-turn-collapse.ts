@@ -11,10 +11,10 @@ export type TurnCollapseControl = {
 
 /**
  * 轮次折叠状态：过程（思考/工具/子代理/diff/中间文本）作为整体由轮级开关控制，
- * 不提供块级独立开关；无手动意图时跟随轮次状态（运行中展开、结束收起）。
+ * 不提供块级独立开关；无手动意图时跟随轮次状态（运行中/异常结束展开，正常完成收起）。
  */
-export function useTurnCollapse(turn: Pick<TurnModel, 'status'>): TurnCollapseControl {
-  const autoOpen = autoOpenForTurn(turn.status);
+export function useTurnCollapse(turn: Pick<TurnModel, 'status' | 'blocks'>): TurnCollapseControl {
+  const autoOpen = autoOpenForTurn(turn);
   const [turnPref, setTurnPref] = React.useState<CollapsePref>(null);
 
   const turnOpen = resolveOpen(turnPref, autoOpen);

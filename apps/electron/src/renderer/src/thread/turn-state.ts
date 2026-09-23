@@ -20,6 +20,16 @@ export function visibleTurnBlocks(blocks: readonly TurnBlock[], processOpen: boo
 }
 
 /**
+ * 轮次是否异常结束（非自然完成）：用户停止/回收打断（status stopped）或轮末异常提示块
+ * （上游报错/中止——与转写重建 failureOf 同一展示面）。运行中的轮尚未结束不在此列；
+ * 正常完成（completed 且无失败块）不算异常。
+ */
+export function turnEndedAbnormally(turn: Pick<TurnModel, 'status' | 'blocks'>): boolean {
+  if (turn.status === 'running') return false;
+  return turn.status === 'stopped' || turn.blocks.some((block) => block.kind === 'turnFailure');
+}
+
+/**
  * 计时基准：运行中取观察时刻，结束/停止冻结在 endedAt。
  * 非有限时间与倒挂区间（endedAt < startedAt、时钟回拨）一律降级为 0。
  */
