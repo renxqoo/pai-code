@@ -9,17 +9,15 @@ describe('callExpandable', () => {
   });
 });
 
-describe('autoOpenForCall（症状回归：失败的工具必须保持详情可见）', () => {
-  test('运行中：有流式输出自动展开，尚无输出收起', () => {
-    expect(autoOpenForCall({ status: 'running', output: 'partial' })).toBe(true);
-    expect(autoOpenForCall({ status: 'running', output: '' })).toBe(false);
+describe('autoOpenForCall（症状回归：bash 短命令闪现输出面板）', () => {
+  test('运行中一律不自动展开——「开始输出即展开、成功即收起」的开合对即闪烁源', () => {
+    expect(autoOpenForCall({ status: 'running' })).toBe(false);
   });
 
   test('失败：保持展开；成功/停止：收起', () => {
-    expect(autoOpenForCall({ status: 'failed', output: 'err' })).toBe(true);
-    expect(autoOpenForCall({ status: 'failed', output: '' })).toBe(true);
-    expect(autoOpenForCall({ status: 'ok', output: 'done' })).toBe(false);
-    expect(autoOpenForCall({ status: 'stopped', output: 'partial' })).toBe(false);
+    expect(autoOpenForCall({ status: 'failed' })).toBe(true);
+    expect(autoOpenForCall({ status: 'ok' })).toBe(false);
+    expect(autoOpenForCall({ status: 'stopped' })).toBe(false);
   });
 });
 

@@ -3,8 +3,10 @@ import type { ToolCallModel } from './thread-model';
 /**
  * 工具单元详情区的展开与内容策略：
  * - 可展开 = 有输出（输出即详情；参数摘要常驻行内，退出状态常驻行尾）；
- * - 自动开合 = 运行中一旦有流式输出就展开看尾部，成功结束收起，失败保持展开（错误必须可见）；
- *   手动意图经 CollapsePref 覆盖自动值（与轮级开关同一套 resolveOpen 语义）；
+ * - 自动开合 = 只有失败自动展开（错误必须可见）；失败是终态，只开不关。
+ *   运行中不自动展开：「开始输出即展开、成功即收起」的开合对会让短命令闪现
+ *   输出面板；实时尾部由用户手动展开（CollapsePref 覆盖自动值，与轮级同一套
+ *   resolveOpen 语义，手动意图跨终态保持）；
  * - 流式期间的详情只显示尾部片段（增长中的输出头部无信息量），结束态显示全量。
  */
 
@@ -14,8 +16,7 @@ export function callExpandable(call: Pick<ToolCallModel, 'output'>): boolean {
   return call.output.length > 0;
 }
 
-export function autoOpenForCall(call: Pick<ToolCallModel, 'status' | 'output'>): boolean {
-  if (call.status === 'running') return call.output.length > 0;
+export function autoOpenForCall(call: Pick<ToolCallModel, 'status'>): boolean {
   return call.status === 'failed';
 }
 
