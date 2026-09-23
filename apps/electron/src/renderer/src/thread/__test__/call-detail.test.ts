@@ -27,9 +27,10 @@ describe('detailOutput', () => {
     expect(detailOutput({ status: 'failed', output: 'boom' })).toBe('boom');
   });
 
-  test('运行中只显示尾部片段（增长中的输出头部无信息量）', () => {
-    const long = `${'x'.repeat(2500)}tail`;
-    expect(detailOutput({ status: 'running', output: long })).toBe(`${'x'.repeat(1996)}tail`);
+  test('运行中只显示头部片段（命令回显与最早输出先到，用户盯的是结果面）', () => {
+    // 上限 2000：head 占 4，x 取 1996
+    const long = `head${'x'.repeat(2500)}`;
+    expect(detailOutput({ status: 'running', output: long })).toBe(`head${'x'.repeat(1996)}`);
     expect(detailOutput({ status: 'running', output: 'short' })).toBe('short');
   });
 
