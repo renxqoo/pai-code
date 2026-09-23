@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { AlertTriangle, Layers, RefreshCw, TerminalSquare } from 'lucide-react';
+import { AlertTriangle, RefreshCw, TerminalSquare } from 'lucide-react';
 import { useStore } from 'zustand';
 
 import { copy } from '@/strings';
@@ -9,13 +9,12 @@ import { BannerStrip } from './banner-strip';
 
 /**
  * 会话状态横幅（T34 M1 自订阅，0 props）：worker 崩溃恢复提示 / 压缩中 / 直执行
- * 命令 / 自动重试 / 排队消息数——全部来自 live store 活跃线程运行态。
+ * 命令 / 自动重试——全部来自 live store 活跃线程运行态。
  * 输入卡上方的轻量提示条，无状态时整行不占位。
  */
 function ThreadBanner(): React.JSX.Element | null {
   const thread = useStore(liveStore, (s) => (s.activeThreadId === null ? undefined : s.threads[s.activeThreadId]));
-  const { crashed, compacting, retrying, queue, bashRunning, bashTail } = thread ?? initialThreadState;
-  const queueCount = queue.steering.length + queue.followUp.length;
+  const { crashed, compacting, retrying, bashRunning, bashTail } = thread ?? initialThreadState;
   if (crashed) {
     return (
       <BannerStrip tone="warn" icon={<AlertTriangle className="size-[13px]" strokeWidth={1.75} />}>
@@ -42,13 +41,6 @@ function ThreadBanner(): React.JSX.Element | null {
     return (
       <BannerStrip tone="info" icon={<RefreshCw className="size-[13px] animate-spin" strokeWidth={1.75} />}>
         {copy.flow.retrying(retrying.attempt)}
-      </BannerStrip>
-    );
-  }
-  if (queueCount > 0) {
-    return (
-      <BannerStrip tone="info" icon={<Layers className="size-[13px]" strokeWidth={1.75} />}>
-        <span>{copy.flow.queued(queueCount)}</span>
       </BannerStrip>
     );
   }

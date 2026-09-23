@@ -187,7 +187,6 @@ export const zh: typeof en = {
     /** 历史轮锚点带（无障碍名） */
     turnAnchorRailAria: '历史轮次导航',
     thinking: '思考',
-    queued: (count: number): string => (count === 1 ? '1 条排队消息' : `${count} 条排队消息`),
     retrying: (attempt: number): string => `重试中（第 ${attempt} 次）`,
     crashedBanner: '本会话的执行进程已退出。发送消息将恢复会话并继续。',
     hydrateFailedTitle: '历史加载失败',

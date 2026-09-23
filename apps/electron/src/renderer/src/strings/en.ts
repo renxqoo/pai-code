@@ -191,7 +191,6 @@ export const en = {
     /** 历史轮锚点带（无障碍名） */
     turnAnchorRailAria: 'Turn history navigation',
     thinking: 'Thinking',
-    queued: (count: number): string => (count === 1 ? '1 queued message' : `${count} queued messages`),
     retrying: (attempt: number): string => `Retrying (attempt ${attempt})`,
     crashedBanner: 'This conversation\'s worker has exited. Sending a message resumes the session.',
     hydrateFailedTitle: 'Failed to load history',
