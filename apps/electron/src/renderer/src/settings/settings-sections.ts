@@ -8,6 +8,7 @@ export type SettingsSectionId =
   | 'permissions'
   | 'agents'
   | 'skills'
+  | 'plugins'
   | 'history'
   | 'runtime';
 
@@ -19,6 +20,7 @@ export const FETCH_ON_ENTER_SECTIONS: ReadonlySet<SettingsSectionId> = new Set([
   'permissions',
   'agents',
   'skills',
+  'plugins',
 ]);
 
 export type SettingsNavGroupId = 'basics' | 'agent' | 'data';
@@ -31,6 +33,6 @@ export type SettingsNavGroup = {
 /** 左侧导航分组（顺序即展示顺序）。 */
 export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
   { id: 'basics', sections: ['general', 'providers'] },
-  { id: 'agent', sections: ['permissions', 'agents', 'skills'] },
+  { id: 'agent', sections: ['permissions', 'agents', 'skills', 'plugins'] },
   { id: 'data', sections: ['history', 'runtime'] },
 ];

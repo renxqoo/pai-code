@@ -11,6 +11,7 @@ import type {
   ApiData,
   ModelInfoView,
   PermMode,
+  PluginView,
   PreferencesView,
   ProviderConfigView,
   SavedSessionView,
@@ -77,6 +78,7 @@ export interface LiveStoreState {
   agentDefinitions: readonly AgentDefinition[];
   /** 用户级技能目录（进技能分区时拉取；启停真相在 hub settings）。 */
   skills: readonly SkillView[];
+  plugins: readonly PluginView[];
   /** 活跃会话的斜杠命令目录（`/` 补全数据源；拉取 effect 写入，切会话同步清空）。 */
   commands: readonly CommandView[];
   /** 活跃会话思考档读口（{level,source}；null = 未加载）。 */
@@ -409,6 +411,7 @@ function initialStoreState(): LiveStoreState {
     providers: [],
     agentDefinitions: [],
     skills: [],
+    plugins: [],
     commands: [],
     thinkingLevel: null,
     preferences: { defaultModel: null, onboarded: false, projectModels: {}, pinnedSessions: [], trustedDefault: false, hiddenProjects: [], idleRecycleMinutes: 5, archivedSessions: [] },

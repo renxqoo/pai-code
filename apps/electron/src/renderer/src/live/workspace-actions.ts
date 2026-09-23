@@ -1,11 +1,12 @@
-import type { AgentDefinition, ApiOutcome, CommandView, IdleRecycleMinutes, ImagePayload, PermMode, ProviderModel, RuntimeSnapshotView, SkillCandidateView } from '@paiapp/contracts';
+import type { AgentDefinition, ApiOutcome, CommandView, IdleRecycleMinutes, ImagePayload, PermMode, PluginCandidateView, ProviderModel, RuntimeSnapshotView, SkillCandidateView } from '@paiapp/contracts';
 import { thinkingLevelOfLabel } from '@paiapp/contracts';
 
 import { writeClipboard } from '@/lib/write-clipboard';
 import { copyOfError } from '@/lib/error-text';
 import { copy } from '@/strings';
 import { entrySeqOf } from './entry-seq';
-import type { SkillImportRequest, SkillImportSummary } from './live-controller-types';
+import { resourceActions } from './resource-actions';
+import type { PluginImportRequest, PluginImportSummary, SkillImportRequest, SkillImportSummary } from './live-controller-types';
 import { parseModelKey, pickSessionModel } from './pick-session-model';
 import { notifySubmitFailure } from './submit-notify';
 import { apiClient, controller, store } from './workspace-runtime';
@@ -90,6 +91,16 @@ export type WorkspaceActions = {
   readonly importSkills: (items: readonly SkillImportRequest[]) => Promise<SkillImportSummary>;
   /** 删除用户级技能（删整技能目录；失败 notice）。 */
   readonly removeSkill: (name: string) => Promise<boolean>;
+  /** 插件目录刷新（设置页插件分区进入时）。 */
+  readonly refreshPlugins: () => void;
+  /** 插件启停：写 hub 名单 + 活跃会话热装/热卸（失败降级重开；仍败 notice）。 */
+  readonly setPluginEnabled: (name: string, enabled: boolean) => Promise<boolean>;
+  /** 插件候选扫描（导入对话框数据源；失败 null + notice）。 */
+  readonly scanPluginCandidates: (sourcePath?: string) => Promise<PluginCandidateView[] | null>;
+  /** 批量插件导入：返回逐条失败明细供汇总渲染（热装失败 notice）。 */
+  readonly importPlugins: (items: readonly PluginImportRequest[]) => Promise<PluginImportSummary>;
+  /** 移除 vendor 件（热卸 + 删目录；失败 notice）。 */
+  readonly removePlugin: (name: string) => Promise<boolean>;
   readonly searchFiles: (query: string) => Promise<string[] | null>;
   /** 指定目录的 @ 文件搜索（新任务页无活跃会话，按所选目录搜索）。 */
   readonly searchFilesIn: (cwd: string, query: string) => Promise<string[] | null>;
@@ -411,42 +422,7 @@ export function createWorkspaceActions(): WorkspaceActions {
     },
     upsertAgentDefinition: (definition, previous) => controller.upsertAgentDefinition(definition, previous),
     removeAgentDefinition: (key) => controller.removeAgentDefinition(key),
-    refreshSkills: () => {
-      void controller.refreshSkills();
-    },
-    fetchCommandPreview: () => controller.fetchCommandPreview(),
-    setSkillEnabled: async (name, enabled) => {
-      // 生效编排走 controller 排队链：写 hub settings（skills/setEnabled）+ 串行重开全部 live 会话（信任态由注册表补全）
-      const outcome = await controller.applySkillToggle(name, enabled);
-      if (!outcome.ok && outcome.reason !== 'skill_not_found') {
-        pushNotice(copy.settings.skillToggleFailed);
-        return false;
-      }
-      if (outcome.ok && outcome.reopenFailures > 0) pushNotice(copy.settings.skillReopenFailed);
-      return outcome.ok;
-    },
-    scanSkillCandidates: async (sourcePath) => {
-      const outcome = await controller.scanSkillCandidates(sourcePath);
-      if (!outcome.ok) {
-        pushNotice(copy.settings.skillScanFailed);
-        return null;
-      }
-      return outcome.candidates;
-    },
-    importSkills: async (items) => {
-      const summary = await controller.importSkills(items);
-      if (summary.reopenFailures > 0) pushNotice(copy.settings.skillReopenFailed);
-      return summary;
-    },
-    removeSkill: async (name) => {
-      const outcome = await controller.removeSkill(name);
-      if (!outcome.ok) {
-        pushNotice(copy.settings.skillDeleteFailed);
-        return false;
-      }
-      if (outcome.reopenFailures > 0) pushNotice(copy.settings.skillReopenFailed);
-      return true;
-    },
+    ...resourceActions({ controller, pushNotice }),
     searchFiles: (query) => {
       const state = store.getState();
       const cwd = state.activeThreadId !== null ? state.sessions[state.activeThreadId]?.cwd ?? '' : '';

@@ -1,7 +1,7 @@
 import * as React from 'react';
 
-import type { AgentDefinition, IdleRecycleMinutes, PermMode, ProviderConfigView, ProviderModel, SkillCandidateView, SkillView, ThinkingLevel } from '@paiapp/contracts';
-import type { SkillImportRequest, SkillImportSummary } from '@/live/live-controller-types';
+import type { AgentDefinition, IdleRecycleMinutes, PermMode, PluginCandidateView, PluginView, ProviderConfigView, ProviderModel, SkillCandidateView, SkillView, ThinkingLevel } from '@paiapp/contracts';
+import type { PluginImportRequest, PluginImportSummary, SkillImportRequest, SkillImportSummary } from '@/live/live-controller-types';
 import { AGENT_TOOL_IDS } from '@paiapp/contracts';
 import type { Theme } from '@/components/theme-context';
 import { useTheme } from '@/components/use-theme';
@@ -100,6 +100,19 @@ export type SettingsScreenProps = {
     /** 删除用户级技能（两步确认后调用）。 */
     onRemove: (name: string) => Promise<boolean>;
   };
+  plugins: {
+    list: readonly PluginView[];
+    onToggle: (name: string, enabled: boolean) => Promise<boolean>;
+    onRefresh: () => void;
+    /** 候选扫描（导入对话框数据源；失败 null）。 */
+    onScanCandidates: (sourcePath?: string) => Promise<readonly PluginCandidateView[] | null>;
+    /** 批量导入（逐条隔离；返回汇总含逐条失败明细）。 */
+    onImportPlugins: (items: readonly PluginImportRequest[]) => Promise<PluginImportSummary>;
+    /** 系统目录选择（导入对话框「选择文件夹…」）。 */
+    onPickFolder: () => Promise<string | null>;
+    /** 移除 vendor 件（两步确认后调用）。 */
+    onRemove: (name: string) => Promise<boolean>;
+  };
   history: {
     saved: readonly SavedSession[];
     pinned: ReadonlySet<string>;
@@ -144,6 +157,7 @@ export function useSettingsScreen({ open, onClose, initialSection }: UseSettings
   const hubSettings = useStore(liveStore, (s) => s.hubSettings);
   const agentDefinitions = useStore(liveStore, (s) => s.agentDefinitions);
   const skills = useStore(liveStore, (s) => s.skills);
+  const plugins = useStore(liveStore, (s) => s.plugins);
   const modelOptions = React.useMemo(() => models.map((model) => `${model.provider}/${model.modelId}`), [models]);
   // 原始值 selector（布尔）：宿主相位或死会话存在性翻转才重渲，与 sessions 表引用解耦
   const runtimeAttention = useStore(
@@ -236,6 +250,15 @@ export function useSettingsScreen({ open, onClose, initialSection }: UseSettings
       onImportSkills: actions.importSkills,
       onPickFolder: () => actions.pickDirectory(null),
       onRemove: actions.removeSkill,
+    },
+    plugins: {
+      list: plugins,
+      onToggle: actions.setPluginEnabled,
+      onRefresh: actions.refreshPlugins,
+      onScanCandidates: actions.scanPluginCandidates,
+      onImportPlugins: actions.importPlugins,
+      onPickFolder: () => actions.pickDirectory(null),
+      onRemove: actions.removePlugin,
     },
     history: {
       saved: saved,

@@ -4,6 +4,7 @@ import type {
   CommandView,
   ImagePayload,
   PermMode,
+  PluginCandidateView,
   PreferencesView,
   ProviderModel,
   SkillCandidateView,
@@ -38,6 +39,12 @@ export type SkillImportSummary = {
   failed: ReadonlyArray<{ name: string; reason: string }>;
   reopenFailures: number;
 };
+
+/** 插件导入请求（名 = manifest 声明名不可改；overwrite = 显式覆盖同名）。 */
+export type PluginImportRequest = { sourcePath: string; overwrite: boolean };
+
+/** 批量插件导入汇总（逐条隔离失败明细 + 热装/降级重开失败数）。 */
+export type PluginImportSummary = SkillImportSummary;
 
 export type CreateSessionOutcome = { ok: true; threadId: string } | { ok: false; reason: string };
 
@@ -109,6 +116,16 @@ export interface LiveController {
   readonly importSkills: (items: readonly SkillImportRequest[]) => Promise<SkillImportSummary>;
   /** 删除用户级技能（hub 删整技能目录——含捆绑文件）；成功后单次重开生效。 */
   readonly removeSkill: (name: string) => Promise<{ ok: true; reopenFailures: number } | { ok: false; reason: string }>;
+  /** 插件启停完整编排：写 hub 名单 + 活跃会话热装/热卸（失败降级重开）。 */
+  readonly applyPluginToggle: (name: string, enabled: boolean) => Promise<{ ok: true; hotFailures: number } | { ok: false; reason: string }>;
+  /** 插件候选扫描（导入对话框数据源；判定 = hub plugins/inspect）。 */
+  readonly scanPluginCandidates: (sourcePath?: string) => Promise<{ ok: true; candidates: PluginCandidateView[] } | { ok: false; reason: string }>;
+  /** 批量插件导入：串行逐条（失败逐条隔离）→ 写后回读 → 逐会话热装（失败降级重开）。 */
+  readonly importPlugins: (items: readonly PluginImportRequest[]) => Promise<PluginImportSummary>;
+  /** 插件目录刷新（设置页插件分区进入时）。 */
+  readonly refreshPlugins: () => Promise<void>;
+  /** 移除 vendor 件（热卸活跃会话 + 删 vendor 目录与 registry 条目）。 */
+  readonly removePlugin: (name: string) => Promise<{ ok: true; hotFailures: number } | { ok: false; reason: string }>;
   /** 同文件重开会话（不指定 trusted，保持既有信任态）：技能/资源开关生效通路。 */
   readonly reopenSession: (threadId: string) => Promise<boolean>;
   /** 项目文件搜索（@ 引用；cwd 门禁在主进程，失败返回 null）。 */

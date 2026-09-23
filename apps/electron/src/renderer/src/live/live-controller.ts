@@ -14,6 +14,7 @@ import { createReadPorts } from './read-ports';
 import { createSettingsPorts } from './settings-ports';
 import { createAgentsActions } from './agents-actions';
 import { createSkillsActions } from './skills-actions';
+import { createPluginsActions } from './plugins-actions';
 import { checkoutGitBranch, listGitBranches, listGitGraph, searchFiles } from './git-actions';
 import type { CreateSessionInput, CreateSessionOutcome, LiveController, QueueOpOutcome } from './live-controller-types';
 import { isLiveSession, type LiveStore } from './store';
@@ -70,6 +71,13 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
   const agentsActions = createAgentsActions({ api, store });
   /** 技能动作组（清单/启停/导入/移除——重开回调经 controller 闭包）。 */
   const skillsActions = createSkillsActions({
+    api,
+    store,
+    chainSkills,
+    reopenSession: (threadId) => controller.reopenSession(threadId),
+  });
+  /** 插件动作组（清单/启停/导入/移除——热装编排 + 重开降级）。 */
+  const pluginsActions = createPluginsActions({
     api,
     store,
     chainSkills,
@@ -429,6 +437,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     runtime: createRuntimeController(client),
     ...agentsActions,
     ...skillsActions,
+    ...pluginsActions,
     /** 预会话命令目录（新建任务页 `/` 补全数据源；失败空目录降级）。 */
     async fetchCommandPreview(): Promise<CommandView[]> {
       const outcome = await api.command.preview({});

@@ -13,6 +13,7 @@ const ALL_SECTIONS: readonly SettingsSectionId[] = [
   'permissions',
   'agents',
   'skills',
+  'plugins',
   'history',
   'runtime',
 ];
@@ -35,6 +36,6 @@ describe('设置分区模型', () => {
   });
 
   test('按开即读分区与无推送目录一致', () => {
-    expect([...FETCH_ON_ENTER_SECTIONS].sort()).toEqual(['agents', 'permissions', 'skills']);
+    expect([...FETCH_ON_ENTER_SECTIONS].sort()).toEqual(['agents', 'permissions', 'plugins', 'skills']);
   });
 });

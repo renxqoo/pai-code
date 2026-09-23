@@ -1,4 +1,4 @@
-import { Activity, ArrowLeft, Bot, Boxes, History, Rocket, Settings2, ShieldCheck, Sparkles } from 'lucide-react';
+import { Activity, ArrowLeft, Bot, Boxes, History, Puzzle, Rocket, Settings2, ShieldCheck, Sparkles } from 'lucide-react';
 
 import type { LucideIcon } from 'lucide-react';
 
@@ -13,6 +13,7 @@ const SECTION_ICONS: Record<SettingsSectionId, LucideIcon> = {
   permissions: ShieldCheck,
   agents: Bot,
   skills: Sparkles,
+  plugins: Puzzle,
   history: History,
   runtime: Activity,
 };
@@ -39,6 +40,7 @@ function SettingsSectionNav({ section, onSelectSection, onClose, runtimeAttentio
     permissions: copy.settings.permissionsTitle,
     agents: copy.settings.agentsTitle,
     skills: copy.settings.skillsTitle,
+    plugins: copy.settings.pluginsTitle,
     history: copy.settings.historyTitle,
     runtime: copy.settings.runtimeTitle,
   };
