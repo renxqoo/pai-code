@@ -6,6 +6,8 @@ export * from './api';
 export * from './queue-views';
 export * from './session-views';
 export * from './git-views';
+export * from './plugin-views';
+export * from './plugin-commands';
 export * from './inflight-views';
 export * from './thinking-levels';
 export * from './agents';

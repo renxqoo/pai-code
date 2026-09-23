@@ -31,6 +31,8 @@ export const HUB_ERROR_CODES = [
   'bash_denied',
   'protocol',
   'compact_rejected',
+  'plugin_install_failed',
+  'plugin_uninstall_failed',
 ] as const;
 
 export type HubErrorCode = (typeof HUB_ERROR_CODES)[number];
@@ -65,6 +67,7 @@ export type AppErrorCode =
   | 'bash_images_rejected'
   | 'skill_source_invalid' | 'skill_invalid' | 'skill_name_invalid' | 'skill_exists'
   | 'skill_write_failed' | 'skill_not_registered' | 'skill_not_supported'
+  | 'plugin_source_invalid' | 'plugin_name_invalid' | 'plugin_exists' | 'plugin_builtin_immutable'
   | 'provider_name_conflict' | 'provider_api_unsupported' | 'provider_baseurl_invalid'
   | 'provider_baseurl_changed' | 'settings_unavailable';
 export type AppError = { kind: AppErrorCode; message?: string };

@@ -18,6 +18,7 @@ import { createOpenLocation, type OpenLocation } from './open-location';
 import { createLocalRoutes } from '@paiapp/api';
 import { createSettingsRoutes } from '@paiapp/api';
 import { createSkillRoutes, failClosedSkillSources, type SkillSourcePort } from '@paiapp/api';
+import { createPluginRoutes, failClosedPluginSources, type PluginSourcePort } from '@paiapp/api';
 import { promptRoutes } from '@paiapp/api';
 import type { AgentDefinitionsStore } from './agent-definitions-store';
 import type { ApiError } from '@paiapp/contracts';
@@ -72,6 +73,10 @@ export interface ApiRouteDeps {
   /** 技能源面（装配层注入 skill-import 实现：批准根白名单 + 候选发现）。
    *  缺省 fail-closed（门恒拒、扫描恒空）——未接线不放大能力面，可测性同 revealPath 范式。 */
   skillImporter?: SkillSourcePort;
+  /** 插件源面（装配层注入 plugin-import 实现；缺省 fail-closed 同 skillImporter 范式）。 */
+  pluginImporter?: PluginSourcePort;
+  /** 热装目标（活跃 thread id 集合的惰性快照；导入后即时生效编排）。 */
+  pluginHotInstallTargets?: () => readonly string[];
   /** 本地 git 分支能力（装配层可注入执行器替身；缺省走真实 git）。 */
   git?: GitBranches;
   /** 本地 git 图谱读口（同上，可注入替身）。 */
@@ -253,6 +258,12 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     ...(deps.onRouteRejected !== undefined ? { onReject: deps.onRouteRejected } : {}),
   });
   const { skillsList, routes: skillRoutes } = skills;
+  const { routes: pluginRoutes } = createPluginRoutes({
+    settingsCommands: () => hub().settings,
+    sources: deps.pluginImporter ?? failClosedPluginSources,
+    ...(deps.pluginHotInstallTargets !== undefined ? { hotInstallTargets: deps.pluginHotInstallTargets } : {}),
+    ...(deps.onRouteRejected !== undefined ? { onReject: deps.onRouteRejected } : {}),
+  });
 
   type RouteTable = { [M in ApiMethod]?: (params: ApiParams<M>) => Outcome<M> };
 
@@ -269,6 +280,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     ...localRoutes,
     ...settings.routes,
     ...skillRoutes,
+    ...pluginRoutes,
     ...threadOpsRoutes({
       agentCommands: () => hub().agents,
       threadCommands: () => hub().thread,

@@ -111,3 +111,5 @@ export {
 export { diffFromWriteArgs } from './views/diff-extract';
 export { flattenUserText, assistantText, assistantThinking } from './views/content';
 export { parseDiagnosticEvent } from './views/diagnostic-events';
+export { createPluginRoutes, mapPluginError, pluginRowsOf, type PluginRoutesDeps } from './verbs/plugins';
+export { failClosedPluginSources, type PluginSourcePort } from './verbs/plugin-source';

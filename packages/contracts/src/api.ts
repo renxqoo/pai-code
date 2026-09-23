@@ -194,7 +194,10 @@ export type { HostInfoView, WorkerRowView, ResourceSampleView, RuntimeEventView,
 const empty = z.object({}).strict();
 const threadOnly = z.object({ threadId: z.string().min(1) }).strict();
 
+import { PluginMethodsSchema } from './plugin-views';
+
 export const ApiSchemas = {
+  ...PluginMethodsSchema,
   'app/bootstrap': {
     params: empty,
     result: BootstrapViewSchema,

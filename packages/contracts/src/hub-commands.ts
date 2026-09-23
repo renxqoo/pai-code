@@ -438,6 +438,10 @@ export interface SubagentSteerCmd {
   message: string;
 }
 
+import type { PluginsListCmd, PluginsInspectCmd, PluginsInstallCmd, PluginsUninstallCmd, PluginsSetEnabledCmd, PluginsRemoveCmd, PluginsHotInstallCmd, PluginsHotUninstallCmd } from './plugin-commands';
+
+export type { PluginsListCmd, PluginsInspectCmd, PluginsInstallCmd, PluginsUninstallCmd, PluginsSetEnabledCmd, PluginsRemoveCmd, PluginsHotInstallCmd, PluginsHotUninstallCmd, PluginRow, PluginsListData, PluginInspectedCandidate, PluginsInspectData, PluginsInstallData } from './plugin-commands';
+
 export type HubCommand =
   | (ThreadStartCmd & { id?: string })
   | (ThreadResumeCmd & { id?: string })
@@ -499,9 +503,17 @@ export type HubCommand =
   | (SkillsRemoveCmd & { id?: string })
   | (SkillsInspectCmd & { id?: string })
   | (SkillsInstallCmd & { id?: string })
+  | (PluginsListCmd & { id?: string })
+  | (PluginsInspectCmd & { id?: string })
+  | (PluginsInstallCmd & { id?: string })
+  | (PluginsUninstallCmd & { id?: string })
+  | (PluginsSetEnabledCmd & { id?: string })
+  | (PluginsRemoveCmd & { id?: string })
+  | (PluginsHotInstallCmd & { id?: string })
+  | (PluginsHotUninstallCmd & { id?: string })
   | (SubagentSteerCmd & { id?: string });
 
-/** 命令词表（与 host-hub COMMAND_NAMES 逐一对应——60 条；测试做封闭断言）。 */
+/** 命令词表（与 host-hub COMMAND_NAMES 对应（app 消费子集 69 条——permission/grant|list_rules|remove_rule 三命令不经 app 面）；测试做封闭断言）。 */
 export const HUB_COMMAND_TYPES = [
   'thread/start',
   'thread/resume',
@@ -563,6 +575,14 @@ export const HUB_COMMAND_TYPES = [
   'skills/install',
   'skills/set_enabled',
   'skills/remove',
+  'plugins/list',
+  'plugins/inspect',
+  'plugins/install',
+  'plugins/uninstall',
+  'plugins/set_enabled',
+  'plugins/remove',
+  'plugins/hot_install',
+  'plugins/hot_uninstall',
   'subagent/steer',
 ] as const;
 

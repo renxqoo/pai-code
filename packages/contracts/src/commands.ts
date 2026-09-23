@@ -55,7 +55,15 @@ export type PaiCommandType =
   | 'compact'
   | 'thread/delete'
   | 'agents/create'
-  | 'agents/remove';
+  | 'agents/remove'
+  | 'plugins/list'
+  | 'plugins/inspect'
+  | 'plugins/install'
+  | 'plugins/uninstall'
+  | 'plugins/set_enabled'
+  | 'plugins/remove'
+  | 'plugins/hot_install'
+  | 'plugins/hot_uninstall';
 
 export type PaiCommand = Extract<HubCommand, { type: PaiCommandType }>;
 

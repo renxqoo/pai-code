@@ -29,6 +29,7 @@ export interface ApiClient {
   readonly models: ReturnType<typeof createModelsDomain>;
   readonly agents: ReturnType<typeof createAgentsDomain>;
   readonly skills: ReturnType<typeof createSkillsDomain>;
+  readonly plugins: ReturnType<typeof createPluginsDomain>;
   readonly dialog: ReturnType<typeof createDialogDomain>;
   readonly files: ReturnType<typeof createFilesDomain>;
   readonly git: ReturnType<typeof createGitDomain>;
@@ -100,6 +101,18 @@ function createSkillsDomain(t: ApiClientTransport) {
   });
 }
 
+function createPluginsDomain(t: ApiClientTransport) {
+  return domain({
+    list: call(t, 'plugins/list'),
+    setEnabled: call(t, 'plugins/setEnabled'),
+    candidates: call(t, 'plugins/candidates'),
+    import: call(t, 'plugins/import'),
+    remove: call(t, 'plugins/remove'),
+    hotInstall: call(t, 'plugins/hotInstall'),
+    hotUninstall: call(t, 'plugins/hotUninstall'),
+  });
+}
+
 function createDialogDomain(t: ApiClientTransport) {
   return domain({
     pickDirectory: call(t, 'dialog/pickDirectory'),
@@ -166,6 +179,7 @@ export function createApiClient(transport: ApiClientTransport): ApiClient {
     models: createModelsDomain(transport),
     agents: createAgentsDomain(transport),
     skills: createSkillsDomain(transport),
+    plugins: createPluginsDomain(transport),
     dialog: createDialogDomain(transport),
     files: createFilesDomain(transport),
     git: createGitDomain(transport),

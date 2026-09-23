@@ -53,6 +53,12 @@ export const zhErrorCopy = {
   bash_denied: '命令被拒绝执行。',
   protocol: '协议错误，请重试或重启应用。',
   compact_rejected: '上下文压缩被拒绝，请稍后重试。',
+  plugin_install_failed: '插件装载失败，请查看错误详情。',
+  plugin_uninstall_failed: '插件卸载失败（可能存在依赖或装载态异常）。',
+  plugin_source_invalid: '插件源目录无效（缺少 plugin.json 或含 SDK 依赖）。',
+  plugin_name_invalid: '插件名无效。',
+  plugin_exists: '同名插件已安装。',
+  plugin_builtin_immutable: '内置插件不可删除，只能停用。',
   unregistered_code: (error: ApiError): string => {
     if (error.kind !== 'unregistered_code') return error.message ?? error.kind;
     return error.message.length === 0 ? error.code : `${error.code}: ${error.message}`;

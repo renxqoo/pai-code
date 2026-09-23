@@ -55,6 +55,12 @@ export const enErrorCopy = {
   bash_denied: 'The command was denied.',
   protocol: 'A protocol error occurred. Retry or restart the app.',
   compact_rejected: 'Context compaction was rejected. Try again later.',
+  plugin_install_failed: 'Plugin failed to load. Check error details.',
+  plugin_uninstall_failed: 'Plugin failed to unload (dependencies or load-state issue).',
+  plugin_source_invalid: 'Invalid plugin source (missing plugin.json or contains SDK imports).',
+  plugin_name_invalid: 'Invalid plugin name.',
+  plugin_exists: 'A plugin with this name is already installed.',
+  plugin_builtin_immutable: 'Built-in plugins cannot be removed, only disabled.',
   unregistered_code: (error: ApiError): string => {
     if (error.kind !== 'unregistered_code') return error.message ?? error.kind;
     return error.message.length === 0 ? error.code : `${error.code}: ${error.message}`;
