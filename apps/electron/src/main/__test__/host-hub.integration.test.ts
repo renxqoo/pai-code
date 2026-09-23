@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 import { HUB_ERROR_CODES, type TokenAnalyticsView } from '@paiapp/contracts';
 import { createApiRoutes } from '../api-routes';
@@ -262,10 +262,10 @@ describe('app API 全接口 × 真 x-harness host-hub（script 默认门）', ()
     // script adapter 实报 output = 16+len('analytics') = 25（按会话独立计）
     expect(view.sessionOutput).toBe(25);
     expect(view.window).toBe(200_000);
-    // breakdown 恒等式（hub 契约）：total = 三项和；微小实报输入下估算基座主导 used
-    expect(view.used).toBe(view.systemPrompt + view.tools + view.messages);
-    expect(view.remaining).toBe(200_000 - view.used);
-    expect(view.utilizationPct).toBe(Math.round((view.used / 200_000) * 100));
+    // 实报优先律（hub 契约）：used = 实报 input（64）；估算偏大时 messages 归零
+    expect(view.used).toBe(64);
+    expect(view.messages).toBe(0);
+    expect([view.remaining, view.utilizationPct]).toEqual([200_000 - 64, 0]);
   }, 30_000);
 
   test.if(hubAvailable && hubTokenAnalytics)('全接口旅程 + 落存储断言', async () => {

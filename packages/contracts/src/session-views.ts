@@ -28,8 +28,9 @@ export const SessionStatsViewSchema = z.object({
 });
 export type SessionStatsView = z.infer<typeof SessionStatsViewSchema>;
 
-/** tokenAnalytics 视图（T43）：上下文占用展示就绪派生（used=total 活线程≈实报输入侧；
- *  utilizationPct 取整主指标；构成分项为估算口径——与实报占用分开命名）。 */
+/** tokenAnalytics 视图（T43）：上下文占用展示就绪派生（used = 实报 input 优先——
+ *  输入侧口径不含 output；无实报退估算下限。utilizationPct 取整主指标；构成分项为
+ *  估算口径——与实报占用分开命名；window 为会话拨号查表值：模型级 > 档案级）。 */
 export const TokenAnalyticsViewSchema = z.object({
   used: z.number(),
   window: z.number(),
