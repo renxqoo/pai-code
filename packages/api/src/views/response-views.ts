@@ -12,6 +12,7 @@ import type {
   SubagentSnapshotView,
   ThreadStateView,
   ThinkingLevelView,
+  TokenAnalyticsView,
   WorkerRowView,
 } from '@paiapp/contracts';
 
@@ -243,6 +244,29 @@ export function sessionStatsView(data: unknown): SessionStatsView {
   };
 }
 
+/** get_token_analytics 响应 → 视图（T43）：展示就绪派生单点。utilizationPct 取整
+ *  边界用 total/window 全精度先乘后取整（不先用 hub 的 utilization 浮点再取整——
+ *  同源同式，避免两处取整差一）；window ≤0 时 pct 恒 0（垃圾输入降级不崩）。 */
+export function tokenAnalyticsView(data: unknown): TokenAnalyticsView {
+  const d = recordOf(data);
+  const b = recordOf(d.breakdown);
+  const used = num(b.total, 0);
+  const window = num(b.contextWindow, 0);
+  return {
+    used,
+    window,
+    utilizationPct: window > 0 ? Math.round((used / window) * 100) : 0,
+    remaining: num(b.remaining, 0),
+    systemPrompt: num(b.systemPrompt, 0),
+    tools: num(b.tools, 0),
+    messages: num(b.messages, 0),
+    cacheHitRate: num(b.cacheHitRate, 0),
+    totalCacheRead: num(b.totalCacheRead, 0),
+    totalCacheWrite: num(b.totalCacheWrite, 0),
+    sessionOutput: num(d.sessionOutput, 0),
+  };
+}
+
 /** get_thinking_level 响应 → 视图（无值态归一 off/source off）。 */
 export function thinkingLevelView(data: unknown): ThinkingLevelView {
   const d = recordOf(data);
@@ -253,7 +277,9 @@ export function thinkingLevelView(data: unknown): ThinkingLevelView {
   };
 }
 
-/** get_commands 响应（顶层数组）→ 命令视图（缺名/source 词表外丢弃；description 缺省 null）。 */
+/** get_commands 响应（顶层数组）→ 命令视图（缺名/source 词表外丢弃；description 缺省 null）。
+ * skill 源同型命名 `skill:<name>`——与 previewCommands（无会话预构目录）一致，
+ * 会话内外补全形态不漂移（hub 侧名无前缀，前缀是 app 展示面约定）。 */
 export function sessionCommands(data: unknown): CommandView[] {
   const commands = Array.isArray(data) ? data : [];
   const out: CommandView[] = [];
@@ -263,7 +289,7 @@ export function sessionCommands(data: unknown): CommandView[] {
     if (name.length === 0) continue;
     const source = c.source;
     if (source !== 'command' && source !== 'skill') continue;
-    out.push({ name, description: optStr(c.description), source });
+    out.push({ name: source === 'skill' ? `skill:${name}` : name, description: optStr(c.description), source });
   }
   return out;
 }

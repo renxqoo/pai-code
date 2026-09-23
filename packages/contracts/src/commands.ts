@@ -44,6 +44,7 @@ export type PaiCommandType =
   | 'skills/set_enabled'
   | 'skills/remove'
   | 'get_session_stats'
+  | 'get_token_analytics'
   | 'set_session_name'
   | 'get_commands'
   | 'ui_response'
@@ -93,6 +94,7 @@ export const PAI_COMMAND_TYPES = [
   'skills/set_enabled',
   'skills/remove',
   'get_session_stats',
+  'get_token_analytics',
   'set_session_name',
   'get_commands',
   'ui_response',

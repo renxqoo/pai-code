@@ -3,6 +3,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { copy } from '@/strings';
 
+import type { TokenAnalyticsView } from '@paiapp/contracts';
+
 import { ComposerActionsRow, type EffortControls, type UsageControls } from '../composer-actions-row';
 
 /**
@@ -19,6 +21,7 @@ const EFFORT: EffortControls = {
 
 const USAGE: UsageControls = {
   stats: null,
+  analytics: null,
   label: copy.composer.usageSummary,
 };
 
@@ -97,7 +100,7 @@ describe('输入框底行模型选择（弹窗入口）', () => {
   test('用量入口：stats 已拉取为可点按钮（title=用量），未拉取退化为纯展示占位', () => {
     const fetched = renderToStaticMarkup(
       <ComposerActionsRow
-        {...makeProps({ usage: { stats: { userMessages: 1, assistantMessages: 2, toolCalls: 3, tokens: { input: 1200, output: 340, total: 1540 }, cost: 0 }, label: copy.composer.usageSummary } })}
+        {...makeProps({ usage: { stats: { userMessages: 1, assistantMessages: 2, toolCalls: 3, tokens: { input: 1200, output: 340, total: 1540 }, cost: 0 }, analytics: null, label: copy.composer.usageSummary } })}
       />,
     );
     const tag = buttonTag(fetched, copy.composer.usageSummary);
@@ -179,5 +182,65 @@ describe('发送/停止键状态机（禁用灰 / 可发黑 / 生成中空输入
     expect(tag).not.toContain('disabled=""');
     expect(tag).toContain('enabled:bg-primary');
     expect(buttonTag(html, copy.composer.stop)).toBeNull();
+  });
+});
+
+
+const STATS_FIXTURE = { userMessages: 1, assistantMessages: 2, toolCalls: 3, toolResults: 4, tokens: { input: 1200, output: 340, total: 1540 }, cost: 0 };
+
+function analyticsOf(pct: number): TokenAnalyticsView {
+  return {
+    used: 55_000, window: 200_000, utilizationPct: pct, remaining: 145_000,
+    systemPrompt: 2_000, tools: 35_000, messages: 18_000,
+    cacheHitRate: 0.8, totalCacheRead: 44_000, totalCacheWrite: 5_000, sessionOutput: 3_000,
+  };
+}
+
+describe('用量主芯片（T43 上下文占用口径——累计 total 不冒充上下文）', () => {
+  test('analytics 在场：显示百分比 + title 带绝对数/窗口；不再显累计 total', () => {
+    const html = renderToStaticMarkup(
+      <ComposerActionsRow {...makeProps({ usage: { stats: STATS_FIXTURE, analytics: analyticsOf(28), label: copy.composer.usageSummary } })} />,
+    );
+    expect(html).toContain('>28%<'); // 按钮文本 28%
+    expect(html).not.toContain('1.5k'); // 累计口径不出现
+    const tag = buttonTag(html, copy.composer.usageSummary);
+    expect(tag).not.toBeNull();
+    expect(tag).toContain('55k'); // title 绝对数（已用 55k / 200k）
+    expect(tag).toContain('200k');
+  });
+
+  test('阈值变色矩阵（Claude Code 官方示例阈值）：<70 muted；70-89 琥珀；>=90 红', () => {
+    const muted = renderToStaticMarkup(
+      <ComposerActionsRow {...makeProps({ usage: { stats: STATS_FIXTURE, analytics: analyticsOf(69), label: copy.composer.usageSummary } })} />,
+    );
+    const mutedTag = buttonTag(muted, copy.composer.usageSummary);
+    expect(mutedTag).toContain('text-muted-foreground');
+    expect(mutedTag).not.toContain('amber');
+    expect(mutedTag).not.toContain('destructive');
+
+    const warn = renderToStaticMarkup(
+      <ComposerActionsRow {...makeProps({ usage: { stats: STATS_FIXTURE, analytics: analyticsOf(70), label: copy.composer.usageSummary } })} />,
+    );
+    const warnTag = buttonTag(warn, copy.composer.usageSummary);
+    expect(warnTag).toContain('text-amber-600');
+    expect(warnTag).not.toContain('text-destructive');
+
+    const warnHigh = renderToStaticMarkup(
+      <ComposerActionsRow {...makeProps({ usage: { stats: STATS_FIXTURE, analytics: analyticsOf(89), label: copy.composer.usageSummary } })} />,
+    );
+    expect(buttonTag(warnHigh, copy.composer.usageSummary)).toContain('text-amber-600');
+
+    const danger = renderToStaticMarkup(
+      <ComposerActionsRow {...makeProps({ usage: { stats: STATS_FIXTURE, analytics: analyticsOf(90), label: copy.composer.usageSummary } })} />,
+    );
+    expect(buttonTag(danger, copy.composer.usageSummary)).toContain('text-destructive');
+  });
+
+  test('降级回落：analytics 缺席（插件禁用/旧 hub）显累计 total（现状行为）', () => {
+    const html = renderToStaticMarkup(
+      <ComposerActionsRow {...makeProps({ usage: { stats: STATS_FIXTURE, analytics: null, label: copy.composer.usageSummary } })} />,
+    );
+    expect(html).toContain('1.5k');
+    expect(html).not.toContain('%</button>');
   });
 });

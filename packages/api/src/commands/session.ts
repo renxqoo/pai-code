@@ -31,6 +31,7 @@ export interface SessionCommands {
   getSubagents(input: Input<'get_subagents'>): Promise<HubResult<unknown>>;
   getPendingDialogs(input: Input<'get_pending_dialogs'>): Promise<HubResult<unknown>>;
   getSessionStats(input: Input<'get_session_stats'>): Promise<HubResult<unknown>>;
+  getTokenAnalytics(input: Input<'get_token_analytics'>): Promise<HubResult<unknown>>;
   getCommands(input: Input<'get_commands'>): Promise<HubResult<unknown>>;
   setSessionName(input: Input<'set_session_name'>): Promise<HubResult<unknown>>;
 }
@@ -57,6 +58,7 @@ export function createSessionCommands(send: Transport): SessionCommands {
     getSubagents: (input) => send<unknown>({ type: 'get_subagents', ...input }, TIMEOUTS.default),
     getPendingDialogs: (input) => send<unknown>({ type: 'get_pending_dialogs', ...input }, TIMEOUTS.default),
     getSessionStats: (input) => send<unknown>({ type: 'get_session_stats', ...input }, TIMEOUTS.default),
+    getTokenAnalytics: (input) => send<unknown>({ type: 'get_token_analytics', ...input }, TIMEOUTS.default),
     getCommands: (input) => send<unknown>({ type: 'get_commands', ...input }, TIMEOUTS.default),
     setSessionName: (input) => send<unknown>({ type: 'set_session_name', ...input }, TIMEOUTS.default),
   };

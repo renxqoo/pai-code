@@ -174,6 +174,21 @@ describe('live store（对话框/通知/bootstrap 合并）', () => {
     expect(store.getState().threads['t1']?.crashed).toBe(true);
   });
 
+  test('updateAnalytics（T43）：线程级写入 + sessionRemoved 随行清理（与 stats 同点）', () => {
+    const store = createLiveStore();
+    store.getState().bootstrap(bootstrapOf([session('t1'), session('t2')]));
+    const analytics = {
+      used: 55_000, window: 200_000, utilizationPct: 28, remaining: 145_000,
+      systemPrompt: 2_000, tools: 35_000, messages: 18_000,
+      cacheHitRate: 0.8, totalCacheRead: 44_000, totalCacheWrite: 5_000, sessionOutput: 3_000,
+    };
+    store.getState().updateAnalytics('t1', analytics);
+    expect(store.getState().analytics['t1']).toEqual(analytics);
+    store.getState().applyEvent({ type: 'sessionRemoved', threadId: 't1' }, 9);
+    expect(store.getState().analytics['t1']).toBeUndefined();
+    expect(store.getState().analytics['t2']).toBeUndefined(); // 未写线程无残留
+  });
+
   test('hydrate/stopIntent/updateStats/reset 动作', () => {
     const store = createLiveStore();
     store.getState().bootstrap(bootstrapOf([session('t1')]));

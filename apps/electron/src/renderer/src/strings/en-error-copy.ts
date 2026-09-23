@@ -42,6 +42,7 @@ export const enErrorCopy = {
   unknown_command: 'Unknown command.',
   capability_thinking: 'The selected thinking level was rejected: the model does not declare reasoning support — turn on the "Reasoning" toggle on its model row in channel settings, or set effort back to Default.',
   capability_images: imagesDeniedCopy,
+  capability_plugin: 'Context analytics plugin not loaded: the context usage indicator is unavailable (remove it from plugins.disabled in hub settings).',
   images_too_many: imagesTooManyCopy,
   model_unavailable: 'The selected model is unavailable. Check the provider configuration in Settings.',
   cursor_stale: 'The conversation view is out of date. Refresh and try again.',

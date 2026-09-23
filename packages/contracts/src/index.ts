@@ -4,6 +4,7 @@ export * from './ui-events';
 export * from './commands';
 export * from './api';
 export * from './queue-views';
+export * from './session-views';
 export * from './git-views';
 export * from './inflight-views';
 export * from './thinking-levels';

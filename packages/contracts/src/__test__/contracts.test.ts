@@ -41,8 +41,8 @@ describe('词表封闭（双向）', () => {
     );
   });
 
-  test('hub 命令词表 == 60（x-harness host-hub COMMAND_NAMES 镜像；queue/drop、queue/send_now 为单条队列操作面；skills/inspect|install 为技能安装面）', () => {
-    expect(HUB_COMMAND_TYPES.length).toBe(60);
+  test('hub 命令词表 == 61（x-harness host-hub COMMAND_NAMES 镜像；queue/drop、queue/send_now 为单条队列操作面；skills/inspect|install 为技能安装面；get_token_analytics 为上下文分析面）', () => {
+    expect(HUB_COMMAND_TYPES.length).toBe(61);
     expect(HUB_COMMAND_TYPES).toContain('thread/delete');
     expect(HUB_COMMAND_TYPES).toContain('queue/drop');
     expect(HUB_COMMAND_TYPES).toContain('queue/send_now');
@@ -51,7 +51,7 @@ describe('词表封闭（双向）', () => {
         'thread/start', 'thread/resume', 'thread/register', 'thread/stop', 'thread/retire', 'thread/delete', 'thread/set_keepalive', 'thread/list', 'thread/list_saved',
         'get_host_info', 'set_idle_retire_ms', 'set_rss_retire_bytes',
         'prompt', 'steer', 'follow_up', 'abort', 'clear_queue', 'queue/drop', 'queue/send_now', 'compact',
-        'get_state', 'get_messages', 'get_entries', 'get_tree', 'get_session_stats', 'set_session_name', 'get_commands', 'get_fork_messages',
+        'get_state', 'get_messages', 'get_entries', 'get_tree', 'get_session_stats', 'get_token_analytics', 'set_session_name', 'get_commands', 'get_fork_messages',
         'get_inflight', 'get_subagents', 'get_pending_dialogs',
         'fork', 'clone',
         'get_models', 'set_model', 'set_model_override',
@@ -212,6 +212,18 @@ describe('API schema：每方法合法/非法样本', () => {
 
   test('command/list 合法样本通过', () => {
     expect(ApiSchemas['command/list'].params.parse({ threadId: 't1' })).toEqual({ threadId: 't1' });
+  });
+
+  test('session/tokenAnalytics（T43）：params threadId 必填；result 形状往返与垃圾拒绝', () => {
+    expect(ApiSchemas['session/tokenAnalytics'].params.parse({ threadId: 't1' })).toEqual({ threadId: 't1' });
+    expect(() => ApiSchemas['session/tokenAnalytics'].params.parse({})).toThrow();
+    const view = {
+      used: 55_000, window: 200_000, utilizationPct: 28, remaining: 145_000,
+      systemPrompt: 2_000, tools: 35_000, messages: 18_000,
+      cacheHitRate: 0.8, totalCacheRead: 44_000, totalCacheWrite: 5_000, sessionOutput: 3_000,
+    };
+    expect(ApiSchemas['session/tokenAnalytics'].result.parse(view)).toEqual(view);
+    expect(() => ApiSchemas['session/tokenAnalytics'].result.parse({ ...view, utilizationPct: 27.5 })).toThrow(); // int 约束
   });
 
   test('session/prompt 携带 images 合法；畸形 image 拒绝', () => {

@@ -131,7 +131,9 @@ export interface LiveController {
   readonly revealSession: (sessionPath: string) => Promise<void>;
   /** 从历史条目分叉（seq = WAL 行号，position=before）→ 旧线程镜像终态 + 激活新会话；失败带原因。 */
   readonly forkSession: (threadId: string, seq: number) => Promise<{ ok: true; threadId: string } | { ok: false; reason: string }>;
-  readonly refreshStats: (threadId: string) => Promise<void>;
+  /** 轮次边界/线程切换/Usage 页：累计统计 + 上下文分析合并拉取（analytics 失败保持
+   *  last-known——与 stats 同构；从未成功拉到时芯片才回落累计口径）。 */
+  readonly refreshUsage: (threadId: string) => Promise<void>;
   /** 只读水化链（纳管→直读→model 补齐；force 供重试入口越过 hydrated 守卫）。 */
   readonly ensureHydrated: (threadId: string, options?: { force?: boolean }) => Promise<void>;
 }

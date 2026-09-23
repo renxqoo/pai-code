@@ -3,7 +3,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import type { SkillCandidateView } from '@paiapp/contracts';
 import { copy } from '@/strings';
-import { SkillImportContent, SkillImportDialog, buildImportItems, type RowSelection } from '../skill-import-dialog';
+import { buildImportItems, SkillImportContent, type RowSelection } from '../skill-import-content';
+import { SkillImportDialog } from '../skill-import-dialog';
 
 /** T42 M3 渲染冒烟（SSR：Base UI Dialog 外壳走 Portal，内容组件抽出后直测——
  *  provider-model-dialog 同款范式）+ 选择集装配纯函数用例。 */

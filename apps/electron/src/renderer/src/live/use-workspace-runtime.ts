@@ -60,7 +60,7 @@ export function useWorkspaceRuntime(): void {
       if (store.getState().activeThreadId !== activeThreadId) return;
       if (outcome.ok) store.setState({ commands: outcome.data });
     });
-    void controller.refreshStats(activeThreadId);
+    void controller.refreshUsage(activeThreadId);
   }, [activeThreadId, activeSessionState]);
 
   // 面板组态会话级存档/恢复：panel 变化即存档、切会话恢复（原 usePanelTabs 同构迁出）；

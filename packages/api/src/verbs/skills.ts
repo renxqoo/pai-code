@@ -39,8 +39,8 @@ export interface SkillSourcePort {
 
 /** fail-closed 缺省源面（未接线形态）：门恒拒、扫描恒空——不放大能力面。 */
 export const failClosedSkillSources: SkillSourcePort = {
-  discover: async () => ({ ok: true, found: [] }),
-  gate: async (sourcePath) => ({
+  discover: () => Promise.resolve({ ok: true, found: [] }),
+  gate: (sourcePath) => Promise.resolve({
     ok: false,
     error: appError('skill_source_invalid', `skill source gate not wired: ${sourcePath}`),
   }),

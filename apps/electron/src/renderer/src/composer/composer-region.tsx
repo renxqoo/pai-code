@@ -53,6 +53,7 @@ function ComposerRegion(): React.JSX.Element {
   const activeSession = useStore(liveStore, (s) => (s.activeThreadId === null ? undefined : s.sessions[s.activeThreadId]));
   const models = useStore(liveStore, (s) => s.models);
   const activeStats = useStore(liveStore, (s) => s.stats[s.activeThreadId ?? '']) ?? null;
+  const activeAnalytics = useStore(liveStore, (s) => s.analytics[s.activeThreadId ?? '']) ?? null;
   const sessionPermissionMode = useStore(liveStore, (s) => s.sessionPermissionMode);
   const hostPhase = useStore(liveStore, (s) => s.hostPhase);
   const commands = useStore(liveStore, (s) => s.commands);
@@ -282,7 +283,7 @@ function ComposerRegion(): React.JSX.Element {
               options: selection.effortOptions,
               onSelect: workspaceActions.selectEffort,
             }}
-            usage={{ stats: activeStats, label: copy.composer.usageSummary }}
+            usage={{ stats: activeStats, analytics: activeAnalytics, label: copy.composer.usageSummary }}
           />
         )}
       />

@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFi
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { HUB_ERROR_CODES } from '@paiapp/contracts';
+import { HUB_ERROR_CODES, type TokenAnalyticsView } from '@paiapp/contracts';
 import { createApiRoutes } from '../api-routes';
 import { createAgentDefinitionsStore } from '../agent-definitions-store';
 import { createSkillImporter } from '../skill-import';
@@ -19,13 +19,21 @@ import { createRuntimeMonitor } from '@paiapp/infra';
  * 文件（HOME 隔离，.x-harness 域）。GLM 真凭证旅程保留 opt-in（PAI_E2E=1 + GLM_*）。
  */
 
-// 技能安装面（skills/inspect|install，T42 H 路线）在 x-harness-skill-install 分支检出——
-// 优先取之；退回旁级 mainline x-harness 时导入旅程走 test.if 特性探测（见下）
+// hub 检出：优先取 x-harness 主仓（feat/sandbox-srt 已并 skill-install 且带
+// get_token_analytics/capability_plugin——技能+上下文分析两面的超集）；旧环境退回
+// x-harness-skill-install worktree 时能力面按 test.if 特性探测（见下）
 const hubEntry =
   process.env['PAI_HUB_ENTRY'] ??
-  (existsSync('/Users/wrr/work/x-harness-skill-install/apps/host-hub/src/host/cli.ts')
-    ? '/Users/wrr/work/x-harness-skill-install/apps/host-hub/src/host/cli.ts'
-    : '/Users/wrr/work/x-harness/apps/host-hub/src/host/cli.ts');
+  (existsSync('/Users/wrr/work/x-harness/apps/host-hub/src/host/cli.ts')
+    ? '/Users/wrr/work/x-harness/apps/host-hub/src/host/cli.ts'
+    : '/Users/wrr/work/x-harness-skill-install/apps/host-hub/src/host/cli.ts');
+
+/** hub 检出能力探测（注册期同步读源码面）：旧分支检出时对应旅程 test.if 不注册——裸 return 会被 bun 记 pass（假绿）。 */
+function hubSourceHas(marker: string, ...segments: string[]): boolean {
+  try { return readFileSync(join(dirname(hubEntry), '..', ...segments), 'utf8').includes(marker); } catch { return false; }
+}
+const hubSkillsInstall = hubSourceHas('skills/install', 'protocol', 'commands.ts');
+const hubTokenAnalytics = hubSourceHas('capability_plugin', 'shared', 'errors.ts');
 const bunPath = process.env['PAI_BUN_PATH'] ?? '/Users/wrr/work/agent-app/resources/bun/bun';
 const hubAvailable = existsSync(hubEntry);
 
@@ -146,7 +154,7 @@ function tapEventNames(runtime: PaiRuntime, names: string[]): void {
 
   // 技能导入旅程（T42 M4/M5；真 hub skills/inspect|install 面）：候选三态 → 导入 →
   // 清单/命令面在场（新会话装配 = 重开同路径）→ 删除整技能目录（D-1 回归：含捆绑文件）
-  test.if(hubAvailable)('技能导入旅程：candidates → install → 命令面在场 → remove 整目录', async () => {
+  test.if(hubAvailable && hubSkillsInstall)('技能导入旅程：candidates → install → 命令面在场 → remove 整目录', async () => {
     const h = makeHarness(REPLY_SCRIPT);
     await h.runtime.start();
     expect(h.runtime.host.phase).toBe('ready');
@@ -237,8 +245,30 @@ function walEvents(eventsPath: string): Array<Record<string, unknown>> {
 
 describe('app API 全接口 × 真 x-harness host-hub（script 默认门）', () => {
   // 环境前提：本门需要旁级 x-harness 检出（hub 源码入口）。入口缺失时显式 skip
-  //（bun test 记 skip 不记 pass——不产生「绿但什么都没测」的假门）
-  test.if(hubAvailable)('全接口旅程 + 落存储断言', async () => {
+  // T43 上下文分析旅程：能力探测见 hubSourceHas（test.if 不注册，防假绿）。
+  test.if(hubAvailable && hubTokenAnalytics)('上下文分析旅程：prompt 一轮 → session/tokenAnalytics 实报数字（T43）', async () => {
+    const h = makeHarness(JSON.stringify([{ reply: 'analytics' }]));
+    await h.runtime.start();
+    // 事件面在 bootstrap 前缓冲不发（runtime 契约）——旅程与真实启动序一致先 bootstrap
+    expect(((await h.invoke('app/bootstrap', {})) as { ok: boolean }).ok).toBe(true);
+    const started = (await h.invoke('session/start', { cwd: h.work, trusted: true })) as { ok: boolean; data: { threadId: string } };
+    expect(started.ok).toBe(true);
+    const threadId = started.data.threadId;
+    if (!((await h.invoke('session/prompt', { threadId, message: 'hi' })) as { ok: boolean }).ok) throw new Error('prompt failed');
+    expect(await waitFor(() => h.events.includes('turnSettled'), 60_000)).toBe(true);
+    const analytics = (await h.invoke('session/tokenAnalytics', { threadId })) as { ok: true; data: TokenAnalyticsView } | { ok: false };
+    if (!analytics.ok) throw new Error('tokenAnalytics failed');
+    const view = analytics.data;
+    // script adapter 实报 output = 16+len('analytics') = 25（按会话独立计）
+    expect(view.sessionOutput).toBe(25);
+    expect(view.window).toBe(200_000);
+    // breakdown 恒等式（hub 契约）：total = 三项和；微小实报输入下估算基座主导 used
+    expect(view.used).toBe(view.systemPrompt + view.tools + view.messages);
+    expect(view.remaining).toBe(200_000 - view.used);
+    expect(view.utilizationPct).toBe(Math.round((view.used / 200_000) * 100));
+  }, 30_000);
+
+  test.if(hubAvailable && hubTokenAnalytics)('全接口旅程 + 落存储断言', async () => {
     const h = makeHarness(REPLY_SCRIPT);
     await h.runtime.start();
     expect(h.runtime.host.phase).toBe('ready');

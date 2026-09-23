@@ -3,11 +3,11 @@ import { thinkingLevelOfLabel } from '@paiapp/contracts';
 
 import { writeClipboard } from '@/lib/write-clipboard';
 import { copyOfError } from '@/lib/error-text';
-import { isTransientFace } from '@/strings/zh-error-copy';
 import { copy } from '@/strings';
 import { entrySeqOf } from './entry-seq';
 import type { SkillImportRequest, SkillImportSummary } from './live-controller-types';
 import { parseModelKey, pickSessionModel } from './pick-session-model';
+import { notifySubmitFailure } from './submit-notify';
 import { apiClient, controller, store } from './workspace-runtime';
 import { uiStore } from '@/ui/ui-store';
 import { statsTargetsOf } from './stats-targets';
@@ -176,44 +176,6 @@ function defaultModelKey(cwd: string): string {
     active?.model ?? fallback,
   );
   return picked !== undefined ? `${picked.provider}/${picked.modelId}` : '';
-}
-
-/** 投递失败通知口径：宿主桥不可用不弹（横幅已显式呈现），恢复失败用专项文案。
- *  通道承载本地 token 与 hub error kind 字符串（W2 再定型为 ApiError）。 */
-function notifySubmitFailure(reason: string | null): void {
-  if (reason === null || reason === 'bridge_unavailable') return;
-  if (reason === 'resume_failed') {
-    pushNotice(copy.flow.resumeFailed);
-    return;
-  }
-  // 空舞台（无活跃会话）投递：给可行动去向，不透传 schema 密文
-  if (reason === 'no_active_session') {
-    pushNotice(copy.flow.noActiveSession);
-    return;
-  }
-  // hub 能力门/量限的友好文案（细节原文对用户无行动价值；其余 kind 原样透传）
-  if (reason === 'capability_images') {
-    pushNotice(copy.flow.imagesDenied);
-    return;
-  }
-  if (reason === 'images_too_many') {
-    pushNotice(copy.flow.imagesTooMany);
-    return;
-  }
-  // 直执行（`! `）携图互斥：主进程本地先拒的 kind（文案与 bashNoImages 同句）
-  if (reason === 'bash_images_rejected') {
-    pushNotice(copy.flow.bashNoImages);
-    return;
-  }
-  // transient faces（宿主代际切换窗口/超时/忙/命令失败兜底）：按 face 出精准文案
-  // （「宿主未就绪，请稍后重试」等），不走 sendFailed 原文透传。词表判定与
-  // transientFaceCopy 同源（编译期闭集 Record 的键）——submitDraft 透传的 face
-  // 恒属该词表，新增 face 自动带文案，不会漂移
-  if (isTransientFace(reason)) {
-    pushNotice(copyOfError({ kind: 'transient', face: reason }));
-    return;
-  }
-  pushNotice(copy.flow.sendFailed(reason));
 }
 
 export function createWorkspaceActions(): WorkspaceActions {
@@ -391,7 +353,7 @@ export function createWorkspaceActions(): WorkspaceActions {
       // stats 是 worker 级查询：parked 会话不发（会唤醒全部 worker——T27 预算），
       // 只刷新 live 会话，parked 显示最后已知值
       for (const threadId of statsTargetsOf(store.getState().sessions)) {
-        void controller.refreshStats(threadId);
+        void controller.refreshUsage(threadId);
       }
     },
     retryHydration: () => {

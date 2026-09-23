@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { ArrowUp, ChevronDown, Plus } from 'lucide-react';
 
-import type { PermMode, SessionStatsView } from '@paiapp/contracts';
+import type { PermMode, SessionStatsView, TokenAnalyticsView } from '@paiapp/contracts';
 
 import { UsageDetails } from './usage-details';
 
@@ -9,6 +9,7 @@ import { IconButton, MenuButton, menuTriggerClassName, PickerDialog } from '@pai
 import { groupModelOptions } from '@/components/group-model-options';
 import { copy } from '@/strings';
 import { formatTokenCount } from '@/thread/format-count-unit';
+import { cn } from '@/lib/utils';
 
 import { PermissionModeMenu } from './permission-mode-menu';
 import { AgentStatusButton } from './agent-status-button';
@@ -24,6 +25,8 @@ type EffortControls = {
 type UsageControls = {
   /** 用量明细（I1）；null = 未拉取，不可点。 */
   stats: SessionStatsView | null
+  /** 上下文分析（T43）；在场 = 主芯片显上下文占用百分比，缺席 = 回落累计 total。 */
+  analytics: TokenAnalyticsView | null
   label: string
 }
 
@@ -61,8 +64,9 @@ function optionItems(options: readonly string[], selected: string) {
 /**
  * 输入框底行：左侧附件与权限模式，右侧用量 / 模型 / 思考档 / 发送（生成中且无输入时为红色停止）。
  * 模型选择走统一 CommandDialog 弹窗（T21）；思考档恒四档（会话读口当前值，新建页本地选择）；
- * 用量入口只在有会话时出现（上下文水位已随 stats 形状退役，入口显 token 合计）。
- * 压缩入口是斜杠命令 /compact（按钮已下线；hub prompt 通路拦截，见 T26）。
+ * 用量入口只在有会话时出现：主指标 = 上下文占用百分比（T43，实报输入侧口径——
+ * 累计 total 单调增不重置，不冒充上下文），插件缺席回落累计 total；阈值变色
+ * ≥70% 琥珀 / ≥90% 红（Claude Code 官方示例阈值）。压缩入口是斜杠命令 /compact。
  */
 function ComposerActionsRow({
   model,
@@ -98,11 +102,29 @@ function ComposerActionsRow({
       <div className="ml-auto flex min-w-0 items-center gap-[9px]">
         {usage === null ? null : (
           <span className="relative flex shrink-0 items-center">
-            {usageOpen && usage.stats !== null ? <UsageDetails stats={usage.stats} /> : null}
+            {usageOpen && usage.stats !== null ? <UsageDetails stats={usage.stats} analytics={usage.analytics} /> : null}
             {usage.stats === null ? (
               <span title={usage.label} className="font-mono text-[11px] leading-none text-muted-foreground/50 tabular-nums">
                 —
               </span>
+            ) : usage.analytics !== null ? (
+              <button
+                type="button"
+                title={`${usage.label} · ${copy.usage.contextUsed(formatTokenCount(usage.analytics.used) ?? '0', formatTokenCount(usage.analytics.window) ?? '0')}`}
+                aria-label={usage.label}
+                aria-expanded={usageOpen}
+                onClick={() => setUsageOpen((open) => !open)}
+                className={cn(
+                  'cursor-pointer rounded-md px-[2px] font-mono text-[11px] leading-none tabular-nums outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50',
+                  usage.analytics.utilizationPct >= 90
+                    ? 'text-destructive'
+                    : usage.analytics.utilizationPct >= 70
+                      ? 'text-amber-600 dark:text-amber-400'
+                      : 'text-muted-foreground',
+                )}
+              >
+                {`${String(usage.analytics.utilizationPct)}%`}
+              </button>
             ) : (
               <button
                 type="button"

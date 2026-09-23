@@ -1,5 +1,5 @@
 import { createApiClient } from '@paiapp/api/client';
-import type { AgentDefinition, CommandView, ImagePayload, PreferencesView, ProviderModel, SkillCandidateView, SkillView, UiEvent } from '@paiapp/contracts';
+import type { CommandView, ImagePayload, PreferencesView, ProviderModel, UiEvent } from '@paiapp/contracts';
 import { isSettableThinkingLevel } from '@paiapp/contracts';
 
 import { copy } from '@/strings';
@@ -12,8 +12,10 @@ import { createDialogTimers } from './dialog-timers';
 import { createLazyResume } from './lazy-resume';
 import { createReadPorts } from './read-ports';
 import { createSettingsPorts } from './settings-ports';
+import { createAgentsActions } from './agents-actions';
+import { createSkillsActions } from './skills-actions';
 import { checkoutGitBranch, listGitBranches, listGitGraph, searchFiles } from './git-actions';
-import type { CreateSessionInput, CreateSessionOutcome, LiveController, QueueOpOutcome, SkillImportRequest, SkillImportSummary } from './live-controller-types';
+import type { CreateSessionInput, CreateSessionOutcome, LiveController, QueueOpOutcome } from './live-controller-types';
 import { isLiveSession, type LiveStore } from './store';
 
 /**
@@ -44,14 +46,6 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
   /** 对账在途标记（每线程一个），防止重复拉取。 */
   const reconciling = new Set<string>();
 
-  const now = (): number => Date.now();
-
-  const refreshAgentDefinitions = async (): Promise<void> => {
-    const outcome = await api.agents.definitions({});
-
-    if (outcome.ok) store.setState({ agentDefinitions: outcome.data });
-  };
-
   /** 会话条目水化三路径（增量对账/轮末重建/冷启动全量）独立模块。 */
   const { fetchEntries, rebuildFromTranscript, hydrateFull } = createEntryHydration({
     client,
@@ -71,6 +65,16 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
 
   /** 配置面读写口（目录刷新/hub 缺省/会话级权限与思考档读口——单一职责模块）。 */
   const settingsPorts = createSettingsPorts({ api, store });
+
+  /** 代理定义动作组（拉取/写/删——纯动作模块）。 */
+  const agentsActions = createAgentsActions({ api, store });
+  /** 技能动作组（清单/启停/导入/移除——重开回调经 controller 闭包）。 */
+  const skillsActions = createSkillsActions({
+    api,
+    store,
+    chainSkills,
+    reopenSession: (threadId) => controller.reopenSession(threadId),
+  });
 
   /** 直执行 bash 的收尾探测（协议无终态帧 → 输出静默后读口确认收尾；仍在跑时有界重排）。
    *  声明须先于 readonlyHydration（后者注入 ports）。 */
@@ -121,7 +125,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
 
   const onEvent = (event: UiEvent): void => {
     const state = store.getState();
-    state.applyEvent(event, now());
+    state.applyEvent(event, Date.now());
     if (event.type === 'host' && (event.phase === 'restarting' || event.phase === 'failed')) {
       // host 进程消亡：乐观登记的「已恢复」随 worker 全灭失效（对账会重发 parked 视图）；
       // 挂起弹窗兜底 timer 与轮首游标全部随进程消亡回收（与 dispose 同口径）
@@ -207,7 +211,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
             return latest !== undefined && latest.liveTurnId !== null && latest.liveTurnId !== settledTurnId;
           },
         }).catch(() => undefined);
-        void controller.refreshStats(event.threadId);
+        void controller.refreshUsage(event.threadId);
       }, RECONCILE_SETTLE_DELAY_MS);
     }
   };
@@ -423,103 +427,12 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       void api.app.restartHost({}).then(() => undefined);
     },
     runtime: createRuntimeController(client),
-    async refreshAgentDefinitions(): Promise<void> {
-      await refreshAgentDefinitions();
-    },
-    async upsertAgentDefinition(definition: AgentDefinition, previous: { name: string; scope: 'user' | 'project'; project: string | null } | null): Promise<string | null> {
-      const outcome = await api.agents.upsert({ definition, previous });
-      if (!outcome.ok) return copyOfError(outcome.error);
-      await refreshAgentDefinitions();
-      return null;
-    },
-    async removeAgentDefinition(key: { name: string; scope: 'user' | 'project'; project: string | null }): Promise<string | null> {
-      const outcome = await api.agents.remove(key);
-      if (!outcome.ok) return copyOfError(outcome.error);
-      await refreshAgentDefinitions();
-      return null;
-    },
-    async refreshSkills(): Promise<void> {
-      const outcome = await api.skills.list({});
-      if (outcome.ok) store.setState({ skills: outcome.data });
-    },
+    ...agentsActions,
+    ...skillsActions,
     /** 预会话命令目录（新建任务页 `/` 补全数据源；失败空目录降级）。 */
     async fetchCommandPreview(): Promise<CommandView[]> {
       const outcome = await api.command.preview({});
       return outcome.ok ? outcome.data : [];
-    },
-    async setSkillEnabled(name: string, enabled: boolean): Promise<{ ok: true; data: SkillView[] } | { ok: false; reason: string }> {
-      const outcome = await api.skills.setEnabled({ name, enabled });
-      if (!outcome.ok) return { ok: false, reason: copyOfError(outcome.error) };
-      store.setState({ skills: outcome.data });
-      return { ok: true, data: outcome.data };
-    },
-    async applySkillToggle(name: string, enabled: boolean): Promise<{ ok: true; reopenFailures: number } | { ok: false; reason: string }> {
-      // 链式排队：重开链在途时后续开关追加到队尾（持有新快照，不与在途循环交错）
-      const run = async (): Promise<{ ok: true; reopenFailures: number } | { ok: false; reason: string }> => {
-        const outcome = await this.setSkillEnabled(name, enabled);
-        if (!outcome.ok) return { ok: false, reason: outcome.reason };
-        let reopenFailures = 0;
-        for (const session of Object.values(store.getState().sessions)) {
-          if (session.state !== 'live') continue;
-          const reopened = await this.reopenSession(session.threadId);
-          if (!reopened) reopenFailures += 1;
-        }
-        return { ok: true, reopenFailures };
-      };
-      return chainSkills(run);
-    },
-    async scanSkillCandidates(sourcePath?: string): Promise<{ ok: true; candidates: SkillCandidateView[] } | { ok: false; reason: string }> {
-      const outcome = await api.skills.candidates(sourcePath !== undefined ? { sourcePath } : {});
-      if (!outcome.ok) return { ok: false, reason: copyOfError(outcome.error) };
-      return { ok: true, candidates: outcome.data.candidates };
-    },
-    /** 批量导入（T42 D5/D6）：串行逐条（失败逐条隔离）→ 清 skills.disabled 名单 → 批末单次重开。 */
-    async importSkills(items: readonly SkillImportRequest[]): Promise<SkillImportSummary> {
-      return chainSkills(async () => {
-        const failed: Array<{ name: string; reason: string }> = [];
-        let imported = 0;
-        for (const item of items) {
-          const label = item.name ?? item.sourcePath.split('/').filter(Boolean).pop() ?? item.sourcePath;
-          const outcome = await api.skills.import(item);
-          if (!outcome.ok) {
-            failed.push({ name: label, reason: copyOfError(outcome.error) });
-            continue;
-          }
-          // 生效闭环①：导入即启用——名在 skills.disabled 名单则清名单（否则导入即显示「已关闭」）
-          const landed = outcome.data.skills.find((skill) => skill.name === outcome.data.imported.name && skill.source === 'user');
-          if (landed !== undefined && !landed.enabled) {
-            const enabled = await api.skills.setEnabled({ name: landed.name, enabled: true });
-            store.setState({ skills: enabled.ok ? enabled.data : outcome.data.skills });
-          } else {
-            store.setState({ skills: outcome.data.skills });
-          }
-          imported += 1;
-        }
-        // D5：批末单次重开（不是每技能一次）
-        let reopenFailures = 0;
-        if (imported > 0) {
-          for (const session of Object.values(store.getState().sessions)) {
-            if (session.state !== 'live') continue;
-            const reopened = await this.reopenSession(session.threadId);
-            if (!reopened) reopenFailures += 1;
-          }
-        }
-        return { imported, failed, reopenFailures };
-      });
-    },
-    async removeSkill(name: string): Promise<{ ok: true; reopenFailures: number } | { ok: false; reason: string }> {
-      return chainSkills(async () => {
-        const outcome = await api.skills.remove({ name });
-        if (!outcome.ok) return { ok: false, reason: copyOfError(outcome.error) };
-        store.setState({ skills: outcome.data });
-        let reopenFailures = 0;
-        for (const session of Object.values(store.getState().sessions)) {
-          if (session.state !== 'live') continue;
-          const reopened = await this.reopenSession(session.threadId);
-          if (!reopened) reopenFailures += 1;
-        }
-        return { ok: true, reopenFailures };
-      });
     },
     async reopenSession(threadId: string): Promise<boolean> {
       const sessionPath = store.getState().sessions[threadId]?.sessionPath ?? null;
@@ -611,9 +524,14 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       const outcome = await api.provider.test(modelId === undefined ? { name } : { name, modelId });
       return outcome.ok ? { ok: true, latencyMs: outcome.data.latencyMs } : { ok: false, reason: copyOfError(outcome.error) };
     },
-    async refreshStats(threadId: string): Promise<void> {
-      const outcome = await api.session.stats({ threadId });
-      if (outcome.ok) store.getState().updateStats(threadId, outcome.data);
+    async refreshUsage(threadId: string): Promise<void> {
+      // 上下文分析缺席（capability_plugin/旧 hub）不报错不重试——主芯片回落累计口径
+      const [stats, analytics] = await Promise.all([
+        api.session.stats({ threadId }),
+        api.session.tokenAnalytics({ threadId }).catch(() => null),
+      ]);
+      if (stats.ok) store.getState().updateStats(threadId, stats.data);
+      if (analytics?.ok) store.getState().updateAnalytics(threadId, analytics.data);
     },
     ensureHydrated: (threadId: string, options?: { force?: boolean }) => readonlyHydration.ensureHydrated(threadId, options),
     selectSession(threadId: string): void {

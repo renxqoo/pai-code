@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { FolderInput, RefreshCw, Sparkles, Trash2 } from 'lucide-react';
+import { FolderInput, RefreshCw, Sparkles } from 'lucide-react';
 
 import type { SkillCandidateView, SkillView } from '@paiapp/contracts';
 import { ActionButton, IconButton, ToggleSwitch } from '@paiapp/ui';
@@ -11,6 +11,7 @@ import { SettingsCard } from './settings-card';
 import { SettingsPageHeader } from './settings-page-header';
 import { SettingsSearchInput } from './settings-search-input';
 import { SkillImportDialog } from './skill-import-dialog';
+import { SkillRemoveButton } from './skill-remove-button';
 
 type SkillsSectionProps = {
   list: readonly SkillView[]
@@ -38,29 +39,6 @@ function skillMatchesQuery(skill: SkillView, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (q.length === 0) return true;
   return skill.name.toLowerCase().includes(q);
-}
-
-/** 技能行删除（两步内联确认范式：先点删除，再确认/取消——provider-row 同款）。 */
-function SkillRemoveButton({ name, onRemove }: { name: string; onRemove: (name: string) => Promise<boolean> }): React.JSX.Element {
-  const [confirming, setConfirming] = React.useState(false);
-  if (confirming) {
-    return (
-      <span className="flex items-center gap-[6px]">
-        <span className="text-[12px] leading-[17px] text-muted-foreground">{copy.settings.skillDeleteConfirm(name)}</span>
-        <ActionButton size="sm" variant="outline" onClick={() => { setConfirming(false); void onRemove(name); }}>
-          {copy.settings.confirmRemove}
-        </ActionButton>
-        <ActionButton size="sm" variant="quiet" onClick={() => setConfirming(false)}>
-          {copy.settings.cancelEdit}
-        </ActionButton>
-      </span>
-    );
-  }
-  return (
-    <IconButton label={copy.settings.skillDeleteLabel(name)} onClick={() => setConfirming(true)}>
-      <Trash2 strokeWidth={1.75} />
-    </IconButton>
-  );
 }
 
 /** Skills 分区：搜索 + 导入入口 + 用户级技能卡（来源徽章 + 关闭徽章 + 启停开关 + 删除）；

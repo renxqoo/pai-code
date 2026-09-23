@@ -2,7 +2,7 @@ import { readdir, realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-import type { ApiError, SkillCandidateView } from '@paiapp/contracts';
+import type { SkillCandidateView } from '@paiapp/contracts';
 import {
   appError,
   discoverSkillDirs,

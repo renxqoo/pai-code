@@ -178,6 +178,11 @@ export interface GetSessionStatsCmd {
   threadId: string;
 }
 
+export interface GetTokenAnalyticsCmd {
+  type: 'get_token_analytics';
+  threadId: string;
+}
+
 export interface GetCommandsCmd {
   type: 'get_commands';
   threadId: string;
@@ -457,6 +462,7 @@ export type HubCommand =
   | (GetTreeCmd & { id?: string })
   | (SetSessionNameCmd & { id?: string })
   | (GetSessionStatsCmd & { id?: string })
+  | (GetTokenAnalyticsCmd & { id?: string })
   | (GetCommandsCmd & { id?: string })
   | (GetForkMessagesCmd & { id?: string })
   | (ForkCmd & { id?: string })
@@ -520,6 +526,7 @@ export const HUB_COMMAND_TYPES = [
   'get_tree',
   'set_session_name',
   'get_session_stats',
+  'get_token_analytics',
   'get_commands',
   'get_fork_messages',
   'fork',

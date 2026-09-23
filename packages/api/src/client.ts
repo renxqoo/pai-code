@@ -52,6 +52,7 @@ function createSessionDomain(t: ApiClientTransport) {
     pendingDialogs: call(t, 'session/pendingDialogs'),
     subagents: call(t, 'session/subagents'),
     stats: call(t, 'session/stats'),
+    tokenAnalytics: call(t, 'session/tokenAnalytics'),
     state: call(t, 'session/state'),
     listSaved: call(t, 'session/listSaved'),
     delete: call(t, 'session/delete'),

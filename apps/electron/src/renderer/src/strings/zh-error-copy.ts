@@ -40,6 +40,7 @@ export const zhErrorCopy = {
   unknown_command: '未知命令。',
   capability_thinking: '所选思考档被拒绝：该模型未声明支持思考——在渠道设置的模型行打开「思考」开关，或把思考档调回「默认」。',
   capability_images: imagesDeniedCopy,
+  capability_plugin: '上下文分析插件未装载：模型上下文用量指示不可用（可在 hub 设置 plugins.disabled 中移除禁用）。',
   images_too_many: imagesTooManyCopy,
   model_unavailable: '所选模型不可用，请在设置中检查 Provider 配置。',
   cursor_stale: '会话视图已过期，请刷新后重试。',

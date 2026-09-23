@@ -141,6 +141,26 @@ export interface SessionStatsData {
   tokens: { input: number; output: number; total: number; cost?: number };
 }
 
+/** get_token_analytics 响应（x-harness docs/PLUGINS.md 契约 5）：breakdown 12 数值
+ *  字段 + 按会话输出。统计域 = 装配后事件（resume 不含历史 usage）。 */
+export interface TokenAnalyticsData {
+  breakdown: {
+    systemPrompt: number;
+    tools: number;
+    messages: number;
+    total: number;
+    contextWindow: number;
+    remaining: number;
+    utilization: number;
+    lastReportedInput: number;
+    totalOutputTokens: number;
+    cacheHitRate: number;
+    totalCacheRead: number;
+    totalCacheWrite: number;
+  };
+  sessionOutput: number;
+}
+
 /** get_host_info 响应。 */
 export interface HostInfoData {
   version: string;

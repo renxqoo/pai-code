@@ -18,6 +18,7 @@ export const HUB_ERROR_CODES = [
   'unknown_command',
   'capability_thinking',
   'capability_images',
+  'capability_plugin',
   'images_too_many',
   'model_unavailable',
   'cursor_stale',

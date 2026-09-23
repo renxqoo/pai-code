@@ -8,6 +8,7 @@ import {
   pendingDialogsView,
   threadStateView,
   thinkingLevelView,
+  tokenAnalyticsView,
   type savedSessions,
 } from '../views/response-views';
 import { mapEntries } from '../views/entries-mapper';
@@ -74,6 +75,7 @@ export function sessionRoutes(deps: {
   'session/pendingDialogs': Handler<'session/pendingDialogs'>;
   'session/state': Handler<'session/state'>;
   'session/stats': Handler<'session/stats'>;
+  'session/tokenAnalytics': Handler<'session/tokenAnalytics'>;
   'session/setName': Handler<'session/setName'>;
   'session/setModel': Handler<'session/setModel'>;
   'session/setThinking': Handler<'session/setThinking'>;
@@ -163,6 +165,10 @@ export function sessionRoutes(deps: {
     'session/stats': async (params) => {
       const result = await sc().getSessionStats({ threadId: params.threadId });
       return result.ok ? { ok: true as const, data: sessionStatsView(result.data) } : fail(result.error);
+    },
+    'session/tokenAnalytics': async (params) => {
+      const result = await sc().getTokenAnalytics({ threadId: params.threadId });
+      return result.ok ? { ok: true as const, data: tokenAnalyticsView(result.data) } : fail(result.error);
     },
     'session/setName': async (params) => {
       // parked 占位未进 host（setName 必回 Unknown threadId）：标题直接落注册表，
