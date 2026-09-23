@@ -12,7 +12,7 @@ import { createSkillImporter } from './skill-import';
 import { createPluginImporter } from './plugin-import';
 import { createAgentDefinitionsStore } from './agent-definitions-store';
 import { createFileLogger, createFileSettings } from './file-settings';
-import { resolveHubPaths } from './hub-paths';
+import { packagedHubCandidates, resolveHubPaths } from './hub-paths';
 import { resolveAppPaths, resolveUserDataDir } from './paths';
 import { createPaiRuntime } from './pai-runtime';
 import { createProviderKeyStore } from './provider-key-store';
@@ -66,8 +66,14 @@ void app.whenReady().then(async () => {
         ? { bunPath: process.env['PAI_BUN_PATH'] ?? 'bun', hubEntry: process.env['PAI_HUB_ENTRY'] }
         : null;
     const resources = process.resourcesPath ?? paths.userDataDir;
-    const packagedEntry = join(resources, 'host-hub', 'host-hub');
-    const fromPackaged = existsSync(packagedEntry) ? { bunPath: packagedEntry, hubEntry: null } : null;
+    // 插件宿主形态优先（dist 多文件 + node_modules 子集——线程隔离插件可用）；
+    // 缺 dist 资源时回落编译单文件（零插件裁剪：worker 模式装载引擎层明确拒）
+    const candidates = packagedHubCandidates(resources);
+    const fromPackaged = existsSync(candidates.distEntry)
+      ? { bunPath: candidates.bunPath, hubEntry: candidates.distEntry }
+      : existsSync(candidates.compiledEntry)
+        ? { bunPath: candidates.compiledEntry, hubEntry: null }
+        : null;
     return resolveHubPaths({
       fromSettings,
       fromEnv,

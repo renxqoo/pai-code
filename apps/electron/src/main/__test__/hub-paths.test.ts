@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { devHubEntryCandidates, resolveHubPaths } from '../hub-paths';
+import { devHubEntryCandidates, packagedHubCandidates, resolveHubPaths } from '../hub-paths';
 
 /**
  * 宿主路径解析链回归：dev shell 丢失 PAI_HUB_ENTRY 时曾直接判 hub_paths_unconfigured
@@ -78,5 +78,23 @@ describe('hub-paths 解析链（设置 > env > dev 同级探测 > 打包产物�
     expect(
       resolveHubPaths({ fromSettings: null, fromEnv: null, fromPackaged: null, devRepoRoot: '/work/agent-app', packaged: false, exists: () => false }),
     ).toBeNull();
+  });
+});
+
+/** plugin-runtime M2：打包资源形态候选（插件宿主 dist 优先 > 编译单文件裁剪）。 */
+
+describe('packagedHubCandidates：三形态候选（dist 插件宿主优先）', () => {
+  test('dist 形态在场时优先返回脚本形态（bun + dist 入口）', () => {
+    const c = packagedHubCandidates('/res');
+    expect(c).toEqual({
+      bunPath: '/res/bun/bun',
+      distEntry: '/res/host-hub/dist/host/cli.js',
+      compiledEntry: '/res/host-hub/host-hub',
+    });
+  });
+
+  test('resolveHubPaths 不受新候选影响（fromPackaged 由调用方构造——index.ts 分支）', () => {
+    expect(resolveHubPaths({ fromSettings: null, fromEnv: null, fromPackaged: { bunPath: '/res/bun/bun', hubEntry: '/res/host-hub/dist/host/cli.js' }, devRepoRoot: null, packaged: true, exists: () => true }))
+      .toEqual({ bunPath: '/res/bun/bun', hubEntry: '/res/host-hub/dist/host/cli.js' });
   });
 });

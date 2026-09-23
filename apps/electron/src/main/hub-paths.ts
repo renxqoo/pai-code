@@ -35,6 +35,30 @@ export function devHubEntryCandidates(devRepoRoot: string): string[] {
   return [join(hubRoot, 'src', 'host', 'cli.ts'), join(hubRoot, 'dist', 'host', 'cli.js')];
 }
 
+/** 打包资源形态候选（插件宿主优先）：
+ *  ① dist 形态：resources/host-hub/dist/host/cli.js + resources/bun/bun——
+ *     plugin-manager 保持源码经 resources/host-hub/node_modules 链解析，
+ *     worker/host.ts 在磁盘 = 插件线程隔离装载可用（plugin-runtime M2）。
+ *  ② 直执行形态：resources/host-hub/host-hub（编译单文件——零插件裁剪版；
+ *     worker 模式装载在引擎层明确拒：host 文件不在磁盘）。 */
+export interface PackagedHubCandidates {
+  /** bun 可执行（dist 形态用） */
+  readonly bunPath: string;
+  /** dist 形态入口（存在才返回） */
+  readonly distEntry: string;
+  /** 直执行单文件（存在才返回） */
+  readonly compiledEntry: string;
+}
+
+export function packagedHubCandidates(resourcesPath: string): PackagedHubCandidates {
+  const hubRoot = join(resourcesPath, 'host-hub');
+  return {
+    bunPath: join(resourcesPath, 'bun', 'bun'),
+    distEntry: join(hubRoot, 'dist', 'host', 'cli.js'),
+    compiledEntry: join(hubRoot, 'host-hub'),
+  };
+}
+
 export function resolveHubPaths(deps: ResolveHubPathsDeps): HubPaths | null {
   if (deps.fromSettings !== null) return deps.fromSettings;
   if (deps.fromEnv !== null) return deps.fromEnv;
