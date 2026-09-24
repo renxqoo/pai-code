@@ -254,6 +254,7 @@ export const en = {
     attach: 'Attach images and files',
     send: 'Send message',
     stop: 'Stop generating',
+    sending: 'Sending',
     usageSummary: 'Usage',
     steerPlaceholder: 'Steer this agent…',
     steerFailed: (reason: string): string => `Steering failed (${reason}).`,

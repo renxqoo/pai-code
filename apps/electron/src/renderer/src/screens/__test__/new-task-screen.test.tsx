@@ -185,3 +185,69 @@ describe('NewTaskScreen 分支切换锁（T36：与线程页同一把，目录�
     liveStore.getState().reset();
   });
 });
+
+describe('NewTaskScreen 提交在途（症状：建会话+首条投递卡很久时发送位无反馈）', () => {
+  test('在途发送位呈 loading 且禁用，连按 Enter 只建一次；结算成功即关页', async () => {
+    const holder: { release: ((ok: boolean) => void) | null } = { release: null };
+    let created = 0;
+    let closed = 0;
+    const view = render(
+      <NewTaskScreen
+        knownDirs={['/w/app']}
+        commands={[]}
+        defaultCwd="/w/app"
+        trustedDefault={false}
+        defaultModelFor={() => 'glm/glm-4.7'}
+        modelOptions={['glm/glm-4.7']}
+        noModelsLabel={copy.composer.noModels}
+        defaultPermissionMode="auto"
+        onSearchFiles={() => Promise.resolve(null)}
+        onListBranches={() => Promise.resolve({ ok: true, data: { isRepo: true, current: 'main', branches: ['main'], dirtyFiles: 0 } })}
+        onListGraph={() => Promise.resolve({ ok: true, data: { isRepo: true, commits: [], truncated: false } })}
+        onCheckoutBranch={() => Promise.resolve({ ok: true, data: { branch: 'main' } })}
+        onPickDirectory={() => Promise.resolve(null)}
+        onCreate={() => {
+          created += 1;
+          return new Promise<boolean>((resolve) => {
+            holder.release = resolve;
+          });
+        }}
+        onClose={() => {
+          closed += 1;
+        }}
+        onNotify={() => undefined}
+        onDialogOpenChange={() => undefined}
+      />,
+    );
+    try {
+      await React.act(async () => {
+        for (let i = 0; i < 6; i += 1) await Promise.resolve();
+      });
+      // 草稿经快捷胶囊回填（happy-dom 输入合成链不通——走真实交互入口）
+      React.act(() => {
+        [...view.container.querySelectorAll('button')].find((b) => b.textContent?.trim() === copy.newTask.quickTasks[0])?.click();
+      });
+      const sendButton = (): HTMLButtonElement | undefined =>
+        [...view.container.querySelectorAll('button')].find((b) => b.getAttribute('aria-label') === copy.composer.send);
+      expect(sendButton()?.hasAttribute('disabled')).toBe(false);
+      const sendForm = (): void => {
+        view.container.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      };
+      React.act(sendForm);
+      expect(created).toBe(1);
+      expect(sendButton()?.hasAttribute('disabled')).toBe(true);
+      expect(sendButton()?.querySelector('[role="status"]')).not.toBeNull();
+      React.act(sendForm); // 连按 Enter：在途闸拦截，不重复建会话
+      expect(created).toBe(1);
+      await React.act(async () => {
+        const release = holder.release as ((ok: boolean) => void) | null;
+        release?.(true);
+        for (let i = 0; i < 10; i += 1) await Promise.resolve();
+      });
+      expect(closed).toBe(1);
+    } finally {
+      view.unmount();
+      liveStore.getState().reset();
+    }
+  });
+});

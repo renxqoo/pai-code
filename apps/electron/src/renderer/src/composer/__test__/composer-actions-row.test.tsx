@@ -36,6 +36,7 @@ function makeProps(overrides: Partial<Parameters<typeof ComposerActionsRow>[0]> 
     sendLabel: copy.composer.send,
     stopLabel: copy.composer.stop,
     canSend: true,
+    sending: false,
     generating: false,
     onStop: noop,
     permissionMode: null,
@@ -181,6 +182,27 @@ describe('发送/停止键状态机（禁用灰 / 可发黑 / 生成中空输入
     const tag = buttonTag(html, copy.composer.send);
     expect(tag).not.toContain('disabled=""');
     expect(tag).toContain('enabled:bg-primary');
+    expect(buttonTag(html, copy.composer.stop)).toBeNull();
+  });
+});
+
+describe('发送在途 loading（症状：提交卡很久时发送位无任何反馈）', () => {
+  test('在途：发送位呈旋转加载（role=status 发送中）且按钮禁用（aria-busy）；结算后回到箭头', () => {
+    const busy = renderToStaticMarkup(<ComposerActionsRow {...makeProps({ sending: true })} />);
+    const busyTag = buttonTag(busy, copy.composer.send);
+    expect(busyTag).toContain('disabled=""');
+    expect(busyTag).toContain('aria-busy="true"');
+    expect(busy).toContain('role="status"');
+    expect(busy).toContain(`aria-label="${copy.composer.sending}"`);
+
+    const idle = renderToStaticMarkup(<ComposerActionsRow {...makeProps({ sending: false })} />);
+    expect(buttonTag(idle, copy.composer.send)).not.toContain('disabled=""');
+    expect(idle).not.toContain('role="status"');
+  });
+
+  test('生成中+有输入在途：排队提交同样有反馈——发送位仍是 loading，不换停止键', () => {
+    const html = renderToStaticMarkup(<ComposerActionsRow {...makeProps({ sending: true, generating: true })} />);
+    expect(html).toContain('role="status"');
     expect(buttonTag(html, copy.composer.stop)).toBeNull();
   });
 });

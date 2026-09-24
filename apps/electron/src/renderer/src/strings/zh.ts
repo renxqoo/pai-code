@@ -247,6 +247,7 @@ export const zh: typeof en = {
     attach: '添加图片与文件',
     send: '发送消息',
     stop: '停止生成',
+    sending: '发送中',
     usageSummary: '用量',
     steerPlaceholder: '向该子智能体注入指令…',
     steerFailed: (reason: string): string => `改向失败（${reason}）。`,

@@ -99,6 +99,11 @@ function ComposerRegion(): React.JSX.Element {
   const [branchError, setBranchError] = React.useState<string | null>(null);
   /** 同步闸：连按 Enter/双击时 state 闭包仍为旧值，异步在途必须用 ref 拦 */
   const busyRef = React.useRef(false);
+  /** 发送在途按线程键控（Set，同步闸）：同线程连按 Enter 去重防双投，跨线程互不误拦
+   *  （唤醒/受理慢窗口里切会话仍可发送）；在途线程 id 供本区域按线程呈现 loading。 */
+  const sendingRef = React.useRef<Set<string>>(new Set());
+  const [sendingThreadId, setSendingThreadId] = React.useState<string | null>(null);
+  const submitting = sendingThreadId === activeThreadId;
   /** 图谱只在弹窗打开时拉取（无轮询）；branchRevision 让 checkout 成功后重开即新谱 */
   const graph = useGitGraph(activeCwd, workspaceActions.listGitGraph, branchRevision, dialog === 'graph');
 
@@ -170,13 +175,22 @@ function ComposerRegion(): React.JSX.Element {
   }, []);
 
   /** 发送一行：附件转协议载荷 → submitDraft（`! `/排队语义在主进程管线内）→
-   *  成功清草稿（草稿清理 = 发送成功分支的一步；失败草稿保留重发）。 */
+   *  成功清草稿（草稿清理 = 发送成功分支的一步；失败草稿保留重发）。
+   *  同线程在途闸 + loading：唤醒/受理慢窗口里发送位呈加载态，同线程连按 Enter 不重复投递（跨线程互不误拦）。 */
   const submit = async (text: string, attachments: readonly ComposerAttachment[]): Promise<boolean> => {
-    const images = attachments.length === 0 ? undefined : attachments.map(({ payload }) => imagePayloadOf(payload));
-    const reason = await workspaceActions.submitDraft(text, images);
-    if (reason !== null) return false;
-    uiStore.getState().clearDraft(activeThreadId);
-    return true;
+    if (sendingRef.current.has(activeThreadId)) return false;
+    sendingRef.current.add(activeThreadId);
+    setSendingThreadId(activeThreadId);
+    try {
+      const images = attachments.length === 0 ? undefined : attachments.map(({ payload }) => imagePayloadOf(payload));
+      const reason = await workspaceActions.submitDraft(text, images);
+      if (reason !== null) return false;
+      uiStore.getState().clearDraft(activeThreadId);
+      return true;
+    } finally {
+      sendingRef.current.delete(activeThreadId);
+      setSendingThreadId((current) => (current === activeThreadId ? null : current));
+    }
   };
 
   return (
@@ -273,6 +287,7 @@ function ComposerRegion(): React.JSX.Element {
             sendLabel={copy.composer.send}
             stopLabel={copy.composer.stop}
             canSend={value.trim().length > 0}
+            sending={submitting}
             generating={generating}
             onStop={stopOrAbort}
             permissionMode={permissionMode}

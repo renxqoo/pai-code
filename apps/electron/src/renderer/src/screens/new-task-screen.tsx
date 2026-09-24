@@ -330,6 +330,7 @@ function NewTaskScreen({
                 sendLabel={copy.composer.send}
                 stopLabel={copy.composer.stop}
                 canSend={canSubmit}
+                sending={creating}
                 generating={false}
                 onStop={() => undefined}
                 permissionMode={permissionMode ?? defaultPermissionMode}

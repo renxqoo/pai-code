@@ -5,7 +5,7 @@ import type { PermMode, SessionStatsView, TokenAnalyticsView } from '@paiapp/con
 
 import { UsageDetails } from './usage-details';
 
-import { IconButton, MenuButton, menuTriggerClassName, PickerDialog } from '@paiapp/ui';
+import { IconButton, MenuButton, menuTriggerClassName, PickerDialog, Spinner } from '@paiapp/ui';
 import { groupModelOptions } from '@/components/group-model-options';
 import { copy } from '@/strings';
 import { formatTokenCount } from '@/thread/format-count-unit';
@@ -43,6 +43,8 @@ type ComposerActionsRowProps = {
   sendLabel: string
   stopLabel: string
   canSend: boolean
+  /** 发送在途（表单提交 → 受理结算）：发送位换加载指示并禁用——唤醒/受理的慢窗口不再无反馈 */
+  sending: boolean
   /** 生成中且无输入时发送键让位给红色停止键；有输入时发送键回归（提交=排队，投递语义由父层裁决） */
   generating: boolean
   onStop: () => void
@@ -62,7 +64,7 @@ function optionItems(options: readonly string[], selected: string) {
 }
 
 /**
- * 输入框底行：左侧附件与权限模式，右侧用量 / 模型 / 思考档 / 发送（生成中且无输入时为红色停止）。
+ * 输入框底行：左侧附件与权限模式，右侧用量 / 模型 / 思考档 / 发送（在途呈加载指示；生成中且无输入时为红色停止）。
  * 模型选择走统一 CommandDialog 弹窗（T21）；思考档恒四档（会话读口当前值，新建页本地选择）；
  * 用量入口只在有会话时出现：主指标 = 上下文占用百分比（T43，实报输入侧口径——
  * 累计 total 单调增不重置，不冒充上下文），插件缺席回落累计 total；阈值变色
@@ -79,6 +81,7 @@ function ComposerActionsRow({
   sendLabel,
   stopLabel,
   canSend,
+  sending,
   generating,
   onStop,
   permissionMode,
@@ -206,10 +209,11 @@ function ComposerActionsRow({
             type="submit"
             aria-label={sendLabel}
             title={sendLabel}
-            disabled={!canSend}
+            disabled={!canSend || sending}
+            aria-busy={sending}
             className="flex size-[29px] shrink-0 cursor-pointer items-center justify-center rounded-full text-primary-foreground outline-none transition-colors select-none focus-visible:ring-3 focus-visible:ring-ring/50 enabled:bg-primary enabled:hover:bg-primary/90 disabled:cursor-default disabled:bg-send disabled:text-white"
           >
-            <ArrowUp className="size-[15px]" strokeWidth={2.5} />
+            {sending ? <Spinner label={copy.composer.sending} className="size-[15px]" strokeWidth={2.5} /> : <ArrowUp className="size-[15px]" strokeWidth={2.5} />}
           </button>
         )}
       </div>
