@@ -2,7 +2,8 @@ import { app, BrowserWindow, dialog, ipcMain, Notification, shell } from 'electr
 
 import { registerIpcWindowActions } from './window-actions-ipc';
 import { join } from 'node:path';
-import { existsSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
+import { seedBundledRg } from './rg-seed';
 
 import { ApiSchemas, type UiEvent } from '@paiapp/contracts';
 import { appError } from '@paiapp/api';
@@ -206,6 +207,20 @@ void app.whenReady().then(async () => {
         monitorRef.noteDiagnostic(message);
       },
     };
+    // rg 首启放置先于 runtime（host spawn）：hub 首个 worker 装配即解析得到内置 rg
+    seedBundledRg({
+      resourcesPath: app.isPackaged ? (process.resourcesPath ?? null) : null,
+      agentDir: paths.agentDir,
+      exists: existsSync,
+      isFile: (path) => {
+        try {
+          return statSync(path).isFile();
+        } catch {
+          return false;
+        }
+      },
+      log: (message) => loggingToMonitor.log(message),
+    });
     runtime = createPaiRuntime({
       paths,
       keyStore,

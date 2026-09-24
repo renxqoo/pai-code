@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
 
-import { collectHarnessDeps, collectThirdPartyDirs, resolveResourceSources, workspaceMembers } from '../sync-resources';
+import { collectHarnessDeps, collectThirdPartyDirs, resolveResourceSources, rgResourcePaths, workspaceMembers } from '../sync-resources';
 
 /** 资源来源解析回归：env 覆盖优先、缺省走旁级 x-harness host-hub 源码入口（编译输入）。 */
 
@@ -114,4 +114,12 @@ test('collectThirdPartyDirs：任意深度传递依赖闭包（真实检出上�
     expect(names).toContain(required);
   }
 
+});
+
+/** rg 内置二进制收集面：x-harness staging（fetch:rg 产物）→ resources/host-hub/bin/rg
+ *  （hub rgBinDir = <agentDir>/bin 同源；Pai 首启 seedBundledRg 的资源源）。 */
+test('rgResourcePaths：staging → resources 布局口径', () => {
+  const paths = rgResourcePaths('/x-harness');
+  expect(paths.from).toBe('/x-harness/apps/host-hub/dist/bin/rg');
+  expect(paths.to).toBe('host-hub/bin/rg');
 });

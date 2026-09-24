@@ -185,6 +185,14 @@ export function collectThirdPartyDirs(packages: string[]): string[] {
   return dirs;
 }
 
+/** rg 内置二进制放置（TOOLBOX §5 获取形态）：x-harness staging（fetch:rg 产物）→
+ *  resources/host-hub/bin/rg。hub 运行时解析链 rgBinDir = <HUB_AGENT_DIR>/bin，
+ * 首启由 Pai 主进程从本资源拷贝放置。缺席 = x-harness 未跑 fetch:rg（打包机错序）——
+ * 硬失败不静默（hub grep 会 SEARCH_RG_UNAVAILABLE）。 */
+export function rgResourcePaths(harnessRoot: string): { readonly from: string; readonly to: string } {
+  return { from: join(harnessRoot, 'apps', 'host-hub', 'dist', 'bin', 'rg'), to: 'host-hub/bin/rg' };
+}
+
 function main(): void {
   const repoRoot = resolve(import.meta.dir, '..', '..');
   const sources = resolveResourceSources(process.env, repoRoot, process.execPath);
@@ -196,7 +204,16 @@ function main(): void {
     }
     console.log(`[sync-resources] ${basename(source)} <- ${source} (${(size / 1048576).toFixed(1)} MB)`);
   }
+  // rg staging 缺席 = 打包机错序（fetch:rg 先于 package）——硬失败
+  const rgPaths = rgResourcePaths(sources.harnessRoot);
+  const rgSize = statSync(rgPaths.from, { throwIfNoEntry: false })?.size;
+  if (rgSize === undefined) {
+    console.error(`[sync-resources] rg missing: ${rgPaths.from} (run 'bun run fetch:rg' in x-harness first)`);
+    process.exit(1);
+  }
+  console.log(`[sync-resources] rg <- ${rgPaths.from} (${(rgSize / 1048576).toFixed(1)} MB)`);
   copyExecutable(sources.bunPath, join(repoRoot, 'resources', 'bun', 'bun'));
+  copyExecutable(rgPaths.from, join(repoRoot, 'resources', rgPaths.to));
 
   // ① 编译单文件（零插件裁剪形态）
   const hubOut = join(repoRoot, 'resources', 'host-hub', 'host-hub');
