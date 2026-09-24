@@ -1,4 +1,5 @@
 import type { ApiError, ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
+import { currentPermModes, setPermModes } from '@paiapp/contracts';
 import { appError } from '../errors';
 import {
   inflightView,
@@ -248,13 +249,19 @@ export function sessionRoutes(deps: {
     'permission/mode': async (params) => {
       const result = await pc().getMode({ threadId: params.threadId });
       if (!result.ok) return fail(result.error);
-      const data = result.data as { mode?: unknown; source?: unknown };
+      const data = result.data as { mode?: unknown; source?: unknown; modes?: unknown };
       const source = data.source;
+      // host 词表收敛（单一真相）：响应携 modes 即动态收敛本地词表，后续 setMode/设置页
+      // 校验随词表放行；缺席（老 host）保持内置缺省
+      if (Array.isArray(data.modes) && data.modes.length > 0 && data.modes.every((m) => typeof m === 'string')) {
+        setPermModes(data.modes as string[]);
+      }
       return {
         ok: true as const,
         data: {
           mode: typeof data.mode === 'string' ? data.mode : '',
           source: source === 'session' || source === 'project' || source === 'user' || source === 'default' ? source : 'default',
+          modes: [...currentPermModes()],
         },
       };
     },

@@ -1,7 +1,7 @@
 import { ChevronDown, Shield } from 'lucide-react';
 
 import type { PermMode } from '@paiapp/contracts';
-import { PERM_MODES } from '@paiapp/contracts';
+import { currentPermModes } from '@paiapp/contracts';
 import { MenuButton, type MenuItemDef } from '@paiapp/ui';
 
 import { copy } from '@/strings';
@@ -14,14 +14,17 @@ type PermissionModeMenuProps = {
   onSelectMode: (mode: PermMode) => void
 }
 
-/** 权限模式展示名（语言切换后随渲染重估——模块级常量会冻结首个 locale）。 */
+/** 权限模式展示名（语言切换后随渲染重估——模块级常量会冻结首个 locale）。
+ *  词表外档（host 协议扩展、文案未收录）回退 id 本身——新档可见可选，不崩。 */
 export function permModeLabel(mode: PermMode): string {
-  return copy.settings.permModeOptions[mode];
+  return copy.settings.permModeOptions[mode] ?? mode;
 }
 
-/** 会话权限模式下拉：读 permission/mode、写 permission/setMode（四档；下一工具裁决生效）。 */
+/** 会话权限模式下拉：读 permission/mode、写 permission/setMode（下一工具裁决生效）。
+ *  选项面 = host 词表（permission/get_mode modes 收敛；host 缺席回落内置缺省）。 */
 function PermissionModeMenu({ mode, onSelectMode }: PermissionModeMenuProps) {
-  const items: MenuItemDef[] = PERM_MODES.map((value) => ({
+  const modes = currentPermModes();
+  const items: MenuItemDef[] = modes.map((value) => ({
     kind: 'item' as const,
     id: value,
     label: permModeLabel(value),
@@ -33,7 +36,7 @@ function PermissionModeMenu({ mode, onSelectMode }: PermissionModeMenuProps) {
       align="start"
       items={items}
       onSelect={(id) => {
-        if ((PERM_MODES as readonly string[]).includes(id)) onSelectMode(id as PermMode);
+        if (modes.includes(id)) onSelectMode(id);
       }}
       triggerClassName={`${menuTriggerClassName} shrink-0`}
       trigger={

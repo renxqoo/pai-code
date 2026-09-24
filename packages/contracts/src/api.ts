@@ -471,10 +471,10 @@ export const ApiSchemas = {
     params: threadOnly,
     result: z.null(),
   },
-  /** 会话权限模式读（permission/get_mode；source = 生效层级）。 */
+  /** 会话权限模式读（permission/get_mode；source = 生效层级；modes = host 词表——UI 选项渲染源）。 */
   'permission/mode': {
     params: threadOnly,
-    result: z.object({ mode: z.string(), source: z.enum(['session', 'project', 'user', 'default']) }).strict(),
+    result: z.object({ mode: z.string(), source: z.enum(['session', 'project', 'user', 'default']), modes: z.array(z.string()) }).strict(),
   },
   /** 会话权限模式写（permission/set_mode；下一工具裁决生效）。 */
   'permission/setMode': {

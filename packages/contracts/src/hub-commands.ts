@@ -260,7 +260,7 @@ export interface PermissionSetModeCmd {
   mode: PermMode;
 }
 
-/** 会话权限模式（读；source = session|project|user|default）。 */
+/** 会话权限模式（读；source = session|project|user|default；响应携 modes = host 词表）。 */
 export interface PermissionGetModeCmd {
   type: 'permission/get_mode';
   threadId: string;

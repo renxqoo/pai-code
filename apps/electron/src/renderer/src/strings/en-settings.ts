@@ -84,8 +84,10 @@ export const enSettings = {
     permModeOptions: {
       plan: 'Plan',
       auto: 'Auto',
+      'edit-confirm': 'Edit confirm',
       full: 'Full auto',
-    },
+      'sandboxed-auto': 'Sandboxed',
+    } as Record<string, string>,
     permissionsLoading: 'Loading permission settings…',
     generalTitle: 'General',
     generalDesc: 'Language, appearance and basic behavior.',

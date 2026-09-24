@@ -1,7 +1,7 @@
 
 
 import type { ApiError, ApiMethod, ApiOutcome, ApiParams, PreferencesView, ProviderConfig, ProviderConfigView } from '@paiapp/contracts';
-import { isApiFormat, normalizeLegacyPermMode } from '@paiapp/contracts';
+import { currentPermModes, isApiFormat, normalizeLegacyPermMode } from '@paiapp/contracts';
 import { appError } from '../errors';
 import type { SettingsCommands } from '../commands/settings';
 
@@ -136,9 +136,9 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
       return {
         ok: true as const,
         data: {
-          // 读侧归一：旧 4 档存量值（my-agent 期写入）收敛到 3 档（default/acceptEdits→auto、
-          // fullAuto→full）——归一展示不丢语义；词表外语形视为未设置
-          permissionDefaultMode: typeof mode === 'string' ? (normalizeLegacyPermMode(mode) ?? null) : null,
+          // 读侧归一：旧 4 档存量值收敛到现词表；词表外（含动态收敛后的新增档）原样透传
+          // ——归一展示不丢语义；非法值视为未设置
+          permissionDefaultMode: typeof mode === 'string' ? (normalizeLegacyPermMode(mode) ?? (currentPermModes().includes(mode) ? mode : null)) : null,
           thinkingDefault:
             thinking === 'off' || thinking === 'low' || thinking === 'medium' || thinking === 'high' || thinking === 'max'
               ? thinking

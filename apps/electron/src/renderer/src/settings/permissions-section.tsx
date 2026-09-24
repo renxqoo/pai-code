@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import type { PermMode, ThinkingLevel } from '@paiapp/contracts';
-import { PERM_MODES, THINKING_LEVEL_ORDER, thinkingLevelLabel } from '@paiapp/contracts';
+import { THINKING_LEVEL_ORDER, currentPermModes, thinkingLevelLabel } from '@paiapp/contracts';
 import { SegmentedControl, type SegmentedControlOption } from '@paiapp/ui';
 
 import { copy } from '@/strings';
@@ -42,10 +42,12 @@ function PermissionsSection({ hubSettings, onSaveDefaults }: PermissionsSectionP
     );
   }
 
-  /** 选项类型含空串：无缺省（null）时传入 ''，无匹配段即无高亮（hub 无清除语义，不设清除选项）。 */
-  const modeOptions: ReadonlyArray<SegmentedControlOption<PermMode | ''>> = PERM_MODES.map((mode) => ({
-    value: mode as PermMode | '',
-    label: copy.settings.permModeOptions[mode],
+  /** 选项类型含空串：无缺省（null）时传入 ''，无匹配段即无高亮（hub 无清除语义，不设清除选项）。
+   *  选项面 = host 词表（permission/get_mode modes 收敛；host 缺席回落内置缺省）；
+   *  文案未收录档回退 id 本身——新档可见可选，不崩。 */
+  const modeOptions: ReadonlyArray<SegmentedControlOption<PermMode>> = currentPermModes().map((mode) => ({
+    value: mode,
+    label: copy.settings.permModeOptions[mode] ?? mode,
   }));
   const thinkingOptions: ReadonlyArray<SegmentedControlOption<ThinkingLevel | ''>> = THINKING_LEVEL_ORDER.map((level) => ({
     value: level as ThinkingLevel | '',

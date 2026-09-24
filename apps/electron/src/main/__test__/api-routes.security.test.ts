@@ -37,7 +37,7 @@ function fakeHost(models: Array<Record<string, unknown>>): { port: HostProcessPo
     request: (command: PaiCommand): Promise<HostCommandOutcome> => {
       sent.push(command);
       if (command.type === "get_models") return Promise.resolve({ ok: true, data: models });
-      if (command.type === "permission/get_mode") return Promise.resolve({ ok: true, data: { mode: "default", source: "user" } });
+      if (command.type === "permission/get_mode") return Promise.resolve({ ok: true, data: { mode: "default", source: "user", modes: ["plan", "auto", "edit-confirm", "full", "sandboxed-auto"] } });
       if (command.type === "settings/get") {
         return Promise.resolve({ ok: true, data: { values: { "permission.defaultMode": "default", "thinking.default": "low" } } });
       }
@@ -259,14 +259,14 @@ describe("api-routes 安全面（C-S2/C-S8/C-S4）", () => {
 });
 
 describe("api-routes 权限模式与 hub 设置（hub 命令面）", () => {
-  test("permission/mode：permission/get_mode 收窄 {mode,source}；词表外 source 降级 default", async () => {
+  test("permission/mode：permission/get_mode 收窄 {mode,source,modes}；词表外 source 降级 default；host 词表透传", async () => {
     const work = mkdtempSync(join(tmpdir(), "pai-sec-permmode-"));
     const { routes } = await makeRoutes(work, { models: [] });
     const mode = (await routes.invoke("permission/mode", { threadId: "t1" })) as {
       ok: boolean;
-      data: { mode: string; source: string };
+      data: { mode: string; source: string; modes: string[] };
     };
-    expect(mode).toEqual({ ok: true, data: { mode: "default", source: "user" } });
+    expect(mode).toEqual({ ok: true, data: { mode: "default", source: "user", modes: ["plan", "auto", "edit-confirm", "full", "sandboxed-auto"] } });
   });
 
   test("permission/setMode：permission/set_mode 透传 + 审计；词表外 mode 拒绝", async () => {

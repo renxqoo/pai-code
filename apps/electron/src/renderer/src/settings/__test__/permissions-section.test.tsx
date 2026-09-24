@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import type { PermMode, ThinkingLevel } from '@paiapp/contracts';
+import { setPermModes } from '@paiapp/contracts';
 import { copy } from '@/strings';
 import { PermissionsSection } from '../permissions-section';
 
@@ -20,11 +21,12 @@ function render(hubSettings: { permissionDefaultMode: PermMode | null; thinkingD
 }
 
 describe('PermissionsSection', () => {
-  test('无缺省（null）：全部段不选中；无清除选项（选项面 = 词表本身）', () => {
+  test('无缺省（null）：全部段不选中；无清除选项（选项面 = host 词表本身）', () => {
+    setPermModes(['plan', 'auto', 'edit-confirm', 'full', 'sandboxed-auto']);
     const html = render({ permissionDefaultMode: null, thinkingDefault: null });
     expect(html).not.toContain('aria-checked="true"');
-    // 两行各 4 段（perm 词表 + thinking 词表），无额外「缺省」段
-    expect(html.match(/role="radio"/g) ?? []).toHaveLength(8);
+    // 两行各 N 段（perm 词表 5 档 + thinking 词表 5 档），无额外「缺省」段
+    expect(html.match(/role="radio"/g) ?? []).toHaveLength(10);
   });
 
   test('已设缺省：对应段选中', () => {
