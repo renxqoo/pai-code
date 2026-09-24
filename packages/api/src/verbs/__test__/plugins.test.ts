@@ -55,6 +55,9 @@ function fakeSettingsCommands(behavior: {
   inspect?: unknown;
   install?: unknown;
   hotInstall?: unknown;
+  proposals?: unknown;
+  confirmProposal?: unknown;
+  rejectProposal?: unknown;
   errors?: Array<{ kind: string; message: string }>;
 }): SettingsCommands {
   let callIndex = 0;
@@ -98,6 +101,21 @@ function fakeSettingsCommands(behavior: {
       return error === undefined ? Promise.resolve({ ok: true, data: behavior.hotInstall ?? { name: 'p', mode: 'worker' } }) : Promise.resolve({ ok: false, error });
     },
     hotUninstallPlugin: () => Promise.resolve({ ok: true, data: {} }),
+    listPluginProposals: () => {
+      const error = err(callIndex);
+      callIndex += 1;
+      return error === undefined ? Promise.resolve({ ok: true, data: behavior.proposals }) : Promise.resolve({ ok: false, error });
+    },
+    confirmPluginProposal: () => {
+      const error = err(callIndex);
+      callIndex += 1;
+      return error === undefined ? Promise.resolve({ ok: true, data: behavior.confirmProposal ?? {} }) : Promise.resolve({ ok: false, error });
+    },
+    rejectPluginProposal: () => {
+      const error = err(callIndex);
+      callIndex += 1;
+      return error === undefined ? Promise.resolve({ ok: true, data: behavior.rejectProposal ?? {} }) : Promise.resolve({ ok: false, error });
+    },
   };
 }
 
@@ -224,6 +242,73 @@ describe('createPluginRoutes：导入闭环与热装编排', () => {
         ['c', 'blocked', 'no plugin.json'],
       ]);
     }
+  });
+
+  test('proposals：登记态直读（形状收窄）——坏行丢弃、缺字段丢行', async () => {
+    const routes = createPluginRoutes({
+      settingsCommands: () => fakeSettingsCommands({
+        proposals: {
+          proposals: [
+            {
+              proposalId: 'pr-1', sourcePath: '/agent/src/p1', name: 'p1', description: 'd',
+              requestedCapabilities: ['fs', 'net', 42], sha256: 'abc', createdAt: 1, confirmed: false,
+            },
+            { proposalId: 123 }, // 坏行：id 非字符串
+            'garbage',
+          ],
+        },
+      }),
+      sources: failClosedPluginSources,
+    });
+    const outcome = await routes.routes['plugins/proposals']({});
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) {
+      expect(outcome.data.proposals).toHaveLength(1);
+      expect(outcome.data.proposals[0]).toMatchObject({ proposalId: 'pr-1', name: 'p1', sha256: 'abc' });
+      expect(outcome.data.proposals[0].requestedCapabilities).toEqual(['fs', 'net']); // 非串项滤除
+    }
+  });
+
+  test('proposals：应答缺 proposals 数组 → malformed_response（不静默空表）', async () => {
+    const routes = createPluginRoutes({
+      settingsCommands: () => fakeSettingsCommands({ proposals: { what: 'else' } }),
+      sources: failClosedPluginSources,
+    });
+    const outcome = await routes.routes['plugins/proposals']({});
+    expect(outcome.ok).toBe(false);
+    if (!outcome.ok) expect(outcome.error.kind).toBe('malformed_response');
+  });
+
+  test('proposals：hub 失败 → mapPluginError 透出', async () => {
+    const routes = createPluginRoutes({
+      settingsCommands: () => fakeSettingsCommands({ errors: [{ kind: 'io_failed', message: 'host down' }] }),
+      sources: failClosedPluginSources,
+    });
+    const outcome = await routes.routes['plugins/proposals']({});
+    expect(outcome.ok).toBe(false);
+    if (!outcome.ok) expect(outcome.error.kind).toBe('plugin_source_invalid');
+  });
+
+  test('confirmProposal / rejectProposal：透传 proposalId；hub 拒映射后透出', async () => {
+    const confirmOk = createPluginRoutes({
+      settingsCommands: () => fakeSettingsCommands({ confirmProposal: { ok: true } }),
+      sources: failClosedPluginSources,
+    });
+    expect(await confirmOk.routes['plugins/confirmProposal']({ proposalId: 'pr-1' })).toEqual({ ok: true, data: null });
+
+    const rejectOk = createPluginRoutes({
+      settingsCommands: () => fakeSettingsCommands({ rejectProposal: { ok: true } }),
+      sources: failClosedPluginSources,
+    });
+    expect(await rejectOk.routes['plugins/rejectProposal']({ proposalId: 'pr-1' })).toEqual({ ok: true, data: null });
+
+    const rejectFail = createPluginRoutes({
+      settingsCommands: () => fakeSettingsCommands({ errors: [{ kind: 'plugin_install_failed', message: 'gone' }] }),
+      sources: failClosedPluginSources,
+    });
+    const outcome = await rejectFail.routes['plugins/rejectProposal']({ proposalId: 'pr-gone' });
+    expect(outcome.ok).toBe(false);
+    if (!outcome.ok) expect(outcome.error.kind).toBe('plugin_install_failed');
   });
 
   test('hotInstall：hub 拒 → 映射后错误透出', async () => {

@@ -122,6 +122,21 @@ describe('导入面板渲染冒烟', () => {
     expect(html).toContain(copy.settings.pluginImportRun);
   });
 
+  test('同名已装徽章 + 选中后覆盖确认行 + blocked 缺省诊断', () => {
+    const html = content({
+      candidates: [candidate({ name: 'installed-one' })],
+      installedNames: ['installed-one'],
+      selections: new Map([['/src/demo', { overwrite: false }]]),
+    });
+    expect(html).toContain(copy.settings.pluginImportExists);
+    expect(html).toContain(copy.settings.pluginImportOverwrite);
+    // blocked 且 problem 空 → 缺省诊断文案（problemText 的 nullish 兜底分支）
+    const blockedDefault = content({ candidates: [candidate({ name: 'b', state: 'blocked', problem: null })] });
+    expect(blockedDefault).toContain(copy.settings.pluginProblemBlocked);
+    // 空候选清单 → 空态文案
+    expect(content({ candidates: [] })).toContain(copy.settings.pluginImportEmpty);
+  });
+
   test('汇总态：成功/失败明细与关闭钮', () => {
     const html = content({ summary: { imported: 1, failed: [{ name: 'x', reason: 'plugin exists' }], reopenFailures: 0 } });
     expect(html).toContain(copy.settings.pluginImportDone(1, 1));

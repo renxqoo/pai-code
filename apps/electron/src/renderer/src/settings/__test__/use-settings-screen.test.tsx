@@ -74,6 +74,7 @@ function SettingsPropsProbe(): React.JSX.Element {
     <span
       data-providers={props.providers.list.map((entry) => entry.name).join(',')}
       data-attention={String(props.runtimeAttention)}
+      data-plugin-actions={Object.keys(props.plugins).length}
     />
   );
 }
@@ -146,6 +147,19 @@ describe('装配 hook 挂载', () => {
       liveStore.setState({ sessions: { t1: deadSession('t1') } });
     });
     expect(probe?.getAttribute('data-attention')).toBe('true');
+    view.unmount();
+  });
+
+  test('plugins 面装配：M5 提案三动作在场（onListProposals/onConfirmProposal/onRejectProposal）', () => {
+    const view = render(
+      <ThemeProvider>
+        <SettingsPropsProbe />
+      </ThemeProvider>,
+    );
+    const probe = view.container.querySelector('[data-plugin-actions]');
+    // plugins 面键位：list/onToggle/onRefresh/onScanCandidates/onImportPlugins/onPickFolder/onRemove
+    // + M5 提案三动作（onListProposals/onConfirmProposal/onRejectProposal）= 10
+    expect(probe?.getAttribute('data-plugin-actions')).toBe('10');
     view.unmount();
   });
 });
