@@ -7,7 +7,7 @@ import type { PendingDialog } from '@/live/store';
 /**
  * 输入区内联确认条（Codex 式）：confirm 待答呈现从全局模态迁入输入卡顶槽——
  * 随会话走（只在发起会话的输入区出现），单条应答 + 其余计数。静态口径断言
- * 信息完整可读（工具/摘要/按钮文案/计数），交互回传由 ConfirmBody 回调直连。
+ * 信息完整可读（统一工具提示/按钮文案/计数），交互回传由 ConfirmBody 回调直连。
  */
 
 const base: PendingDialog = {
@@ -54,5 +54,17 @@ describe('ConfirmRequestBar 内联确认条', () => {
     expect(html).toContain('需要确认');
     expect(html).toContain('允许');
     expect(html).not.toContain('undefined');
+  });
+
+  test('症状回归：审批文案曾显示「edit unknown tool:edit」、不知改哪个文件——主文案现为「工具 + 目标」一行', () => {
+    const html = renderToStaticMarkup(
+      <ConfirmRequestBar
+        dialog={{ ...base, tool: 'edit', summary: 'src/a.ts', reason: 'unknown tool:edit' }}
+        remaining={0}
+        {...noop}
+      />,
+    );
+    expect(html).toContain('>edit src/a.ts<');
+    expect(html).not.toContain('>unknown tool:edit<');
   });
 });

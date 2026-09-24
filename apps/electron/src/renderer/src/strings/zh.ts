@@ -273,6 +273,8 @@ export const zh: typeof en = {
   },
   dialogs: {
     confirmTitle: '需要确认',
+    /** 统一工具提示文案：工具 + 目标（文件路径/命令）一行。 */
+    toolPrompt: (tool: string, target: string): string => `${tool} ${target}`,
     allow: '允许',
     deny: '拒绝',
     cancel: '取消',

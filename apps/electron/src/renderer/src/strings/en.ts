@@ -280,6 +280,8 @@ export const en = {
   },
   dialogs: {
     confirmTitle: 'Confirmation required',
+    /** 统一工具提示文案：工具 + 目标（文件路径/命令）一行。 */
+    toolPrompt: (tool: string, target: string): string => `${tool} ${target}`,
     allow: 'Allow',
     deny: 'Deny',
     cancel: 'Cancel',
