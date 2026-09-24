@@ -105,7 +105,7 @@ function ComposerActionsRow({
       <div className="ml-auto flex min-w-0 items-center gap-[9px]">
         {usage === null ? null : (
           <span className="relative flex shrink-0 items-center">
-            {usageOpen && usage.stats !== null ? <UsageDetails stats={usage.stats} analytics={usage.analytics} /> : null}
+            {usageOpen && usage.stats !== null ? <UsageDetails analytics={usage.analytics} /> : null}
             {usage.stats === null ? (
               <span title={usage.label} className="font-mono text-[11px] leading-none text-muted-foreground/50 tabular-nums">
                 —
