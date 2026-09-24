@@ -17,32 +17,35 @@ export interface HubTransport {
 export type Transport = <T>(command: PaiCommand, timeoutMs?: number) => Promise<HubResult<T>>;
 
 /** 调用观测钩子：失败分支携带解码后的完整 ApiError（消费方自行取舍格式化，
- *  不在观测层折平 kind/face/code）。 */
+ *  不在观测层折平 kind/face/code）；第三参为命令往返耗时（毫秒，注入时钟测得——
+ *  慢命令诊断行 slowCallTrace 的数据源）。 */
 export interface CallObserver {
-  (command: PaiCommand, result: { ok: true } | { ok: false; error: ApiError }): void;
+  (command: PaiCommand, result: { ok: true } | { ok: false; error: ApiError }, durationMs: number): void;
 }
 
-export function createTransport(deps: { request: HubTransport['request']; onCall?: CallObserver }): Transport {
+export function createTransport(deps: { request: HubTransport['request']; onCall?: CallObserver; now?: () => number }): Transport {
+  const now = deps.now ?? Date.now;
   return async <T>(command: PaiCommand, timeoutMs?: number): Promise<HubResult<T>> => {
+    const startedAt = now();
     let outcome: HostCommandOutcome;
     try {
       outcome = await deps.request(command, timeoutMs);
     } catch {
       const result = { ok: false as const, error: decodeApiError('host_unavailable') };
-      observe(command, result);
+      observe(command, result, now() - startedAt);
       return result;
     }
     const result: HubResult<T> = outcome.ok
       ? { ok: true, data: outcome.data as T }
       : { ok: false, error: decodeApiError(outcome.error) };
-    observe(command, result);
+    observe(command, result, now() - startedAt);
     return result;
   };
 
-  function observe(command: PaiCommand, result: HubResult<unknown>): void {
+  function observe(command: PaiCommand, result: HubResult<unknown>, durationMs: number): void {
     if (deps.onCall === undefined) return;
     try {
-      const observed = deps.onCall(command, result.ok ? { ok: true } : { ok: false, error: result.error }) as unknown;
+      const observed = deps.onCall(command, result.ok ? { ok: true } : { ok: false, error: result.error }, durationMs) as unknown;
       // 观测者签名是 void，但 TS 允许赋入 async 函数（返回 Promise）——同步 throw
       // 之外，async 观测者的 reject 同样不得逃逸为 unhandled rejection
       if (observed instanceof Promise) void observed.catch(() => undefined);

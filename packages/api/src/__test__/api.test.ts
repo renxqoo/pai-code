@@ -54,6 +54,40 @@ describe('transport 管线契约（T40 §2.3 审查处置 H1）', () => {
     expect(observed).toEqual([{ ok: false, error: { kind: 'transient', face: 'command_failed', message: 'no dial' } }]);
   });
 
+  test('症状：发送卡很久时无从判断卡在哪条命令——onCall 携带命令往返耗时（注入时钟，确定性）', async () => {
+    const observed: Array<{ type: string; durationMs: number }> = [];
+    let now = 1_000;
+    const send = createTransport({
+      request: () => {
+        now += 1_234;
+        return Promise.resolve({ ok: true, data: null } as HostCommandOutcome);
+      },
+      now: () => now,
+      onCall: (command, _result, durationMs) => {
+        observed.push({ type: command.type, durationMs });
+      },
+    });
+    await send<null>({ type: 'prompt', threadId: 't1', message: 'hi' });
+    expect(observed).toEqual([{ type: 'prompt', durationMs: 1_234 }]);
+  });
+
+  test('host_unavailable 路径同样带耗时（观测面完整，永不缺参）', async () => {
+    const observed: number[] = [];
+    let now = 0;
+    const send = createTransport({
+      request: () => {
+        now += 7;
+        return Promise.reject(new Error('bridge gone'));
+      },
+      now: () => now,
+      onCall: (_command, _result, durationMs) => {
+        observed.push(durationMs);
+      },
+    });
+    await send<null>({ type: 'thread/list' });
+    expect(observed).toEqual([7]);
+  });
+
   test('ack 命令（retire/steer）成功恒折叠 null（帧解码缺省 data 为 undefined）', async () => {
     const hub = createHubApi({
       request: () => Promise.resolve({ ok: true, data: undefined } as HostCommandOutcome),

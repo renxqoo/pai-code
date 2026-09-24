@@ -64,6 +64,7 @@ export {
 export { createSkillInstallPort, type SkillInstallPort } from './verbs/skill-install-port';
 export { compactInvocationOf, interceptsCompact } from './verbs/compact-lexing';
 export { errorLogToken } from './verbs/error-log-token';
+export { slowCallTrace } from './verbs/slow-call-trace';
 export { envVarNameForProvider } from './verbs/env-name';
 export { autoTitleCandidateOf } from './verbs/auto-title';
 export { createGitBranches, classifyGitExecError, type GitBranches, type GitExec, type GitExecResult, type GitExecError } from './verbs/git-branches';

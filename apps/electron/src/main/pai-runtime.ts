@@ -13,7 +13,7 @@ import {
   type HubApi,
 } from '@paiapp/api';
 
-import { errorLogToken } from '@paiapp/api';
+import { errorLogToken, slowCallTrace } from '@paiapp/api';
 
 import { createQueueMirror } from './queue-mirror';
 import {
@@ -46,6 +46,8 @@ import { writeModelsConfig } from './models-config';
 const DEFAULT_TITLE = 'New conversation';
 const EVENT_BUFFER_LIMIT = 1_000;
 const READY_TIMEOUT_MS = 30_000;
+/** 慢命令诊断阈值（ms）：达阈值的 hub 命令落一行 hub_call_slow——「发送卡顿」类症状的定位口 */
+const SLOW_CALL_TRACE_MS = 500;
 
 export interface PaiRuntimeDeps {
   paths: AppPaths;
@@ -394,8 +396,15 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
       // ——经 decode 成 transient/host_disposed（port 的 request 永不 reject，无 catch 路径）
       hubApi = createHubApi({
         request: (cmd, timeoutMs) => built.request(cmd, timeoutMs),
-        onCall: (command, result) => {
-          if (result.ok || command.type === 'get_host_info' || command.type === 'thread/list') return;
+        onCall: (command, result, durationMs) => {
+          const polled = command.type === 'get_host_info' || command.type === 'thread/list';
+          // 慢命令恰一行（hub_call_slow:<type>:<thread>:<ms>ms）：成功不落常规日志，
+          // 但「发送卡顿」类症状需要慢命令耗时定位；轮询豁免防 2s 轮询刷日志。
+          if (!polled) {
+            const slow = slowCallTrace(command, durationMs, SLOW_CALL_TRACE_MS);
+            if (slow !== null) log(slow);
+          }
+          if (result.ok || polled) return;
           const threadId = (command as { threadId?: string }).threadId;
           log(`hub_call_rejected:${command.type}:${threadId ?? '-'}:${errorLogToken(result.error)}`);
         },
