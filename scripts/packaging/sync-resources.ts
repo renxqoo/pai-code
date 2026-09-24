@@ -9,9 +9,9 @@
  *    从 x-harness 检出的 workspace 链按包依赖图收集）。
  * 来源默认 AGENTS.md dev 拓扑的旁级 x-harness 检出；PAI_HUB_ENTRY / PAI_BUN_PATH 可覆盖。
  */
-import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { basename, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 
 export interface ResourceSources {
   bunPath: string;
@@ -42,37 +42,147 @@ function copyExecutable(from: string, to: string): void {
   chmodSync(to, 0o755);
 }
 
+/** workspace 成员清单（单一真相：x-harness 根 package.json 的 workspaces glob 展开）。
+ *  旧启发式按包名猜目录（packages/<name> | packages/<group>/<name> 前缀切分），
+ *  解析不到 core 组两级布局（@x-harness/tools 实际住 packages/core/tools）——
+ *  node_modules 子集静默缺包，打包态 hub 启动即 module not found（dev 走源码链不受影响）。
+ *  glob 形态限于清单实际使用的单段 *（packages/*、packages/core/*、apps/*）。 */
+export function workspaceMembers(harnessRoot: string): Map<string, string> {
+  const rootManifestPath = join(harnessRoot, 'package.json');
+  const members = new Map<string, string>();
+  if (!existsSync(rootManifestPath)) return members;
+  const workspaces = (JSON.parse(readFileSync(rootManifestPath, 'utf8')) as {
+    workspaces?: string[];
+  }).workspaces;
+  if (!Array.isArray(workspaces)) return members;
+  for (const glob of workspaces) {
+    const starIndex = glob.indexOf('*');
+    if (starIndex < 0) continue;
+    if (glob.includes('**')) continue; // 双段通配不在清单使用面，明确不支持
+    const prefix = glob.slice(0, starIndex);
+    const scanRoot = join(harnessRoot, prefix);
+    if (!existsSync(scanRoot)) continue;
+    const starSegments = glob.split('*').length - 1; // 通配段数（每段匹配一层目录名）
+    const stack: Array<{ dir: string; matched: number }> = [{ dir: scanRoot, matched: 0 }];
+    while (stack.length > 0) {
+      const { dir, matched } = stack.pop() as { dir: string; matched: number };
+      if (matched === starSegments) {
+        // 到达通配末端：目录本身即 workspace 成员候选
+        const manifest = join(dir, 'package.json');
+        if (existsSync(manifest)) {
+          const name = (JSON.parse(readFileSync(manifest, 'utf8')) as { name?: string }).name;
+          if (name !== undefined && !members.has(name)) members.set(name, dir);
+        }
+        continue;
+      }
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (entry.isDirectory()) stack.push({ dir: join(dir, entry.name), matched: matched + 1 });
+      }
+    }
+  }
+  return members;
+}
+
 /** @x-harness/* 包依赖闭包收集（workspace 链内包间依赖 + 第三方运行时依赖）：
  *  从 host-hub package.json 依赖出发 BFS，收集每个包目录整树（src + package.json +
  *  自带 node_modules 第三方）。 Bun workspace 的 node_modules 在根（hoisted）——
- *  第三方依赖按根 node_modules 同步整树拷贝。 */
+ *  第三方依赖按根 node_modules 同步整树拷贝。
+ *  闭包内任何 @x-harness/* 解析不到 → 计入 missing（main 层硬失败）：
+ *  静默跳过会让 node_modules 子集缺包，打包态 hub 启动即 module not found。 */
 export function collectHarnessDeps(harnessRoot: string): { packages: string[]; missing: string[] } {
   const hubManifest = join(harnessRoot, 'apps', 'host-hub', 'package.json');
   if (!existsSync(hubManifest)) return { packages: [], missing: [hubManifest] };
+  const members = workspaceMembers(harnessRoot);
   const seen = new Set<string>();
   const queue: string[] = ['@x-harness/host-hub'];
   const packages: string[] = [];
+  const missing: string[] = [];
   while (queue.length > 0) {
     const name = queue.shift() as string;
     if (seen.has(name)) continue;
     seen.add(name);
-    // workspace 包路径解析：@x-harness/foo → packages/foo | packages/<group>/foo
-    const short = name.replace(/^@x-harness\//, '');
-    const candidates = [
-      join(harnessRoot, 'packages', short),
-      join(harnessRoot, 'apps', short),
-      join(harnessRoot, 'packages', short.split('-')[0] as string, short),
-      join(harnessRoot, 'packages', short.replace(/-([a-z]+)$/, '/$1')),
-    ].filter((dir) => existsSync(join(dir, 'package.json')));
-    const pkgDir = candidates[0];
-    if (pkgDir === undefined) continue; // 非 workspace 包（第三方）——根 node_modules 兜底
+    const pkgDir = members.get(name);
+    if (pkgDir === undefined) {
+      if (name.startsWith('@x-harness/')) missing.push(name); // workspace 内包缺失是硬错误，不再静默跳过
+      continue; // 非 workspace 包（第三方）——本地 node_modules 兜底
+    }
     packages.push(pkgDir);
     const manifest = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8')) as { dependencies?: Record<string, string> };
     for (const dep of Object.keys(manifest.dependencies ?? {})) {
       if (!seen.has(dep)) queue.push(dep);
     }
   }
-  return { packages, missing: [] };
+  return { packages, missing };
+}
+
+/** node_modules 目录下包名清单（展开 @scope；链接与目录都算——Bun isolated install
+ *  的依赖全是符号链接，Dirent.isDirectory() 对链接返回 false）。 */
+function listPackagesInNodeModules(nmDir: string): string[] {
+  if (!existsSync(nmDir)) return [];
+  const isDirLike = (e: { isDirectory: () => boolean; isSymbolicLink: () => boolean }) =>
+    e.isDirectory() || e.isSymbolicLink();
+  const names: string[] = [];
+  for (const e of readdirSync(nmDir, { withFileTypes: true })) {
+    if (e.name === '.bin' || e.name.startsWith('._') || !isDirLike(e)) continue;
+    if (e.name.startsWith('@')) {
+      const scopeDir = join(nmDir, e.name);
+      if (!existsSync(scopeDir)) continue;
+      for (const inner of readdirSync(scopeDir, { withFileTypes: true })) {
+        if (!isDirLike(inner)) continue;
+        if (existsSync(join(scopeDir, inner.name, 'package.json'))) names.push(`${e.name}/${inner.name}`);
+      }
+      continue;
+    }
+    if (existsSync(join(nmDir, e.name, 'package.json'))) names.push(e.name);
+  }
+  return names;
+}
+
+/** 包目录 → 所在 .bun store 条目的 node_modules（向上走到名为 node_modules 的目录）。
+ *  scoped 包（@scope/pkg）的父目录是 @scope 而非 node_modules，逐级上溯收口。 */
+function entryNodeModulesOf(pkgDir: string): string | null {
+  let cur = realpathSync(pkgDir);
+  for (;;) {
+    if (basename(cur) === 'node_modules') return cur;
+    const parent = dirname(cur);
+    if (parent === cur) return null;
+    cur = parent;
+  }
+}
+
+/** 三方依赖闭包（Bun isolated install）：从 workspace 包 node_modules 里的第三方
+ *  链接出发，沿 .bun store 条目兄弟链 BFS——每个条目 node_modules 兄弟位即该包
+ *  全部传递依赖（openai/typebox 一层、standardwebhooks 二层……任意深度可达）。
+ *  返回去重后的包真实目录（cpSync 解符号链接 → 落地为实文件）。 */
+export function collectThirdPartyDirs(packages: string[]): string[] {
+  const seen = new Set<string>();
+  const queue: string[] = [];
+  for (const pkgDir of packages) {
+    const localNm = join(pkgDir, 'node_modules');
+    for (const name of listPackagesInNodeModules(localNm)) {
+      if (name.startsWith('@x-harness/')) continue; // workspace 链接包已整树收集
+      const real = realpathSync(join(localNm, ...name.split('/')));
+      if (!seen.has(real)) {
+        seen.add(real);
+        queue.push(real);
+      }
+    }
+  }
+  const dirs: string[] = [];
+  while (queue.length > 0) {
+    const dir = queue.shift() as string;
+    dirs.push(dir);
+    const entryNm = entryNodeModulesOf(dir);
+    if (entryNm === null) continue;
+    for (const name of listPackagesInNodeModules(entryNm)) {
+      const real = realpathSync(join(entryNm, ...name.split('/')));
+      if (!seen.has(real)) {
+        seen.add(real);
+        queue.push(real);
+      }
+    }
+  }
+  return dirs;
 }
 
 function main(): void {
@@ -130,27 +240,12 @@ function main(): void {
       cpSync(join(pkgDir, entry), join(target, entry), { recursive: true, force: true });
     }
   }
-  // 第三方依赖（根 node_modules hoisted）：host-hub 依赖闭包里的非 @x-harness 包
-  const thirdParty = new Set<string>();
-  for (const pkgDir of packages) {
-    const manifest = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8')) as { dependencies?: Record<string, string> };
-    for (const dep of Object.keys(manifest.dependencies ?? {})) {
-      if (!dep.startsWith('@x-harness/')) thirdParty.add(dep);
-    }
-  }
-  // Bun workspaces 非 hoist：第三方住依赖包自己的 node_modules（apps/host-hub/node_modules/...）
-  const thirdPartyDirs: string[] = [];
-  for (const pkgDir of packages) {
-    const localNm = join(pkgDir, 'node_modules');
-    for (const dep of thirdParty) {
-      const dir = join(localNm, ...dep.split('/'));
-      if (existsSync(join(dir, 'package.json')) && !thirdPartyDirs.includes(dir)) thirdPartyDirs.push(dir);
-    }
-  }
-
+  // ④ 三方依赖闭包（Bun isolated install 的 .bun store 兄弟链 BFS）
+  const thirdPartyDirs = collectThirdPartyDirs(packages);
   for (const dir of thirdPartyDirs) {
     const manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as { name: string };
     const target = join(nmOut, ...manifest.name.split('/'));
+    if (existsSync(join(target, 'package.json'))) continue; // 已在场（含 workspace 包优先）
     mkdirSync(target, { recursive: true });
     for (const entry of readdirSync(dir)) {
       if (entry === 'node_modules' || entry === '.bin') continue;
