@@ -29,8 +29,9 @@ function makeDef(overrides: Partial<AgentDefinition> = {}): AgentDefinition {
 function makeStore(): { store: ReturnType<typeof createAgentDefinitionsStore>; home: string; userDir: string } {
   const work = mkdtempSync(join(tmpdir(), 'pai-agent-store-'));
   const home = join(work, 'home');
+  const agentDir = join(work, 'agent');
   mkdirSync(home, { recursive: true });
-  return { store: createAgentDefinitionsStore(home), home, userDir: join(home, '.x-harness', 'agents') };
+  return { store: createAgentDefinitionsStore({ homeDir: home, agentDir }), home, agentDir, userDir: join(agentDir, 'agents') };
 }
 
 let PROJECTS: string[] = [];
@@ -114,7 +115,7 @@ describe('agent-definitions-store 落位与生命周期', () => {
   test('project 级写入 <项目>/.x-harness/agents/<name>.md（目录不存在时创建）', () => {
     const work = mkdtempSync(join(tmpdir(), 'pai-agent-store-'));
     const project = join(work, 'proj');
-    const store = createAgentDefinitionsStore(join(work, 'home'));
+    const store = createAgentDefinitionsStore({ homeDir: join(work, 'home'), agentDir: join(work, 'agent') });
     expect(store.upsert(makeDef({ scope: 'project', project }), null, [project])).toEqual({ ok: true });
     expect(existsSync(join(project, '.x-harness', 'agents', 'search.md'))).toBe(true);
   });

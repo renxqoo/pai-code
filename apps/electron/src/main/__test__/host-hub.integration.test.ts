@@ -131,7 +131,7 @@ function makeHarness(script: string): Harness {
     settings,
     keyStore,
     audit: () => undefined,
-    agentDefinitions: createAgentDefinitionsStore(home),
+    agentDefinitions: createAgentDefinitionsStore({ homeDir: home, agentDir }),
     agentDir,
     revealPath: () => undefined,
     pickDirectory: () => Promise.resolve(null),
@@ -394,11 +394,11 @@ describe('app API 全接口 × 真 x-harness host-hub（script 默认门）', ()
     expect(commands.ok).toBe(true);
     expect(commands.data.some((item) => item.name === 'compact' && item.source === 'command')).toBe(true);
 
-    // --- agent 定义：user 级走 hub 命令 → ~/.x-harness/agents/<name>.md（HOME 隔离）→ remove ---
+    // --- agent 定义：user 级走 hub 命令 → <agentDir>/agents/<name>.md（agentDir 派生缝，与 skills 同区）→ remove ---
     const definition = { name: 'code-reviewer', description: 'Review code for defects', systemPrompt: 'You review code.', tools: ['read', 'grep'] as string[] | null, model: null as string | null, scope: 'user' as const, project: null };
     const upserted = await h.invoke('agent/upsert', { definition, previous: null });
     expect(upserted.ok).toBe(true);
-    const agentFile = join(h.home, '.x-harness', 'agents', 'code-reviewer.md');
+    const agentFile = join(h.agentDir, 'agents', 'code-reviewer.md');
     expect(existsSync(agentFile)).toBe(true);
     // round-trip 保证由 hub 命令面承担（写删即生效且格式永不漂移——agents/list 真命令可见）
     const hubListed = await h.runtime.host.request({ type: 'agents/list' } as never);
@@ -609,7 +609,7 @@ describe('app API × 真 x-harness host-hub（GLM 真门，opt-in）', () => {
       settings,
       keyStore,
       audit: () => undefined,
-      agentDefinitions: createAgentDefinitionsStore(work),
+      agentDefinitions: createAgentDefinitionsStore({ homeDir: work, agentDir: join(work, 'agent') }),
       agentDir: join(work, 'agent'),
       revealPath: () => undefined,
       pickDirectory: () => Promise.resolve(null),

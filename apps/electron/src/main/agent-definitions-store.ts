@@ -1,7 +1,7 @@
 import { mkdirSync, openSync, readFileSync, readdirSync, renameSync, unlinkSync, writeSync, fsyncSync, closeSync, existsSync, type Dirent } from 'node:fs';
 import { homedir } from 'node:os';
 import { randomUUID } from 'node:crypto';
-import { dirname as dirnamePath } from 'node:path';
+import { dirname as dirnamePath, join as joinPaths } from 'node:path';
 
 import { AGENT_FIELD_LINE, isValidAgentName, type AgentDefinition, type AgentScope } from '@paiapp/contracts';
 import { fileNameStemOf, isSafeFileNameStem, parseAgentDefinition, serializeAgentDefinition } from '@paiapp/api';
@@ -10,8 +10,8 @@ import { agentDefinitionPath } from './agent-definition-path';
 
 /**
  * 子 agent 定义文件面（project 级直写 + 两域枚举；x-harness 同格式热发现——写删即生效）：
- * user 级 = ~/.x-harness/agents/<name>.md（**写路径走 hub agents/create|remove 命令**——
- * round-trip 复析由 hub 保证，路由层分派；本面只读枚举）；
+ * user 级 = <agentDir>/agents/<name>.md（agentDir 派生缝；缺省 ~/.x-harness/agents 共享目录；
+ * **写路径走 hub agents/create|remove 命令**——round-trip 复析由 hub 保证，路由层分派；本面只读枚举）；
  * project 级 = <项目>/.x-harness/agents/<name>.md（app 直写）。
  * 身份键 = name（= 文件名主干，app 写入不变式）。
  * 写门禁（镜像 x-harness agents-admin 校验）：name 非空无 `/` 无换行、description
@@ -29,10 +29,13 @@ export type AgentDefinitionsStore = {
   remove: (key: AgentDefinitionKey, projects: readonly string[]) => { ok: true } | { ok: false; reason: 'invalid_name' | 'invalid_project' | 'not_found' | 'remove_failed' };
 };
 
-export function createAgentDefinitionsStore(homeDir: string = homedir()): AgentDefinitionsStore {
-  const home = homeDir;
+export function createAgentDefinitionsStore(input: { homeDir?: string; agentDir?: string }): AgentDefinitionsStore {
+  const home = input.homeDir ?? homedir();
 
-  const userDir = `${home}/.x-harness/agents`;
+  const userDir =
+    input.agentDir !== undefined && input.agentDir.length > 0
+      ? joinPaths(input.agentDir, 'agents')
+      : `${home}/.x-harness/agents`;
   const projectDir = (project: string): string => `${project}/.x-harness/agents`;
 
   /** 写前校验 = x-harness agents-admin 校验表镜像（非空/单行/非字段形态/单行 model）——
@@ -53,11 +56,13 @@ export function createAgentDefinitionsStore(homeDir: string = homedir()): AgentD
     return { ok: true };
   };
 
+  const pathInput = { homeDir: home, agentDir: input.agentDir };
+
   const resolveTarget = (key: AgentDefinitionKey, projects: readonly string[]): string | null => {
     if (!isSafeFileNameStem(key.name)) return null;
-    if (key.scope === 'user') return agentDefinitionPath(home, 'user', null, key.name);
+    if (key.scope === 'user') return agentDefinitionPath(pathInput, 'user', null, key.name);
     if (key.project === null || key.project.length === 0 || !projects.includes(key.project)) return null;
-    return agentDefinitionPath(home, 'project', key.project, key.name);
+    return agentDefinitionPath(pathInput, 'project', key.project, key.name);
   };
 
   function readDirDefinitions(dir: string, scope: AgentScope, project: string | null, out: AgentDefinition[]): void {
@@ -151,7 +156,7 @@ export function createAgentDefinitionsStore(homeDir: string = homedir()): AgentD
         return { ok: false, reason: 'invalid_project' };
       }
       // 新文件主干恒 = name（app 管理不变式；编辑手写的 name≠主干文件时即归一）
-      const target = agentDefinitionPath(home, definition.scope, definition.project, definition.name);
+      const target = agentDefinitionPath(pathInput, definition.scope, definition.project, definition.name);
       const sameKey =
         previous !== null && previous.name === definition.name && previous.scope === definition.scope && previous.project === definition.project;
       // 同键位覆盖允许；跨键位且目标已存在 = 重名（hub 的 project 覆盖 user 是运行期语义，文件面两级同名独立存在）

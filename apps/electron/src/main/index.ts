@@ -237,7 +237,7 @@ void app.whenReady().then(async () => {
       },
       audit: (message) => logger.log(`audit:${message}`),
       onRouteRejected: (message) => logger.log(message),
-      agentDefinitions: createAgentDefinitionsStore(),
+      agentDefinitions: createAgentDefinitionsStore({ agentDir: paths.agentDir }),
       agentDir: paths.agentDir,
       revealPath: (path) => shell.showItemInFolder(path),
       // 技能源面：批准根 = 三个内置源根 ∪ 对话框批准目录（pickedDirectories 复用）
