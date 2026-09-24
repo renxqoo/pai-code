@@ -46,6 +46,19 @@ bun test          # 各模块 __test__ 单测 + T1 夹具回归
 - 每个修复的 bug 必须带回归用例，用例名注明症状
 - 汇报必须如实报告用例数与覆盖率数字；「门禁全绿」不等于「覆盖率达标」
 
+## UI 测试（bw 真机走查）
+
+渲染层交互改动在四门之外补真机走查：bw CLI 驱动真实 Electron 窗口（skill `~/.pai/agent/skills/bw`），断言实际渲染文本而非组件快照。测试装置全放 /tmp，不进仓库。
+
+1. **构建 + 隔离启动**：`apps/electron` 下 `bun run build` 产 `out/`，再 `PAI_USER_DATA_DIR=/tmp/pai-ui-test bw s create --electron node_modules/electron/dist/Electron.app/Contents/MacOS/Electron --electron-arg . --allow-eval`（cwd = apps/electron）。`PAI_USER_DATA_DIR` 重定向拿独立单实例锁与数据区——同 userData 双开即第二实例静默退出（exit 0）；`bw s close` 连带收走 `--electron` 拉起的 app。
+2. **隔离数据预置**（均落 `$PAI_USER_DATA_DIR`）：
+   - `settings.json`：providers（渠道 + `api` 协议 + models）、`defaultModel`/`projectModels` 钉住测试模型、`onboarded: true` 跳引导。
+   - `agent/credentials.json`（0600）：hub 凭据（优先序 credentials > providers.json 字面 > apiKeyEnv）。app keyStore 走 safeStorage 不可预置，shell env 注入会被 hub spawn 白名单剥掉，这里是唯一不碰真凭据的注入点。
+   - `agent/sessions/<id>/{header.json,events.jsonl}` + `registry.sqlite` 行 = 预置历史会话（侧栏 parked 懒恢复）；档案先过 x-harness 自己的 `validateSessionEvents` + 归档读取器再落盘。注意 parked 会话读不唤醒：stats/上下文分析要发一条消息唤醒线程后才拉得到。
+3. **mock 模型服务**：本地 OpenAI SSE（`/chat/completions` 末帧带 `usage`），providers.baseUrl 指它——一轮对话零外部成本、usage 数字可控。
+4. **驱动与断言**：`snap` 看可交互元素（索引随动作重排），`click`/`type`/`press` 操作，`eval` 取 DOM 文本做正/反断言，`look --out` 留截图。已知坑：clicktext 参数串撞敏感词（如「发送消息」）返回 `CONFIRMATION_REQUIRED`（确认即执行，未经许可不批）；发送按钮只有 aria-label（clicktext 只认可见文本），用输入框 `press Enter` 发送；`file://` 页面 click 偶发 `POLICY_BLOCKED: scheme not allowed: file:`，换 clicktext/press/eval 路径。
+5. **收尾**：`bw s close`；临时数据留 /tmp 复用，不入库。
+
 
 
 ## 提交与交付规范

@@ -29,4 +29,4 @@ export { Textarea } from './textarea';
 export { ToggleSwitch, type ToggleSwitchProps } from './switch';
 export { TypewriterText, typewriterTail, type TypewriterTextProps } from './typewriter-text';
 export { TypePill, type TypePillProps } from './type-pill';
-export { UsageRing, type UsageRingProps } from './usage-ring';
+export { Progress, type ProgressProps } from './progress';

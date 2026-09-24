@@ -5,7 +5,7 @@ import type { PermMode, SessionStatsView, TokenAnalyticsView } from '@paiapp/con
 
 import { UsageDetails } from './usage-details';
 
-import { IconButton, MenuButton, menuTriggerClassName, PickerDialog, Spinner } from '@paiapp/ui';
+import { IconButton, MenuButton, menuTriggerClassName, PickerDialog, Progress, Spinner } from '@paiapp/ui';
 import { groupModelOptions } from '@/components/group-model-options';
 import { copy } from '@/strings';
 import { formatTokenCount } from '@/thread/format-count-unit';
@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 
 import { PermissionModeMenu } from './permission-mode-menu';
 import { AgentStatusButton } from './agent-status-button';
+import { useHoverIntent } from './use-hover-intent';
 
 /** 思考档控件组：恒四档（会话读口当前值 / 新任务页本地选择），两页都渲染。 */
 type EffortControls = {
@@ -25,7 +26,7 @@ type EffortControls = {
 type UsageControls = {
   /** 用量明细（I1）；null = 未拉取，不可点。 */
   stats: SessionStatsView | null
-  /** 上下文分析（T43）；在场 = 主芯片显上下文占用百分比，缺席 = 回落累计 total。 */
+  /** 上下文分析（T43）；在场 = 主芯片显上下文占用环，缺席 = 回落累计 total。 */
   analytics: TokenAnalyticsView | null
   label: string
 }
@@ -66,9 +67,10 @@ function optionItems(options: readonly string[], selected: string) {
 /**
  * 输入框底行：左侧附件与权限模式，右侧用量 / 模型 / 思考档 / 发送（在途呈加载指示；生成中且无输入时为红色停止）。
  * 模型选择走统一 CommandDialog 弹窗（T21）；思考档恒四档（会话读口当前值，新建页本地选择）；
- * 用量入口只在有会话时出现：主指标 = 上下文占用百分比（T43，实报输入侧口径——
- * 累计 total 单调增不重置，不冒充上下文），插件缺席回落累计 total；阈值变色
- * ≥70% 琥珀 / ≥90% 红（Claude Code 官方示例阈值）。压缩入口是斜杠命令 /compact。
+ * 用量入口只在有会话时出现：主指标 = 上下文占用百分比环（T43，实报输入侧口径——
+ * 累计 total 单调增不重置，不冒充上下文），插件缺席回落累计 total；环色随阈值
+ * ≥70% 琥珀 / ≥90% 红（Claude Code 官方示例阈值）。明细弹层 hover 触发（延迟
+ * 开关防闪烁）。压缩入口是斜杠命令 /compact。
  */
 function ComposerActionsRow({
   model,
@@ -90,7 +92,7 @@ function ComposerActionsRow({
   effort,
   usage,
 }: ComposerActionsRowProps) {
-  const [usageOpen, setUsageOpen] = React.useState(false);
+  const usageHover = useHoverIntent();
   const [modelPickerOpen, setModelPickerOpen] = React.useState(false);
   return (
     <div className="flex items-center gap-[7px] px-4 pt-1 pb-[13px]">
@@ -104,8 +106,14 @@ function ComposerActionsRow({
       {/* 右组可收缩（min-w-0），收缩量全部由模型名截断吸收；其余控件 shrink-0 保持原宽 */}
       <div className="ml-auto flex min-w-0 items-center gap-[9px]">
         {usage === null ? null : (
-          <span className="relative flex shrink-0 items-center">
-            {usageOpen && usage.stats !== null ? <UsageDetails analytics={usage.analytics} /> : null}
+          <span
+            className="relative flex shrink-0 items-center"
+            onMouseEnter={usageHover.onEnter}
+            onMouseLeave={usageHover.onLeave}
+            onFocus={usageHover.openNow}
+            onBlur={usageHover.closeNow}
+          >
+            {usageHover.open && usage.stats !== null ? <UsageDetails analytics={usage.analytics} /> : null}
             {usage.stats === null ? (
               <span title={usage.label} className="font-mono text-[11px] leading-none text-muted-foreground/50 tabular-nums">
                 —
@@ -115,10 +123,9 @@ function ComposerActionsRow({
                 type="button"
                 title={`${usage.label} · ${copy.usage.contextUsed(formatTokenCount(usage.analytics.used) ?? '0', formatTokenCount(usage.analytics.window) ?? '0')}`}
                 aria-label={usage.label}
-                aria-expanded={usageOpen}
-                onClick={() => setUsageOpen((open) => !open)}
+                aria-expanded={usageHover.open}
                 className={cn(
-                  'cursor-pointer rounded-md px-[2px] font-mono text-[11px] leading-none tabular-nums outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50',
+                  'rounded-md p-[2px] outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50',
                   usage.analytics.utilizationPct >= 90
                     ? 'text-destructive'
                     : usage.analytics.utilizationPct >= 70
@@ -126,16 +133,15 @@ function ComposerActionsRow({
                       : 'text-muted-foreground',
                 )}
               >
-                {`${String(usage.analytics.utilizationPct)}%`}
+                <Progress value={usage.analytics.utilizationPct} />
               </button>
             ) : (
               <button
                 type="button"
                 title={usage.label}
                 aria-label={usage.label}
-                aria-expanded={usageOpen}
-                onClick={() => setUsageOpen((open) => !open)}
-                className="cursor-pointer rounded-md px-[2px] font-mono text-[11px] leading-none text-muted-foreground tabular-nums outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+                aria-expanded={usageHover.open}
+                className="rounded-md px-[2px] font-mono text-[11px] leading-none text-muted-foreground tabular-nums outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
               >
                 {formatTokenCount(usage.stats.tokens.total) ?? '0'}
               </button>

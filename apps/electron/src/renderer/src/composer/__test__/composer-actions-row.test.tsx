@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test';
+import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { copy } from '@/strings';
+import { render } from '@/testing/render';
 
 import type { TokenAnalyticsView } from '@paiapp/contracts';
 
@@ -219,11 +221,12 @@ function analyticsOf(pct: number): TokenAnalyticsView {
 }
 
 describe('用量主芯片（T43 上下文占用口径——累计 total 不冒充上下文）', () => {
-  test('analytics 在场：显示百分比 + title 带绝对数/窗口；不再显累计 total', () => {
+  test('analytics 在场：主指标渲染上下文占用环 + title 带绝对数/窗口；不再显百分比文本/累计 total', () => {
     const html = renderToStaticMarkup(
       <ComposerActionsRow {...makeProps({ usage: { stats: STATS_FIXTURE, analytics: analyticsOf(28), label: copy.composer.usageSummary } })} />,
     );
-    expect(html).toContain('>28%<'); // 按钮文本 28%
+    expect(html).toContain('<circle'); // 环形进度（底环 + 弧段）
+    expect(html).not.toContain('28%'); // 百分比文本不再渲染
     expect(html).not.toContain('1.5k'); // 累计口径不出现
     const tag = buttonTag(html, copy.composer.usageSummary);
     expect(tag).not.toBeNull();
@@ -264,5 +267,83 @@ describe('用量主芯片（T43 上下文占用口径——累计 total 不冒�
     );
     expect(html).toContain('1.5k');
     expect(html).not.toContain('%</button>');
+  });
+});
+
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
+async function settleMs(ms: number): Promise<void> {
+  await React.act(async () => {
+    await sleep(ms);
+  });
+}
+
+/** React 的 enter/leave 由 mouseover/mouseout 合成（relatedTarget 判方向）。 */
+function hoverIn(el: Element): void {
+  React.act(() => {
+    el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, relatedTarget: document.body }));
+  });
+}
+
+function hoverOut(el: Element): void {
+  React.act(() => {
+    el.dispatchEvent(new MouseEvent('mouseout', { bubbles: true, relatedTarget: document.body }));
+  });
+}
+
+function showsDetails(container: HTMLElement): boolean {
+  return (container.textContent ?? '').includes(copy.usage.estimateNote);
+}
+
+function usageTriggerHost(container: HTMLElement): Element {
+  const button = container.querySelector(`button[aria-label="${copy.composer.usageSummary}"]`);
+  expect(button).not.toBeNull();
+  return button?.parentElement as Element;
+}
+
+describe('用量明细弹层 hover 触发（延迟开关防闪烁）', () => {
+  test('进入出现、移出消失', async () => {
+    const view = render(
+      <ComposerActionsRow {...makeProps({ usage: { stats: STATS_FIXTURE, analytics: analyticsOf(28), label: copy.composer.usageSummary } })} />,
+    );
+    const host = usageTriggerHost(view.container);
+    expect(showsDetails(view.container)).toBe(false);
+    hoverIn(host);
+    await settleMs(300);
+    expect(showsDetails(view.container)).toBe(true);
+    hoverOut(host);
+    await settleMs(500);
+    expect(showsDetails(view.container)).toBe(false);
+    view.unmount();
+  });
+
+  test('症状：扫过触发区闪弹层——进→出同帧不开', async () => {
+    const view = render(
+      <ComposerActionsRow {...makeProps({ usage: { stats: STATS_FIXTURE, analytics: analyticsOf(28), label: copy.composer.usageSummary } })} />,
+    );
+    const host = usageTriggerHost(view.container);
+    hoverIn(host);
+    hoverOut(host);
+    await settleMs(300);
+    expect(showsDetails(view.container)).toBe(false);
+    view.unmount();
+  });
+
+  test('症状：跨触发器与弹层缝隙闪断——开启后 出→进 同帧不关', async () => {
+    const view = render(
+      <ComposerActionsRow {...makeProps({ usage: { stats: STATS_FIXTURE, analytics: analyticsOf(28), label: copy.composer.usageSummary } })} />,
+    );
+    const host = usageTriggerHost(view.container);
+    hoverIn(host);
+    await settleMs(300);
+    expect(showsDetails(view.container)).toBe(true);
+    hoverOut(host);
+    hoverIn(host);
+    await settleMs(300);
+    expect(showsDetails(view.container)).toBe(true);
+    view.unmount();
   });
 });
