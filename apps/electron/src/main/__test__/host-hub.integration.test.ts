@@ -73,9 +73,9 @@ function makeHarness(script: string): Harness {
   // 进程内 HOME 重定向对 store 无效——store 经 homeDir 注入缝隔离；
   // hub 侧 agents/skills 的 user 目录解析用进程 HOME（对 host 子进程生效）
   process.env['HOME'] = home;
-  // 种一个用户级技能（x-harness skills 域 = 平铺 .md + frontmatter）
-  mkdirSync(join(home, '.x-harness', 'skills', 'demo-skill'), { recursive: true });
-  writeFileSync(join(home, '.x-harness', 'skills', 'demo-skill', 'SKILL.md'), '---\nname: demo-skill\ndescription: Demo skill for the integration journey\n---\nDemo body.\n');
+  // 种一个用户级技能（user 根 = <agentDir>/skills——agentDir 派生缝；与导入/删除同区）
+  mkdirSync(join(agentDir, 'skills', 'demo-skill'), { recursive: true });
+  writeFileSync(join(agentDir, 'skills', 'demo-skill', 'SKILL.md'), '---\nname: demo-skill\ndescription: Demo skill for the integration journey\n---\nDemo body.\n');
   const keyStore: ProviderKeyStore = {
     encryptionAvailable: false,
     getKey: () => null,
@@ -177,7 +177,8 @@ function tapEventNames(runtime: PaiRuntime, names: string[]): void {
     expect(candidates.ok).toBe(true);
     expect(candidates.data.candidates.find((item) => item.name === 'imported-skill')).toMatchObject({ state: 'ready', origin: 'agents' });
 
-    // 导入：hub install → user 技能根（HOME 隔离）；写后清单 + imported + 捆绑文件原样
+    // 导入：hub install → user 技能根（agentDir 派生 = <agentDir>/skills——app 数据区
+    // 与插件 vendor 根同区；HOME 隔离缝仅在 agentDir 缺席的 CLI 形态生效）
     const imported = (await h.invoke('skills/import', { sourcePath: sourceDir, overwrite: false })) as {
       ok: boolean;
       data: { imported: { name: string; path: string }; skills: Array<{ name: string; enabled: boolean }> };
@@ -185,7 +186,7 @@ function tapEventNames(runtime: PaiRuntime, names: string[]): void {
     expect(imported.ok).toBe(true);
     expect(imported.data.imported.name).toBe('imported-skill');
     expect(imported.data.skills.some((item) => item.name === 'imported-skill' && item.enabled)).toBe(true);
-    expect(existsSync(join(h.home, '.x-harness', 'skills', 'imported-skill', 'references', 'notes.md'))).toBe(true);
+    expect(existsSync(join(h.agentDir, 'skills', 'imported-skill', 'references', 'notes.md'))).toBe(true);
 
     // 生效面：新会话装配（= 重开同路径）command/list 含 skill:imported-skill
     const started = (await h.invoke('session/start', { cwd: h.work, trusted: true })) as { ok: boolean; data: { threadId: string } };
@@ -198,7 +199,7 @@ function tapEventNames(runtime: PaiRuntime, names: string[]): void {
     const removed = (await h.invoke('skills/remove', { name: 'imported-skill' })) as { ok: boolean; data: Array<{ name: string }> };
     expect(removed.ok).toBe(true);
     expect(removed.data.some((item) => item.name === 'imported-skill')).toBe(false);
-    expect(existsSync(join(h.home, '.x-harness', 'skills', 'imported-skill'))).toBe(false);
+    expect(existsSync(join(h.agentDir, 'skills', 'imported-skill'))).toBe(false);
   });
 
 afterAll(async () => {
