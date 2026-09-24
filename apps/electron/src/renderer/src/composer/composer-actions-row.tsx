@@ -3,7 +3,7 @@ import { ArrowUp, ChevronDown, Plus } from 'lucide-react';
 
 import type { PermMode, SessionStatsView, TokenAnalyticsView } from '@paiapp/contracts';
 
-import { UsageDetails } from './usage-details';
+import { UsageDetails, formatWindowPct } from './usage-details';
 
 import { IconButton, MenuButton, menuTriggerClassName, PickerDialog, Progress, Spinner } from '@paiapp/ui';
 import { groupModelOptions } from '@/components/group-model-options';
@@ -121,7 +121,7 @@ function ComposerActionsRow({
             ) : usage.analytics !== null ? (
               <button
                 type="button"
-                title={`${usage.label} · ${copy.usage.contextUsed(formatTokenCount(usage.analytics.used) ?? '0', formatTokenCount(usage.analytics.window) ?? '0')}`}
+                title={`${usage.label} · ${copy.usage.contextUsed(formatWindowPct(usage.analytics.used, usage.analytics.window))}`}
                 aria-label={usage.label}
                 aria-expanded={usageHover.open}
                 className={cn(

@@ -221,7 +221,7 @@ function analyticsOf(pct: number): TokenAnalyticsView {
 }
 
 describe('用量主芯片（T43 上下文占用口径——累计 total 不冒充上下文）', () => {
-  test('analytics 在场：主指标渲染上下文占用环 + title 带绝对数/窗口；不再显百分比文本/累计 total', () => {
+  test('analytics 在场：主指标渲染上下文占用环 + title 带已用占窗口比；不再显百分比文本/累计 total', () => {
     const html = renderToStaticMarkup(
       <ComposerActionsRow {...makeProps({ usage: { stats: STATS_FIXTURE, analytics: analyticsOf(28), label: copy.composer.usageSummary } })} />,
     );
@@ -230,8 +230,8 @@ describe('用量主芯片（T43 上下文占用口径——累计 total 不冒�
     expect(html).not.toContain('1.5k'); // 累计口径不出现
     const tag = buttonTag(html, copy.composer.usageSummary);
     expect(tag).not.toBeNull();
-    expect(tag).toContain('55k'); // title 绝对数（已用 55k / 200k）
-    expect(tag).toContain('200k');
+    expect(tag).toContain('27.5%'); // title 占窗口比（已用 27.5%）
+    expect(tag).not.toContain('200k');
   });
 
   test('阈值变色矩阵（Claude Code 官方示例阈值）：<70 muted；70-89 琥珀；>=90 红', () => {
@@ -295,7 +295,7 @@ function hoverOut(el: Element): void {
 }
 
 function showsDetails(container: HTMLElement): boolean {
-  return (container.textContent ?? '').includes(copy.usage.estimateNote);
+  return (container.textContent ?? '').includes(copy.usage.contextTitle);
 }
 
 function usageTriggerHost(container: HTMLElement): Element {
