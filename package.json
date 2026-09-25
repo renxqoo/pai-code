@@ -11,8 +11,8 @@
     "fmt": "oxfmt .",
     "fmt:check": "oxfmt --check .",
     "typecheck": "bun scripts/typecheck.ts",
-    "build": "bun run --filter '@paiapp/electron' build",
-    "test": "bun scripts/coverage-gate.ts",
+    "build": "bun run --filter '@paiapp/electron' build && bun run --filter '@paiapp/mobile' build:web",
+    "test": "bun scripts/coverage-gate.ts && bun run --filter '@paiapp/mobile' test",
     "ci": "bun run lint && bun run typecheck && bun run build && bun run test"
   },
   "devDependencies": {

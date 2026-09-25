@@ -1,0 +1,33 @@
+import * as React from 'react';
+import { Pressable, type PressableProps } from 'react-native';
+import type { LucideIcon } from 'lucide-react-native';
+import { useAppTheme } from '@/theme/theme-context';
+import { radius } from '@/theme/tokens';
+
+type IconButtonProps = Omit<PressableProps, 'children'> & {
+  icon: LucideIcon;
+  label: string;
+  active?: boolean;
+  size?: number;
+  filled?: boolean;
+};
+
+export function IconButton({ icon: Icon, label, active = false, size = 20, filled = false, disabled, ...props }: IconButtonProps) {
+  const { colors } = useAppTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: disabled ?? false, selected: active }}
+      disabled={disabled}
+      hitSlop={6}
+      style={({ pressed }) => ({
+        alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.pill,
+        height: 44, justifyContent: 'center', opacity: disabled ? 0.4 : pressed ? 0.58 : 1, shadowColor: '#3F3F46', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 1, width: 44,
+      })}
+      {...props}
+    >
+      <Icon color={active ? colors.text : colors.textMuted} fill={filled ? colors.text : 'none'} size={size} strokeWidth={1.9} />
+    </Pressable>
+  );
+}
