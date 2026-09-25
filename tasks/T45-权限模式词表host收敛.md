@@ -105,7 +105,9 @@
 - 「症状回归：设置页选项面与会话菜单同词表（hubSettings.permissionModes）——跨进程一致」。
 
 菜单开合/点选交互不进 DOM 单测（base-ui 弹层依赖真布局，happy-dom 不驱动）——按 AGENTS.md
-UI 测试纪律走 bw 真机走查；DOM 单测钉静态面（触发器展示名/词表外回退）。
+UI 测试纪律走 bw 真机走查（已核销：假 hub 回自定义六档词表〔含 future-mode〕，真机验证
+会话菜单/新建页菜单/设置页分段三处选项面均随 host 词表出新档，选中回写与词表外档回退
+id 均正常；截图 /tmp/pai-bw-shots/，装置 /tmp/pai-bw-hub/ 不入库）。
 
 ## 6. 并发 / 一致性 / 安全预算
 
