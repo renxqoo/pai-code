@@ -20,41 +20,56 @@ function isNearBottom(container: HTMLElement): boolean {
 }
 
 /**
- * 滚动贴底跟随：挂在滚动容器上，内容增长时贴住底缘，用户上翻即让位，
- * 回到底部附近自动恢复跟随。只渲染时机做一次定位，不挂计时器。
- * 内容尺寸变化经 ResizeObserver 观测内容列（滚动容器盒由视口决定、不随内容
- * 变化——只观察容器对流式追加/折叠展开/图片加载零感知）。
- * 程序触发的平滑滚动（回底浮标）途中：中间位置不等价于用户上翻，不让位；
- * 用户上翻（滚轮/拖拽）显式中断跟随意图。enabled 关闭时全部闲置（不吸附不
- * 跟随），重新开启后自当前位置恢复判断。
+ * 滚动贴底跟随：挂在滚动容器上，内容增长时贴住底缘；用户上翻即让位，只有
+ * 用户下滚回到底部附近（或程序回底/发送回底）才恢复跟随。
+ * 让位判读走滚动增量方向而非位置死区：上行增量（滚轮/拖拽/键盘同路径）立即
+ * 让位——48px 内的小步上翻不再被「近底」重武装后拽回；位置死区只用于判
+ * 「回到底部附近」的恢复时机与浮标显隐。滚轮上翻在 scroll 事件落帧前先一步
+ * 表达让位意图，消除与内容增长钉底同帧的竞态。
+ * 钉底只在内容增长时执行（ResizeObserver 观测内容列；滚动容器盒由视口决定、
+ * 不随内容变化——只观察容器对流式追加/折叠展开/图片加载零感知），渲染时机
+ * 不钉底：拽回不会来自重渲。程序写入 scrollTop 后同步登记增量基准，自身
+ * 写入不计为用户滚动。程序触发的平滑滚动（回底）途中：中间帧不等价于
+ * 用户上翻，到达态显隐保持到底；用户上行滚动立即中断程序到达。
+ * enabled 关闭时全部闲置（不吸附不跟随），重新开启后自当前位置恢复判断。
  */
 export function useStickToBottom(options: StickToBottomOptions = {}): StickToBottom {
   const { enabled = true } = options;
   const containerRef = React.useRef<HTMLDivElement | null>(null);
-  const stuckRef = React.useRef(true);
+  const followingRef = React.useRef(true);
   const arrivingRef = React.useRef(false);
+  const lastScrollTopRef = React.useRef<number | null>(null);
   const [atBottom, setAtBottom] = React.useState(true);
 
   const syncFromScroll = React.useCallback(() => {
     const container = containerRef.current;
     if (container === null) return;
-    if (arrivingRef.current) {
-      // 程序滚动的中间帧不是用户让位：到达底部附近才结束到达态
-      if (isNearBottom(container)) arrivingRef.current = false;
-      stuckRef.current = true;
-      setAtBottom(true);
-      return;
+    const top = container.scrollTop;
+    const previous = lastScrollTopRef.current;
+    lastScrollTopRef.current = top;
+    const near = isNearBottom(container);
+    if (previous !== null && top < previous) {
+      // 上行滚动（滚轮/拖拽/键盘同路径）：用户让位，程序到达态一并中断
+      arrivingRef.current = false;
+      followingRef.current = false;
+    } else if (previous !== null && top > previous && near) {
+      // 下行（含程序钉底）回到近底：恢复跟随、收掉到达态
+      arrivingRef.current = false;
+      followingRef.current = true;
     }
-    stuckRef.current = isNearBottom(container);
-    setAtBottom(stuckRef.current);
+    setAtBottom(arrivingRef.current || near);
   }, []);
 
   React.useEffect(() => {
     const container = containerRef.current;
     if (container === null || !enabled) return;
+    lastScrollTopRef.current = container.scrollTop;
     const observer = new ResizeObserver(() => {
-      if (stuckRef.current) {
+      if (followingRef.current || arrivingRef.current) {
+        // 内容增长贴底；程序到达途中被增长甩开时硬钉到当前底（钉底即到达）
+        arrivingRef.current = false;
         container.scrollTop = container.scrollHeight;
+        lastScrollTopRef.current = container.scrollTop;
         setAtBottom(true);
         return;
       }
@@ -70,38 +85,26 @@ export function useStickToBottom(options: StickToBottomOptions = {}): StickToBot
   React.useEffect(() => {
     const container = containerRef.current;
     if (container === null || !enabled) return;
-    // 用户显式上翻中断程序到达态与跟随（下行滚动不视为让位）
-    const onUserScrollUp = (event: WheelEvent): void => {
+    // 滚轮上翻在 scroll 事件落帧前就让位：增长钉底同帧竞态里先一步表达意图
+    const onWheelUp = (event: WheelEvent): void => {
       if (event.deltaY < 0) {
         arrivingRef.current = false;
-        stuckRef.current = false;
+        followingRef.current = false;
       }
     };
-    const onUserDrag = (): void => {
-      arrivingRef.current = false;
-    };
-    container.addEventListener('wheel', onUserScrollUp);
-    container.addEventListener('pointerdown', onUserDrag);
-    return () => {
-      container.removeEventListener('wheel', onUserScrollUp);
-      container.removeEventListener('pointerdown', onUserDrag);
-    };
+    container.addEventListener('wheel', onWheelUp);
+    return () => container.removeEventListener('wheel', onWheelUp);
   }, [enabled]);
-
-  React.useEffect(() => {
-    const container = containerRef.current;
-    if (container === null || !enabled || !stuckRef.current) return;
-    container.scrollTop = container.scrollHeight;
-  });
 
   const scrollToBottom = React.useCallback(() => {
     const container = containerRef.current;
     if (container === null) return;
-    stuckRef.current = true;
+    followingRef.current = true;
     // 尊重系统减弱动态偏好：平滑滚动降级为直接定位（与轮次锚点跳转同约定）
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (reduceMotion) {
       container.scrollTop = container.scrollHeight;
+      lastScrollTopRef.current = container.scrollTop;
       arrivingRef.current = false;
     } else {
       arrivingRef.current = true;
