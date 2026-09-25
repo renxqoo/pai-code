@@ -1,12 +1,13 @@
 import { z } from 'zod';
 
 import type { ApiError } from './hub-errors';
-import { GitBranchesViewSchema, GitGraphViewSchema } from './git-views';
+import { GitBranchesViewSchema, GitGraphViewSchema, GitStatusViewSchema } from './git-views';
 import { PermModeSchema } from './permissions';
 import { RuntimeSnapshotViewSchema } from './runtime';
 import { InflightViewSchema, PendingDialogViewSchema, SubagentSnapshotViewSchema } from './inflight-views';
 import { DiffFileViewSchema, SessionViewSchema, SubagentSpawnViewSchema } from './ui-events';
 import { IdleRecycleMinutesSchema, ProviderModelSchema } from './settings';
+import { TodoSnapshotEventDataSchema } from './todo-views';
 import { THINKING_LEVEL_ORDER } from './thinking-levels';
 import {
   CommandViewSchema,
@@ -271,6 +272,8 @@ export const ApiSchemas = {
       items: z.array(HistoryItemSchema),
       /** 已消费到的最后条目 seq（下一次 since 游标）；null = 尚无条目。 */
       cursor: z.number().int().nullable(),
+      /** 本窗口内最后一条 todo/snapshot（窗口内无快照 = null——不清既有快照）。 */
+      todo: TodoSnapshotEventDataSchema.nullable(),
     }),
   },
   'session/state': {
@@ -418,6 +421,11 @@ export const ApiSchemas = {
   'git/graph': {
     params: z.object({ cwd: z.string().min(1) }).strict(),
     result: GitGraphViewSchema,
+  },
+  /** 工作区变更速览（速览面板 Git 区）：变更文件 + 增删行数 + 上游计数；非 git 目录空形态（不报错）。 */
+  'git/status': {
+    params: z.object({ cwd: z.string().min(1) }).strict(),
+    result: GitStatusViewSchema,
   },
   /** 用户级技能目录（含启用态；启停真相 = hub-settings.json skills.disabled，经 skills/set_enabled）。 */
   'skills/list': {

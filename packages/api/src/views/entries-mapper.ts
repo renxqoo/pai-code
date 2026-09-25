@@ -1,10 +1,11 @@
-import type { HistoryItem } from '@paiapp/contracts';
+import { isTodoTool, type HistoryItem, type TodoSnapshotEventData } from '@paiapp/contracts';
 
 import { assistantText, assistantThinking, assistantToolCalls, flattenUserText, toolResultText, userImages } from './content';
 import { previewArgs } from './args-preview';
 import { diffFromWriteArgs } from './diff-extract';
 import { isSnapshotFrame } from './snapshot-frame';
 import { subagentsField } from './subagent-spawns';
+import { todoSnapshotOf } from './todo-snapshot';
 
 /**
  * get_entries 条目（x-harness WAL 投影 {seq, ts, event:{type, …data, surfaceOp?}}）→
@@ -16,8 +17,11 @@ import { subagentsField } from './subagent-spawns';
  * （`[bash] $ <cmd>\n<output>`）落 WAL，按前缀还原；user/message 域内的内核尾部
  * 快照信封帧（模型上下文而非对话内容，谓词见 snapshot-frame.ts）整帧跳过；
  * replace 型 user/message（compaction/autocompact L2 压缩摘要）归系统条
- * （origin=system）；其余事件（turn/*、step/*、system/message、request/*、llm/retry、
- * agent/inbox/spliced、autocompact/*、todo/snapshot、session/meta、
+ * （origin=system）；todo 清单工具的 tool/call|result 与 assistant 条目内的对应
+ * tool_use 不产生渲染条目（对话流零痕迹——面板进程区由 todo/snapshot 呈现）；
+ * todo/snapshot 不产生渲染条目但被折为快照返回（last-wins，进程区数据源）；
+ * 其余事件（turn/*、step/*、system/message、request/*、llm/retry、
+ * agent/inbox/spliced、autocompact/*、session/meta、
  * session/end-seed、compaction/*、command/*）为元数据/账本域，不产生渲染条目
  * （cursor 仍推进——按行消费，不按渲染条目消费）。
  */
@@ -27,7 +31,7 @@ const BASH_ENVELOPE = '[bash] $ ';
 /** assistant 条目的工具调用元素（tool/result 并入的目标形状）。 */
 type AssistantToolCall = Extract<HistoryItem, { kind: 'assistant' }>['toolCalls'][number];
 
-export function mapEntries(data: unknown): { items: HistoryItem[]; cursor: number | null } {
+export function mapEntries(data: unknown): { items: HistoryItem[]; cursor: number | null; todo: TodoSnapshotEventData | null } {
   const list = Array.isArray((recordOf(data))['entries']) ? (recordOf(data)['entries'] as unknown[]) : [];
   const items: HistoryItem[] = [];
   // 条目 seq 记录（surfaceOp replace 区间折叠用——压缩摘要是位置区间替换，原始
@@ -38,6 +42,8 @@ export function mapEntries(data: unknown): { items: HistoryItem[]; cursor: numbe
   // tool/call 先于 assistant/message 到达时的暂存（name/args 补齐面）
   const earlyCalls = new Map<string, { name: string; args: Record<string, unknown> }>();
   let cursor: number | null = null;
+  // 本窗口内最后一条 todo/snapshot（窗口内无快照 = null——调用方不得据此清既有快照）
+  let todo: TodoSnapshotEventData | null = null;
 
   for (const raw of list) {
     const entry = recordOf(raw);
@@ -78,7 +84,7 @@ export function mapEntries(data: unknown): { items: HistoryItem[]; cursor: numbe
           diff: name === 'write' ? writeDiffOf(args) : null,
           ...subagentsField(name, args),
         };
-      });
+      }).filter((call) => !isTodoTool(call.name));
       // 异常终态收窄（内核词表 stop|max-tokens + interrupted 布尔）：max-tokens 透传，
       // interrupted（中止/打断）映射 aborted；失败信息在 turn/end reason（live 经
       // settled reason 呈现），消息级无 error 面——不再杜撰 meta.error 读取
@@ -110,6 +116,11 @@ export function mapEntries(data: unknown): { items: HistoryItem[]; cursor: numbe
         for (let index = 0; index < target.length; index += 1) {
           const call = target[index];
           if (call === undefined || call.id !== callId) continue;
+          // 补面终名是 todo 工具 = 对话流零痕迹：整条移除（tool/result 天然失配丢弃）
+          if (isTodoTool(name)) {
+            target.splice(index, 1);
+            break;
+          }
           target[index] = {
             id: callId,
             name: name.length > 0 ? name : call.name,
@@ -122,6 +133,7 @@ export function mapEntries(data: unknown): { items: HistoryItem[]; cursor: numbe
           break;
         }
       } else {
+        // todo 工具照记暂存（tool_use 块名为空时靠它在合并点判滤）
         earlyCalls.set(callId, { name, args });
       }
       continue;
@@ -150,10 +162,17 @@ export function mapEntries(data: unknown): { items: HistoryItem[]; cursor: numbe
       continue;
     }
 
+    if (type === 'todo/snapshot') {
+      // 清单全量快照 last-wins（垃圾形状跳过不跌零）
+      const snapshot = todoSnapshotOf(event);
+      if (snapshot !== null) todo = snapshot;
+      continue;
+    }
+
     // 其余事件类型：元数据/账本域，不产生渲染条目（cursor 已推进）
   }
 
-  return { items, cursor };
+  return { items, cursor, todo };
 }
 
 /** surfaceOp replace 判别：replace 型 user/message 的唯一产生者是内核压缩摘要落账

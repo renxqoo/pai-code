@@ -1,8 +1,9 @@
-import type { UiEvent, UsageView } from '@paiapp/contracts';
+import { isTodoTool, type UiEvent, type UsageView } from '@paiapp/contracts';
 
 import { previewArgs } from '../views/args-preview';
 import { diffFromToolCall } from '../views/diff-extract';
 import { subagentsField } from '../views/subagent-spawns';
+import { todoSnapshotOf } from '../views/todo-snapshot';
 
 /**
  * x-harness hub event 帧 → UiEvent（渲染层流式装饰）。
@@ -23,8 +24,10 @@ import { subagentsField } from '../views/subagent-spawns';
  * agent/inbox/spliced（结构信号：主进程层拉取 get_state.queue 合成 queueChanged）
  * permission/decided（审计事件；对话框交互面是 ui_request 帧）
  * user/message、step/start|end、system/message、assistant/attempt、request/*、
- *   session/*、todo/snapshot、command/run|done、autocompact/*（前向兼容忽略）
+ *   session/*、command/run|done、autocompact/*（前向兼容忽略）
  * agent/error（终态经 settled/turn/end 收敛）
+ * todo 清单工具的 tool/call|result（对话流零痕迹——面板进程区由 todo/snapshot 呈现；
+ *   记忆桶照记，tool/result 侧按名过滤）
  */
 
 export interface EventMapDeps {
@@ -167,6 +170,8 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
           const args = argsOf(payload.arguments);
           const callId = str(payload.callId);
           if (callId.length > 0) ownerBucket(state.calls, mainKeyOf(threadId)).set(callId, toolName);
+          // todo 清单工具在对话流零痕迹：不产渲染事件（记忆桶照记供 tool/result 按名过滤）
+          if (isTodoTool(toolName)) return [];
           return [
             {
               type: 'toolCallAdded',
@@ -180,6 +185,8 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
         case 'tool/result': {
           const callId = str(payload.callId);
           ownerBucket(state.toolStreams, mainKeyOf(threadId)).delete(callId);
+          const toolName = str(payload.name).length > 0 ? str(payload.name) : (ownerBucket(state.calls, mainKeyOf(threadId)).get(callId) ?? '');
+          if (isTodoTool(toolName)) return [];
           return [
             {
               type: 'toolEnded',
@@ -256,6 +263,11 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
               status: str(payload.outcome),
             },
           ];
+        case 'todo/snapshot': {
+          // 全量快照 last-wins（垃圾形状跳过不跌零——面板不清空既有快照）
+          const snapshot = todoSnapshotOf(payload);
+          return snapshot === null ? [] : [{ type: 'todoSnapshot', threadId, snapshot }];
+        }
         default:
           return [];
       }
@@ -330,6 +342,8 @@ function mapSubagent(state: StreamState, threadId: string, name: string, payload
     case 'tool/call': {
       const toolName = str(payload.name);
       const args = argsOf(payload.arguments);
+      // todo 清单工具同主会话零痕迹（面板进程区统一由 todo/snapshot 呈现）
+      if (isTodoTool(toolName)) return [];
       return [
         {
           type: 'subagentTool',
@@ -342,6 +356,7 @@ function mapSubagent(state: StreamState, threadId: string, name: string, payload
     }
     case 'tool/result':
       ownerBucket(state.toolStreams, subagentKeyOf(threadId, agentId)).delete(str(payload.callId));
+      if (isTodoTool(str(payload.name))) return [];
       return [
         {
           type: 'subagentTool',

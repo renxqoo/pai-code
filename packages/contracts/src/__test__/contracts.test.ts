@@ -72,8 +72,8 @@ describe('词表封闭（双向）', () => {
     );
   });
 
-  test('hub 事件名词表封闭（app 消费子集；x-harness 另发 request/*、system/message、assistant/attempt、session/*、todo/snapshot、command/run|done、autocompact/*、compaction/served-window|diagnostic、agent/error、step/start|end——app 忽略）', () => {
-    expect(HUB_EVENT_NAMES.length).toBe(18);
+  test('hub 事件名词表封闭（app 消费子集；x-harness 另发 request/*、system/message、assistant/attempt、session/*、command/run|done、autocompact/*、compaction/served-window|diagnostic、agent/error、step/start|end——app 忽略）', () => {
+    expect(HUB_EVENT_NAMES.length).toBe(19);
     expect([...HUB_EVENT_NAMES].sort(byStr)).toEqual(
       [
         'turn/start', 'turn/end',
@@ -83,7 +83,7 @@ describe('词表封闭（双向）', () => {
         'agent/inbox/spliced', 'agent/assistant-stream', 'agent/tool-stream',
         'agent/status', 'agent/spawned', 'agent/finished',
         'compaction/landed', 'permission/decided',
-        'settled',
+        'settled', 'todo/snapshot',
         'bash_execution_update',
       ].sort(byStr),
     );
@@ -466,6 +466,19 @@ function samplePerUiEvent(): UiEvent[] {
     { type: 'subagentTool', threadId: t, agentId: 'ag1', call: { id: 'tc2', name: 'read_file', argsPreview: 'a.ts' }, phase: 'end', output: 'x', isError: false },
     { type: 'subagentSettled', threadId: t, agentId: 'ag1', status: 'completed' },
     { type: 'subagentState', threadId: t, agentId: 'ag1', busy: true },
+    {
+      type: 'todoSnapshot',
+      threadId: t,
+      snapshot: {
+        seq: 2,
+        tasks: [
+          { id: '1', subject: '批次 A', status: 'completed' },
+          { id: '2', subject: '批次 B', status: 'in_progress', description: 'd', activeForm: 'a', owner: 'worker-2' },
+          { id: '3', subject: '批次 C', status: 'pending' },
+        ],
+        edges: [['1', '2']],
+      },
+    },
     { type: 'dialogRequest', threadId: t, requestId: 'r1', method: 'confirm', tool: 'bash', summary: 'npm test', reason: 'direct execution requested by client', agentName: 'explore' },
     { type: 'dialogSettled', requestId: 'r1' },
     { type: 'bashOutput', threadId: t, id: 'b1', delta: 'out', truncated: false },

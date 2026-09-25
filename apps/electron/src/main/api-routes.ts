@@ -5,10 +5,12 @@ import {
   appError,
   createGitBranches,
   createGitGraph,
+  createGitStatus,
   createHubApi,
   savedSessions,
   type GitBranches,
   type GitGraph,
+  type GitStatus,
   type HubApi,
 } from '@paiapp/api';
 import { createFileRead, type FileRead } from './file-read';
@@ -81,6 +83,8 @@ export interface ApiRouteDeps {
   git?: GitBranches;
   /** 本地 git 图谱读口（同上，可注入替身）。 */
   graph?: GitGraph;
+  /** 工作区变更速览读口（同上，可注入替身）。 */
+  gitStatus?: GitStatus;
   /** 运行状态监控器（T29 app/runtime 快照源）。 */
   monitor: RuntimeMonitor;
   /** 档位 hub 同步失败落档钩子（监督日志 → 监控时间线）。 */
@@ -207,6 +211,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
 
   const git = deps.git ?? createGitBranches(runGit);
   const graph = deps.graph ?? createGitGraph(runGit);
+  const gitStatus = deps.gitStatus ?? createGitStatus(runGit);
   const openLocation = deps.openLocation ?? createOpenLocation();
   const fileRead = deps.fileRead ?? createFileRead();
 
@@ -240,6 +245,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     fileSearch: { search: searchProjectFiles },
     git,
     graph,
+    gitStatus,
     openLocation,
     fileRead,
   });

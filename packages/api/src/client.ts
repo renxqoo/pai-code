@@ -135,6 +135,7 @@ function createGitDomain(t: ApiClientTransport) {
     branches: call(t, 'git/branches'),
     checkout: call(t, 'git/checkout'),
     graph: call(t, 'git/graph'),
+    status: call(t, 'git/status'),
   });
 }
 

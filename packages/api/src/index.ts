@@ -69,6 +69,7 @@ export { envVarNameForProvider } from './verbs/env-name';
 export { autoTitleCandidateOf } from './verbs/auto-title';
 export { createGitBranches, classifyGitExecError, type GitBranches, type GitExec, type GitExecResult, type GitExecError } from './verbs/git-branches';
 export { createGitGraph, type GitGraph } from './verbs/git-graph';
+export { createGitStatus, type GitStatus, type GitStatusOutcome } from './verbs/git-status';
 export {
   parseAgentDefinition,
   serializeAgentDefinition,
