@@ -4,8 +4,8 @@ import * as React from 'react';
 import { demoSessions } from '@/fixtures/demo-data';
 import { ChatHeader } from '@/features/chat/chat-header';
 import { EmptyChat } from '@/features/chat/empty-chat';
-import { MessageRow } from '@/features/chat/message-row';
 import { PermissionCard } from '@/features/chat/permission-card';
+import { TimelineList } from '@/features/chat/timeline-list';
 import { SessionRow } from '@/features/history/session-row';
 import { WorkspaceSheet } from '@/features/workspace/workspace-sheet';
 import { useConversationStore } from '@/store/conversation-store';
@@ -20,22 +20,28 @@ describe('chat and history components', () => {
     useConversationStore.getState().startNewSession();
   });
 
-  it('renders every message presentation kind', async () => {
-    const view = await render(<><MessageRow message={{ id: '1', kind: 'user', text: '用户消息', createdAt: 'now' }} /><MessageRow message={{ id: '2', kind: 'assistant', text: '助手消息', createdAt: 'now' }} /><MessageRow message={{ id: '3', kind: 'thinking', text: '分析中', createdAt: 'now' }} /><MessageRow message={{ id: '4', kind: 'tool', title: '执行', text: '完成', createdAt: 'now' }} /><MessageRow message={{ id: '5', kind: 'code', title: 'main.ts', language: 'ts', text: 'const x = 1', createdAt: 'now' }} /><MessageRow message={{ id: '6', kind: 'tool', text: '默认工具', createdAt: 'now' }} /><MessageRow message={{ id: '7', kind: 'code', text: 'plain text', createdAt: 'now' }} /></>);
-    expect(view.getByText('用户消息')).toBeTruthy();
-    expect(view.getByText('思考过程')).toBeTruthy();
-    expect(view.getByText('main.ts')).toBeTruthy();
-    expect(view.getByText('默认工具')).toBeTruthy();
-    expect(view.getByText('代码')).toBeTruthy();
-    expect(view.getByText('text')).toBeTruthy();
+  it('renders user attachments, assistant text, code preview and status rows', async () => {
+    const session = demoSessions[1];
+    if (session === undefined) throw new Error('fixture missing');
+    const view = await render(<TimelineList generating={false} messages={session.messages} />);
+    expect(view.getByText('ComposerPanel.tsx')).toBeTruthy();
+    await fireEvent.press(view.getByText('ComposerPanel.tsx'));
+    expect(view.getByText('已完成移动端视觉走查')).toBeTruthy();
+    const release = demoSessions[2];
+    if (release === undefined) throw new Error('fixture missing');
+    await view.rerender(<TimelineList generating={false} messages={release.messages} />);
+    expect(view.getByText('Android 权限检查失败')).toBeTruthy();
   });
 
-  it('opens empty workspace and resolves permission', async () => {
+  it('opens empty workspace, demo conversation and quick prompts', async () => {
     const workspace = jest.fn();
     const prompt = jest.fn();
-    const view = await render(<><EmptyChat onPrompt={prompt} onWorkspace={workspace} /><PermissionCard /></>);
+    const demo = jest.fn();
+    const view = await render(<><EmptyChat onDemo={demo} onPrompt={prompt} onWorkspace={workspace} /><PermissionCard /></>);
     await fireEvent.press(view.getByText('选择工作空间'));
     expect(workspace).toHaveBeenCalledTimes(1);
+    await fireEvent.press(view.getByText('查看示例对话'));
+    expect(demo).toHaveBeenCalledTimes(1);
     await fireEvent.press(view.getByText('分析当前项目'));
     await fireEvent.press(view.getByText('定位并修复问题'));
     await fireEvent.press(view.getByText('审查代码质量'));

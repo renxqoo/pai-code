@@ -18,23 +18,26 @@ describe('composer components', () => {
     useNavigationStore.setState({ drawerOpen: false, sheet: null, tab: 'chat' });
   });
 
-  it('edits and sends a draft from the compact input', async () => {
+  it('edits and sends a draft with attachments from the compact input', async () => {
+    useAttachmentStore.getState().addAttachment({ id: 'sent-file', name: '设计.pdf', size: 2000, kind: 'pdf', status: 'ready' });
     const view = await render(<ComposerPanel />);
     expect(view.getByPlaceholderText('尽管问，带图也行')).toBeTruthy();
     await fireEvent.changeText(view.getByLabelText('消息输入框'), '检查 Android 构建');
     await fireEvent.press(view.getByLabelText('发送消息'));
     expect(useComposerStore.getState().draft).toBe('');
+    expect(useComposerStore.getState().generating).toBe(true);
     expect(useConversationStore.getState().session.messages[0]?.text).toBe('检查 Android 构建');
+    expect(useConversationStore.getState().session.messages[0]?.attachments?.[0]?.name).toBe('设计.pdf');
   });
 
   it('keeps only attachment and send controls in the input area', async () => {
     const view = await render(<ComposerPanel />);
     expect(view.getByLabelText('添加附件')).toBeTruthy();
     expect(view.getByLabelText('发送消息')).toBeTruthy();
-    expect(view.queryByLabelText('任务配置')).toBeNull();
-    expect(view.queryByLabelText('权限模式：每次询问')).toBeNull();
     expect(view.queryByLabelText('上下文已使用 24%')).toBeNull();
     expect(view.queryByLabelText('模型与思考')).toBeNull();
+    expect(view.queryByLabelText('任务配置')).toBeNull();
+    expect(view.queryByLabelText('权限模式：每次询问')).toBeNull();
   });
 
   it('expands on focus and returns to the compact capsule on blur', async () => {
@@ -78,7 +81,7 @@ describe('composer components', () => {
     expect(view.getByText('配置应用于当前对话；默认配置可在个人设置中调整。')).toBeTruthy();
   });
 
-  it('removes attachments and stops generation', async () => {
+  it('removes and sends attachments', async () => {
     useAttachmentStore.getState().addAttachment({ id: '1', name: 'a.pdf', size: 100, kind: 'pdf', status: 'ready' });
     useComposerStore.getState().setDraft('内容');
     const view = await render(<ComposerPanel />);
@@ -87,8 +90,12 @@ describe('composer components', () => {
     await view.rerender(<TestWrapper><ComposerPanel /></TestWrapper>);
     await fireEvent.press(view.getByLabelText('发送消息'));
     expect(useAttachmentStore.getState().items).toHaveLength(0);
-    await act(() => Promise.resolve(useComposerStore.setState({ generating: true })));
-    await view.rerender(<TestWrapper><ComposerPanel /></TestWrapper>);
+    expect(useConversationStore.getState().session.messages[0]?.attachments?.[0]?.name).toBe('b.pdf');
+  });
+
+  it('stops generation', async () => {
+    useComposerStore.setState({ generating: true });
+    const view = await render(<ComposerPanel />);
     await fireEvent.press(view.getByLabelText('停止生成'));
     expect(useComposerStore.getState().generating).toBe(false);
   });

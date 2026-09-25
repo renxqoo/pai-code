@@ -23,7 +23,8 @@ export type Attachment = {
   uri?: string;
 };
 
-export type MessageKind = 'user' | 'assistant' | 'system' | 'thinking' | 'tool' | 'code';
+export type MessageKind = 'user' | 'assistant' | 'system' | 'thinking' | 'tool' | 'code' | 'status';
+export type MessageRunStatus = 'running' | 'success' | 'error';
 
 export type ChatMessage = {
   id: string;
@@ -32,6 +33,10 @@ export type ChatMessage = {
   createdAt: string;
   title?: string;
   language?: string;
+  status?: MessageRunStatus;
+  durationMs?: number;
+  lineCount?: number;
+  summary?: string;
   attachments?: readonly Attachment[];
 };
 

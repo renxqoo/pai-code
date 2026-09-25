@@ -5,7 +5,7 @@ import { useAppTheme } from '@/theme/theme-context';
 import { radius, spacing } from '@/theme/tokens';
 import type { Attachment } from '@/types/domain';
 
-type AttachmentChipProps = { attachment: Attachment; onRemove: () => void };
+type AttachmentChipProps = { attachment: Attachment; onRemove?: () => void };
 
 export function AttachmentChip({ attachment, onRemove }: AttachmentChipProps) {
   const { colors } = useAppTheme();
@@ -18,7 +18,7 @@ export function AttachmentChip({ attachment, onRemove }: AttachmentChipProps) {
         <Text numberOfLines={1} style={{ color: colors.text, fontSize: 12, fontWeight: '600' }}>{attachment.name}</Text>
         <Text style={{ color: attachment.status === 'failed' ? colors.destructive : colors.textFaint, fontSize: 10, marginTop: 2 }}>{attachment.status === 'failed' ? '添加失败' : `${size} · ${attachment.kind}`}</Text>
       </View>
-      <Pressable accessibilityLabel={`移除 ${attachment.name}`} hitSlop={8} onPress={onRemove} style={{ padding: 8 }}><X color={colors.textMuted} size={16} /></Pressable>
+      {onRemove ? <Pressable accessibilityLabel={`移除 ${attachment.name}`} hitSlop={8} onPress={onRemove} style={{ padding: 8 }}><X color={colors.textMuted} size={16} /></Pressable> : null}
     </View>
   );
 }

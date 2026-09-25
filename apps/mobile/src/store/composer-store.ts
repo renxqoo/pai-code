@@ -27,7 +27,7 @@ export const useComposerStore = create<ComposerState>((set, get) => ({
   submitDraft: () => {
     const { draft, sending } = get();
     if (draft.trim().length === 0 || sending) return false;
-    set({ sending: false, draft: '' });
+    set({ sending: false, generating: true, draft: '' });
     return true;
   },
   toggleGeneration: () => set((state) => ({ generating: !state.generating, sending: false })),
