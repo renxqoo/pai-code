@@ -24,11 +24,11 @@ export function ListRow({ label, detail, icon: Icon, trailing, onPress, selected
       accessibilityState={{ selected }}
       disabled={!onPress}
       onPress={onPress}
-      style={({ pressed }) => ({ alignItems: 'center', flexDirection: 'row', minHeight: 52, opacity: pressed ? 0.62 : 1, paddingHorizontal: spacing.xs3 })}
+      style={({ pressed }) => ({ alignItems: 'center', flexDirection: 'row', minHeight: 60, opacity: pressed ? 0.62 : 1, paddingHorizontal: spacing.xs4 })}
     >
-      {Icon ? <Icon color={destructive ? colors.destructive : colors.textMuted} size={20} strokeWidth={1.8} /> : null}
+      {Icon ? <Icon color={destructive ? colors.destructive : colors.text} size={21} strokeWidth={1.8} /> : null}
       <View style={{ flex: 1, marginLeft: Icon ? spacing.xs2 : 0 }}>
-        <Text style={{ color: destructive ? colors.destructive : colors.text, fontSize: 15, fontWeight: '500' }}>{label}</Text>
+        <Text style={{ color: destructive ? colors.destructive : colors.text, fontSize: 16, fontWeight: '500' }}>{label}</Text>
         {detail ? <Text numberOfLines={2} style={{ color: colors.textMuted, fontSize: 12, lineHeight: 17, marginTop: 2 }}>{detail}</Text> : null}
       </View>
       {trailing ? <Text numberOfLines={1} style={{ color: selected ? colors.accent : colors.textMuted, fontSize: 13, marginLeft: spacing.sm, maxWidth: 140 }}>{trailing}</Text> : null}

@@ -10,7 +10,7 @@ import { useSettingsStore } from '@/store/settings-store';
 describe('mobile UI stores', () => {
   beforeEach(() => {
     useNavigationStore.setState({ drawerOpen: false, sheet: null, tab: 'chat' });
-    useComposerStore.setState({ draft: '', model: 'gpt-5.2-codex', thinking: 'medium', permission: 'ask', picker: null, sending: false, generating: false, contextPercent: 24 });
+    useComposerStore.setState({ draft: '', model: 'gpt-5.2-codex', thinking: 'medium', permission: 'ask', sending: false, generating: false, contextPercent: 24 });
     useHistoryStore.setState({ sessions: demoSessions, query: '', showArchived: false });
     useAttachmentStore.setState({ items: [] });
     useSettingsStore.setState({ theme: 'system', defaultModel: 'gpt-5.2-codex', defaultThinking: 'medium', defaultPermission: 'ask', notifications: true, haptics: true, compactHistory: false });
@@ -26,15 +26,11 @@ describe('mobile UI stores', () => {
     expect(useNavigationStore.getState().sheet).toBeNull();
   });
 
-  it('selects model, thinking and permission and closes the active picker', () => {
-    useComposerStore.getState().openPicker('model');
+  it('selects model, thinking and permission', () => {
     useComposerStore.getState().selectModel('claude-sonnet-5');
-    expect(useComposerStore.getState()).toMatchObject({ model: 'claude-sonnet-5', picker: null });
-    useComposerStore.getState().openPicker('thinking');
     useComposerStore.getState().selectThinking('high');
-    useComposerStore.getState().openPicker('permission');
     useComposerStore.getState().selectPermission('plan');
-    expect(useComposerStore.getState()).toMatchObject({ thinking: 'high', permission: 'plan', picker: null });
+    expect(useComposerStore.getState()).toMatchObject({ model: 'claude-sonnet-5', thinking: 'high', permission: 'plan' });
   });
 
   it('rejects empty and duplicate submissions and bounds draft length', () => {

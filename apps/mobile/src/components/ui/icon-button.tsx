@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Pressable, type PressableProps } from 'react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { useAppTheme } from '@/theme/theme-context';
-import { layout, radius } from '@/theme/tokens';
+import { radius } from '@/theme/tokens';
 
 type IconButtonProps = Omit<PressableProps, 'children'> & {
   icon: LucideIcon;
@@ -22,8 +22,8 @@ export function IconButton({ icon: Icon, label, active = false, size = 20, fille
       disabled={disabled}
       hitSlop={6}
       style={({ pressed }) => ({
-        alignItems: 'center', backgroundColor: active ? colors.surfaceSubtle : 'transparent', borderRadius: radius.md,
-        height: layout.minTouch, justifyContent: 'center', opacity: disabled ? 0.4 : pressed ? 0.58 : 1, width: layout.minTouch,
+        alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.pill,
+        height: 44, justifyContent: 'center', opacity: disabled ? 0.4 : pressed ? 0.58 : 1, width: 44,
       })}
       {...props}
     >

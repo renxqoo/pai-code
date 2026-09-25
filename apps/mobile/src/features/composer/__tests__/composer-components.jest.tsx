@@ -2,17 +2,21 @@ import { act, fireEvent, render } from '@testing-library/react-native';
 import { beforeEach, describe, expect, it } from '@jest/globals';
 import * as React from 'react';
 import { ComposerPanel } from '@/features/composer/composer-panel';
-import { PickerSheet } from '@/features/composer/picker-sheet';
+import { TaskSettingsSheet } from '@/features/composer/task-settings-sheet';
+import { PermissionSheet } from '@/features/composer/permission-sheet';
+import { ContextSheet } from '@/features/composer/context-sheet';
 import { useAttachmentStore } from '@/store/attachment-store';
 import { useComposerStore } from '@/store/composer-store';
 import { useConversationStore } from '@/store/conversation-store';
+import { useNavigationStore } from '@/store/navigation-store';
 import { TestWrapper } from '@/test/test-wrapper';
 
 describe('composer components', () => {
   beforeEach(() => {
-    useComposerStore.setState({ draft: '', model: 'gpt-5.2-codex', thinking: 'medium', permission: 'ask', picker: null, sending: false, generating: false, contextPercent: 24 });
+    useComposerStore.setState({ draft: '', model: 'gpt-5.2-codex', thinking: 'medium', permission: 'ask', sending: false, generating: false, contextPercent: 24 });
     useAttachmentStore.setState({ items: [] });
     useConversationStore.getState().startNewSession();
+    useNavigationStore.setState({ drawerOpen: false, sheet: null, tab: 'chat' });
   });
 
   it('edits and sends a draft', async () => {
@@ -23,22 +27,46 @@ describe('composer components', () => {
     expect(useConversationStore.getState().session.messages[0]?.text).toBe('检查 Android 构建');
   });
 
-  it('opens and selects model', async () => {
-    const view = await render(<TestWrapper><><ComposerPanel /><PickerSheet /></></TestWrapper>);
-    await fireEvent.press(view.getByLabelText('GPT-5.2 Codex'));
-    await fireEvent.press(view.getByText('Claude Sonnet 5'));
-    expect(useComposerStore.getState().model).toBe('claude-sonnet-5');
+  it('keeps attachment and permission left, with context, model and send grouped right', async () => {
+    const view = await render(<ComposerPanel />);
+    expect(view.getByLabelText('添加附件')).toBeTruthy();
+    expect(view.getByLabelText('权限模式：每次询问')).toBeTruthy();
+    expect(view.getByLabelText('上下文已使用 24%').props.accessibilityValue).toEqual({ min: 0, max: 100, now: 24 });
+    expect(view.getByLabelText('模型与思考')).toBeTruthy();
+    expect(view.getByLabelText('发送消息')).toBeTruthy();
+    expect(view.queryByText('GPT-5.2 Codex')).toBeNull();
+    expect(view.queryByText('每次询问')).toBeNull();
   });
 
-  it('selects thinking and permission', async () => {
-    await act(() => Promise.resolve(useComposerStore.getState().openPicker('thinking')));
-    const thinking = await render(<TestWrapper><PickerSheet /></TestWrapper>);
-    await fireEvent.press(thinking.getByText('高'));
+  it('opens model and thinking settings separately from permission and context', async () => {
+    const view = await render(<TestWrapper><><ComposerPanel /><TaskSettingsSheet /><PermissionSheet /><ContextSheet /></></TestWrapper>);
+    await fireEvent.press(view.getByLabelText('模型与思考'));
+    expect(useNavigationStore.getState().sheet).toBe('task-settings');
+    await fireEvent.changeText(view.getByLabelText('搜索模型'), 'Claude');
+    await fireEvent.press(view.getByText('Claude Sonnet 5'));
+    await fireEvent.press(view.getByText('高'));
     expect(useComposerStore.getState().thinking).toBe('high');
-    await act(() => Promise.resolve(useComposerStore.getState().openPicker('permission')));
-    const permission = await render(<TestWrapper><PickerSheet /></TestWrapper>);
-    await fireEvent.press(permission.getByText('仅规划'));
+    expect(useComposerStore.getState()).toMatchObject({ model: 'claude-sonnet-5', thinking: 'high' });
+    expect(view.getByLabelText('搜索模型').props.value).toBe('Claude');
+    await fireEvent.press(view.getByLabelText('权限模式：每次询问'));
+    expect(useNavigationStore.getState().sheet).toBe('permission');
+    await fireEvent.press(view.getByText('仅规划'));
     expect(useComposerStore.getState().permission).toBe('plan');
+    await fireEvent.press(view.getByLabelText('上下文已使用 24%'));
+    expect(useNavigationStore.getState().sheet).toBe('context');
+  });
+
+  it('renders normal context usage in the context sheet', async () => {
+    useNavigationStore.getState().openSheet('context');
+    const view = await render(<TestWrapper><ContextSheet /></TestWrapper>);
+    expect(view.getByText('24%')).toBeTruthy();
+  });
+
+  it('shows high context usage in the context sheet', async () => {
+    useComposerStore.getState().setContextPercent(91);
+    useNavigationStore.getState().openSheet('context');
+    const view = await render(<TestWrapper><ContextSheet /></TestWrapper>);
+    expect(view.getByText('91%')).toBeTruthy();
   });
 
   it('removes an attachment and stops generation', async () => {

@@ -19,7 +19,7 @@ import { TestWrapper } from '@/test/test-wrapper';
 describe('presentational components', () => {
   it('renders brand, card, header and empty state', async () => {
     const noop = jest.fn();
-    const view = await render(<TestWrapper><PaiMark size={48} /><Card elevated><SectionHeader action="添加" onAction={noop} title="项目" /><EmptyState description="说明" icon={Search} title="空态" /></Card></TestWrapper>);
+    const view = await render(<TestWrapper><PaiMark size={48} /><Card><SectionHeader action="添加" onAction={noop} title="项目" /><EmptyState description="说明" icon={Search} title="空态" /></Card></TestWrapper>);
     expect(view.getByLabelText('Pai Code')).toBeTruthy();
     expect(view.getByText('空态')).toBeTruthy();
   });

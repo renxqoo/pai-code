@@ -35,11 +35,15 @@ describe('settings components', () => {
     expect(useSettingsStore.getState()).toMatchObject({ notifications: false, haptics: false, compactHistory: true });
   });
 
-  it('renders main settings and toggles preferences', async () => {
+  it('renders concise settings navigation without duplicated controls', async () => {
     const view = await render(<TestWrapper><SettingsScreen /></TestWrapper>);
-    await fireEvent.press(view.getByLabelText('通知'));
-    await fireEvent.press(view.getByLabelText('触感反馈'));
-    expect(useSettingsStore.getState()).toMatchObject({ notifications: false, haptics: false });
+    expect(view.getByText('设置')).toBeTruthy();
+    expect(view.getByLabelText('返回')).toBeTruthy();
+    expect(view.getByText('偏好设置')).toBeTruthy();
+    expect(view.getByText('外观')).toBeTruthy();
+    expect(view.queryByLabelText('通知')).toBeNull();
+    expect(view.queryByLabelText('触感反馈')).toBeNull();
+    expect(view.getByTestId('settings-scroll').props.contentContainerStyle).toMatchObject({ paddingTop: 59 });
   });
 
   it('navigates rows and footer links', async () => {

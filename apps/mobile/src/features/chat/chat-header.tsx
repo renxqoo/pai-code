@@ -16,11 +16,11 @@ export function ChatHeader() {
   const title = useConversationStore((state) => state.session.title);
   const project = useConversationStore((state) => state.session.project);
   return (
-    <View style={{ alignItems: 'center', flexDirection: 'row', height: layout.minTouch + 12, paddingHorizontal: spacing.xs3 }}>
+    <View style={{ alignItems: 'center', flexDirection: 'row', height: layout.minTouch + 16, paddingHorizontal: spacing.xs4 }}>
       <IconButton icon={Menu} label="打开对话历史" onPress={() => setDrawerOpen(true)} />
       <View style={{ flex: 1, marginLeft: spacing.sm }}>
-        <Text numberOfLines={1} style={{ color: colors.text, fontSize: 15, fontWeight: '700', textAlign: 'center' }}>{title}</Text>
-        <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 10, marginTop: 2, textAlign: 'center' }}>{project}</Text>
+        <Text numberOfLines={1} style={{ color: colors.text, fontSize: 16, fontWeight: '600', textAlign: 'center' }}>{title}</Text>
+        <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 11, marginTop: 2, textAlign: 'center' }}>{project}</Text>
       </View>
       <IconButton icon={Search} label="搜索对话" onPress={() => { router.push('/search'); }} />
       <IconButton icon={MoreHorizontal} label="对话菜单" onPress={() => openSheet('session-actions')} />

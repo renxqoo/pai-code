@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-type SheetName = 'workspace' | 'attachments' | 'session-actions' | 'message-actions' | null;
+type SheetName = 'workspace' | 'attachments' | 'task-settings' | 'permission' | 'context' | 'session-actions' | 'message-actions' | null;
 type RootTab = 'chat' | 'search' | 'settings';
 
 type NavigationState = {

@@ -14,7 +14,7 @@ export function ToggleRow({ label, detail, value, onChange }: ToggleRowProps) {
         <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 3 }}>{detail}</Text>
       </View>
       <View style={{ backgroundColor: value ? colors.primary : colors.border, borderRadius: radius.pill, height: 30, justifyContent: 'center', marginTop: 14, paddingHorizontal: 3, width: 51 }}>
-        <View style={{ alignSelf: value ? 'flex-end' : 'flex-start', backgroundColor: '#FFFFFF', borderRadius: 12, height: 24, width: 24 }} />
+        <View style={{ alignSelf: value ? 'flex-end' : 'flex-start', backgroundColor: colors.primaryText, borderRadius: 12, height: 24, width: 24 }} />
       </View>
     </Pressable>
   );

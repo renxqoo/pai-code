@@ -6,7 +6,7 @@
 
 ## 1. 目标
 
-在 monorepo 的 `apps/mobile` 新增生产级 Expo 应用，交付 Pai Code 的完整移动端 UI 与本地交互。界面沿用桌面端黑白中性色、细边框、克制阴影与橙色生成态；参考图片仅用于理解工作空间、对话历史、设置和发送任务的信息层级，不复制其图标、布局、文案与视觉细节。
+在 monorepo 的 `apps/mobile` 新增生产级 Expo 应用，交付 Pai Code 的完整移动端 UI 与本地交互。界面采用统一的中性黑白设计语言、细边框与克制阴影；参考图片仅用于理解工作空间、对话历史、设置和发送任务的信息层级，不复制其图标、布局、文案与视觉细节。
 
 ## 2. 外部契约
 
@@ -36,9 +36,9 @@
 
 ## 4. 设计基线
 
-- 设计 token：中性背景、近黑主文字、弱化边框、深浅主题、单一橙色生成强调色。
+- 设计 token：纯白页面底色、白色悬浮面、无外描边、柔和阴影、较宽圆角与深浅主题。
 - 组件层级：底层 `components/ui`、领域 `components/*`、页面 `features/*`、路由 `app/*`。
-- 移动端节奏：16 页边距、12 网格间距、44pt 最小触摸目标、紧凑列表、底部安全区。
+- 移动端节奏：16–20 页边距、12 网格间距、44pt 最小触摸目标、悬浮容器、连续列表与底部安全区。
 - 面板：居中短内容用 Sheet；长表单与历史用全屏页；不照搬参考图的超长空白和巨型标题。
 - 图标：统一 Lucide 线性图标，避免混用参考图中的拟物图形。
 - 动效：Reanimated 160–280ms，尊重系统 Reduce Motion；同一时刻只允许一个主 Sheet。
@@ -110,7 +110,7 @@
 - [x] 设置页与默认偏好完整。
 - [x] iOS/Android 安全区、键盘、返回和无障碍由 SafeArea、KeyboardAvoidingView、Router 与 accessibility 属性承接；iOS/Android Hermes bundle 通过。
 - [x] 组件文件均不超过 300 行且单组件文件纪律成立。
-- [x] 四门与双平台 bundle 通过；移动端覆盖率语句 92.44%、分支 86.30%、函数 90.28%、行 94.91%。
+- [x] 四门与双平台 bundle 通过；移动端覆盖率语句 93.90%、分支 85.13%、函数 92.21%、行 96.52%。
 - [x] 独立对抗审查问题清零：补齐抽屉入口、搜索入口、项目/设备/资产页面、工作空间选择、项目附件与发送清附件。
 - [x] 无 TODO、假成功按钮、密钥、真实网络或凭据。
 
@@ -119,8 +119,8 @@
 - 根级 `bun run lint`：0 warning / 0 error。
 - 根级 `bun run typecheck`：Electron 与 mobile 全部通过。
 - 根级 `bun run build`：Electron 与 Expo Web export 全部通过。
-- 根级 `bun run test`：既有 Bun 2063 pass / 1 skip / 0 fail；移动端 Jest 12 suites / 51 tests 全绿。
+- 根级 `bun run test`：既有 Bun 2063 pass / 1 skip / 0 fail；移动端 Jest 14 suites / 58 tests 全绿。
 - Expo iOS / Android Hermes bundle：全部通过。
 - `expo install --check`：依赖与 SDK 57 官方矩阵一致。
-- bw Web 走查：首屏、抽屉、搜索、设置深色、模型、思考、权限、附件 Sheet、真实发送、设备、资产、项目和工作空间选择均通过；浏览器 errors/console 为空。
+- bw Web 走查：首屏、纯白背景、圆形操作、悬浮 Composer、抽屉、设置安全区、模型与思考、权限、上下文、附件、真实发送、设备、资产、项目和工作空间选择均通过；浏览器 errors/console 为空。
 - Expo Doctor 在当前无 npm 的 Bun 环境中：配置 schema 与 peer dependency 检查通过；依赖树/重复链接相关检查因 Doctor 硬调用 npm 未能完整执行，且同版本包在 Bun `.bun` 布局出现重复链接。该工具链限制不掩盖为通过，原生 Metro bundle 另门通过。

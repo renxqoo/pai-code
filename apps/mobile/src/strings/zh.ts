@@ -61,10 +61,10 @@ export const copy = {
 } as const;
 
 export const models = [
-  { id: 'gpt-5.2-codex', name: 'GPT-5.2 Codex', provider: 'OpenAI', description: '复杂工程与长上下文任务', accent: '#35312E' },
-  { id: 'claude-sonnet-5', name: 'Claude Sonnet 5', provider: 'Anthropic', description: '平衡推理速度与代码质量', accent: '#9B6A4B' },
-  { id: 'gemini-3-pro', name: 'Gemini 3 Pro', provider: 'Google', description: '多模态理解与快速探索', accent: '#416C91' },
-  { id: 'qwen3-coder', name: 'Qwen3 Coder', provider: 'Alibaba', description: '本地与高性价比代码任务', accent: '#5B658C' },
+  { id: 'gpt-5.2-codex', name: 'GPT-5.2 Codex', provider: 'OpenAI', description: '复杂工程与长上下文任务' },
+  { id: 'claude-sonnet-5', name: 'Claude Sonnet 5', provider: 'Anthropic', description: '平衡推理速度与代码质量' },
+  { id: 'gemini-3-pro', name: 'Gemini 3 Pro', provider: 'Google', description: '多模态理解与快速探索' },
+  { id: 'qwen3-coder', name: 'Qwen3 Coder', provider: 'Alibaba', description: '本地与高性价比代码任务' },
 ] as const;
 
 export const thinkingLevels = [
