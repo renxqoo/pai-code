@@ -1,13 +1,12 @@
 import * as React from 'react';
 
-import { CaretToggle, DurationTag, MetaLine, StatusDot, TypePill } from '@paiapp/ui';
+import { CaretToggle, DurationTag, formatTokenCount, MetaLine, StatusDot, TypePill } from '@paiapp/ui';
 
 import { copy } from '@/strings';
 import { agentActivity } from '@/thread/agent-activity';
 import { agentElapsedMs } from '@/thread/panel-summary';
 import { formatElapsed } from '@/thread/format-elapsed';
 import { SteerInput } from './steer-input';
-import { formatTokenCount } from '@/thread/format-count-unit';
 import { subagentStatusLabel } from '@/thread/subagent-status';
 import type { SubagentModel } from '@/thread/thread-model';
 

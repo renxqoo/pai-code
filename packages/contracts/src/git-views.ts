@@ -17,6 +17,35 @@ export const GitBranchesViewSchema = z
   .strict();
 export type GitBranchesView = z.infer<typeof GitBranchesViewSchema>;
 
+/** git status 单个变更文件（porcelain XY 归一到 kind；untracked 基线不可得，增删恒 0——与 DiffFileView 的 write 同规）。 */
+export const GitStatusFileSchema = z
+  .object({
+    path: z.string(),
+    kind: z.enum(['modified', 'added', 'deleted', 'renamed', 'untracked']),
+    additions: z.number().int().min(0),
+    deletions: z.number().int().min(0),
+  })
+  .strict();
+export type GitStatusFile = z.infer<typeof GitStatusFileSchema>;
+
+/** 工作区变更速览（速览面板 Git 区）：增删行数 = 已跟踪变更相对 HEAD（含 staged）；
+ *  ahead/behind 相对上游（无上游/无 HEAD = 0）；files 超上限截断但计数全量。 */
+export const GitStatusViewSchema = z
+  .object({
+    isRepo: z.boolean(),
+    current: z.string().nullable(),
+    files: z.array(GitStatusFileSchema),
+    /** 变更文件总数（files 截断时仍为全量数）。 */
+    fileCount: z.number().int().min(0),
+    truncated: z.boolean(),
+    additions: z.number().int().min(0),
+    deletions: z.number().int().min(0),
+    ahead: z.number().int().min(0),
+    behind: z.number().int().min(0),
+  })
+  .strict();
+export type GitStatusView = z.infer<typeof GitStatusViewSchema>;
+
 /** git 图谱单条提交：parents 供渲染层计算泳道几何；refs 只含本地分支装饰（「HEAD -> main」形态原样透传，拆 pill 归渲染层）。 */
 export const GitGraphCommitSchema = z
   .object({

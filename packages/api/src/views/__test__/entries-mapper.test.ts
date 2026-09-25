@@ -289,12 +289,13 @@ describe('mapEntries（x-harness WAL 转写真相源）', () => {
   });
 
   test('垃圾输入降级：非对象/非数组/空 → 空形态', () => {
-    expect(mapEntries(undefined)).toEqual({ items: [], cursor: null });
-    expect(mapEntries(null)).toEqual({ items: [], cursor: null });
-    expect(mapEntries({})).toEqual({ items: [], cursor: null });
-    expect(mapEntries({ entries: 'nope' })).toEqual({ items: [], cursor: null });
-    expect(mapEntries([row(1, 1, { type: 'user/message', turn: 0, step: 0, content: 'hi' })])).toEqual({ items: [], cursor: null });
-    expect(mapEntries({ entries: [] })).toEqual({ items: [], cursor: null });
+    const empty = { items: [], cursor: null, todo: null };
+    expect(mapEntries(undefined)).toEqual(empty);
+    expect(mapEntries(null)).toEqual(empty);
+    expect(mapEntries({})).toEqual(empty);
+    expect(mapEntries({ entries: 'nope' })).toEqual(empty);
+    expect(mapEntries([row(1, 1, { type: 'user/message', turn: 0, step: 0, content: 'hi' })])).toEqual(empty);
+    expect(mapEntries({ entries: [] })).toEqual(empty);
   });
 });
 

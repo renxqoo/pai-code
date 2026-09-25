@@ -1,11 +1,10 @@
 import * as React from 'react';
 import { FileDiff } from 'lucide-react';
 
-import { ChevronToggle, SplitButton } from '@paiapp/ui';
+import { ChevronToggle, formatDiffDelta, SplitButton } from '@paiapp/ui';
 
 import { copy } from '@/strings';
 import { DiffFileList } from './diff-file-list';
-import { formatDiffDelta } from './format-count-unit';
 import type { DiffSummaryModel } from './thread-model';
 
 type DiffBlockProps = {

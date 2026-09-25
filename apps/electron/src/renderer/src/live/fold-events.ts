@@ -3,7 +3,7 @@ import type { ThreadItem, ToolCallModel, TurnBlock } from '@/thread/thread-model
 
 import { onSubagentEvent } from './fold-subagents';
 import { mergeDiffFile } from './hydrate-items';
-import { capSeenIds, noteCallStart, noteMessageTurn, omitCallStart, type LiveThreadState } from './live-thread-state';
+import { capSeenIds, mergeTodo, noteCallStart, noteMessageTurn, omitCallStart, type LiveThreadState } from './live-thread-state';
 import { beginLiveTurn, claimAnonymousBlocks, clip, ensureLiveTurn, findTurn, insertBeforeLiveTurn, updateTurn } from './turn-ops';
 
 
@@ -142,6 +142,9 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
     case 'subagentSettled':
     case 'subagentState':
       return onSubagentEvent(state, event, now);
+    case 'todoSnapshot':
+      // todo 清单全量快照（单调合并——水化/事件交错防复活旧快照；速览面板进程区整体替换）
+      return { ...state, todo: mergeTodo(state.todo, event.snapshot) };
     case 'sessionDied':
       // worker 死亡时全部在途子代理随进程自灭且无 settle 通知（api.md U2）：就地终态
       return { ...foldDeath(state, now), crashed: true };

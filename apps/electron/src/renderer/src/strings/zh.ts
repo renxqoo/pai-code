@@ -1,4 +1,5 @@
 /** 中文文案表（默认语言；key 结构与 en 表逐字段对齐，类型强制同步）。 */
+import { zhPulse } from './zh-pulse';
 import { zhSettings } from './zh-settings';
 import type { en } from './en';
 import {
@@ -137,6 +138,7 @@ export const zh: typeof en = {
       },
     },
   },
+  pulse: zhPulse,
   flow: {
     openDiff: '打开 Diff',
     steerPlaceholder: '向该子智能体注入指令…',

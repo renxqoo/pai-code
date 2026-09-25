@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { queueEntry } from './queue-views';
+import { TodoSnapshotEventDataSchema } from './todo-views';
 
 /**
  * 渲染层事件词表：adapter 把 host-hub 帧折叠成这些正规化事件，
@@ -167,6 +168,9 @@ const uiEventDefs = {
   subagentSettled: z.object({ type: z.literal('subagentSettled'), threadId, agentId: z.string(), status: z.string() }),
   /** 子 agent 忙闲迁移（agent/status running|idle；面板状态徽标的数据源）。 */
   subagentState: z.object({ type: z.literal('subagentState'), threadId, agentId: z.string(), busy: z.boolean() }),
+
+  /** todo 清单全量快照（last-wins：速览面板进程区整体替换）。 */
+  todoSnapshot: z.object({ type: z.literal('todoSnapshot'), threadId, snapshot: TodoSnapshotEventDataSchema }),
 
   dialogRequest: z.object({
     type: z.literal('dialogRequest'),

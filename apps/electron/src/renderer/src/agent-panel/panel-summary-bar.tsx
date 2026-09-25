@@ -1,7 +1,6 @@
-import { StatusDot } from '@paiapp/ui';
+import { formatCountUnit, StatusDot } from '@paiapp/ui';
 
 import { copy } from '@/strings';
-import { formatCountUnit } from '@/thread/format-count-unit';
 import type { PanelSummary } from '@/thread/panel-summary';
 
 type PanelSummaryBarProps = {

@@ -23,6 +23,7 @@ import { PanelLayer } from '@/screens/panel-layer';
 import { CommandPalette } from '@/palette/command-palette';
 import { useCommandPalette } from '@/screens/use-command-palette';
 import { ThreadStage } from '@/screens/thread-stage';
+import { PulsePanel } from '@/pulse-panel/pulse-panel';
 import { NewTaskPage } from '@/screens/new-task-page';
 import { uiStore } from '@/ui/ui-store';
 
@@ -138,6 +139,7 @@ function WorkspaceMain(): React.JSX.Element {
         {!newTaskOpen ? (
           <>
             <ThreadStage />
+            <PulsePanel />
             <div ref={observeComposerLayer} className="pointer-events-none absolute inset-x-0 bottom-0 z-10 px-[40px] pb-[18px]">
           {confirmStop ? (
             <StopConfirmBar

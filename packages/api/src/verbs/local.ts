@@ -2,6 +2,7 @@ import type { ApiError, ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contrac
 import { appError } from '../errors';
 import type { GitBranches } from './git-branches';
 import type { GitGraph } from './git-graph';
+import type { GitStatus } from './git-status';
 
 /** 宿主能力端口（结构满足即可——electron 注入实现）；git/图谱端口直接用 verbs 内真型（同一事实一套接口） */
 interface FileReadPort { read(cwd: string, path: string): { ok: true; data: { content: string; truncated: boolean; size: number } } | { ok: false; error: ApiError }; }
@@ -22,6 +23,7 @@ export type LocalRoutesDeps = {
   fileSearch: FileSearchPort;
   git: GitBranches;
   graph: GitGraph;
+  gitStatus: GitStatus;
   openLocation: OpenLocationPort;
   fileRead: FileReadPort;
 };
@@ -36,6 +38,7 @@ export function createLocalRoutes(deps: LocalRoutesDeps) {
     'git/branches': Handler<'git/branches'>;
     'git/checkout': Handler<'git/checkout'>;
     'git/graph': Handler<'git/graph'>;
+    'git/status': Handler<'git/status'>;
   } = {
     'file/search': (params) => {
       // 目录门禁：只允许扫描本应用已知会话目录（活跃会话 + 注册表），缩小枚举面（见 T23 挂账）
@@ -60,13 +63,20 @@ export function createLocalRoutes(deps: LocalRoutesDeps) {
       if (!deps.isKnownCwd(params.cwd)) return fail(appError('cwd_not_allowed'));
       deps.audit(`git_checkout:${params.cwd}:${params.branch}:${params.create ? 'create' : 'switch'}`);
       const outcome = await deps.git.checkout(params.cwd, params.branch, params.create);
-      // HEAD 已改写：丢弃图谱在途快照，紧随的图谱请求不再复用切换前数据
-      if (outcome.ok) deps.graph.invalidate(params.cwd);
+      // HEAD 已改写：丢弃图谱/变更速览的在途快照，紧随的请求不再复用切换前数据
+      if (outcome.ok) {
+        deps.graph.invalidate(params.cwd);
+        deps.gitStatus.invalidate(params.cwd);
+      }
       return outcome;
     },
     'git/graph': (params) => {
       if (!deps.isKnownCwd(params.cwd)) return fail(appError('cwd_not_allowed'));
       return deps.graph.list(params.cwd);
+    },
+    'git/status': (params) => {
+      if (!deps.isKnownCwd(params.cwd)) return fail(appError('cwd_not_allowed'));
+      return deps.gitStatus.status(params.cwd);
     },
   };
 

@@ -37,7 +37,7 @@ function resolveBodyState(view: GitGraphView | null, loading: boolean, failed: b
   return { kind: 'ready', commits: view.commits, truncated: view.truncated };
 }
 
-/** 「Git 图谱」弹窗：近全屏壳 + 标题栏 + 表头 + 可滚动泳道表体（纯展示，数据与回调全走 props）。 */
+/** 「Git 图谱」弹窗：八成窗口壳（80vw×80vh）+ 标题栏 + 表头 + 可滚动泳道表体（纯展示，数据与回调全走 props）。 */
 function GitGraphDialog({ open, onOpenChange, view, loading, failed, onRefresh }: GitGraphDialogProps) {
   const body = resolveBodyState(view, loading, failed);
   const layouts = body.kind === 'ready' ? buildGraphLayouts(body.commits) : [];
@@ -48,7 +48,7 @@ function GitGraphDialog({ open, onOpenChange, view, loading, failed, onRefresh }
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton={false}
-        className="h-[calc(100vh-20px)] w-[calc(100vw-20px)] max-w-none grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden rounded-xl p-0 sm:max-w-[calc(100vw-20px)]"
+        className="h-[80vh] w-[80vw] max-w-none grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden rounded-xl p-0 sm:max-w-[80vw]"
       >
         <div className="flex h-[52px] items-center justify-between border-b border-border bg-muted pr-3 pl-4">
           <div className="flex min-w-0 items-center gap-2">

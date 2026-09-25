@@ -32,7 +32,7 @@ export function createEntryHydration(input: {
         store.getState().hydrate(threadId, { kind: 'hydrate/failed' });
         return;
       }
-      store.getState().hydrate(threadId, { kind: 'hydrate/reconcile', items: outcome.data.items, cursor: outcome.data.cursor, dropLiveTurn });
+      store.getState().hydrate(threadId, { kind: 'hydrate/reconcile', items: outcome.data.items, cursor: outcome.data.cursor, dropLiveTurn, todo: outcome.data.todo ?? undefined });
     } finally {
       reconciling.delete(`${threadId}:${dropLiveTurn}`);
     }
@@ -61,7 +61,7 @@ export function createEntryHydration(input: {
     }
     const preserveLive = opts.liveTurnPresent?.() ?? false;
     if (since === null && !preserveLive) {
-      store.getState().hydrate(threadId, { kind: 'hydrate/rebuild', items: outcome.data.items, cursor: outcome.data.cursor });
+      store.getState().hydrate(threadId, { kind: 'hydrate/rebuild', items: outcome.data.items, cursor: outcome.data.cursor, todo: outcome.data.todo ?? undefined });
       return;
     }
     store.getState().hydrate(threadId, {
@@ -69,6 +69,7 @@ export function createEntryHydration(input: {
       items: outcome.data.items,
       cursor: outcome.data.cursor,
       dropLiveTurn: !preserveLive,
+      todo: outcome.data.todo ?? undefined,
     });
   };
 
@@ -79,7 +80,7 @@ export function createEntryHydration(input: {
       store.getState().hydrate(threadId, { kind: 'hydrate/failed' });
       return;
     }
-    store.getState().hydrate(threadId, { kind: 'hydrate/initial', items: outcome.data.items, cursor: outcome.data.cursor });
+    store.getState().hydrate(threadId, { kind: 'hydrate/initial', items: outcome.data.items, cursor: outcome.data.cursor, todo: outcome.data.todo ?? undefined });
   };
 
   return { fetchEntries, rebuildFromTranscript, hydrateFull };
@@ -119,10 +120,10 @@ export function createReadonlyHydration(input: {
       return;
     }
     if (mode === 'initial') {
-      store.getState().hydrate(threadId, { kind: 'hydrate/initial', items: outcome.data.items, cursor: outcome.data.cursor });
+      store.getState().hydrate(threadId, { kind: 'hydrate/initial', items: outcome.data.items, cursor: outcome.data.cursor, todo: outcome.data.todo ?? undefined });
       return;
     }
-    store.getState().hydrate(threadId, { kind: 'hydrate/reconcile', items: outcome.data.items, cursor: outcome.data.cursor, dropLiveTurn: false });
+    store.getState().hydrate(threadId, { kind: 'hydrate/reconcile', items: outcome.data.items, cursor: outcome.data.cursor, dropLiveTurn: false, todo: outcome.data.todo ?? undefined });
   };
 
   /**
