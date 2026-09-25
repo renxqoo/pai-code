@@ -1,31 +1,30 @@
 import * as React from 'react';
-import { TextInput, View } from 'react-native';
-import { useAppTheme } from '@/theme/theme-context';
-import { radius, spacing } from '@/theme/tokens';
+import { View } from 'react-native';
+import { spacing } from '@/theme/tokens';
 import { useAttachmentStore } from '@/store/attachment-store';
 import { useComposerStore } from '@/store/composer-store';
+import { useNavigationStore } from '@/store/navigation-store';
 import { AttachmentChip } from '@/features/composer/attachment-chip';
-import { ComposerToolbar } from '@/features/composer/composer-toolbar';
+import { CompactComposer } from '@/features/composer/compact-composer';
+import { FocusedComposer } from '@/features/composer/focused-composer';
+import { useComposerSubmit } from '@/features/composer/use-composer-submit';
 
 export function ComposerPanel() {
-  const { colors } = useAppTheme();
+  const [focused, setFocused] = React.useState(false);
   const draft = useComposerStore((state) => state.draft);
+  const generating = useComposerStore((state) => state.generating);
   const setDraft = useComposerStore((state) => state.setDraft);
+  const toggleGeneration = useComposerStore((state) => state.toggleGeneration);
   const items = useAttachmentStore((state) => state.items);
   const removeAttachment = useAttachmentStore((state) => state.removeAttachment);
+  const openSheet = useNavigationStore((state) => state.openSheet);
+  const submit = useComposerSubmit();
+  const canSend = draft.trim().length > 0;
+  const send = () => generating ? toggleGeneration() : submit();
   return (
-    <View style={{ backgroundColor: colors.surface, borderRadius: radius.xl, marginHorizontal: spacing.xs4, paddingBottom: 3, shadowColor: '#3F3F46', shadowOffset: { height: 6, width: 0 }, shadowOpacity: 0.09, shadowRadius: 18, elevation: 4, marginBottom: spacing.xs3, minHeight: 88 }}>
-      {items.length > 0 ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingHorizontal: spacing.sm, paddingTop: spacing.sm }}>{items.map((item) => <AttachmentChip attachment={item} key={item.id} onRemove={() => removeAttachment(item.id)} />)}</View> : null}
-      <TextInput
-        accessibilityLabel="消息输入框"
-        multiline
-        onChangeText={setDraft}
-        placeholder="描述任务，或粘贴代码和错误信息…"
-        placeholderTextColor={colors.textFaint}
-        style={{ color: colors.text, flex: 1, fontSize: 16, lineHeight: 23, maxHeight: 112, minHeight: 46, paddingHorizontal: 16, paddingTop: 13 }}
-        value={draft}
-      />
-      <ComposerToolbar />
+    <View style={{ marginBottom: spacing.xs3, marginHorizontal: spacing.xs4 }}>
+      {items.length > 0 ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm }}>{items.map((item) => <AttachmentChip attachment={item} key={item.id} onRemove={() => removeAttachment(item.id)} />)}</View> : null}
+      {focused ? <FocusedComposer canSend={canSend} draft={draft} generating={generating} onAttachment={() => openSheet('attachments')} onBlur={() => setFocused(false)} onChangeText={setDraft} onSend={send} /> : <CompactComposer canSend={canSend} draft={draft} generating={generating} onAttachment={() => openSheet('attachments')} onChangeText={setDraft} onFocus={() => setFocused(true)} onSend={send} />}
     </View>
   );
 }

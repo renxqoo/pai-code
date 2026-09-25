@@ -12,7 +12,7 @@ export function PermissionCard() {
   const resolve = useConversationStore((state) => state.resolvePermission);
   if (request === null) return null;
   return (
-    <View accessibilityLabel="权限确认" style={{ backgroundColor: colors.accentSoft, borderColor: colors.accent, borderRadius: radius.lg, borderWidth: 1, marginTop: spacing.sm, padding: spacing.xs3 }}>
+    <View accessibilityLabel="权限确认" style={{ backgroundColor: colors.accentSoft, borderRadius: radius.lg, marginTop: spacing.sm, padding: spacing.xs3 }}>
       <View style={{ alignItems: 'center', flexDirection: 'row' }}>
         <ShieldCheck color={colors.accent} size={19} />
         <Text style={{ color: colors.text, fontSize: 15, fontWeight: '700', marginLeft: spacing.sm }}>{request.title}</Text>

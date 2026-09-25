@@ -21,29 +21,39 @@ describe('chat and history components', () => {
   });
 
   it('renders every message presentation kind', async () => {
-    const view = await render(<><MessageRow message={{ id: '1', kind: 'user', text: '用户消息', createdAt: 'now' }} /><MessageRow message={{ id: '2', kind: 'assistant', text: '助手消息', createdAt: 'now' }} /><MessageRow message={{ id: '3', kind: 'thinking', text: '分析中', createdAt: 'now' }} /><MessageRow message={{ id: '4', kind: 'tool', title: '执行', text: '完成', createdAt: 'now' }} /><MessageRow message={{ id: '5', kind: 'code', title: 'main.ts', language: 'ts', text: 'const x = 1', createdAt: 'now' }} /></>);
+    const view = await render(<><MessageRow message={{ id: '1', kind: 'user', text: '用户消息', createdAt: 'now' }} /><MessageRow message={{ id: '2', kind: 'assistant', text: '助手消息', createdAt: 'now' }} /><MessageRow message={{ id: '3', kind: 'thinking', text: '分析中', createdAt: 'now' }} /><MessageRow message={{ id: '4', kind: 'tool', title: '执行', text: '完成', createdAt: 'now' }} /><MessageRow message={{ id: '5', kind: 'code', title: 'main.ts', language: 'ts', text: 'const x = 1', createdAt: 'now' }} /><MessageRow message={{ id: '6', kind: 'tool', text: '默认工具', createdAt: 'now' }} /><MessageRow message={{ id: '7', kind: 'code', text: 'plain text', createdAt: 'now' }} /></>);
     expect(view.getByText('用户消息')).toBeTruthy();
     expect(view.getByText('思考过程')).toBeTruthy();
     expect(view.getByText('main.ts')).toBeTruthy();
+    expect(view.getByText('默认工具')).toBeTruthy();
+    expect(view.getByText('代码')).toBeTruthy();
+    expect(view.getByText('text')).toBeTruthy();
   });
 
   it('opens empty workspace and resolves permission', async () => {
     const workspace = jest.fn();
-    const view = await render(<><EmptyChat onWorkspace={workspace} /><PermissionCard /></>);
+    const prompt = jest.fn();
+    const view = await render(<><EmptyChat onPrompt={prompt} onWorkspace={workspace} /><PermissionCard /></>);
     await fireEvent.press(view.getByText('选择工作空间'));
     expect(workspace).toHaveBeenCalledTimes(1);
+    await fireEvent.press(view.getByText('分析当前项目'));
+    await fireEvent.press(view.getByText('定位并修复问题'));
+    await fireEvent.press(view.getByText('审查代码质量'));
+    expect(prompt).toHaveBeenNthCalledWith(1, '分析当前项目结构、关键模块和潜在风险，并给出可执行改进计划。');
+    expect(prompt).toHaveBeenNthCalledWith(2, '定位当前项目中的错误或失败测试，分析根因并完成修复。');
+    expect(prompt).toHaveBeenNthCalledWith(3, '审查当前代码变更，检查正确性、安全性和可维护性。');
     await act(() => Promise.resolve(useConversationStore.getState().requestPermission({ id: 'p', title: '运行测试', command: 'bun test', approved: null })));
     await view.rerender(<PermissionCard />);
     await fireEvent.press(view.getByText('允许一次'));
     expect(useConversationStore.getState().permissionRequest?.approved).toBe(true);
   });
 
-  it('renders chat header and opens history/actions', async () => {
+  it('renders chat header and opens history/task configuration', async () => {
     const view = await render(<ChatHeader />);
     await fireEvent.press(view.getByLabelText('打开对话历史'));
     expect(useNavigationStore.getState().drawerOpen).toBe(true);
-    await fireEvent.press(view.getByLabelText('对话菜单'));
-    expect(useNavigationStore.getState().sheet).toBe('session-actions');
+    await fireEvent.press(view.getByLabelText('任务配置'));
+    expect(useNavigationStore.getState().sheet).toBe('task-config');
   });
 
   it('opens and manages a session row', async () => {

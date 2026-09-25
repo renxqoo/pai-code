@@ -10,16 +10,18 @@ import { PermissionCard } from '@/features/chat/permission-card';
 import { ComposerPanel } from '@/features/composer/composer-panel';
 import { useConversationStore } from '@/store/conversation-store';
 import { useNavigationStore } from '@/store/navigation-store';
+import { useComposerStore } from '@/store/composer-store';
 
 export function ChatScreen() {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const session = useConversationStore((state) => state.session);
   const openSheet = useNavigationStore((state) => state.openSheet);
+  const setDraft = useComposerStore((state) => state.setDraft);
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ backgroundColor: colors.background, flex: 1 }}>
       <View style={{ paddingTop: insets.top }}><ChatHeader /></View>
-      {session.messages.length === 0 ? <EmptyChat onWorkspace={() => openSheet('workspace')} /> : <ScrollView contentContainerStyle={{ maxWidth: 760, paddingBottom: spacing.xs5, paddingHorizontal: spacing.xs3, width: '100%', alignSelf: 'center' }} keyboardShouldPersistTaps="handled">{session.messages.map((message) => <MessageRow key={message.id} message={message} />)}<PermissionCard /></ScrollView>}
+      {session.messages.length === 0 ? <EmptyChat onPrompt={setDraft} onWorkspace={() => openSheet('workspace')} /> : <ScrollView contentContainerStyle={{ maxWidth: 760, paddingBottom: spacing.xs5, paddingHorizontal: spacing.xs3, width: '100%', alignSelf: 'center' }} keyboardShouldPersistTaps="handled">{session.messages.map((message) => <MessageRow key={message.id} message={message} />)}<PermissionCard /></ScrollView>}
       <View style={{ paddingBottom: insets.bottom }}><ComposerPanel /></View>
     </KeyboardAvoidingView>
   );

@@ -58,6 +58,9 @@ export const copy = {
   light: '浅色',
   dark: '深色',
   permissionExplain: '控制 Pai Code 执行命令和修改文件时需要你的确认。',
+  quickAnalyze: '分析当前项目',
+  quickFix: '定位并修复问题',
+  quickReview: '审查代码质量',
 } as const;
 
 export const models = [

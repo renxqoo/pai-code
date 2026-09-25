@@ -4,9 +4,7 @@ import { HistoryDrawer } from '@/features/history/history-drawer';
 import { SessionSheet } from '@/features/history/session-sheet';
 import { WorkspaceSheet } from '@/features/workspace/workspace-sheet';
 import { AttachmentSheet } from '@/features/composer/attachment-sheet';
-import { TaskSettingsSheet } from '@/features/composer/task-settings-sheet';
-import { PermissionSheet } from '@/features/composer/permission-sheet';
-import { ContextSheet } from '@/features/composer/context-sheet';
+import { TaskConfigSheet } from '@/features/composer/task-config-sheet';
 
 export default function IndexScreen() {
   return (
@@ -15,9 +13,7 @@ export default function IndexScreen() {
       <HistoryDrawer />
       <WorkspaceSheet />
       <AttachmentSheet />
-      <TaskSettingsSheet />
-      <PermissionSheet />
-      <ContextSheet />
+      <TaskConfigSheet />
       <SessionSheet />
     </>
   );

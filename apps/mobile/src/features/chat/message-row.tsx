@@ -26,7 +26,7 @@ export function MessageRow({ message }: MessageRowProps) {
   }
   if (message.kind === 'thinking') {
     return (
-      <View style={{ backgroundColor: colors.surfaceSubtle, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, marginVertical: 5, padding: 12 }}>
+      <View style={{ backgroundColor: colors.surfaceSubtle, borderRadius: radius.md, marginVertical: 6, padding: 13 }}>
         <Text style={{ color: colors.textMuted, fontSize: 13, fontWeight: '600', marginBottom: 5 }}>思考过程</Text>
         <Text selectable style={{ color: colors.textMuted, fontSize: 13, lineHeight: 20 }}>{message.text}</Text>
       </View>
@@ -34,17 +34,17 @@ export function MessageRow({ message }: MessageRowProps) {
   }
   if (message.kind === 'code') {
     return (
-      <View style={{ backgroundColor: colors.code, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, marginVertical: 6, overflow: 'hidden' }}>
-        <View style={{ alignItems: 'center', borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: 'row', paddingHorizontal: 12, paddingVertical: 8 }}>
+      <View style={{ backgroundColor: colors.surfaceSubtle, borderRadius: radius.md, marginVertical: 8, overflow: 'hidden' }}>
+        <View style={{ alignItems: 'center', borderBottomColor: colors.divider, borderBottomWidth: 1, flexDirection: 'row', paddingHorizontal: 13, paddingVertical: 9 }}>
           <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '600' }}>{message.title ?? '代码'}</Text>
           <Text style={{ color: colors.textFaint, fontSize: 11, marginLeft: 'auto' }}>{message.language ?? 'text'}</Text>
         </View>
-        <Text selectable style={{ color: colors.text, fontFamily: 'Menlo', fontSize: 12, lineHeight: 19, padding: 12 }}>{message.text}</Text>
+        <Text selectable style={{ color: colors.text, fontFamily: 'Menlo', fontSize: 12, lineHeight: 19, padding: 13 }}>{message.text}</Text>
       </View>
     );
   }
   return (
-    <View style={{ borderColor: colors.divider, borderLeftWidth: 2, marginVertical: 5, paddingLeft: 12 }}>
+    <View style={{ backgroundColor: colors.surfaceSubtle, borderRadius: radius.md, marginVertical: 6, padding: 12 }}>
       <Text style={{ color: colors.text, fontSize: 13, fontWeight: '600' }}>{message.title ?? '执行工具'}</Text>
       <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 18, marginTop: 4 }}>{message.text}</Text>
     </View>

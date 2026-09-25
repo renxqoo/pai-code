@@ -20,4 +20,9 @@ describe('ThemeProvider', () => {
     const view = await render(<TestWrapper><ThemeProvider preference={preference}><ThemeProbe /></ThemeProvider></TestWrapper>);
     expect(view.getByTestId('theme').props.children).toBe(`${color}-${dark}`);
   });
+
+  it('follows the system light appearance', async () => {
+    const view = await render(<TestWrapper><ThemeProvider preference="system"><ThemeProbe /></ThemeProvider></TestWrapper>);
+    expect(view.getByTestId('theme').props.children).toBe(`${lightColors.text}-false`);
+  });
 });

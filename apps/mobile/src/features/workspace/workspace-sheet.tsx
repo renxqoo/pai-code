@@ -4,7 +4,7 @@ import { Folder } from 'lucide-react-native';
 import { useAppTheme } from '@/theme/theme-context';
 import { spacing } from '@/theme/tokens';
 import { Sheet } from '@/components/ui/sheet';
-import { ListRow } from '@/components/ui/list-row';
+import { ContentCard } from '@/components/ui/content-card';
 import { workspaces } from '@/fixtures/demo-data';
 import { useNavigationStore } from '@/store/navigation-store';
 import { useConversationStore } from '@/store/conversation-store';
@@ -19,7 +19,7 @@ export function WorkspaceSheet() {
     <Sheet onClose={closeSheet} title="选择工作空间" visible={open}>
       <Text style={{ color: colors.textMuted, fontSize: 12, paddingBottom: spacing.sm, paddingHorizontal: 3 }}>选择 Pai Code 可以访问的代码目录</Text>
       <ScrollView contentContainerStyle={{ paddingBottom: spacing.xs3 }}>
-        {workspaces.map((workspace) => <ListRow detail={workspace.path} icon={Folder} key={workspace.id} label={workspace.name} selected={workspaceId === workspace.id} onPress={() => { chooseWorkspace(workspace.id, workspace.name); closeSheet(); }} trailing={workspaceId === workspace.id ? '已选择' : undefined} />)}
+        <ContentCard items={workspaces.map((workspace) => ({ detail: workspace.path, icon: Folder, label: workspace.name, onPress: () => { chooseWorkspace(workspace.id, workspace.name); closeSheet(); }, selected: workspaceId === workspace.id }))} />
       </ScrollView>
     </Sheet>
   );

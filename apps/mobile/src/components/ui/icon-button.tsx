@@ -23,7 +23,7 @@ export function IconButton({ icon: Icon, label, active = false, size = 20, fille
       hitSlop={6}
       style={({ pressed }) => ({
         alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.pill,
-        height: 44, justifyContent: 'center', opacity: disabled ? 0.4 : pressed ? 0.58 : 1, width: 44,
+        height: 44, justifyContent: 'center', opacity: disabled ? 0.4 : pressed ? 0.58 : 1, shadowColor: '#3F3F46', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 1, width: 44,
       })}
       {...props}
     >

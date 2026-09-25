@@ -5,14 +5,13 @@ import { Bell, FileText, Search } from 'lucide-react-native';
 import { PaiMark } from '@/components/brand/pai-mark';
 import { ActionButton } from '@/components/ui/action-button';
 import { Card } from '@/components/ui/card';
+import { ContentCard } from '@/components/ui/content-card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { IconButton } from '@/components/ui/icon-button';
-import { ListRow } from '@/components/ui/list-row';
 import { SectionHeader } from '@/components/ui/section-header';
 import { TextField } from '@/components/ui/text-field';
 import { ToggleRow } from '@/components/ui/toggle-row';
 import { AttachmentChip } from '@/features/composer/attachment-chip';
-import { DeviceRow } from '@/features/settings/device-row';
 import { PrivacyProtectionRow } from '@/features/privacy/privacy-protection-row';
 import { TestWrapper } from '@/test/test-wrapper';
 
@@ -32,14 +31,6 @@ describe('presentational components', () => {
     await fireEvent.press(view.getByLabelText('通知'));
     expect(section).toHaveBeenCalledTimes(1);
     expect(icon).toHaveBeenCalledTimes(1);
-  });
-
-  it('renders list row variants and destructive action', async () => {
-    const press = jest.fn();
-    const view = await render(<><ListRow detail="路径" icon={FileText} label="文件" onPress={press} selected trailing="已选" /><ListRow destructive icon={FileText} label="删除" /></>);
-    await fireEvent.press(view.getByText('文件'));
-    expect(press).toHaveBeenCalledTimes(1);
-    expect(view.getByText('删除').props.style.color).toBeTruthy();
   });
 
   it('edits a single and multiline text field', async () => {
@@ -70,9 +61,27 @@ describe('presentational components', () => {
     expect(remove).toHaveBeenCalledTimes(1);
   });
 
-  it('renders device and privacy status', async () => {
-    const view = await render(<><DeviceRow /><PrivacyProtectionRow /></>);
-    expect(view.getByText('设备与连接')).toBeTruthy();
+  it('renders interactive, static, trailing and selected content rows', async () => {
+    const press = jest.fn();
+    const selectedPress = jest.fn();
+    const view = await render(<ContentCard items={[{ detail: '详情', icon: FileText, label: '可点击', onPress: press }, { label: '只读' }, { label: '状态', trailing: '进行中' }, { label: '已选', onPress: selectedPress, selected: true, trailing: '不可见状态' }]} />);
+    expect(view.getByText('可点击')).toBeTruthy();
+    await fireEvent.press(view.getByLabelText('可点击，详情'));
+    expect(press).toHaveBeenCalledTimes(1);
+    expect(view.getByText('只读')).toBeTruthy();
+    expect(view.getByText('进行中')).toBeTruthy();
+    expect(view.getByText('已选')).toBeTruthy();
+    await fireEvent.press(view.getByLabelText('已选'));
+    expect(selectedPress).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders padded content cards', async () => {
+    const view = await render(<ContentCard items={[{ label: '统计' }]} padded />);
+    expect(view.getByText('统计')).toBeTruthy();
+  });
+
+  it('renders privacy status', async () => {
+    const view = await render(<PrivacyProtectionRow />);
     expect(view.getByLabelText('隐私保护已启用')).toBeTruthy();
   });
 });

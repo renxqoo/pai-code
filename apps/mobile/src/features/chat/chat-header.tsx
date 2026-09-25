@@ -1,7 +1,6 @@
 import * as React from 'react';
-import { useRouter } from 'expo-router';
 import { Text, View } from 'react-native';
-import { Menu, MoreHorizontal, Search } from 'lucide-react-native';
+import { Menu, SlidersHorizontal } from 'lucide-react-native';
 import { useAppTheme } from '@/theme/theme-context';
 import { layout, spacing } from '@/theme/tokens';
 import { IconButton } from '@/components/ui/icon-button';
@@ -9,7 +8,6 @@ import { useNavigationStore } from '@/store/navigation-store';
 import { useConversationStore } from '@/store/conversation-store';
 
 export function ChatHeader() {
-  const router = useRouter();
   const { colors } = useAppTheme();
   const setDrawerOpen = useNavigationStore((state) => state.setDrawerOpen);
   const openSheet = useNavigationStore((state) => state.openSheet);
@@ -22,8 +20,7 @@ export function ChatHeader() {
         <Text numberOfLines={1} style={{ color: colors.text, fontSize: 16, fontWeight: '600', textAlign: 'center' }}>{title}</Text>
         <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 11, marginTop: 2, textAlign: 'center' }}>{project}</Text>
       </View>
-      <IconButton icon={Search} label="搜索对话" onPress={() => { router.push('/search'); }} />
-      <IconButton icon={MoreHorizontal} label="对话菜单" onPress={() => openSheet('session-actions')} />
+      <IconButton icon={SlidersHorizontal} label="任务配置" onPress={() => openSheet('task-config')} />
     </View>
   );
 }

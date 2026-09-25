@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useRouter } from 'expo-router';
 import { Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { HardDrive, Laptop, MoreHorizontal, Search, Settings, SquarePen, X } from 'lucide-react-native';
+import { Archive, HardDrive, Laptop, Search, Settings, SquarePen, X } from 'lucide-react-native';
 import { useAppTheme } from '@/theme/theme-context';
 import { radius, spacing } from '@/theme/tokens';
 import { IconButton } from '@/components/ui/icon-button';
@@ -35,15 +35,13 @@ export function HistoryDrawer() {
         <View style={{ paddingHorizontal: spacing.xs3 }}><Pressable accessibilityRole="button" onPress={() => { startNewSession(); setDrawerOpen(false); }} style={{ alignItems: 'center', backgroundColor: 'transparent', borderRadius: radius.lg, flexDirection: 'row', minHeight: 54, paddingHorizontal: 4 }}><SquarePen color={colors.text} size={21} /><Text style={{ color: colors.text, fontSize: 16, fontWeight: '500', marginLeft: 12 }}>新建对话</Text></Pressable>
           <DrawerLink icon={Laptop} label="连接电脑" onPress={() => { router.push('/devices'); setDrawerOpen(false); }} />
           <DrawerLink icon={HardDrive} label="资产" onPress={() => { router.push('/assets'); setDrawerOpen(false); }} />
-          <DrawerLink icon={MoreHorizontal} label="归档" onPress={() => { router.push('/archived'); setDrawerOpen(false); }} />
-          <DrawerLink icon={Settings} label="更多" onPress={() => { router.push('/settings'); setDrawerOpen(false); }} />
           <View style={{ alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.pill, flexDirection: 'row', marginTop: spacing.sm, minHeight: 46, paddingHorizontal: 14 }}><Search color={colors.textFaint} size={17} /><TextInput accessibilityLabel="搜索对话" onChangeText={setQuery} placeholder="搜索对话和项目" placeholderTextColor={colors.textFaint} style={{ color: colors.text, flex: 1, fontSize: 14, padding: 10 }} value={query} /></View>
         </View>
         <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xs6, paddingHorizontal: spacing.xs5 }}>{sessions.filter((session) => session.pinned).length > 0 ? <><SectionHeader title="置顶" />{sessions.filter((session) => session.pinned).map((session) => <SessionRow key={session.id} onAction={() => { selectSession(session.id); openSession(session); openSheet('session-actions'); }} onOpen={() => { selectSession(session.id); openSession(session); setDrawerOpen(false); }} session={session} />)}</> : null}
           <SectionHeader action="+ 添加项目" onAction={() => { router.push('/projects'); setDrawerOpen(false); }} title="项目" />
           {visible.map((session) => <SessionRow key={session.id} onAction={() => { selectSession(session.id); openSession(session); openSheet('session-actions'); }} onOpen={() => { selectSession(session.id); openSession(session); setDrawerOpen(false); }} session={session} />)}
         </ScrollView>
-        <View style={{ padding: spacing.xs5 }}><Pressable accessibilityRole="button" onPress={() => { router.push('/settings'); setDrawerOpen(false); }} style={{ alignItems: 'center', flexDirection: 'row', minHeight: 46 }}><Settings color={colors.text} size={19} /><Text style={{ color: colors.text, fontSize: 15, fontWeight: '600', marginLeft: 11 }}>个人设置</Text></Pressable></View>
+        <View style={{ padding: spacing.xs5 }}><DrawerLink icon={Archive} label="归档对话" onPress={() => { router.push('/archived'); setDrawerOpen(false); }} /><Pressable accessibilityRole="button" onPress={() => { router.push('/settings'); setDrawerOpen(false); }} style={{ alignItems: 'center', flexDirection: 'row', minHeight: 46 }}><Settings color={colors.text} size={19} /><Text style={{ color: colors.text, fontSize: 15, fontWeight: '600', marginLeft: 11 }}>个人设置</Text></Pressable></View>
       </View></View>
     </Modal>
   );

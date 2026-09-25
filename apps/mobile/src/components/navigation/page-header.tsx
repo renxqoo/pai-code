@@ -14,9 +14,9 @@ export function PageHeader({ title, subtitle, action }: PageHeaderProps) {
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
   return (
-    <View style={{ alignItems: 'center', flexDirection: 'row', minHeight: 58, paddingHorizontal: spacing.xs2, paddingTop: insets.top }}>
+    <View style={{ alignItems: 'center', flexDirection: 'row', minHeight: 68, paddingHorizontal: spacing.xs4, paddingTop: insets.top }}>
       <IconButton icon={ArrowLeft} label="返回" onPress={() => router.back()} />
-      <View style={{ flex: 1 }}><Text accessibilityRole="header" style={{ color: colors.text, fontSize: 17, fontWeight: '700', textAlign: 'center' }}>{title}</Text>{subtitle ? <Text style={{ color: colors.textMuted, fontSize: 10, marginTop: 2, textAlign: 'center' }}>{subtitle}</Text> : null}</View>
+      <View style={{ flex: 1 }}><Text accessibilityRole="header" style={{ color: colors.text, fontSize: 18, fontWeight: '700', textAlign: 'center' }}>{title}</Text>{subtitle ? <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 2, textAlign: 'center' }}>{subtitle}</Text> : null}</View>
       <View style={{ minWidth: 44, paddingHorizontal: 4 }}>{action}</View>
     </View>
   );
