@@ -39,8 +39,9 @@
 ## 验证记录
 
 - 全仓 lint/typecheck：0 warning / 0 error。
-- 根级 test：既有 Bun 2063 pass / 1 skip / 0 fail；移动端 Jest 18 suites / 73 tests 全绿。
-- 移动端覆盖率：语句 95.22%、分支 89.37%、函数 93.98%、行 97.27%。
+- 根级 test：既有 Bun 2212 pass / 1 skip / 0 fail；移动端 Jest 19 suites / 78 tests 全绿。
+- 移动端覆盖率：语句 95.29%、分支 88.88%、函数 95.22%、行 96.86%。
 - Expo iOS / Android Hermes bundle：全部通过。
 - bw 390×844 视口：首页、对话时间线、思考/工具折叠、代码截断、绝对定位 Todo、动态滚动预留、任务配置、附件、真实发送、抽屉、设置及全部补充页面均走查通过；无横向溢出与浏览器错误。
 - 项目文件页使用 `/files` 路由，避开 Metro `/assets` 保留路径；深链刷新与原生 bundle 均正常。
+- 终审收口：状态栏跟随应用主题、内容展开不抢占用户滚动、Todo 正确显示失败步骤、Android 等宽字体、搜索可达、权限确认 Mock、辅助文字对比度与 44pt 触控均已验证。

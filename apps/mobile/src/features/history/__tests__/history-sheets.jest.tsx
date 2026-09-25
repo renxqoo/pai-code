@@ -23,17 +23,23 @@ describe('history sheets', () => {
     useNavigationStore.setState({ drawerOpen: false, sheet: null });
   });
 
-  it('opens drawer, filters, starts a session and navigates settings', async () => {
+  it('starts a new session and navigates to settings', async () => {
     await act(() => Promise.resolve(useNavigationStore.getState().setDrawerOpen(true)));
     const view = await render(<TestWrapper><HistoryDrawer /></TestWrapper>);
-    await fireEvent.changeText(view.getByLabelText('搜索对话'), 'Pai Mobile');
-    expect(view.getByText('Pai Mobile 视觉走查')).toBeTruthy();
     await fireEvent.press(view.getByText('新建对话'));
     expect(useConversationStore.getState().activeSessionId).toBeNull();
     await act(() => Promise.resolve(useNavigationStore.getState().setDrawerOpen(true)));
     await view.rerender(<TestWrapper><HistoryDrawer /></TestWrapper>);
     await fireEvent.press(view.getByText('个人设置'));
-    expect(mockPush).toHaveBeenCalledWith('/settings');
+    expect(mockPush).toHaveBeenLastCalledWith('/settings');
+  });
+
+  it('opens search results when the drawer query is submitted', async () => {
+    await act(() => Promise.resolve(useNavigationStore.getState().setDrawerOpen(true)));
+    const view = await render(<TestWrapper><HistoryDrawer /></TestWrapper>);
+    await fireEvent.changeText(view.getByLabelText('搜索对话'), 'Pai Mobile');
+    await fireEvent(view.getByLabelText('搜索对话'), 'submitEditing');
+    expect(mockPush).toHaveBeenCalledWith('/search');
   });
 
   it('navigates to devices, files, projects and archive', async () => {

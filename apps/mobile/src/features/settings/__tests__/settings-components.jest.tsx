@@ -24,6 +24,7 @@ describe('settings components', () => {
     const view = await render(<TestWrapper><AppearanceScreen /></TestWrapper>);
     await fireEvent.press(view.getByText('深色'));
     expect(useSettingsStore.getState().theme).toBe('dark');
+    expect(view.queryByText('紧凑历史列表')).toBeNull();
   });
 
   it('renders preferences and navigates to models', async () => {

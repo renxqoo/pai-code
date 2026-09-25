@@ -5,7 +5,7 @@ export type ExecutionTodo = {
   id: string;
   title: string;
   detail: string;
-  state: 'done' | 'current' | 'pending';
+  state: 'done' | 'failed' | 'current' | 'pending';
 };
 
 export type ActiveExecution = {
@@ -24,7 +24,7 @@ export function selectActiveExecution(messages: readonly ChatMessage[]): ActiveE
     id: message.id,
     title: message.title ?? '执行工具',
     detail: message.summary ?? message.text,
-    state: message.status === 'success' || (message.status === 'error' && index < currentIndex) ? 'done' : index === currentIndex ? 'current' : 'pending',
+    state: message.status === 'error' ? 'failed' : message.status === 'success' ? 'done' : index === currentIndex ? 'current' : 'pending',
   }));
   return {
     messages: block.messages,

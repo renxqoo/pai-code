@@ -21,6 +21,7 @@ describe('ChatScreen', () => {
     expect(useNavigationStore.getState().sheet).toBe('workspace');
     await fireEvent.press(view.getByText('查看示例对话'));
     expect(useConversationStore.getState().session.id).toBe('session-refactor');
+    expect(useConversationStore.getState().permissionRequest?.approved).toBeNull();
   });
 
   it('renders a grouped existing conversation and composer', async () => {

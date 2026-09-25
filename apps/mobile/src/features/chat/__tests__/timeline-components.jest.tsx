@@ -6,6 +6,7 @@ import { MessageItem } from '@/features/chat/message-item';
 import { StatusRow } from '@/features/chat/status-row';
 import { ToolBlock } from '@/features/chat/tool-block';
 import { ThinkingBlock } from '@/features/chat/thinking-block';
+import { ExecutionTodoRow } from '@/features/chat/execution-todo-row';
 import { formatTimelineDuration } from '@/features/chat/timeline-duration';
 import type { ChatMessage } from '@/types/domain';
 
@@ -70,6 +71,11 @@ describe('timeline components', () => {
     expect(view.getByText('完成工具')).toBeTruthy();
     await fireEvent.press(runningControl);
     expect(view.getByText('继续运行')).toBeTruthy();
+  });
+
+  it('renders failed execution steps with a warning state', async () => {
+    const view = await render(<ExecutionTodoRow todo={{ id: 'failed', title: '测试失败', detail: '修复后重试', state: 'failed' }} />);
+    expect(view.getByText('测试失败')).toBeTruthy();
   });
 
   it('formats duration boundaries safely', () => {

@@ -1,16 +1,16 @@
 import * as React from 'react';
 import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider } from '@/theme/theme-provider';
 import { useSettingsStore } from '@/store/settings-store';
+import { AppStatusBar } from '@/components/app-status-bar';
 
 export default function RootLayout() {
   const theme = useSettingsStore((state) => state.theme);
   return (
     <SafeAreaProvider>
       <ThemeProvider preference={theme}>
-        <StatusBar style="auto" />
+        <AppStatusBar />
         <Stack screenOptions={{ animation: 'slide_from_right', contentStyle: { backgroundColor: 'transparent' }, headerShown: false }}>
           <Stack.Screen name="index" />
           <Stack.Screen name="search" />

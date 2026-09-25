@@ -16,6 +16,15 @@ describe('active execution selection', () => {
     expect(execution?.todos.map((todo) => todo.state)).toEqual(['done', 'current', 'pending']);
   });
 
+  it('preserves failed steps as failed todos', () => {
+    const execution = selectActiveExecution([
+      { id: 'failed', kind: 'tool', text: 'failed', status: 'error', createdAt: 'now' },
+      { id: 'current', kind: 'tool', text: 'current', status: 'running', createdAt: 'now' },
+    ]);
+    expect(execution?.todos.map((todo) => todo.state)).toEqual(['failed', 'current']);
+    expect(execution?.completed).toBe(0);
+  });
+
   it('removes only the active execution from the timeline', () => {
     expect(withoutActiveExecution(messages)).toEqual([]);
     expect(withoutActiveExecution([{ id: 'history', kind: 'tool', text: 'history', status: 'success', createdAt: 'now' }])).toHaveLength(1);

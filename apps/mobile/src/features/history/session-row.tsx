@@ -18,7 +18,7 @@ export function SessionRow({ session, onOpen, onAction }: SessionRowProps) {
         <View style={{ alignItems: 'center', flexDirection: 'row', marginTop: 7 }}><Text style={{ color: colors.textFaint, fontSize: 10 }}>{session.project} · {session.timeLabel}</Text>{session.state === 'working' ? <View style={{ backgroundColor: colors.accent, borderRadius: 4, height: 6, marginLeft: 7, width: 6 }} /> : null}</View>
       </View>
       {session.unread ? <View style={{ backgroundColor: colors.accent, borderRadius: 4, height: 7, marginRight: 8, marginTop: 7, width: 7 }} /> : null}
-      <Pressable accessibilityLabel={`${session.title} 更多操作`} hitSlop={8} onPress={(event) => { event.stopPropagation(); onAction(); }} style={{ padding: 5 }}><MoreHorizontal color={colors.textMuted} size={18} /></Pressable>
+      <Pressable accessibilityLabel={`${session.title} 更多操作`} hitSlop={8} onPress={(event) => { event.stopPropagation(); onAction(); }} style={{ alignItems: 'center', height: 44, justifyContent: 'center', marginVertical: -10, width: 44 }}><MoreHorizontal color={colors.textMuted} size={18} /></Pressable>
     </Pressable>
   );
 }
