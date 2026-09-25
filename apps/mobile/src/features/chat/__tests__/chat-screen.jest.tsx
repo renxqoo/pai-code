@@ -11,7 +11,7 @@ import { TestWrapper } from '@/test/test-wrapper';
 describe('ChatScreen', () => {
   beforeEach(() => {
     useConversationStore.getState().startNewSession();
-    useNavigationStore.setState({ drawerOpen: false, sheet: null, tab: 'chat' });
+    useNavigationStore.setState({ drawerOpen: false, sheet: null });
     useComposerStore.setState({ generating: false });
   });
 

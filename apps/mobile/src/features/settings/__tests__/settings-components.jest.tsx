@@ -16,7 +16,7 @@ jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush, back: jest
 describe('settings components', () => {
   beforeEach(() => {
     mockPush.mockClear();
-    useNavigationStore.setState({ drawerOpen: false, sheet: null, tab: 'chat' });
+    useNavigationStore.setState({ drawerOpen: false, sheet: null });
     useSettingsStore.setState({ theme: 'system', defaultModel: 'gpt-5.2-codex', defaultThinking: 'medium', defaultPermission: 'ask', notifications: true, haptics: true, compactHistory: false });
   });
 

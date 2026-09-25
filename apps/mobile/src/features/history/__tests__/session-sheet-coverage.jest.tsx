@@ -12,8 +12,8 @@ jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn(), back: jes
 
 describe('SessionSheet actions', () => {
   beforeEach(() => {
-    useHistoryStore.setState({ sessions: demoSessions, query: '', showArchived: false });
-    useNavigationStore.setState({ drawerOpen: false, sheet: null, tab: 'chat' });
+    useHistoryStore.setState({ sessions: demoSessions, query: '' });
+    useNavigationStore.setState({ drawerOpen: false, sheet: null });
   });
 
   it('archives and deletes through the active session sheet', async () => {

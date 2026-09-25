@@ -16,7 +16,7 @@ jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn(), back: jes
 
 describe('chat and history components', () => {
   beforeEach(() => {
-    useNavigationStore.setState({ drawerOpen: false, sheet: null, tab: 'chat' });
+    useNavigationStore.setState({ drawerOpen: false, sheet: null });
     useConversationStore.getState().startNewSession();
   });
 

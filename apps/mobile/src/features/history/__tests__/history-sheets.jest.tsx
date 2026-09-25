@@ -18,9 +18,9 @@ jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush, back: jest
 describe('history sheets', () => {
   beforeEach(() => {
     mockPush.mockClear();
-    useHistoryStore.setState({ sessions: demoSessions, query: '', showArchived: false });
+    useHistoryStore.setState({ sessions: demoSessions, query: '' });
     useConversationStore.getState().startNewSession();
-    useNavigationStore.setState({ drawerOpen: false, sheet: null, tab: 'chat' });
+    useNavigationStore.setState({ drawerOpen: false, sheet: null });
   });
 
   it('opens drawer, filters, starts a session and navigates settings', async () => {

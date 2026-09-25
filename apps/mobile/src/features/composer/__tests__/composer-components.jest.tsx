@@ -15,7 +15,7 @@ describe('composer components', () => {
     useComposerStore.setState({ draft: '', model: 'gpt-5.2-codex', thinking: 'medium', permission: 'ask', sending: false, generating: false, contextPercent: 24 });
     useAttachmentStore.setState({ items: [] });
     useConversationStore.getState().startNewSession();
-    useNavigationStore.setState({ drawerOpen: false, sheet: null, tab: 'chat' });
+    useNavigationStore.setState({ drawerOpen: false, sheet: null });
   });
 
   it('edits and sends a draft with attachments from the compact input', async () => {

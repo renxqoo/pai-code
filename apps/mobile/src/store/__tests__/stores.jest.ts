@@ -9,9 +9,9 @@ import { useSettingsStore } from '@/store/settings-store';
 
 describe('mobile UI stores', () => {
   beforeEach(() => {
-    useNavigationStore.setState({ drawerOpen: false, sheet: null, tab: 'chat' });
+    useNavigationStore.setState({ drawerOpen: false, sheet: null });
     useComposerStore.setState({ draft: '', model: 'gpt-5.2-codex', thinking: 'medium', permission: 'ask', sending: false, generating: false, contextPercent: 24 });
-    useHistoryStore.setState({ sessions: demoSessions, query: '', showArchived: false });
+    useHistoryStore.setState({ sessions: demoSessions, query: '' });
     useAttachmentStore.setState({ items: [] });
     useSettingsStore.setState({ theme: 'system', defaultModel: 'gpt-5.2-codex', defaultThinking: 'medium', defaultPermission: 'ask', notifications: true, haptics: true, compactHistory: false });
     useConversationStore.getState().startNewSession();

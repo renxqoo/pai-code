@@ -18,7 +18,7 @@ describe('attachment sheet', () => {
     mockDocumentPicker.getDocumentAsync.mockReset();
     mockImagePicker.launchImageLibraryAsync.mockReset();
     useAttachmentStore.setState({ items: [] });
-    useNavigationStore.setState({ drawerOpen: false, sheet: null, tab: 'chat' });
+    useNavigationStore.setState({ drawerOpen: false, sheet: null });
   });
 
   it('fires an attachment option', async () => {
