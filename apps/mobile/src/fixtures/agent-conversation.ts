@@ -169,6 +169,7 @@ export const agentConversation: ConversationSession = {
     message({ id: 'tool-babel-retry', kind: 'tool', title: '配置 Babel 转译重试', text: '对 ESM-only 包强制转 CJS 后重跑测试。', status: 'error', durationMs: 900, summary: 'root 配置不覆盖外部包', createdAt: '10:14' }),
     message({ id: 'tool-umd-retry', kind: 'tool', title: '映射 UMD 构建重试', text: '把测试入口映射到 UMD 构建后重跑。', status: 'error', durationMs: 800, summary: '仍按包级 type:module 判定', createdAt: '10:15' }),
     message({ id: 'tool-switch-parser', kind: 'tool', title: '切换 CJS 解析器', text: '改用 markdown-it 并按 token 流重写解析层。', status: 'success', durationMs: 2200, summary: '解析测试全绿', createdAt: '10:16' }),
+    message({ id: 'assistant-parser-pivot', kind: 'assistant', text: parserPivot, createdAt: '10:16' }),
     message({ id: 'tool-token-bug', kind: 'tool', title: '修复词法差异', text: 'inline 子节点在 children、行内代码 token 名不同，导致内容为空。', status: 'error', durationMs: 1400, summary: '2 类 token 形态踩坑', createdAt: '10:17' }),
     message({ id: 'tool-parser-green', kind: 'tool', title: '重跑解析测试', text: '修正词法映射并补列表/引用边界用例。', status: 'success', durationMs: 1300, summary: '37 个用例通过', createdAt: '10:18' }),
     message({ id: 'tool-write-render', kind: 'tool', title: '实现渲染组件', text: '落地段落、标题、列表、引用、分隔线、代码与安全链接。', status: 'success', durationMs: 2800, summary: '新增 6 个渲染组件', createdAt: '10:19' }),
