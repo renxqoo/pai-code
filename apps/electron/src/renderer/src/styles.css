@@ -177,8 +177,8 @@
 
 /* 全局滚动条：细拇指 + 全透明轨道/交角（消灭系统默认的白底描边框），亮暗随主题变量 */
 ::-webkit-scrollbar {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track,
@@ -188,9 +188,10 @@
 
 ::-webkit-scrollbar-thumb {
   background: var(--border);
-  border: 3.5px solid transparent;
+  border: 0;
+  border-right: 4px solid transparent;
   background-clip: content-box;
-  border-radius: 8px;
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -240,7 +241,7 @@
  * 悬停变色沿用全局 thumb:hover 规则（background-clip 一并继承）。
  */
 .scroll-thin::-webkit-scrollbar {
-  width: 8px;
+  width: 10px;
   height: 8px;
 }
 
@@ -251,9 +252,10 @@
 
 .scroll-thin::-webkit-scrollbar-thumb {
   background: var(--border);
-  border: 2.5px solid transparent;
+  border: 0;
+  border-right: 4px solid transparent;
   background-clip: content-box;
-  border-radius: 8px;
+  border-radius: 3px;
 }
 /*
  * 对话正文 markdown（chat-markdown，见 markdown-text.tsx）外观校准，对标基准：
