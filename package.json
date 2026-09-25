@@ -17,10 +17,10 @@
   },
   "devDependencies": {
     "@oxlint/plugins": "^1.81.0",
-    "@types/node": "26.4.1",
+    "@types/node": "26.5.1",
     "oxlint": "^1.81.0",
     "oxlint-tsgolint": "^7.0.2001",
-    "oxfmt": "^0.66.0",
+    "oxfmt": "^0.67.0",
     "typescript": "^7.0.2"
   }
 }
