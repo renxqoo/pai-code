@@ -34,6 +34,13 @@ export async function listGitGraph(client: BridgeClient, cwd: string): Promise<A
   return api.git.graph({ cwd });
 }
 
+/** 工作区变更速览（速览面板 Git 区；非仓库为空形态，失败 {ok:false}）。 */
+export async function listGitStatus(client: BridgeClient, cwd: string): Promise<ApiOutcome<'git/status'>> {
+  const api = createApiClient(client);
+  if (cwd.length === 0) return emptyCwd();
+  return api.git.status({ cwd });
+}
+
 /** 切换 / 创建并检出分支（失败原因透传，由调用方转文案）。 */
 export async function checkoutGitBranch(
   client: BridgeClient,

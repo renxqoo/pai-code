@@ -1,4 +1,5 @@
 /** 英文文案表（key 结构 = 唯一真相；zh 表按同形状翻译）。 */
+import { enPulse } from './en-pulse';
 import { enSettings } from './en-settings';
 import {
   bashImagesRejectedCopy,
@@ -136,6 +137,7 @@ export const en = {
       },
     },
   },
+  pulse: enPulse,
   flow: {
     openDiff: 'Open Diff',
     steerPlaceholder: 'Steer this agent…',

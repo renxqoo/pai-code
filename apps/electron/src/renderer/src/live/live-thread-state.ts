@@ -1,4 +1,4 @@
-import type { HistoryItem, InflightToolView, InflightView, QueueEntry } from '@paiapp/contracts';
+import type { HistoryItem, InflightToolView, InflightView, QueueEntry, TodoSnapshotEventData } from '@paiapp/contracts';
 import type { ThreadItem, SubagentModel } from '@/thread/thread-model';
 
 /**
@@ -14,6 +14,8 @@ export type RetryState = { attempt: number; errorMessage: string };
 export type LiveThreadState = {
   items: readonly ThreadItem[];
   agents: readonly SubagentModel[];
+  /** todo 清单全量快照（todo/snapshot 与水化载荷 last-wins；null = 尚无清单）。 */
+  todo: TodoSnapshotEventData | null;
   /** get_entries 增量游标（WAL seq；null = 尚未水化）。 */
   cursor: number | null;
   /** 已并入的条目 id（对账去重；userMessage 事件同源）。 */
@@ -61,6 +63,7 @@ export type LiveThreadState = {
 export const initialThreadState: LiveThreadState = {
   items: [],
   agents: [],
+  todo: null,
   cursor: null,
   seenIds: new Set<string>(),
   liveTurnId: null,
@@ -84,14 +87,26 @@ export const initialThreadState: LiveThreadState = {
   bashTail: '',
 };
 
+/** todo 快照合并（单调）：桶计数器只进不退——水化载荷与事件交错时防复活旧快照，
+ *  同 seq 后到胜（幂等重投）。incoming 缺席/空 = 不动既有。 */
+export function mergeTodo(
+  current: TodoSnapshotEventData | null,
+  incoming: TodoSnapshotEventData | null | undefined,
+): TodoSnapshotEventData | null {
+  if (incoming === undefined || incoming === null) return current;
+  if (current === null) return incoming;
+  return incoming.seq >= current.seq ? incoming : current;
+}
+
 /** 对账动作（非 UiEvent 的内部输入，controller 编排水化时派发）。 */
 export type HydrateAction =
   /** 在途读口收敛（T35 M2b）：`session/inflight` 视图合入折叠态（幂等）。 */
   | { kind: 'hydrate/inflight'; view: InflightView; at: number }
-  | { kind: 'hydrate/initial'; items: readonly HistoryItem[]; cursor: number | null }
-  | { kind: 'hydrate/reconcile'; items: readonly HistoryItem[]; cursor: number | null; dropLiveTurn: boolean }
+  /** 条目载荷三型共有的 todo 快照槽：窗口内无快照 = 缺席（不得据此清既有快照）。 */
+  | { kind: 'hydrate/initial'; items: readonly HistoryItem[]; cursor: number | null; todo?: TodoSnapshotEventData }
+  | { kind: 'hydrate/reconcile'; items: readonly HistoryItem[]; cursor: number | null; dropLiveTurn: boolean; todo?: TodoSnapshotEventData }
   /** 全量重建（settle 对账）：条目真相整体替换 items，继承停止语义。 */
-  | { kind: 'hydrate/rebuild'; items: readonly HistoryItem[]; cursor: number | null }
+  | { kind: 'hydrate/rebuild'; items: readonly HistoryItem[]; cursor: number | null; todo?: TodoSnapshotEventData }
   | { kind: 'hydrate/failed' };
 
 /**

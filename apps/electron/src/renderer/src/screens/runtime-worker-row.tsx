@@ -1,8 +1,7 @@
 import { MoreHorizontal, Pin, PinOff } from 'lucide-react';
 
-import { IconButton, MenuButton, type MenuItemDef } from '@paiapp/ui';
+import { formatTokenCount, IconButton, MenuButton, type MenuItemDef } from '@paiapp/ui';
 
-import { formatTokenCount } from '@/thread/format-count-unit';
 import { copy } from '@/strings';
 import { cn } from '@/lib/utils';
 import type { RuntimeWorkerRow } from '@/screens/runtime-entries';

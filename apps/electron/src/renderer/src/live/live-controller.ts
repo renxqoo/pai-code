@@ -15,7 +15,7 @@ import { createSettingsPorts } from './settings-ports';
 import { createAgentsActions } from './agents-actions';
 import { createSkillsActions } from './skills-actions';
 import { createPluginsActions } from './plugins-actions';
-import { checkoutGitBranch, listGitBranches, listGitGraph, searchFiles } from './git-actions';
+import { checkoutGitBranch, listGitBranches, listGitGraph, listGitStatus, searchFiles } from './git-actions';
 import type { CreateSessionInput, CreateSessionOutcome, LiveController, QueueOpOutcome } from './live-controller-types';
 import { isLiveSession, type LiveStore } from './store';
 
@@ -506,6 +506,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     searchFiles: (cwd: string, query: string) => searchFiles(client, cwd, query),
     listGitBranches: (cwd: string) => listGitBranches(client, cwd),
     listGitGraph: (cwd: string) => listGitGraph(client, cwd),
+    listGitStatus: (cwd: string) => listGitStatus(client, cwd),
     checkoutGitBranch: (cwd: string, branch: string, create: boolean) => checkoutGitBranch(client, cwd, branch, create),
     async upsertProvider(input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; apiKey?: string }): Promise<string | null> {
       const outcome = await api.provider.upsert(input);

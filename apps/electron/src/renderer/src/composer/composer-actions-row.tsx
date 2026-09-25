@@ -5,10 +5,9 @@ import type { SessionStatsView, TokenAnalyticsView } from '@paiapp/contracts';
 
 import { UsageDetails, formatWindowPct } from './usage-details';
 
-import { IconButton, MenuButton, menuTriggerClassName, PickerDialog, Progress, Spinner } from '@paiapp/ui';
+import { formatTokenCount, IconButton, MenuButton, menuTriggerClassName, PickerDialog, Progress, Spinner } from '@paiapp/ui';
 import { groupModelOptions } from '@/components/group-model-options';
 import { copy } from '@/strings';
-import { formatTokenCount } from '@/thread/format-count-unit';
 import { cn } from '@/lib/utils';
 
 import { PermissionModeMenu } from './permission-mode-menu';

@@ -1,6 +1,6 @@
 import { Bot } from 'lucide-react';
 
-import { IconButton } from '@paiapp/ui';
+import { IconBadge } from '@paiapp/ui';
 
 import { copy } from '@/strings';
 
@@ -13,17 +13,10 @@ type AgentStatusButtonProps = {
 /** 输入框底行子代理状态：Bot 图标 + 右上角小数字，点击打开 Agents 侧栏面板。 */
 function AgentStatusButton({ count, onOpen }: AgentStatusButtonProps) {
   if (count <= 0) return null;
-  const label = copy.flow.agentsWorking(count);
   return (
-    <IconButton label={label} size="sm" onClick={onOpen} className="text-muted-foreground/90">
+    <IconBadge count={count} label={copy.flow.agentsWorking(count)} size="sm" onClick={onOpen} className="text-muted-foreground/90">
       <Bot strokeWidth={1.75} />
-      <span
-        aria-hidden="true"
-        className="absolute -top-[3px] -right-[3px] flex h-[13px] min-w-[13px] items-center justify-center rounded-full bg-link px-[3px] font-mono text-[9px] leading-none tabular-nums text-white"
-      >
-        {count}
-      </span>
-    </IconButton>
+    </IconBadge>
   );
 }
 
