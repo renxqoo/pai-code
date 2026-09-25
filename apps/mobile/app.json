@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "Pai Code",
+    "slug": "pai-code",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "pai-code",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.pai.code"
+    },
+    "android": {
+      "package": "com.pai.code",
+      "predictiveBackGestureEnabled": true
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": ["expo-router", "expo-document-picker", "expo-image-picker"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
