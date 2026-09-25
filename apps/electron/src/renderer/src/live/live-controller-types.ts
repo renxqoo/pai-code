@@ -140,6 +140,8 @@ export interface LiveController {
   /** 本地 git 分支列表（新任务页分支选择；非仓库为空形态，失败为 {ok:false}）。 */
   readonly listGitBranches: (cwd: string) => Promise<ApiOutcome<'git/branches'>>;
   readonly listGitGraph: (cwd: string) => Promise<ApiOutcome<'git/graph'>>;
+  /** 工作区变更速览（速览面板 Git 区数据源）。 */
+  readonly listGitStatus: (cwd: string) => Promise<ApiOutcome<'git/status'>>;
   /** 切换/创建并检出分支（成功返回 {ok:true}；失败原因透传，由调用方转文案）。 */
   readonly checkoutGitBranch: (cwd: string, branch: string, create: boolean) => Promise<ApiOutcome<'git/checkout'>>;
   readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; apiKey?: string }) => Promise<string | null>;

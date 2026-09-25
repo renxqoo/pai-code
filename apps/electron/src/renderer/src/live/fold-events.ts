@@ -142,6 +142,9 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
     case 'subagentSettled':
     case 'subagentState':
       return onSubagentEvent(state, event, now);
+    case 'todoSnapshot':
+      // todo 清单全量快照 last-wins（速览面板进程区整体替换）
+      return { ...state, todo: event.snapshot };
     case 'sessionDied':
       // worker 死亡时全部在途子代理随进程自灭且无 settle 通知（api.md U2）：就地终态
       return { ...foldDeath(state, now), crashed: true };

@@ -44,4 +44,20 @@ describe('FloatingPanel', () => {
     );
     expect(html).toContain('收起');
   });
+
+  test('底部固定条渲染（不随内容滚动；缺省无）', () => {
+    const html = renderToStaticMarkup(
+      <FloatingPanel label="a" title="t" footer={<div>运行中 1</div>}>
+        <p>x</p>
+      </FloatingPanel>,
+    );
+    expect(html).toContain('运行中 1');
+    expect(html).toContain('shrink-0 border-t');
+    const without = renderToStaticMarkup(
+      <FloatingPanel label="a" title="t">
+        <p>x</p>
+      </FloatingPanel>,
+    );
+    expect(without).not.toContain('border-t');
+  });
 });

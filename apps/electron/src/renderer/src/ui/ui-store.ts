@@ -39,6 +39,15 @@ export type ProjectFilesState = {
   loading: boolean;
 };
 
+/** 速览面板分区（面板内各分区独立折叠）。 */
+export type PulseSection = 'git' | 'todo' | 'agents';
+
+/** 速览面板交互态（展开 ⇄ 收起 chip；分区折叠——本地交互真相，不进持久层）。 */
+export type PulseState = {
+  open: boolean;
+  sections: Readonly<Record<PulseSection, boolean>>;
+};
+
 export type UiState = {
   sidebarWidth: number;
   sidebarCollapsed: boolean;
@@ -73,6 +82,8 @@ export type UiState = {
   /** 输入浮层实测高度（避让消费：舞台底部 padding 与回底浮标；偏移在动作内加成）。 */
   composerInset: number;
   projectFiles: ProjectFilesState;
+  /** 速览面板（右上角固定浮层）交互态。 */
+  pulse: PulseState;
 };
 
 export type UiActions = {
@@ -117,6 +128,9 @@ export type UiActions = {
   /** 图片回填信号（token 自增；images 可为空数组——仍产生一次信号，消费端并入零项）。 */
   setComposerRestore: (images: NamedPendingImages) => void;
   bumpBranchRevision: () => void;
+  /** 速览面板：展开/收起切换与分区折叠。 */
+  setPulseOpen: (open: boolean) => void;
+  togglePulseSection: (key: PulseSection) => void;
   beginProjectFiles: (target: { name: string; path: string }) => void;
   completeProjectFiles: (tree: readonly ProjectFileNode[]) => void;
   closeProjectFiles: () => void;
@@ -149,6 +163,7 @@ function initialUiState(): UiState {
     panel: EMPTY_PANEL,
     composerInset: 184,
     projectFiles: { target: null, tree: [], loading: false },
+    pulse: { open: true, sections: { git: true, todo: true, agents: true } },
   };
 }
 
@@ -201,6 +216,9 @@ export function createUiStore() {
     setComposerRestore: (images) =>
       set((state) => ({ composerRestore: { token: (state.composerRestore?.token ?? 0) + 1, images } })),
     bumpBranchRevision: () => set((state) => ({ branchRevision: state.branchRevision + 1 })),
+    setPulseOpen: (open) => set((state) => ({ pulse: { ...state.pulse, open } })),
+    togglePulseSection: (key) =>
+      set((state) => ({ pulse: { ...state.pulse, sections: { ...state.pulse.sections, [key]: !state.pulse.sections[key] } } })),
     beginProjectFiles: (target) => set({ projectFiles: { target, tree: [], loading: true } }),
     completeProjectFiles: (tree) =>
       set((state) => ({ projectFiles: { ...state.projectFiles, tree, loading: false } })),
