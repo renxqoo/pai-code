@@ -1,6 +1,9 @@
 import { useEffect, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 
 import { Popover } from '@base-ui/react/popover';
+import { cn } from 'cn';
+
+import { panelSurfaceClassName } from './panel-styles';
 
 type AnchoredPanelProps = {
   /** 受控开合；点击面板外、Esc、触发器点击都经 Base UI dismiss 汇入此口 */
@@ -22,9 +25,11 @@ type AnchoredPanelProps = {
   sideOffset?: number
 };
 
-/** 面板容器外观：大圆角 + 描边 + 柔和阴影，开合走 scale/opacity 过渡（与 Menu 族同一观感）。 */
-const popupClassName =
-  'z-50 box-border origin-[var(--transform-origin)] overflow-hidden rounded-2xl border border-border bg-popover text-popover-foreground shadow-lg shadow-black/5 outline-none data-[ending-style]:scale-95 data-[ending-style]:opacity-0 data-[starting-style]:scale-95 data-[starting-style]:opacity-0 transition-[opacity,scale] data-[starting-style]:duration-100 data-[ending-style]:duration-75';
+/** 面板容器外观：大圆角 + 描边 + 柔和阴影（与 FloatingPanel 共用面板观感 token），开合走 scale/opacity 过渡（与 Menu 族同一观感）。 */
+const popupClassName = cn(
+  panelSurfaceClassName,
+  'z-50 origin-[var(--transform-origin)] overflow-hidden data-[ending-style]:scale-95 data-[ending-style]:opacity-0 data-[starting-style]:scale-95 data-[starting-style]:opacity-0 transition-[opacity,scale] data-[starting-style]:duration-100 data-[ending-style]:duration-75',
+);
 
 /**
  * 通用锚定面板：受控弹出的非模态面板，锚定在触发器旁。非模态语义（modal=false）——

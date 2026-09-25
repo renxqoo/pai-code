@@ -1,4 +1,4 @@
-import { formatDiffDelta } from './format-count-unit';
+import { formatDiffDelta } from '@paiapp/ui';
 import type { DiffFileModel } from './thread-model';
 
 type DiffFileListProps = {

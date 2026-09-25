@@ -1,6 +1,6 @@
 import { useUsageEntries } from '@/hooks/use-usage-panel';
 import { copy } from '@/strings';
-import { formatTokenCount } from '@/thread/format-count-unit';
+import { formatTokenCount } from '@paiapp/ui';
 
 /** 会话用量条目（仅本次运行内存中的活跃会话，无跨重启历史）。 */
 type UsageEntry = {
