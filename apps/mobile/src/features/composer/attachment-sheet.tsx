@@ -19,4 +19,3 @@ export function AttachmentSheet() {
   const addDocument = async () => { const result = await DocumentPicker.getDocumentAsync({ multiple: true, copyToCacheDirectory: true }); closeSheet(); if (!result.canceled) result.assets.forEach((asset) => addAttachment({ id: asset.uri, name: asset.name, size: asset.size ?? 0, kind: kindOf(asset.name), status: 'ready', uri: asset.uri })); };
   return <Sheet onClose={closeSheet} title="添加附件" visible={open}><View style={{ gap: spacing.sm, paddingBottom: spacing.xs3 }}><AttachmentOption description="图片、代码文件、文档与 PDF" icon={ImageIcon} label="从相册选择" onPress={() => { void addImage(); }} /><AttachmentOption description="支持多选，文件仅用于当前任务" icon={FolderOpen} label="浏览文件" onPress={() => { void addDocument(); }} /><AttachmentOption description="添加当前工作空间中的 README.md" icon={FileText} label="从项目导入" onPress={addProjectFile} /></View></Sheet>;
 }
-

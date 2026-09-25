@@ -36,7 +36,7 @@ describe('history sheets', () => {
     expect(mockPush).toHaveBeenCalledWith('/settings');
   });
 
-  it('navigates to devices, assets, projects and archive', async () => {
+  it('navigates to devices, files, projects and archive', async () => {
     await act(() => Promise.resolve(useNavigationStore.getState().setDrawerOpen(true)));
     const view = await render(<TestWrapper><HistoryDrawer /></TestWrapper>);
     await fireEvent.press(view.getByText('连接电脑'));
@@ -44,7 +44,7 @@ describe('history sheets', () => {
     await act(() => Promise.resolve(useNavigationStore.getState().setDrawerOpen(true)));
     await view.rerender(<TestWrapper><HistoryDrawer /></TestWrapper>);
     await fireEvent.press(view.getByText('资产'));
-    expect(mockPush).toHaveBeenCalledWith('/assets');
+    expect(mockPush).toHaveBeenCalledWith('/files');
     await act(() => Promise.resolve(useNavigationStore.getState().setDrawerOpen(true)));
     await view.rerender(<TestWrapper><HistoryDrawer /></TestWrapper>);
     await fireEvent.press(view.getByText('+ 添加项目'));
