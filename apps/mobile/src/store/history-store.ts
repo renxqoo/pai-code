@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { agentConversation } from '@/fixtures/agent-conversation';
 import { demoSessions } from '@/fixtures/demo-data';
 import type { ConversationSession } from '@/types/domain';
 
@@ -17,7 +18,7 @@ const updateSession = (sessions: readonly ConversationSession[], id: string, upd
   sessions.map((session) => session.id === id ? update(session) : session);
 
 export const useHistoryStore = create<HistoryState>((set) => ({
-  sessions: demoSessions, query: '',
+  sessions: [agentConversation, ...demoSessions], query: '',
   setQuery: (query) => set({ query: query.slice(0, 120) }),
   selectSession: (id) => set((state) => ({ sessions: state.sessions.map((session) => session.id === id ? { ...session, unread: false } : session) })),
   togglePinned: (id) => set((state) => ({ sessions: updateSession(state.sessions, id, (session) => ({ ...session, pinned: !session.pinned })) })),

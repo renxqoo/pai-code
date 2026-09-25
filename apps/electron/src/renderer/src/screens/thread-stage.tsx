@@ -10,6 +10,7 @@ import { useThreadHeaderAssembly } from '@/thread/use-thread-header-assembly';
 import { TurnAnchorRail } from '@/thread/turn-anchor-rail';
 import { turnAnchors } from '@/thread/turn-anchor-data';
 import { useElapsedNow } from '@/thread/use-elapsed-now';
+import { useFollowLatest } from '@/thread/use-follow-latest';
 import { useStickToBottom } from '@/thread/use-stick-to-bottom';
 import { editUserMessage, forkUserMessage } from '@/screens/workspace-fork';
 import { initialThreadState } from '@/live/live-thread-state';
@@ -49,8 +50,10 @@ function ThreadStage(): React.JSX.Element {
     queueCount,
   });
 
-  /** 页面滚动：菜单栏固定，消息流独占滚动容器，贴底跟随挂在容器上 */
+  /** 页面滚动：菜单栏固定，消息流独占滚动容器，贴底跟随挂在容器上；
+   *  发送回底信号消费即回到底部并恢复跟随（用户主动发送的显式意图）。 */
   const { containerRef: scrollRef, onScroll, atBottom, scrollToBottom } = useStickToBottom();
+  useFollowLatest(scrollToBottom);
   const turnAnchorList = React.useMemo(() => turnAnchors(activeThread.items), [activeThread.items]);
   const jumpToTurn = React.useCallback((turnId: string) => {
     const container = scrollRef.current;

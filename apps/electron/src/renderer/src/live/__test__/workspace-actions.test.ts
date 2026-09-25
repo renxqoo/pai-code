@@ -155,3 +155,39 @@ describe('提交失败通知（D15：images 硬拒的友好文案）', () => {
   });
 });
 
+describe('发送回底信号（threadId 寻址，用户主动投递成功才触发）', () => {
+  test('submitDraft 成功：以投递线程递增 followLatest；失败不触发', async () => {
+    store.setState({ activeThreadId: 't1', threads: { t1: { ...initialThreadState } } });
+    jest.spyOn(controller, 'submitDraft').mockResolvedValueOnce(null);
+    expect(await workspaceActions.submitDraft('发出这条')).toBeNull();
+    expect(uiStore.getState().followLatest).toEqual({ token: 1, threadId: 't1' });
+
+    jest.spyOn(controller, 'submitDraft').mockResolvedValueOnce('no_active_session');
+    expect(await workspaceActions.submitDraft('失败这条')).toBe('no_active_session');
+    expect(uiStore.getState().followLatest).toEqual({ token: 1, threadId: 't1' });
+  });
+
+  test('立即改向受理成功（ok）触发回底；撞已消费竞态（已入轮）同口径；window/failed 不触发', async () => {
+    seedQueue();
+    jest.spyOn(controller, 'queueSendNow').mockResolvedValueOnce('ok');
+    workspaceActions.sendQueuedMessageNow('t1', 'q1');
+    await Promise.resolve();
+    expect(uiStore.getState().followLatest).toEqual({ token: 1, threadId: 't1' });
+
+    jest.spyOn(controller, 'queueSendNow').mockResolvedValueOnce('consumed');
+    workspaceActions.sendQueuedMessageNow('t1', 'q1');
+    await Promise.resolve();
+    expect(uiStore.getState().followLatest).toEqual({ token: 2, threadId: 't1' });
+
+    jest.spyOn(controller, 'queueSendNow').mockResolvedValueOnce('window');
+    workspaceActions.sendQueuedMessageNow('t1', 'q1');
+    await Promise.resolve();
+    expect(uiStore.getState().followLatest).toEqual({ token: 2, threadId: 't1' });
+
+    jest.spyOn(controller, 'queueSendNow').mockResolvedValueOnce('failed');
+    workspaceActions.sendQueuedMessageNow('t1', 'q1');
+    await Promise.resolve();
+    expect(uiStore.getState().followLatest).toEqual({ token: 2, threadId: 't1' });
+  });
+});
+

@@ -75,6 +75,9 @@ export type UiState = {
   confirmStop: boolean;
   /** 输入卡图片回填一次性信号：token 递增即并入附件态（消费端 PromptCard）。 */
   composerRestore: { token: number; images: NamedPendingImages } | null;
+  /** 发送回底一次性信号：用户主动投递成功时递增并记发送线程；舞台消费即回到底部
+   *  并恢复贴底跟随（threadId 寻址，非本线程的发送不拉走阅读位置）。 */
+  followLatest: { token: number; threadId: string } | null;
   /** 分支视图失效代次（新建任务页 checkout 成功递增，输入卡上下文条分支段重拉）。 */
   branchRevision: number;
   /** 面板系统当前多标签态（会话级存档在 panel-controller 的模块档案，非当前态）。 */
@@ -127,6 +130,7 @@ export type UiActions = {
   setComposerInset: (rawHeight: number) => void;
   /** 图片回填信号（token 自增；images 可为空数组——仍产生一次信号，消费端并入零项）。 */
   setComposerRestore: (images: NamedPendingImages) => void;
+  requestFollowLatest: (threadId: string) => void;
   bumpBranchRevision: () => void;
   /** 速览面板：展开/收起切换与分区折叠。 */
   setPulseOpen: (open: boolean) => void;
@@ -159,6 +163,7 @@ function initialUiState(): UiState {
     drafts: {},
     confirmStop: false,
     composerRestore: null,
+    followLatest: null,
     branchRevision: 0,
     panel: EMPTY_PANEL,
     composerInset: 184,
@@ -215,6 +220,8 @@ export function createUiStore() {
     setComposerInset: (rawHeight) => set({ composerInset: Math.round(rawHeight) + 24 }),
     setComposerRestore: (images) =>
       set((state) => ({ composerRestore: { token: (state.composerRestore?.token ?? 0) + 1, images } })),
+    requestFollowLatest: (threadId) =>
+      set((state) => ({ followLatest: { token: (state.followLatest?.token ?? 0) + 1, threadId } })),
     bumpBranchRevision: () => set((state) => ({ branchRevision: state.branchRevision + 1 })),
     setPulseOpen: (open) => set((state) => ({ pulse: { ...state.pulse, open } })),
     togglePulseSection: (key) =>

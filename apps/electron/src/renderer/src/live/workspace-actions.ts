@@ -231,8 +231,11 @@ export function createWorkspaceActions(): WorkspaceActions {
     submitDraft: async (message, images, mode) => {
       // 调用时读 store 真相：fork/重开等异步链路后的旧闭包不得打到旧线程；
       // 空舞台守卫/parked 懒唤醒/unknown_thread 自愈在主进程 session/prompt 管线内
-      const reason = await controller.submitDraft(activeThreadOf(), message, images, mode);
+      const threadId = activeThreadOf();
+      const reason = await controller.submitDraft(threadId, message, images, mode);
       notifySubmitFailure(reason);
+      // 发送成功 = 用户主动看最新：回底一次性信号（threadId 寻址，舞台消费即贴底跟随）
+      if (reason === null) uiStore.getState().requestFollowLatest(threadId);
       return reason;
     },
     stopActiveTurn: () => void controller.stopActiveTurn(activeThreadOf()),
@@ -267,8 +270,14 @@ export function createWorkspaceActions(): WorkspaceActions {
       void controller.queueSendNow(threadId, entryId).then((outcome) => {
         // 无可注入的运行中轮：条目留在队列（下轮 step0 消费），提示不对「已改向」说谎
         if (outcome === 'window') pushNotice(copy.flow.queuedSendNowUnavailable);
-        else if (outcome === 'consumed') pushNotice(copy.flow.queuedEntryConsumed);
-        else if (outcome === 'failed') pushNotice(copy.flow.queueOpFailed);
+        else if (outcome === 'consumed') {
+          pushNotice(copy.flow.queuedEntryConsumed);
+          // 竞态撞已消费：条目已入轮（消息在流里），与受理同口径回底
+          uiStore.getState().requestFollowLatest(threadId);
+        } else if (outcome === 'ok') {
+          // 立即改向受理成功：消息即刻注入当前轮，用户主动看最新 → 回底跟随
+          uiStore.getState().requestFollowLatest(threadId);
+        } else if (outcome === 'failed') pushNotice(copy.flow.queueOpFailed);
       });
     },
     selectSession: (threadId) => controller.selectSession(threadId),

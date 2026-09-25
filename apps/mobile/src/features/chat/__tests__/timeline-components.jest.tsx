@@ -1,87 +1,192 @@
-import { fireEvent, render } from '@testing-library/react-native';
-import { describe, expect, it } from '@jest/globals';
-import * as React from 'react';
-import { CodeBlock } from '@/features/chat/code-block';
-import { MessageItem } from '@/features/chat/message-item';
-import { StatusRow } from '@/features/chat/status-row';
-import { ToolBlock } from '@/features/chat/tool-block';
-import { ThinkingBlock } from '@/features/chat/thinking-block';
-import { ExecutionTodoRow } from '@/features/chat/execution-todo-row';
-import { formatTimelineDuration } from '@/features/chat/timeline-duration';
-import type { ChatMessage } from '@/types/domain';
+import { fireEvent, render } from "@testing-library/react-native";
+import { describe, expect, it } from "@jest/globals";
+import * as React from "react";
+import { ActivityBlock } from "@/features/chat/activity-block";
+import { CodeBlock } from "@/features/chat/code-block";
+import { MessageItem } from "@/features/chat/message-item";
+import { ExecutionTodoRow } from "@/features/chat/execution-todo-row";
+import { formatTimelineDuration } from "@/features/chat/timeline-duration";
+import type { ChatMessage } from "@/types/domain";
 
-type MessageValues = Pick<ChatMessage, 'id' | 'kind' | 'text'> & Partial<Omit<ChatMessage, 'id' | 'kind' | 'text'>>;
-const message = (values: MessageValues): ChatMessage => ({ createdAt: 'now', ...values });
+type MessageValues = Pick<ChatMessage, "id" | "kind" | "text"> &
+  Partial<Omit<ChatMessage, "id" | "kind" | "text">>;
+const message = (values: MessageValues): ChatMessage => ({ createdAt: "now", ...values });
 
-describe('timeline components', () => {
-  it('renders message fallbacks for every message kind', async () => {
-    const view = await render(<><MessageItem message={message({ id: 'user', kind: 'user', text: '用户' })} /><MessageItem message={message({ id: 'system', kind: 'system', text: '系统' })} /><MessageItem message={message({ id: 'think', kind: 'thinking', text: '思考' })} /><MessageItem message={message({ id: 'tool', kind: 'tool', text: '工具' })} /><MessageItem message={message({ id: 'status', kind: 'status', text: '完成' })} /></>);
-    expect(view.getByText('用户')).toBeTruthy();
-    expect(view.getByText('系统')).toBeTruthy();
-    expect(view.getByText('思考过程')).toBeTruthy();
-    expect(view.getByText('执行完成')).toBeTruthy();
-    expect(view.getByText('完成')).toBeTruthy();
+describe("timeline components", () => {
+  it("renders user, assistant, system and code content messages", async () => {
+    const view = await render(
+      <>
+        <MessageItem message={message({ id: "user", kind: "user", text: "用户" })} />
+        <MessageItem message={message({ id: "assistant", kind: "assistant", text: "助手" })} />
+        <MessageItem message={message({ id: "system", kind: "system", text: "系统" })} />
+        <MessageItem message={message({ id: "code", kind: "code", text: "代码内容" })} />
+      </>,
+    );
+    expect(view.getByText("用户")).toBeTruthy();
+    expect(view.getByTestId("user-task-card").props.style).toMatchObject({ borderRadius: 14 });
+    expect(view.getByTestId("user-task-card").props.style.borderBottomRightRadius).toBeUndefined();
+    expect(view.getByText("助手")).toBeTruthy();
+    expect(view.getByText("系统")).toBeTruthy();
+    expect(view.getByText("代码内容")).toBeTruthy();
   });
 
-  it('groups and expands multiple thinking steps', async () => {
-    const block = { kind: 'thinking' as const, key: 'thinking', messages: [message({ id: 'think-1', kind: 'thinking', text: '第一步' }), message({ id: 'think-2', kind: 'thinking', text: '第二步' })] };
-    const view = await render(<ThinkingBlock block={block} />);
-    expect(view.getByText('2 步')).toBeTruthy();
-    expect(view.queryByText('第一步')).toBeNull();
-    await fireEvent.press(view.getByLabelText('展开或收起思考过程'));
-    expect(view.getByText('第一步')).toBeTruthy();
-    expect(view.getByText('第二步')).toBeTruthy();
+  it("keeps successful activity folded and reveals mixed details in original order", async () => {
+    const block = {
+      kind: "activity" as const,
+      key: "activity",
+      messages: [
+        message({ id: "think-1", kind: "thinking", text: "先检查消息模型" }),
+        message({
+          id: "tool-1",
+          kind: "tool",
+          title: "读取文件",
+          text: "读取完整内容",
+          summary: "读取 3 个文件",
+          status: "success",
+          durationMs: 500,
+        }),
+        message({
+          id: "status-1",
+          kind: "status",
+          text: "检查完成",
+          summary: "0 个错误",
+          status: "success",
+          durationMs: 700,
+        }),
+      ],
+    };
+    const view = await render(<ActivityBlock block={block} />);
+    const control = view.getByLabelText("展开活动详情：已完成 3 项活动");
+    expect(control.props.accessibilityState).toEqual({ expanded: false });
+    expect(view.getByText("已完成 3 项活动")).toBeTruthy();
+    expect(view.getByText("0 个错误")).toBeTruthy();
+    expect(view.queryByText("先检查消息模型")).toBeNull();
+    await fireEvent.press(control);
+    expect(view.getByText("先检查消息模型")).toBeTruthy();
+    expect(view.getByText("读取文件")).toBeTruthy();
+    expect(view.getByText("检查完成")).toBeTruthy();
   });
 
-  it('truncates long code, expands and collapses with fallback metadata', async () => {
-    const long = message({ id: 'code', kind: 'code', text: '1\n2\n3\n4\n5\n6\n7' });
-    const view = await render(<CodeBlock message={long} />);
-    expect(view.getByText('代码')).toBeTruthy();
-    expect(view.getByText('text')).toBeTruthy();
-    expect(view.getByText('展开剩余 2 行')).toBeTruthy();
-    await fireEvent.press(view.getByText('代码'));
-    expect(view.getByText('收起代码')).toBeTruthy();
-    await fireEvent.press(view.getByText('收起代码'));
-    expect(view.getByText('展开剩余 2 行')).toBeTruthy();
-    const short = await render(<CodeBlock message={message({ id: 'short', kind: 'code', text: 'only', title: 'app.ts', language: 'ts' })} />);
+  it("truncates long code, expands and collapses with fallback metadata", async () => {
+    const view = await render(<CodeBlock code={'1\n2\n3\n4\n5\n6\n7'} />);
+    expect(view.getByText("代码")).toBeTruthy();
+    expect(view.getByText("text")).toBeTruthy();
+    expect(view.getByText("展开剩余 2 行")).toBeTruthy();
+    await fireEvent.press(view.getByText("代码"));
+    expect(view.getByText("收起代码")).toBeTruthy();
+    await fireEvent.press(view.getByText("收起代码"));
+    expect(view.getByText("展开剩余 2 行")).toBeTruthy();
+    const short = await render(<CodeBlock code="only" language="ts" lineCount={1} title="app.ts" />);
     expect(short.queryByText(/展开剩余/)).toBeNull();
   });
 
-  it('renders running, success and error status rows with optional metadata', async () => {
-    const view = await render(<><StatusRow message={message({ id: 'running', kind: 'status', text: '运行中' })} /><StatusRow message={message({ id: 'success', kind: 'status', status: 'success', text: '完成', summary: '通过', durationMs: 1200 })} /><StatusRow message={message({ id: 'error', kind: 'status', status: 'error', text: '失败' })} /></>);
-    expect(view.getByText('运行中')).toBeTruthy();
-    expect(view.getByText('通过')).toBeTruthy();
-    expect(view.getByText('1.2s')).toBeTruthy();
-    expect(view.getByText('失败')).toBeTruthy();
+  it("shows running activity as one folded current-action summary", async () => {
+    const running = {
+      kind: "activity" as const,
+      key: "running",
+      messages: [
+        message({ id: "thinking-before", kind: "thinking", text: "先定位测试入口" }),
+        message({
+          id: "done-tool",
+          kind: "tool",
+          title: "读取文件",
+          text: "完成",
+          status: "success",
+        }),
+        message({ id: "thinking-between", kind: "thinking", text: "继续检查失败用例" }),
+        message({
+          id: "running-tool",
+          kind: "tool",
+          title: "运行测试",
+          text: "测试进行中",
+          summary: "12 / 18",
+          status: "running",
+        }),
+      ],
+    };
+    const view = await render(<ActivityBlock block={running} />);
+    expect(view.getByText("正在执行 · 运行测试")).toBeTruthy();
+    expect(view.getByText("12 / 18")).toBeTruthy();
+    expect(view.getByText("1 / 2")).toBeTruthy();
+    expect(view.queryByText("1 / 4")).toBeNull();
+    expect(view.queryByText("读取文件")).toBeNull();
+    expect(view.getByLabelText("展开活动详情：正在执行 · 运行测试").props.accessibilityState).toEqual({
+      expanded: false,
+    });
   });
 
-  it('renders completed, running and failed tool blocks with expanded details', async () => {
-    const completed = { kind: 'tools' as const, key: 'done', messages: [message({ id: 'done-tool', kind: 'tool', title: '完成工具', text: '结果', status: 'success', durationMs: 500 })] };
-    const running = { kind: 'tools' as const, key: 'running', messages: [message({ id: 'running-tool', kind: 'tool', text: '继续运行', status: 'running' })] };
-    const failed = { kind: 'tools' as const, key: 'failed', messages: [message({ id: 'failed-tool', kind: 'tool', text: '失败', status: 'error' })] };
-    const view = await render(<><ToolBlock block={completed} /><ToolBlock block={running} /><ToolBlock block={failed} /></>);
-    expect(view.getByText('执行完成')).toBeTruthy();
-    expect(view.getByText('执行过程')).toBeTruthy();
-    expect(view.getByText('执行失败')).toBeTruthy();
-    const controls = view.getAllByLabelText('展开或收起执行过程');
-    const completedControl = controls[0];
-    const runningControl = view.getAllByLabelText('展开或收起执行过程')[1];
-    if (completedControl === undefined || runningControl === undefined) throw new Error('tool controls missing');
-    await fireEvent.press(completedControl);
-    expect(view.getByText('完成工具')).toBeTruthy();
-    await fireEvent.press(runningControl);
-    expect(view.getByText('继续运行')).toBeTruthy();
+  it("opens failed activity by default and exposes the failed detail", async () => {
+    const failed = {
+      kind: "activity" as const,
+      key: "failed",
+      messages: [
+        message({
+          id: "done-tool",
+          kind: "tool",
+          title: "读取配置",
+          text: "完成",
+          status: "success",
+        }),
+        message({
+          id: "failed-tool",
+          kind: "tool",
+          title: "运行测试",
+          text: "两个断言失败",
+          summary: "2 tests failed",
+          status: "error",
+          durationMs: 1200,
+        }),
+      ],
+    };
+    const view = await render(<ActivityBlock block={failed} />);
+    expect(view.getByText("执行遇到问题")).toBeTruthy();
+    expect(view.getByText("2 tests failed")).toBeTruthy();
+    expect(view.getByText("两个断言失败")).toBeTruthy();
+    expect(view.getAllByText("1.2s")).toHaveLength(2);
+    const control = view.getByLabelText("收起活动详情：执行遇到问题");
+    expect(control.props.accessibilityState).toEqual({ expanded: true });
+    await fireEvent.press(control);
+    expect(view.getByText("2 tests failed")).toBeTruthy();
+    expect(view.queryByText("两个断言失败")).toBeNull();
   });
 
-  it('renders failed execution steps with a warning state', async () => {
-    const view = await render(<ExecutionTodoRow todo={{ id: 'failed', title: '测试失败', detail: '修复后重试', state: 'failed' }} />);
-    expect(view.getByText('测试失败')).toBeTruthy();
+  it("uses safe activity fallbacks for blank metadata and invalid duration", async () => {
+    const block = {
+      kind: "activity" as const,
+      key: "fallback",
+      messages: [
+        message({
+          id: "blank-tool",
+          kind: "tool",
+          title: "   ",
+          text: "",
+          status: "success",
+          durationMs: Number.NaN,
+        }),
+      ],
+    };
+    const view = await render(<ActivityBlock block={block} />);
+    const control = view.getByLabelText("展开活动详情：已完成 1 项活动");
+    expect(view.queryByText("0ms")).toBeNull();
+    await fireEvent.press(control);
+    expect(view.getByText("执行操作")).toBeTruthy();
   });
 
-  it('formats duration boundaries safely', () => {
-    expect(formatTimelineDuration(-10)).toBe('0ms');
-    expect(formatTimelineDuration(999)).toBe('999ms');
-    expect(formatTimelineDuration(1500)).toBe('1.5s');
-    expect(formatTimelineDuration(12_000)).toBe('12s');
+  it("renders failed execution steps with a warning state", async () => {
+    const view = await render(
+      <ExecutionTodoRow
+        todo={{ id: "failed", title: "测试失败", detail: "修复后重试", state: "failed" }}
+      />,
+    );
+    expect(view.getByText("测试失败")).toBeTruthy();
+  });
+
+  it("formats duration boundaries and garbage values safely", () => {
+    expect(formatTimelineDuration(Number.NaN)).toBe("0ms");
+    expect(formatTimelineDuration(Number.POSITIVE_INFINITY)).toBe("0ms");
+    expect(formatTimelineDuration(-10)).toBe("0ms");
+    expect(formatTimelineDuration(999)).toBe("999ms");
+    expect(formatTimelineDuration(1500)).toBe("1.5s");
+    expect(formatTimelineDuration(12_000)).toBe("12s");
   });
 });

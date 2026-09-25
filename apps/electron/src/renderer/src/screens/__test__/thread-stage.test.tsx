@@ -72,3 +72,43 @@ describe('ThreadStage 空态（T27：水化失败不静默）', () => {
     view.unmount();
   });
 });
+
+describe('ThreadStage 发送回底（用户主动发送 → 滚到最新）', () => {
+  test('症状「发送后停在历史中部看不到回执」：已让位前置态下回底信号即滚到底', () => {
+    seedActiveThread();
+    const view = render(<ThreadStage />);
+    const scroller = view.container.querySelector('.overflow-y-auto');
+    if (!(scroller instanceof HTMLDivElement)) throw new Error('thread scroller not found');
+    // 桩滚动几何（happy-dom 无排版；scrollTop 钳制与浏览器一致）
+    let scrollTop = 0;
+    Object.defineProperty(scroller, 'scrollTop', {
+      get: () => scrollTop,
+      set: (value: number) => {
+        scrollTop = Math.min(Math.max(value, 0), 500);
+      },
+      configurable: true,
+    });
+    Object.defineProperty(scroller, 'scrollHeight', { get: () => 1_000, configurable: true });
+    Object.defineProperty(scroller, 'clientHeight', { get: () => 500, configurable: true });
+    // reduced-motion 降级直接定位（与回底同约定），matchMedia 桩成命中
+    const windowStub = window as unknown as { matchMedia: (query: string) => { matches: boolean } };
+    const original = windowStub.matchMedia;
+    windowStub.matchMedia = (query: string): { matches: boolean } => ({ matches: query.includes('prefers-reduced-motion') });
+    try {
+      // 建立「已让位」前置态（用户上翻读历史，滚动事件落位）——症状的真实起点
+      React.act(() => {
+        scroller.scrollTop = 500;
+        scroller.dispatchEvent(new Event('scroll'));
+        scroller.scrollTop = 200;
+        scroller.dispatchEvent(new Event('scroll'));
+      });
+      React.act(() => {
+        uiStore.getState().requestFollowLatest('t1');
+      });
+      expect(scroller.scrollTop).toBe(500);
+      view.unmount();
+    } finally {
+      windowStub.matchMedia = original;
+    }
+  });
+});

@@ -25,8 +25,16 @@ describe('active execution selection', () => {
     expect(execution?.completed).toBe(0);
   });
 
-  it('removes only the active execution from the timeline', () => {
-    expect(withoutActiveExecution(messages)).toEqual([]);
+  it('removes the entire mixed activity while its tool execution is active', () => {
+    const mixed: readonly ChatMessage[] = [
+      { id: 'user', kind: 'user', text: 'task', createdAt: 'now' },
+      { id: 'think-1', kind: 'thinking', text: 'inspect', createdAt: 'now' },
+      { id: 'done', kind: 'tool', text: 'done', title: 'done', status: 'success', createdAt: 'now' },
+      { id: 'think-2', kind: 'thinking', text: 'continue', createdAt: 'now' },
+      { id: 'current', kind: 'tool', text: 'current', title: 'current', status: 'running', createdAt: 'now' },
+    ];
+    expect(selectActiveExecution(mixed)).toMatchObject({ completed: 1, total: 2 });
+    expect(withoutActiveExecution(mixed).map(({ id }) => id)).toEqual(['user']);
     expect(withoutActiveExecution([{ id: 'history', kind: 'tool', text: 'history', status: 'success', createdAt: 'now' }])).toHaveLength(1);
   });
 

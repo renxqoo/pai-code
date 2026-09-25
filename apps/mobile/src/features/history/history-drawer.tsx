@@ -25,6 +25,7 @@ export function HistoryDrawer() {
   const query = useHistoryStore((state) => state.query);
   const setQuery = useHistoryStore((state) => state.setQuery);
   const selectSession = useHistoryStore((state) => state.selectSession);
+  const currentSessionId = useConversationStore((state) => state.session.id);
   const openSession = useConversationStore((state) => state.openSession);
   const startNewSession = useConversationStore((state) => state.startNewSession);
   const visible = sessions.filter((session) => !session.pinned && (query.length === 0 || `${session.title}${session.preview}${session.project}`.includes(query)) && (!session.archived || query.length > 0));
@@ -37,9 +38,9 @@ export function HistoryDrawer() {
           <DrawerLink icon={HardDrive} label="资产" onPress={() => { router.push('/files'); setDrawerOpen(false); }} />
           <View style={{ alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.pill, flexDirection: 'row', marginTop: spacing.sm, minHeight: 46, paddingHorizontal: 14 }}><Search color={colors.textFaint} size={17} /><TextInput accessibilityLabel="搜索对话" onChangeText={setQuery} onSubmitEditing={() => { if (query.trim().length > 0) { router.push('/search'); setDrawerOpen(false); } }} placeholder="搜索对话和项目" placeholderTextColor={colors.textFaint} returnKeyType="search" style={{ color: colors.text, flex: 1, fontSize: 14, padding: 10 }} value={query} /></View>
         </View>
-        <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xs6, paddingHorizontal: spacing.xs5 }}>{sessions.filter((session) => session.pinned).length > 0 ? <><SectionHeader title="置顶" />{sessions.filter((session) => session.pinned).map((session) => <SessionRow key={session.id} onAction={() => { selectSession(session.id); openSession(session); openSheet('session-actions'); }} onOpen={() => { selectSession(session.id); openSession(session); setDrawerOpen(false); }} session={session} />)}</> : null}
+        <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xs6, paddingHorizontal: spacing.xs2 }}>{sessions.filter((session) => session.pinned).length > 0 ? <><SectionHeader title="置顶" />{sessions.filter((session) => session.pinned).map((session) => <SessionRow active={session.id === currentSessionId} key={session.id} onAction={() => { selectSession(session.id); openSession(session); openSheet('session-actions'); }} onOpen={() => { selectSession(session.id); openSession(session); setDrawerOpen(false); }} session={session} />)}</> : null}
           <SectionHeader action="+ 添加项目" onAction={() => { router.push('/projects'); setDrawerOpen(false); }} title="项目" />
-          {visible.map((session) => <SessionRow key={session.id} onAction={() => { selectSession(session.id); openSession(session); openSheet('session-actions'); }} onOpen={() => { selectSession(session.id); openSession(session); setDrawerOpen(false); }} session={session} />)}
+          {visible.map((session) => <SessionRow active={session.id === currentSessionId} key={session.id} onAction={() => { selectSession(session.id); openSession(session); openSheet('session-actions'); }} onOpen={() => { selectSession(session.id); openSession(session); setDrawerOpen(false); }} session={session} />)}
         </ScrollView>
         <View style={{ padding: spacing.xs5 }}><DrawerLink icon={Archive} label="归档对话" onPress={() => { router.push('/archived'); setDrawerOpen(false); }} /><Pressable accessibilityRole="button" onPress={() => { router.push('/settings'); setDrawerOpen(false); }} style={{ alignItems: 'center', flexDirection: 'row', minHeight: 46 }}><Settings color={colors.text} size={19} /><Text style={{ color: colors.text, fontSize: 15, fontWeight: '600', marginLeft: 11 }}>个人设置</Text></Pressable></View>
       </View></View>

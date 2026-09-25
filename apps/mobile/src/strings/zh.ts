@@ -61,6 +61,22 @@ export const copy = {
   quickAnalyze: '分析当前项目',
   quickFix: '定位并修复问题',
   quickReview: '审查代码质量',
+  activityComplete: '已完成',
+  activityFailed: '执行遇到问题',
+  activityRunning: '正在执行',
+  activityItemUnit: '项活动',
+  activityProcess: '过程摘要',
+  activityFallback: '执行操作',
+  expandActivity: '展开活动详情',
+  collapseActivity: '收起活动详情',
+  running: '进行中',
+  paused: '需要处理',
+  unread: '未读',
+  codeDefaultTitle: '代码',
+  codeDefaultLanguage: 'text',
+  codeLineUnit: '行',
+  codeCollapse: '收起代码',
+  expandCodeLines: (count: number) => `展开剩余 ${count} 行`,
 } as const;
 
 export const models = [
