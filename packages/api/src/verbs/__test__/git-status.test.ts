@@ -195,4 +195,20 @@ describe('createGitStatus · 行为', () => {
     expect(first).toEqual(second);
     expect(calls.filter((args) => args[0] === 'status').length).toBe(1);
   });
+
+  test('症状回归「checkout 后在途复用回吐切换前快照」：invalidate 后新调用重读', async () => {
+    const { run, calls } = fakeGit({
+      'rev-parse': ok('.git'),
+      'symbolic-ref': ok('main'),
+      status: ok(''),
+      diff: ok(''),
+      'rev-list': fail(''),
+    });
+    const status: GitStatus = createGitStatus(run);
+    const first = status.status('/x');
+    status.invalidate('/x');
+    const second = status.status('/x');
+    await Promise.all([first, second]);
+    expect(calls.filter((args) => args[0] === 'status').length).toBe(2);
+  });
 });

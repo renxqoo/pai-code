@@ -63,8 +63,11 @@ export function createLocalRoutes(deps: LocalRoutesDeps) {
       if (!deps.isKnownCwd(params.cwd)) return fail(appError('cwd_not_allowed'));
       deps.audit(`git_checkout:${params.cwd}:${params.branch}:${params.create ? 'create' : 'switch'}`);
       const outcome = await deps.git.checkout(params.cwd, params.branch, params.create);
-      // HEAD 已改写：丢弃图谱在途快照，紧随的图谱请求不再复用切换前数据
-      if (outcome.ok) deps.graph.invalidate(params.cwd);
+      // HEAD 已改写：丢弃图谱/变更速览的在途快照，紧随的请求不再复用切换前数据
+      if (outcome.ok) {
+        deps.graph.invalidate(params.cwd);
+        deps.gitStatus.invalidate(params.cwd);
+      }
       return outcome;
     },
     'git/graph': (params) => {

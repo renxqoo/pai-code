@@ -39,8 +39,8 @@ export type ProjectFilesState = {
   loading: boolean;
 };
 
-/** 速览面板分区（面板内各分区独立折叠）。 */
-export type PulseSection = 'git' | 'todo' | 'agents';
+/** 速览面板分区（进程/智能体两区独立折叠；Git 区行少不设分区折叠）。 */
+export type PulseSection = 'todo' | 'agents';
 
 /** 速览面板交互态（展开 ⇄ 收起 chip；分区折叠——本地交互真相，不进持久层）。 */
 export type PulseState = {
@@ -163,7 +163,7 @@ function initialUiState(): UiState {
     panel: EMPTY_PANEL,
     composerInset: 184,
     projectFiles: { target: null, tree: [], loading: false },
-    pulse: { open: true, sections: { git: true, todo: true, agents: true } },
+    pulse: { open: true, sections: { todo: true, agents: true } },
   };
 }
 

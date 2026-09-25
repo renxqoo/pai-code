@@ -33,21 +33,22 @@ const EMPTY_AGENTS: readonly SubagentModel[] = [];
 function PulsePanel(): React.JSX.Element | null {
   const activeThreadId = useStore(liveStore, (s) => s.activeThreadId) ?? '';
   const activeSession = useStore(liveStore, (s) => (s.activeThreadId === null ? undefined : s.sessions[s.activeThreadId]));
-  const threadState = useStore(liveStore, (s) => (s.activeThreadId === null ? undefined : s.threads[s.activeThreadId]));
+  /** 细粒度订阅（非整表 thread）：流式增量不重渲面板（与 ThreadStage 的 B-batch 预算同规） */
+  const todo = useStore(liveStore, (s) => (s.activeThreadId === null ? undefined : s.threads[s.activeThreadId]?.todo)) ?? null;
+  const agents = useStore(liveStore, (s) => (s.activeThreadId === null ? undefined : s.threads[s.activeThreadId]?.agents)) ?? EMPTY_AGENTS;
+  const turnsSettled = useStore(liveStore, (s) => (s.activeThreadId === null ? undefined : s.threads[s.activeThreadId]?.turnsSettled)) ?? 0;
   const pulse = useStore(uiStore, (s) => s.pulse);
   const branchRevision = useStore(uiStore, (s) => s.branchRevision);
 
   const activeCwd = activeSession?.cwd ?? '';
   const branchLocked = useStore(liveStore, (s) => branchSwitchLocked(s.sessions, s.threads, activeCwd));
 
-  const tasks = threadState?.todo?.tasks ?? EMPTY_TASKS;
-  const agents: readonly SubagentModel[] = threadState?.agents ?? EMPTY_AGENTS;
+  const tasks = todo?.tasks ?? EMPTY_TASKS;
   const running = runningAgentsOf(agents);
   /** 计时只随运行中子代理走表（无运行中零定时器） */
   const now = useElapsedNow(running.length > 0);
 
   /** git 失效代次：checkout 成功 + 轮结算（文件改动落点）各递增一次 */
-  const turnsSettled = threadState?.turnsSettled ?? 0;
   const gitRevision = React.useMemo(() => branchRevision + turnsSettled, [branchRevision, turnsSettled]);
   const git = useGitStatus(activeCwd, workspaceActions.listGitStatus, gitRevision);
   const branches = useGitBranches(activeCwd, workspaceActions.listGitBranches, branchRevision);

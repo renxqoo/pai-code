@@ -342,6 +342,9 @@ function mapSubagent(state: StreamState, threadId: string, name: string, payload
     case 'tool/call': {
       const toolName = str(payload.name);
       const args = argsOf(payload.arguments);
+      const callId = str(payload.callId);
+      // 记忆桶照记（tool/result 词条无 name——过滤靠回查，与主路同规）
+      if (callId.length > 0) ownerBucket(state.calls, subagentKeyOf(threadId, agentId)).set(callId, toolName);
       // todo 清单工具同主会话零痕迹（面板进程区统一由 todo/snapshot 呈现）
       if (isTodoTool(toolName)) return [];
       return [
@@ -349,25 +352,28 @@ function mapSubagent(state: StreamState, threadId: string, name: string, payload
           type: 'subagentTool',
           threadId,
           agentId,
-          call: { id: str(payload.callId), name: toolName, argsPreview: previewArgs(args) },
+          call: { id: callId, name: toolName, argsPreview: previewArgs(args) },
           phase: 'start',
         },
       ];
     }
-    case 'tool/result':
-      ownerBucket(state.toolStreams, subagentKeyOf(threadId, agentId)).delete(str(payload.callId));
-      if (isTodoTool(str(payload.name))) return [];
+    case 'tool/result': {
+      const callId = str(payload.callId);
+      ownerBucket(state.toolStreams, subagentKeyOf(threadId, agentId)).delete(callId);
+      const toolName = ownerBucket(state.calls, subagentKeyOf(threadId, agentId)).get(callId) ?? '';
+      if (isTodoTool(toolName)) return [];
       return [
         {
           type: 'subagentTool',
           threadId,
           agentId,
-          call: { id: str(payload.callId), name: str(payload.name), argsPreview: '' },
+          call: { id: callId, name: str(payload.name), argsPreview: '' },
           phase: 'end',
           output: toolResultText(payload.content),
           isError: payload.isError === true,
         },
       ];
+    }
     case 'agent/status':
       return [{ type: 'subagentState', threadId, agentId, busy: str(payload.status) === 'running' }];
     default:

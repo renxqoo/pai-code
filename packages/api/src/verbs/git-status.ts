@@ -111,6 +111,8 @@ function unquote(path: string): string {
 
 export interface GitStatus {
   status: (cwd: string) => Promise<GitStatusOutcome>
+  /** checkout 成功后失效（丢弃在途复用——切前读的快照不得回吐给新调用；镜像 GitGraph.invalidate）。 */
+  invalidate: (cwd: string) => void
 }
 
 export function createGitStatus(run: GitExec): GitStatus {
@@ -189,6 +191,9 @@ export function createGitStatus(run: GitExec): GitStatus {
       });
       inFlight.set(cwd, task);
       return task;
+    },
+    invalidate: (cwd) => {
+      inFlight.delete(cwd);
     },
   };
 }

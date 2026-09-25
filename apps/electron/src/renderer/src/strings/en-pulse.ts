@@ -23,8 +23,6 @@ export const enPulse = {
     statusDone: 'Completed',
     statusDoing: 'In progress',
     statusPending: 'Pending',
-    owner: (owner: string): string => `Owner ${owner}`,
-    empty: 'No tasks yet',
   },
   agents: {
     section: 'Agents',

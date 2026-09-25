@@ -65,7 +65,7 @@ describe('todo 工具零痕迹', () => {
   test.each(['task_create', 'task_get', 'task_list', 'task_update'])('主会话 %s tool/call|result 均无渲染事件', (name) => {
     const mapper = createEventMapper(deps);
     expect(mapper.mapEvent(frame('tool/call', { session: 't', callId: 'c1', name, arguments: '{}' }))).toEqual([]);
-    expect(mapper.mapEvent(frame('tool/result', { session: 't', callId: 'c1', name, content: 'ok' }))).toEqual([]);
+    expect(mapper.mapEvent(frame('tool/result', { session: 't', callId: 'c1', content: 'ok' }))).toEqual([]);
   });
 
   test('tool/result 无 name 字段时按记忆桶回查过滤（tool/call 先注册）', () => {
@@ -84,11 +84,15 @@ describe('todo 工具零痕迹', () => {
     expect(ended[0]?.type).toBe('toolEnded');
   });
 
-  test('子代理工具面同零痕迹（start/end 均滤）', () => {
+  test('子代理工具面同零痕迹；症状回归「子代理 todo tool/result 漏滤」——tool/result 词条无 name，靠记忆桶回查', () => {
     const mapper = createEventMapper(deps);
     expect(mapper.mapEvent(frame('tool/call', { session: 't', callId: 'c4', name: 'task_list', arguments: '{}' }, 'a1'))).toEqual([]);
-    expect(mapper.mapEvent(frame('tool/result', { session: 't', callId: 'c4', name: 'task_list', content: 'ok' }, 'a1'))).toEqual([]);
-    // 子代理的非 todo 工具照常
+    // x-harness tool/result 载荷无 name 字段（夹具不得虚构——线上取不到）
+    expect(mapper.mapEvent(frame('tool/result', { session: 't', callId: 'c4', content: 'ok' }, 'a1'))).toEqual([]);
+    // 子代理的非 todo 工具照常（start 过；end 无名也放行）
     expect(mapper.mapEvent(frame('tool/call', { session: 't', callId: 'c5', name: 'read', arguments: '{}' }, 'a1'))).toHaveLength(1);
+    const ended = mapper.mapEvent(frame('tool/result', { session: 't', callId: 'c5', content: 'ok' }, 'a1'));
+    expect(ended).toHaveLength(1);
+    expect(ended[0]?.type).toBe('subagentTool');
   });
 });

@@ -25,8 +25,6 @@ export const zhPulse: typeof enPulse = {
     statusDone: '已完成',
     statusDoing: '进行中',
     statusPending: '待办',
-    owner: (owner: string): string => `归属 ${owner}`,
-    empty: '暂无任务',
   },
   agents: {
     section: '智能体',

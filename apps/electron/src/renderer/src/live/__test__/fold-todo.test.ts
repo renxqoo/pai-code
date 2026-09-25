@@ -48,9 +48,30 @@ describe('水化载荷的 todo 槽', () => {
     expect(replaced.todo).toEqual(snapshot(2, 'B'));
   });
 
-  test('rebuild 同规（带则替换、缺则保留）', () => {
+  test('rebuild 同规（带则合并、缺则保留）', () => {
     const seeded = foldThreadEvent(initialThreadState, { type: 'todoSnapshot', threadId: 't', snapshot: snapshot(1, 'A') }, 0);
     expect(foldHydrate(seeded, { kind: 'hydrate/rebuild', items: [], cursor: 1 }).todo).toEqual(snapshot(1, 'A'));
     expect(foldHydrate(seeded, { kind: 'hydrate/rebuild', items: [], cursor: 1, todo: snapshot(3, 'C') }).todo).toEqual(snapshot(3, 'C'));
+  });
+});
+
+describe('单调合并（并发回归）', () => {
+  test('症状回归「水化旧快照复活」：事件已到 seq 3，reconcile 带 seq 2 载荷不得回退', () => {
+    let state = foldThreadEvent(initialThreadState, { type: 'todoSnapshot', threadId: 't', snapshot: snapshot(2, 'B') }, 0);
+    state = foldThreadEvent(state, { type: 'todoSnapshot', threadId: 't', snapshot: snapshot(3, 'C') }, 0);
+    const revived = foldHydrate(state, { kind: 'hydrate/reconcile', items: [], cursor: 1, dropLiveTurn: false, todo: snapshot(1, 'A') });
+    expect(revived.todo?.tasks[0]?.subject).toBe('C');
+  });
+
+  test('事件乱序（旧 seq 后到）不回退；同 seq 幂等重投可替换', () => {
+    const state = foldThreadEvent(initialThreadState, { type: 'todoSnapshot', threadId: 't', snapshot: snapshot(5, 'E') }, 0);
+    expect(foldThreadEvent(state, { type: 'todoSnapshot', threadId: 't', snapshot: snapshot(4, 'D') }, 0).todo?.tasks[0]?.subject).toBe('E');
+    expect(foldThreadEvent(state, { type: 'todoSnapshot', threadId: 't', snapshot: snapshot(5, 'E2') }, 0).todo?.tasks[0]?.subject).toBe('E2');
+  });
+
+  test('initial 重置不丢更优快照（事件已到的新快照胜过陈旧全量载荷）', () => {
+    const state = foldThreadEvent(initialThreadState, { type: 'todoSnapshot', threadId: 't', snapshot: snapshot(9, 'I') }, 0);
+    const after = foldHydrate(state, { kind: 'hydrate/initial', items: [], cursor: null, todo: snapshot(1, 'A') });
+    expect(after.todo?.tasks[0]?.subject).toBe('I');
   });
 });

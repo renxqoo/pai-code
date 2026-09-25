@@ -4,7 +4,7 @@ import type { ThreadItem, TurnBlock } from '@/thread/thread-model';
 import { entrySeqOf } from './entry-seq';
 import { applyInflight, applyInflightOutputsToBlocks } from './fold-inflight';
 import { hydrateItems, hydrateNewItems } from './hydrate-items';
-import { capSeenIds, initialThreadState, type HydrateAction, type LiveThreadState } from './live-thread-state';
+import { capSeenIds, initialThreadState, mergeTodo, type HydrateAction, type LiveThreadState } from './live-thread-state';
 import { mergeSpanBlocks } from './merge-turn-blocks';
 import { insertBeforeLiveTurn } from './turn-ops';
 
@@ -19,7 +19,7 @@ export function foldHydrate(state: LiveThreadState, action: HydrateAction): Live
       return applyInflight(state, action.view, action.at);
     case 'hydrate/initial': {
       const items = hydrateItems(action.items);
-      return { ...initialThreadState, items, cursor: action.cursor, seenIds: capSeenIds(new Set(action.items.map((item) => item.id))), hydrated: true, ...(action.todo !== undefined ? { todo: action.todo } : {}) };
+      return { ...initialThreadState, items, cursor: action.cursor, seenIds: capSeenIds(new Set(action.items.map((item) => item.id))), hydrated: true, todo: mergeTodo(state.todo, action.todo) };
     }
     case 'hydrate/reconcile': {
       const derived = hydrateNewItems(action.items);
@@ -107,7 +107,7 @@ export function foldHydrate(state: LiveThreadState, action: HydrateAction): Live
       const seen = capSeenIds(new Set([...state.seenIds, ...fresh.flatMap((entry) => [...entry.entryIds])]));
       // reconcile 也置 hydrated：重载冷启动走 reconcile 保流式现场时，后续
       // ensureHydrated 的守卫同样要看到「历史已装载」
-      return { ...state, items, cursor: action.cursor ?? state.cursor, seenIds: seen, liveTurnId: liveTurn, hydrated: true, hydrateFailed: false, ...(action.todo !== undefined ? { todo: action.todo } : {}) };
+      return { ...state, items, cursor: action.cursor ?? state.cursor, seenIds: seen, liveTurnId: liveTurn, hydrated: true, hydrateFailed: false, todo: mergeTodo(state.todo, action.todo) };
     }
     case 'hydrate/rebuild': {
       const items = [...hydrateItems(action.items)];
@@ -125,7 +125,7 @@ export function foldHydrate(state: LiveThreadState, action: HydrateAction): Live
       }
       // messageTurns 与 turnSerial 随 state 保留：轮 id 全局单调唯一后，陈旧归属
       // 恒不等于新轮 id——清空反而放开守卫（迟到 final 以 owner undefined 直通污染新轮）
-      return { ...state, items, cursor: action.cursor, seenIds: capSeenIds(new Set(action.items.map((item) => item.id))), liveTurnId: null, liveMessageId: null, hydrateFailed: false, ...(action.todo !== undefined ? { todo: action.todo } : {}) };
+      return { ...state, items, cursor: action.cursor, seenIds: capSeenIds(new Set(action.items.map((item) => item.id))), liveTurnId: null, liveMessageId: null, hydrateFailed: false, todo: mergeTodo(state.todo, action.todo) };
     }
     case 'hydrate/failed':
       return { ...state, hydrateFailed: true };

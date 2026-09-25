@@ -87,6 +87,17 @@ export const initialThreadState: LiveThreadState = {
   bashTail: '',
 };
 
+/** todo 快照合并（单调）：桶计数器只进不退——水化载荷与事件交错时防复活旧快照，
+ *  同 seq 后到胜（幂等重投）。incoming 缺席/空 = 不动既有。 */
+export function mergeTodo(
+  current: TodoSnapshotEventData | null,
+  incoming: TodoSnapshotEventData | null | undefined,
+): TodoSnapshotEventData | null {
+  if (incoming === undefined || incoming === null) return current;
+  if (current === null) return incoming;
+  return incoming.seq >= current.seq ? incoming : current;
+}
+
 /** 对账动作（非 UiEvent 的内部输入，controller 编排水化时派发）。 */
 export type HydrateAction =
   /** 在途读口收敛（T35 M2b）：`session/inflight` 视图合入折叠态（幂等）。 */

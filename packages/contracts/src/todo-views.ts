@@ -12,7 +12,8 @@ export type TodoTaskStatus = z.infer<typeof TodoTaskStatusSchema>;
 
 /** todo 快照内单任务。 */
 export const TodoSnapshotTaskSchema = z.object({
-  id: z.string(),
+  /** 十进制规范形非空串（x-harness 词条门同规——空/重复 id 会破列表 key） */
+  id: z.string().min(1),
   subject: z.string(),
   status: TodoTaskStatusSchema,
   description: z.string().optional(),

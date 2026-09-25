@@ -50,6 +50,7 @@ describe('TodoSnapshotEventDataSchema', () => {
     ['缺 seq', { tasks: [], edges: [] }],
     ['tasks 非数组', { seq: 1, tasks: {}, edges: [] }],
     ['任务缺 subject', { seq: 1, tasks: [{ id: '1', status: 'pending' }], edges: [] }],
+    ['任务空 id（破列表 key）', { seq: 1, tasks: [{ id: '', subject: 's', status: 'pending' }], edges: [] }],
     ['edges 元组形状错', { seq: 1, tasks: [], edges: [['1']] }],
     ['垃圾', 'x'],
     ['null', null],

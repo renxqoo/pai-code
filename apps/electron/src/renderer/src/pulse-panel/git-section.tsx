@@ -14,6 +14,7 @@ import { BranchMenu } from './branch-menu';
 type GitSectionProps = {
   /** 工作区变更速览（null = 加载中/未取到） */
   status: GitStatusView | null
+  /** 读取在途（status 为 null 时区分加载中与无 cwd） */
   loading: boolean
   failed: boolean
   onRetry: () => void
@@ -30,6 +31,13 @@ type GitSectionProps = {
 
 const ROW_CLASS = 'flex h-8 w-full items-center gap-2 rounded-lg px-1.5 text-left outline-none select-none';
 const BUTTON_ROW_CLASS = `${ROW_CLASS} cursor-pointer hover:bg-accent/50 focus-visible:ring-3 focus-visible:ring-ring/50`;
+
+/** 更改行 tooltip：文件数 + 变更路径预览（≤5 条；files 载荷截断时置 …）。 */
+function filesHint(view: GitStatusView): string {
+  const lines = [copy.flow.changedFiles(view.fileCount), ...view.files.slice(0, 5).map((file) => file.path)];
+  if (view.truncated) lines.push('…');
+  return lines.join('\n');
+}
 
 /** Git 分区（速览面板）：更改行（→Diff 面板）/ 分支下拉 / 上游计数 / 图谱入口。 */
 function GitSection(props: GitSectionProps): React.JSX.Element {
@@ -53,6 +61,8 @@ function GitSection(props: GitSectionProps): React.JSX.Element {
     );
   }
   if (view === null) {
+    // 无工作目录（cwd 空）不是加载态：不摆假加载行
+    if (!props.loading) return <></>;
     return (
       <div className={ROW_CLASS}>
         <Spinner className="size-3.5 shrink-0 text-muted-foreground" />
@@ -74,7 +84,7 @@ function GitSection(props: GitSectionProps): React.JSX.Element {
         type="button"
         onClick={props.onOpenDiff}
         aria-label={copy.pulse.git.changesAria(view.fileCount)}
-        title={copy.flow.changedFiles(view.fileCount)}
+        title={filesHint(view)}
         className={BUTTON_ROW_CLASS}
       >
         <FileDiff aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" strokeWidth={1.75} />
