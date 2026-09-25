@@ -36,7 +36,7 @@
 
 ## 4. 设计基线
 
-- 设计 token：纯白页面底色、白色悬浮面、无外描边、柔和阴影、较宽圆角与深浅主题。
+- 设计 token：非设置页面使用纯白背景；设置类页面使用冷灰背景与白色悬浮分组；统一无外描边、柔和阴影、较宽圆角与深浅主题。
 - 组件层级：底层 `components/ui`、领域 `components/*`、页面 `features/*`、路由 `app/*`。
 - 移动端节奏：16–20 页边距、12 网格间距、44pt 最小触摸目标、悬浮容器、连续列表与底部安全区。
 - 面板：居中短内容用 Sheet；长表单与历史用全屏页；不照搬参考图的超长空白和巨型标题。
@@ -122,5 +122,5 @@
 - 根级 `bun run test`：既有 Bun 2063 pass / 1 skip / 0 fail；移动端 Jest 14 suites / 58 tests 全绿。
 - Expo iOS / Android Hermes bundle：全部通过。
 - `expo install --check`：依赖与 SDK 57 官方矩阵一致。
-- bw Web 走查：首屏、纯白背景、圆形操作、悬浮 Composer、抽屉、设置安全区、模型与思考、权限、上下文、附件、真实发送、设备、资产、项目和工作空间选择均通过；浏览器 errors/console 为空。
+- bw Web 走查：非设置页纯白背景、设置页冷灰背景与白色分组、圆形操作、悬浮 Composer、抽屉、设置安全区、模型与思考、权限、上下文、附件、真实发送、设备、资产、项目和工作空间选择均通过；浏览器 errors/console 为空。
 - Expo Doctor 在当前无 npm 的 Bun 环境中：配置 schema 与 peer dependency 检查通过；依赖树/重复链接相关检查因 Doctor 硬调用 npm 未能完整执行，且同版本包在 Bun `.bun` 布局出现重复链接。该工具链限制不掩盖为通过，原生 Metro bundle 另门通过。

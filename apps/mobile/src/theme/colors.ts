@@ -1,5 +1,6 @@
 export type ColorScheme = {
   background: string;
+  settingsBackground: string;
   surface: string;
   surfaceRaised: string;
   surfaceSubtle: string;
@@ -20,6 +21,7 @@ export type ColorScheme = {
 
 export const lightColors: ColorScheme = {
   background: '#FFFFFF',
+  settingsBackground: '#F6F6F7',
   surface: '#FFFFFF',
   surfaceRaised: '#FFFFFF',
   surfaceSubtle: '#F6F6F7',
@@ -40,6 +42,7 @@ export const lightColors: ColorScheme = {
 
 export const darkColors: ColorScheme = {
   background: '#101012',
+  settingsBackground: '#161619',
   surface: '#19191C',
   surfaceRaised: '#222226',
   surfaceSubtle: '#252529',

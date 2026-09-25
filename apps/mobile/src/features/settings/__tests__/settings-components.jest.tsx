@@ -44,6 +44,7 @@ describe('settings components', () => {
     expect(view.queryByLabelText('通知')).toBeNull();
     expect(view.queryByLabelText('触感反馈')).toBeNull();
     expect(view.getByTestId('settings-scroll').props.contentContainerStyle).toMatchObject({ paddingTop: 59 });
+    expect(view.getByTestId('settings-scroll').props.style).toMatchObject({ backgroundColor: '#F6F6F7' });
   });
 
   it('navigates rows and footer links', async () => {

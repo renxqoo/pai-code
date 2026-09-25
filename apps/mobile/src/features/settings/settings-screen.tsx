@@ -18,7 +18,7 @@ export function SettingsScreen() {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   return (
-    <ScrollView testID="settings-scroll" style={{ backgroundColor: colors.background, flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xs7, paddingHorizontal: spacing.xs4, paddingTop: insets.top + spacing.xs2 }}>
+    <ScrollView testID="settings-scroll" style={{ backgroundColor: colors.settingsBackground, flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xs7, paddingHorizontal: spacing.xs4, paddingTop: insets.top + spacing.xs2 }}>
       <View style={{ alignItems: 'center', flexDirection: 'row', minHeight: 60 }}><IconButton icon={ChevronLeft} label="返回" onPress={() => router.back()} /><Text style={{ color: colors.text, flex: 1, fontSize: 19, fontWeight: '700', textAlign: 'center' }}>设置</Text><View style={{ width: 44 }} /></View>
       <View style={{ alignItems: 'center', flexDirection: 'row', minHeight: 76 }}><View style={{ alignItems: 'center', backgroundColor: colors.surface, borderRadius: 24, height: 44, justifyContent: 'center', width: 44 }}><PaiMark size={34} /></View><View style={{ marginLeft: 12 }}><Text style={{ color: colors.text, fontSize: 19, fontWeight: '700' }}>个人设置</Text><Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 3 }}>ren.wang · Pai Code</Text></View></View>
       <SectionHeader title="账户" />
