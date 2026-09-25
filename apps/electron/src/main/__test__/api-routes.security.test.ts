@@ -269,7 +269,7 @@ describe("api-routes 权限模式与 hub 设置（hub 命令面）", () => {
     expect(mode).toEqual({ ok: true, data: { mode: "default", source: "user", modes: ["plan", "auto", "edit-confirm", "full", "sandboxed-auto"] } });
   });
 
-  test("permission/setMode：permission/set_mode 透传 + 审计；词表外 mode 拒绝", async () => {
+  test("permission/setMode：permission/set_mode 透传 + 审计；空串形态护栏拒绝（值域裁决单点 = host）", async () => {
     const work = mkdtempSync(join(tmpdir(), "pai-sec-permset-"));
     const { routes, audits, sent } = await makeRoutes(work, { models: [] });
     const ok = (await routes.invoke("permission/setMode", { threadId: "t1", mode: "auto" })) as { ok: boolean };
@@ -280,18 +280,26 @@ describe("api-routes 权限模式与 hub 设置（hub 命令面）", () => {
       mode: "auto",
     });
     expect(audits).toContain("permission_mode:t1:auto");
-    const bad = (await routes.invoke("permission/setMode", { threadId: "t1", mode: "yolo" })) as { ok: boolean; error?: { kind: string; message?: string } };
+    // 空串 = 形态护栏拒绝（发前垃圾拦截）
+    const bad = (await routes.invoke("permission/setMode", { threadId: "t1", mode: "" })) as { ok: boolean; error?: { kind: string; message?: string } };
     expect(bad).toEqual({ ok: false, error: { kind: "invalid_params" } });
+    // 词表外值不吞不拒：透传 host 裁决（开放词表——host 扩档零发版）
+    const extended = (await routes.invoke("permission/setMode", { threadId: "t1", mode: "future-mode" })) as { ok: boolean };
+    expect(extended.ok).toBe(true);
+    expect(sent.some((command) => command.type === "permission/set_mode" && (command as { mode?: string }).mode === "future-mode")).toBe(true);
   });
 
-  test("app/hubSettings：settings/get values 收窄（未设置键 → null）", async () => {
+  test("app/hubSettings：settings/get values 收窄（未设置键 → null）+ permissionModes 词表透传", async () => {
     const work = mkdtempSync(join(tmpdir(), "pai-sec-hubget-"));
     const { routes } = await makeRoutes(work, { models: [] });
     const hub = (await routes.invoke("app/hubSettings", {})) as {
       ok: boolean;
-      data: { permissionDefaultMode: string | null; thinkingDefault: string | null };
+      data: { permissionDefaultMode: string | null; thinkingDefault: string | null; permissionModes: string[] };
     };
-    expect(hub).toEqual({ ok: true, data: { permissionDefaultMode: "auto", thinkingDefault: "low" } });
+    expect(hub).toEqual({
+      ok: true,
+      data: { permissionDefaultMode: "auto", thinkingDefault: "low", permissionModes: ["plan", "auto", "edit-confirm", "full", "sandboxed-auto"] },
+    });
   });
 
   test("app/setHubSettings：settings/set 按键写（permission.defaultMode / thinking.default）", async () => {
@@ -512,6 +520,10 @@ describe("渠道数据迁移端到端（T38 症状：渠道无法保存——旧
         listSkills: () => Promise.resolve({ ok: true as const, data: {} }),
         setSkillEnabled: () => Promise.resolve({ ok: true as const, data: {} }),
         setIdleRetireMs: () => Promise.resolve({ ok: true as const, data: {} }),
+      }),
+      permissionCommands: () => ({
+        getMode: () => Promise.resolve({ ok: true as const, data: {} }),
+        setMode: () => Promise.resolve({ ok: true as const, data: {} }),
       }),
       onReject: (message) => rejects.push(message),
     });

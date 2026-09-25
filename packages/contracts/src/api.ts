@@ -481,13 +481,14 @@ export const ApiSchemas = {
     params: z.object({ threadId: z.string().min(1), mode: PermModeSchema }).strict(),
     result: z.null(),
   },
-  /** hub 用户级设置读（settings/get；null = 未设置，按 hub 缺省）。 */
+  /** hub 用户级设置读（settings/get；null = 未设置，按 hub 缺省；permissionModes = host 词表——设置页选项面）。 */
   'app/hubSettings': {
     params: empty,
     result: z
       .object({
         permissionDefaultMode: PermModeSchema.nullable(),
         thinkingDefault: z.enum(THINKING_LEVEL_ORDER).nullable(),
+        permissionModes: z.array(z.string()),
       })
       .strict(),
   },

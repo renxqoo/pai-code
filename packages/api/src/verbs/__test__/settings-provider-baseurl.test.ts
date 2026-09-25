@@ -45,6 +45,9 @@ function makeRoutes() {
       settingsCommands: () => {
         throw new Error('not needed for provider routes');
       },
+      permissionCommands: () => {
+        throw new Error('not needed for provider routes');
+      },
     }).routes,
   };
 }

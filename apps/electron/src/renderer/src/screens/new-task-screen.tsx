@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useStore } from 'zustand';
 
-import { thinkingLevelLabel, thinkingLevelOfLabel, type ApiOutcome, type CommandView, type PermMode } from '@paiapp/contracts';
+import { thinkingLevelLabel, thinkingLevelOfLabel, type ApiOutcome, type CommandView } from '@paiapp/contracts';
 
 import { branchSegmentOf } from '@/composer/branch-segment';
 import { BranchPanel } from '@/composer/branch-panel';
@@ -35,7 +35,7 @@ export type NewTaskStart = {
   /** `provider/modelId` */
   model: string
   /** null = 不干预（hub 按 settings 缺省） */
-  permissionMode: PermMode | null
+  permissionMode: string | null
   /** 思考档（协议档位值；null = 跟随缺省） */
   thinkingLevel: string | null
   text: string
@@ -58,7 +58,9 @@ type NewTaskScreenProps = {
   noModelsLabel: string
   onOpenSettings?: () => void
   /** 权限模式缺省（hub settings；本地未选时显示并作为不干预基线） */
-  defaultPermissionMode: PermMode
+  defaultPermissionMode: string
+  /** 权限模式选项面（hub settings 的 permissionModes——host 词表随数据走） */
+  permissionModes: readonly string[]
   onSearchFiles: (cwd: string, query: string) => Promise<string[] | null>
   onListBranches: (cwd: string) => Promise<ApiOutcome<'git/branches'>>
   onListGraph: (cwd: string) => Promise<ApiOutcome<'git/graph'>>
@@ -89,6 +91,7 @@ function NewTaskScreen({
   noModelsLabel,
   onOpenSettings,
   defaultPermissionMode,
+  permissionModes,
   onSearchFiles,
   onListBranches,
   onListGraph,
@@ -105,7 +108,7 @@ function NewTaskScreen({
   /** null = 跟随所选项目的默认模型记忆 */
   const [model, setModel] = React.useState<string | null>(null);
   /** null = 不干预（hub 按 settings 缺省建线程） */
-  const [permissionMode, setPermissionMode] = React.useState<PermMode | null>(null);
+  const [permissionMode, setPermissionMode] = React.useState<string | null>(null);
   /** 思考档（协议档位值；null = 跟随缺省，创建时不干预） */
   const [thinkingLevel, setThinkingLevel] = React.useState<string | null>(null);
   const [dialog, setDialog] = React.useState<NewTaskDialog>(null);
@@ -334,6 +337,7 @@ function NewTaskScreen({
                 generating={false}
                 onStop={() => undefined}
                 permissionMode={permissionMode ?? defaultPermissionMode}
+                permissionModes={permissionModes}
                 onSelectPermissionMode={setPermissionMode}
                 effort={{
                   value: thinkingLevel === null ? effortDefaultValue : thinkingLevelLabel(thinkingLevel),

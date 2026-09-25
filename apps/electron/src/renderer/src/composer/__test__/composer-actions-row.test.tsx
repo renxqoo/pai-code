@@ -42,6 +42,7 @@ function makeProps(overrides: Partial<Parameters<typeof ComposerActionsRow>[0]> 
     generating: false,
     onStop: noop,
     permissionMode: null,
+    permissionModes: ['plan', 'auto', 'edit-confirm', 'full', 'sandboxed-auto'],
     onSelectPermissionMode: noop,
     effort: EFFORT,
     usage: USAGE,

@@ -1,8 +1,9 @@
 
 
 import type { ApiError, ApiMethod, ApiOutcome, ApiParams, PreferencesView, ProviderConfig, ProviderConfigView } from '@paiapp/contracts';
-import { currentPermModes, isApiFormat, normalizeLegacyPermMode } from '@paiapp/contracts';
+import { isApiFormat, permVocabOf, resolveStoredPermMode, type PermissionModeData } from '@paiapp/contracts';
 import { appError } from '../errors';
+import type { PermissionCommands } from '../commands/permissions';
 import type { SettingsCommands } from '../commands/settings';
 
 import { envVarNameForProvider } from './env-name';
@@ -35,6 +36,8 @@ export type SettingsRoutesDeps = {
   restartHost: () => Promise<void>;
   /** hub settings 域 accessor（惰性：路由构造早于 runtime.start；host 未启动时各路由显式降级）。 */
   settingsCommands: () => SettingsCommands;
+  /** permissions 域 accessor（hubSettings 词表读口：无 threadId 的权限双域全局档）。 */
+  permissionCommands: () => PermissionCommands;
   /** 拒绝/失败落诊断日志（保存失败零日志曾致排障无据可查）。 */
   onReject?: (message: string) => void;
 };
@@ -128,21 +131,24 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
         : fail(outcome.error);
     },
     'app/hubSettings': async () => {
-      const result = await deps.settingsCommands().get({});
+      // 词表读口 = 无 threadId permission/get_mode（host 权限双域全局档）——与 settings/get
+      // 并发取；词表读失败回落内置缺省（设置读不因词表整体失败），无缓存即无失效问题
+      const [result, vocabResult] = await Promise.all([deps.settingsCommands().get({}), deps.permissionCommands().getMode({})]);
       if (!result.ok) return fail(result.error);
       const values = (result.data as { values?: Record<string, unknown> }).values ?? {};
       const mode = values['permission.defaultMode'];
       const thinking = values['thinking.default'];
+      const vocab = permVocabOf(vocabResult.ok ? (vocabResult.data as PermissionModeData | undefined)?.modes : undefined);
       return {
         ok: true as const,
         data: {
-          // 读侧归一：旧 4 档存量值收敛到现词表；词表外（含动态收敛后的新增档）原样透传
-          // ——归一展示不丢语义；非法值视为未设置
-          permissionDefaultMode: typeof mode === 'string' ? (normalizeLegacyPermMode(mode) ?? (currentPermModes().includes(mode) ? mode : null)) : null,
+          // 读侧归一：旧档映射 → 词表内透传 → 词表外视为未设置（归一展示不丢语义）
+          permissionDefaultMode: typeof mode === 'string' ? resolveStoredPermMode(mode, vocab) : null,
           thinkingDefault:
             thinking === 'off' || thinking === 'low' || thinking === 'medium' || thinking === 'high' || thinking === 'max'
               ? thinking
               : null,
+          permissionModes: vocab,
         },
       };
     },

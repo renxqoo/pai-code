@@ -1,6 +1,8 @@
 /**
  * settings 分区文案（自 en 主表拆出：主表超单文件行数上限；键集与主表 HEAD 严格一致 + 本增补新键）。
  */
+import type { KnownPermMode } from '@paiapp/contracts';
+
 export const enSettings = {
     title: 'Settings',
     navGroupBasics: 'Basics',
@@ -81,13 +83,14 @@ export const enSettings = {
     permissionsDefaultModeHint: 'Used when a conversation does not pick a mode; changing it does not affect live conversations.',
     permissionsDefaultThinking: 'Default thinking level',
     permissionsDefaultThinkingHint: 'Off / Low / Medium / High / Max for new conversations; per-session levels take priority.',
+    /** 已知档文案表（键齐备由 KnownPermMode 保证；词表外档查表落空时回退 id 本身）。 */
     permModeOptions: {
       plan: 'Plan',
       auto: 'Auto',
       'edit-confirm': 'Edit confirm',
       full: 'Full auto',
       'sandboxed-auto': 'Sandboxed',
-    } as Record<string, string>,
+    } satisfies Record<KnownPermMode, string>,
     permissionsLoading: 'Loading permission settings…',
     generalTitle: 'General',
     generalDesc: 'Language, appearance and basic behavior.',

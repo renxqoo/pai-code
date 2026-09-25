@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useStore } from 'zustand';
 
-import type { PermMode, QueueEntry } from '@paiapp/contracts';
+import { normalizePermMode, type QueueEntry } from '@paiapp/contracts';
 
 import { CONVERSATION_COLUMN_CLASS } from '@/thread/conversation-column';
 import { baseNameOf } from '@/lib/project-dirs';
@@ -10,7 +10,6 @@ import { copy } from '@/strings';
 import { imagePayloadOf } from '@/composer/read-image-file';
 import { ComposerActionsRow } from '@/composer/composer-actions-row';
 import { composerSelectionOf } from '@/composer/composer-selection';
-import { normalizePermMode } from '@/live/permission-mode';
 import {
   registerComposerTextarea,
   unregisterComposerTextarea,
@@ -77,7 +76,7 @@ function ComposerRegion(): React.JSX.Element {
   const agentsWorking = summarizeAgents(threadState?.agents ?? []).busyCount;
   const hostDown = hostPhase === null || hostPhase === 'failed';
   // 权限模式（null = 读口未加载——parked 未发 worker 级查询，控件不渲染）
-  const permissionMode: PermMode | null = sessionPermissionMode === null ? null : normalizePermMode(sessionPermissionMode.mode);
+  const permissionMode: string | null = sessionPermissionMode === null ? null : normalizePermMode(sessionPermissionMode.mode, sessionPermissionMode.modes);
 
   const selection = React.useMemo(
     () => composerSelectionOf(models, activeSession, thinkingLevel),
@@ -291,6 +290,7 @@ function ComposerRegion(): React.JSX.Element {
             generating={generating}
             onStop={stopOrAbort}
             permissionMode={permissionMode}
+            permissionModes={sessionPermissionMode?.modes ?? []}
             onSelectPermissionMode={(mode) => void workspaceActions.setSessionPermissionMode(mode)}
             agents={{ working: agentsWorking, onOpen: () => uiStore.getState().openAgentsPane() }}
             effort={{

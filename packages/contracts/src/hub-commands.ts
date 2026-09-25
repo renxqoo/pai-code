@@ -1,5 +1,4 @@
 import type { ImagePayload } from './hub-protocol';
-import type { PermMode } from './permissions';
 import type { ThinkingLevel } from './thinking-levels';
 
 /**
@@ -19,8 +18,8 @@ export interface ThreadStartCmd {
   modelId?: string;
   /** 信任项目级扩展（.x-harness 域：agents、skills、settings）；缺省 false。 */
   trusted?: boolean;
-  /** 会话权限模式初值（词表外静默降级）。 */
-  permissionMode?: PermMode;
+  /** 会话权限模式初值（开放词表 string，词表外静默降级）。 */
+  permissionMode?: string;
   /** 思考档初值（词表外静默降级；词表内但模型不支持显式拒）。 */
   thinkingLevel?: ThinkingLevel;
 }
@@ -31,7 +30,7 @@ export interface ThreadResumeCmd {
   sessionPath: string;
   cwd?: string;
   trusted?: boolean;
-  permissionMode?: PermMode;
+  permissionMode?: string;
   thinkingLevel?: ThinkingLevel;
 }
 
@@ -257,13 +256,14 @@ export interface GetThinkingLevelCmd {
 export interface PermissionSetModeCmd {
   type: 'permission/set_mode';
   threadId: string;
-  mode: PermMode;
+  mode: string;
 }
 
-/** 会话权限模式（读；source = session|project|user|default；响应携 modes = host 词表）。 */
+/** 会话权限模式（读；source = session|project|user|default；响应携 modes = host 词表）。
+ *  threadId 缺省 = 全局默认读（host 权限双域：无 threadId 回 permission.defaultMode + 词表）。 */
 export interface PermissionGetModeCmd {
   type: 'permission/get_mode';
-  threadId: string;
+  threadId?: string;
 }
 
 export interface AuthListCmd {

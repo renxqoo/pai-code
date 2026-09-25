@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useStore } from 'zustand';
 
-import type { CommandView, PermMode } from '@paiapp/contracts';
+import { PERM_MODES, type CommandView } from '@paiapp/contracts';
 
 import type { ComposerAttachment } from '@/composer/prompt-card';
 import { imagePayloadOf } from '@/composer/read-image-file';
@@ -68,8 +68,10 @@ export function useNewTaskScreen(enterCwd: string): NewTaskScreenProps {
   /** 宿主掉线（从未构建或 failed）：模型位文案不得伪装成「未配置模型」 */
   const hostDown = hostPhase === null || hostPhase === 'failed';
   const modelOptions = React.useMemo(() => models.map((model) => `${model.provider}/${model.modelId}`), [models]);
-  /** 权限模式缺省（hub settings 未设置时按 hub 内建 default 档展示）。 */
-  const defaultPermissionMode: PermMode = hubSettings?.permissionDefaultMode ?? 'auto';
+  /** 权限模式缺省（hub settings 未设置时按 hub 内建 default 档展示）；选项面 = host 词表
+   *  （hubSettings.permissionModes；未加载回落内置缺省）。 */
+  const defaultPermissionMode: string = hubSettings?.permissionDefaultMode ?? 'auto';
+  const permissionModes: readonly string[] = hubSettings?.permissionModes ?? PERM_MODES;
 
   /** 切分支包装：成功即失效线程页只读分支段（切完后返回会话页必须看到新分支） */
   const checkoutBranch = React.useCallback(
@@ -110,6 +112,7 @@ export function useNewTaskScreen(enterCwd: string): NewTaskScreenProps {
     noModelsLabel: hostDown ? copy.composer.hostDownModels : copy.composer.noModels,
     onOpenSettings: openSettingsAction,
     defaultPermissionMode,
+    permissionModes,
     onSearchFiles: workspaceActions.searchFilesIn,
     onListBranches: workspaceActions.listGitBranches,
     onListGraph: workspaceActions.listGitGraph,
@@ -119,5 +122,5 @@ export function useNewTaskScreen(enterCwd: string): NewTaskScreenProps {
     onClose: closeNewTaskAction,
     onNotify: workspaceActions.showNotice,
     onDialogOpenChange: (open: boolean) => uiStore.getState().setNewTaskDialogOpen(open),
-  }), [knownDirs, commands, activeCwd, preferences.trustedDefault, modelOptions, checkoutBranch, create, hostDown, defaultPermissionMode]);
+  }), [knownDirs, commands, activeCwd, preferences.trustedDefault, modelOptions, checkoutBranch, create, hostDown, defaultPermissionMode, permissionModes]);
 }

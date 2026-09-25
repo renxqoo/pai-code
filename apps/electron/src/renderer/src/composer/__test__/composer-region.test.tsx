@@ -174,10 +174,16 @@ describe('ComposerRegion 数据形态', () => {
 
   test('权限模式：读口已加载渲染操作栏控件（展示名随词表），未加载不渲染', () => {
     seedLive({});
-    liveStore.setState({ sessionPermissionMode: { mode: 'default', source: 'user' } });
+    liveStore.setState({ sessionPermissionMode: { mode: 'default', source: 'user', modes: ['plan', 'auto', 'edit-confirm', 'full', 'sandboxed-auto'] } });
     const withMode = render(<ComposerRegion />);
     expect(withMode.container.textContent).toContain(copy.settings.permModeOptions.auto);
     withMode.unmount();
+
+    // 症状回归：host 扩档（modes 回传词表外新档）触发器展示名回退 id 本身——可见不崩
+    liveStore.setState({ sessionPermissionMode: { mode: 'future-mode', source: 'session', modes: ['plan', 'auto', 'future-mode'] } });
+    const extended = render(<ComposerRegion />);
+    expect(extended.container.textContent).toContain('future-mode');
+    extended.unmount();
 
     liveStore.setState({ sessionPermissionMode: null });
     const unloaded = render(<ComposerRegion />);

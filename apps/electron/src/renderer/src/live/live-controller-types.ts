@@ -3,7 +3,6 @@ import type {
   ApiOutcome,
   CommandView,
   ImagePayload,
-  PermMode,
   PluginCandidateView,
   PluginProposalRow,
   PreferencesView,
@@ -27,7 +26,7 @@ export type CreateSessionInput = {
   /** 裸模型 id（hub 三级消歧；app 级 "provider/modelId" 记忆由调用方拆解）。 */
   model?: { provider: string; modelId: string }
   thinkingLevel?: string
-  permissionMode?: PermMode
+  permissionMode?: string
 }
 
 /** 会话创建结果：成功带新 threadId（调用方据此把首条消息/草稿寻址到新会话）。 */
@@ -84,11 +83,11 @@ export interface LiveController {
   /** hub 用户级缺省读取（app/hubSettings；新任务页权限控件与设置页共用）；失败返回 null。 */
   readonly readHubSettings: () => Promise<HubSettingsView | null>;
   /** hub 用户级缺省写入（app/setHubSettings，部分字段）；成功返回 null，失败返回原因。 */
-  readonly writeHubSettings: (patch: { permissionDefaultMode?: PermMode | null; thinkingDefault?: string | null }) => Promise<string | null>;
+  readonly writeHubSettings: (patch: { permissionDefaultMode?: string | null; thinkingDefault?: string | null }) => Promise<string | null>;
   /** 活跃会话权限模式读取（permission/mode）；失败返回 null。 */
   readonly readSessionPermissionMode: (threadId: string) => Promise<SessionPermissionModeView | null>;
   /** 会话权限模式写入（permission/setMode，下一工具裁决生效）；成功返回 null。 */
-  readonly setSessionPermissionMode: (threadId: string, mode: PermMode) => Promise<string | null>;
+  readonly setSessionPermissionMode: (threadId: string, mode: string) => Promise<string | null>;
   /** 活跃会话思考档读取（session/thinkingLevels）；失败返回 null。 */
   readonly readThinkingLevel: (threadId: string) => Promise<ThinkingLevelStateView | null>;
   /** 向运行中子代理注入 steer（agentId 寻址；非 running 一律失败，原因透传）。 */

@@ -89,7 +89,7 @@ export const zhSettings: typeof enSettings = {
       'edit-confirm': '编辑确认',
       full: '全自动',
       'sandboxed-auto': '沙箱自动',
-    } as Record<string, string>,
+    },
     permissionsLoading: '正在加载权限设置…',
     agentsTitle: '智能体',
     agentsDesc: '会话可用的智能体定义。',

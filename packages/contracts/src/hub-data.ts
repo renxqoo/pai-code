@@ -192,11 +192,13 @@ export interface ThinkingLevelData {
   source: 'session' | 'project' | 'user' | 'off';
 }
 
-/** permission/get_mode 响应。 */
+/** permission/get_mode 响应（会话/全局双域同形）。 */
 export interface PermissionModeData {
   /** 宽松 string：hub 可能回词表外值（手写项目配置）——收窄归消费方 */
   mode: string;
   source: 'session' | 'project' | 'user' | 'default';
+  /** host 词表（UI 选项渲染源）；缺席 = 老 host，消费方回落内置缺省。 */
+  modes?: string[];
 }
 
 /** settings/get 响应（带 cwd = 项目级展开）。 */

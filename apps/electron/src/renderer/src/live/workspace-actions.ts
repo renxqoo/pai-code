@@ -1,4 +1,4 @@
-import type { AgentDefinition, ApiOutcome, CommandView, IdleRecycleMinutes, ImagePayload, PermMode, PluginCandidateView, PluginProposalRow, ProviderModel, RuntimeSnapshotView, SkillCandidateView } from '@paiapp/contracts';
+import type { AgentDefinition, ApiOutcome, CommandView, IdleRecycleMinutes, ImagePayload, PluginCandidateView, PluginProposalRow, ProviderModel, RuntimeSnapshotView, SkillCandidateView } from '@paiapp/contracts';
 import { thinkingLevelOfLabel } from '@paiapp/contracts';
 
 import { writeClipboard } from '@/lib/write-clipboard';
@@ -36,7 +36,7 @@ export type WorkspaceActions = {
     /** `provider/modelId`；缺省按项目记忆 → 全局默认 → 当前会话 → 首个可用重算 */
     model?: string
     thinkingLevel?: string
-    permissionMode?: PermMode
+    permissionMode?: string
   }) => Promise<boolean>;
   /** 新建任务页提交：建会话 → 投首条消息；sendFailed 时调用方把文本回填到新会话草稿槽。 */
   readonly startTask: (input: {
@@ -45,7 +45,7 @@ export type WorkspaceActions = {
     /** `provider/modelId` */
     model: string
     /** null = 不干预（hub 按 settings 缺省） */
-    permissionMode: PermMode | null
+    permissionMode: string | null
     /** 思考档（协议档位值；null = 跟随缺省） */
     thinkingLevel: string | null
     text: string
@@ -69,11 +69,11 @@ export type WorkspaceActions = {
   /** hub 用户级缺省读取（新任务页权限控件/思考档缺省数据源）。 */
   readonly refreshHubSettings: () => void;
   /** hub 用户级缺省写入（设置页权限分区）；失败 notice。 */
-  readonly saveHubDefaults: (patch: { permissionDefaultMode?: PermMode | null; thinkingDefault?: string | null }) => Promise<boolean>;
+  readonly saveHubDefaults: (patch: { permissionDefaultMode?: string | null; thinkingDefault?: string | null }) => Promise<boolean>;
   /** 活跃会话权限模式读取（permission/mode）。 */
   readonly refreshSessionPermissionMode: () => void;
   /** 操作栏会话权限模式切换（permission/setMode，下一工具裁决生效）；失败 notice。 */
-  readonly setSessionPermissionMode: (mode: PermMode) => Promise<boolean>;
+  readonly setSessionPermissionMode: (mode: string) => Promise<boolean>;
   readonly refreshAgentDefinitions: () => void;
   /** 子 agent 定义保存（新建/编辑/改名/移动统一）；失败 reason 交表单内联呈现。 */
   readonly upsertAgentDefinition: (definition: AgentDefinition, previous: { name: string; scope: 'user' | 'project'; project: string | null } | null) => Promise<string | null>;
@@ -202,7 +202,7 @@ export function createWorkspaceActions(): WorkspaceActions {
     trusted?: boolean
     model?: string
     thinkingLevel?: string
-    permissionMode?: PermMode
+    permissionMode?: string
   }): Promise<{ ok: true; threadId: string } | { ok: false }> => {
     const model = parseModelKey(input.model ?? defaultModelKey(input.cwd));
     const outcome = await controller.createSession({

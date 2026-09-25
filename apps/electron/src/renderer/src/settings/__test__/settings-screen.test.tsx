@@ -52,7 +52,7 @@ function makeProps(overrides: Partial<SettingsScreenProps> = {}): SettingsScreen
       onTest: () => Promise.resolve({ ok: true as const, latencyMs: 1 }),
     },
     permissions: {
-      hubSettings: { permissionDefaultMode: 'default', thinkingDefault: null },
+      hubSettings: { permissionDefaultMode: 'default', thinkingDefault: null, permissionModes: ['plan', 'auto', 'edit-confirm', 'full', 'sandboxed-auto'] },
       onSaveDefaults: ok,
     },
     agents: { definitions: [], knownProjects: [], modelOptions: [], toolIds: [], onRefresh: noop, onSave: () => Promise.resolve(null), onRemove: () => Promise.resolve(null) },

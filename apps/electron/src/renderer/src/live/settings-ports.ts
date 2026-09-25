@@ -1,9 +1,8 @@
-import type { PermMode } from '@paiapp/contracts';
 import { isSettableThinkingLevel } from '@paiapp/contracts';
 
 import { copyOfError } from '@/lib/error-text';
 import type { ApiClient } from '@paiapp/api/client';
-import type { HubSettingsView, LiveStore } from './store';
+import type { HubSettingsView, LiveStore, SessionPermissionModeView } from './store';
 
 /**
  * 配置面读写口（controller 的会话域动作之外）：saved/models 目录刷新、hub 级
@@ -45,14 +44,16 @@ export function createSettingsPorts({ api, store }: SettingsPortsDeps) {
     if (outcome.ok) store.setState({ models: outcome.data });
   }
 
-  async function readSessionPermissionMode(threadId: string): Promise<{ mode: string; source: 'session' | 'project' | 'user' | 'default' } | null> {
+  async function readSessionPermissionMode(threadId: string): Promise<SessionPermissionModeView | null> {
     const outcome = await api.permission.mode({ threadId });
     if (!outcome.ok) return null;
     // 判活：请求在途期间活跃会话已切换则丢弃（防旧会话模式覆盖新会话视图；与目录刷新同型）
     if (store.getState().activeThreadId !== threadId) return null;
-    // 引用幂等：内容相同不换引用（下游菜单依赖引用，防刷新循环击穿用户交互）
+    // 引用幂等：内容相同不换引用（下游菜单依赖引用，防刷新循环击穿用户交互）；
+    // modes 逐项比较（host 词表变化也要换引用——选项面随读口数据走）
     const current = store.getState().sessionPermissionMode;
-    if (current !== null && current.mode === outcome.data.mode && current.source === outcome.data.source) {
+    const sameModes = current !== null && current.modes.length === outcome.data.modes.length && current.modes.every((value, index) => value === outcome.data.modes[index]);
+    if (current !== null && current.mode === outcome.data.mode && current.source === outcome.data.source && sameModes) {
       return current;
     }
     store.setState({ sessionPermissionMode: outcome.data });
@@ -65,7 +66,7 @@ export function createSettingsPorts({ api, store }: SettingsPortsDeps) {
     async readHubSettings(): Promise<HubSettingsView | null> {
       return readHubSettingsIntoStore();
     },
-    async writeHubSettings(patch: { permissionDefaultMode?: PermMode | null; thinkingDefault?: string | null }): Promise<string | null> {
+    async writeHubSettings(patch: { permissionDefaultMode?: string | null; thinkingDefault?: string | null }): Promise<string | null> {
       // 思考档词表校验（词表外值 hub 静默忽略——渲染层先行拒绝，不发空载荷）
       if (patch.thinkingDefault !== undefined && patch.thinkingDefault !== null && !isSettableThinkingLevel(patch.thinkingDefault)) {
         return 'thinkingInvalid';
@@ -84,7 +85,7 @@ export function createSettingsPorts({ api, store }: SettingsPortsDeps) {
       return null;
     },
     readSessionPermissionMode,
-    async setSessionPermissionMode(threadId: string, mode: PermMode): Promise<string | null> {
+    async setSessionPermissionMode(threadId: string, mode: string): Promise<string | null> {
       const outcome = await api.permission.setMode({ threadId, mode });
       return outcome.ok ? null : copyOfError(outcome.error);
     },

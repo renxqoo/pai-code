@@ -77,7 +77,7 @@ test('症状回归「hubSettings null 字段把未设置语义发给 hub」：nu
 });
 
 test('会话权限模式读取/写入透传（permission/mode | permission/setMode）', async () => {
-  const mode = { mode: 'default', source: 'session' as const };
+  const mode = { mode: 'default', source: 'session' as const, modes: ['plan', 'auto', 'edit-confirm', 'full', 'sandboxed-auto'] };
   const client = makeClient({
     'permission/mode': { ok: true, data: mode },
     'permission/setMode': { ok: true, data: null },
@@ -95,13 +95,17 @@ test('会话权限模式读取/写入透传（permission/mode | permission/setMo
   expect(await createLiveController(failClient, createLiveStore()).setSessionPermissionMode('t1', 'plan')).toBe(copyOfError({ kind: 'unknown_thread' }));
 });
 
-test('症状回归：readSessionPermissionMode 引用幂等——内容相同不换引用（防刷新循环击穿模式切换）', async () => {
-  const mode = { mode: 'default', source: 'user' as const };
+test('症状回归：readSessionPermissionMode 引用幂等——内容相同不换引用（防刷新循环击穿模式切换）；词表变化换引用', async () => {
+  const mode = { mode: 'default', source: 'user' as const, modes: ['plan', 'auto', 'edit-confirm', 'full', 'sandboxed-auto'] };
   let reads = 0;
-  const client = makeClient({ 'permission/mode': { ok: true, data: mode } });
+  // 每次应答返回新副本（IPC 序列化语义——跨进程读口不会共享对象引用）
+  const client = makeClient({});
   const baseInvoke = client.invoke.bind(client);
   client.invoke = (async (method: string, params: unknown) => {
-    if (method === 'permission/mode') reads += 1;
+    if (method === 'permission/mode') {
+      reads += 1;
+      return { ok: true as const, data: { mode: mode.mode, source: mode.source, modes: [...mode.modes] } };
+    }
     return baseInvoke(method as never, params);
   }) as typeof client.invoke;
   const store = createLiveStore();
@@ -113,10 +117,15 @@ test('症状回归：readSessionPermissionMode 引用幂等——内容相同不
   expect(reads).toBe(2);
   expect(second).toBe(first);
   expect(store.getState().sessionPermissionMode).toBe(firstRef);
+  // host 词表变化也算内容变化（modes 逐项比较——选项面随读口数据走）
+  mode.modes = [...mode.modes, 'future-mode'];
+  const third = await controller.readSessionPermissionMode('t1');
+  expect(third).not.toBe(first);
+  expect(store.getState().sessionPermissionMode?.modes).toContain('future-mode');
 });
 
 test('症状回归：readSessionPermissionMode 判活——响应落地前会话已切换则丢弃（防旧会话模式覆盖新会话视图）', async () => {
-  const client = makeClient({ 'permission/mode': { ok: true, data: { mode: 'fullAuto', source: 'session' } } });
+  const client = makeClient({ 'permission/mode': { ok: true, data: { mode: 'fullAuto', source: 'session', modes: ['plan', 'auto', 'edit-confirm', 'full', 'sandboxed-auto'] } } });
   const store = createLiveStore();
   store.getState().setActiveThread('t1');
   const controller = createLiveController(client, store);

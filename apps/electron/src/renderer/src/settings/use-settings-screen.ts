@@ -1,6 +1,7 @@
 import * as React from 'react';
 
-import type { AgentDefinition, IdleRecycleMinutes, PermMode, PluginCandidateView, PluginProposalRow, PluginView, ProviderConfigView, ProviderModel, SkillCandidateView, SkillView, ThinkingLevel } from '@paiapp/contracts';
+import type { AgentDefinition, IdleRecycleMinutes, PluginCandidateView, PluginProposalRow, PluginView, ProviderConfigView, ProviderModel, SkillCandidateView, SkillView, ThinkingLevel } from '@paiapp/contracts';
+import type { HubSettingsView } from '@/live/store';
 import type { PluginImportRequest, PluginImportSummary, SkillImportRequest, SkillImportSummary } from '@/live/live-controller-types';
 import { AGENT_TOOL_IDS } from '@paiapp/contracts';
 import type { Theme } from '@/components/theme-context';
@@ -69,8 +70,8 @@ export type SettingsScreenProps = {
     onTest: (name: string, modelId?: string) => Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }>;
   };
   permissions: {
-    hubSettings: { permissionDefaultMode: PermMode | null; thinkingDefault: ThinkingLevel | null } | null;
-    onSaveDefaults: (patch: { permissionDefaultMode?: PermMode | null; thinkingDefault?: ThinkingLevel | null }) => Promise<boolean>;
+    hubSettings: HubSettingsView | null;
+    onSaveDefaults: (patch: { permissionDefaultMode?: string | null; thinkingDefault?: ThinkingLevel | null }) => Promise<boolean>;
   };
   /** 子 agent 定义键位（作用域 + 项目 + name）；upsert 的 previous 与 remove 共用。 */
   agents: {

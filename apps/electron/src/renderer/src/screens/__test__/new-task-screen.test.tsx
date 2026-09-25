@@ -28,6 +28,7 @@ function renderScreen(overrides: Partial<Parameters<typeof NewTaskScreen>[0]> = 
       modelOptions={['glm/glm-4.7', 'glm/glm-5.3']}
       noModelsLabel={copy.composer.noModels}
       defaultPermissionMode="auto"
+      permissionModes={['plan', 'auto', 'edit-confirm', 'full', 'sandboxed-auto']}
       onSearchFiles={() => Promise.resolve(null)}
       onListBranches={() => Promise.resolve({ ok: true, data: { isRepo: true, current: 'main', branches: ['main'], dirtyFiles: 0 } })}
       onListGraph={() => Promise.resolve({ ok: true, data: { isRepo: true, commits: [], truncated: false } })}
@@ -108,6 +109,7 @@ describe('NewTaskScreen 分支切换锁（T36：与线程页同一把，目录�
       modelOptions: ['glm/glm-4.7'],
       noModelsLabel: copy.composer.noModels,
       defaultPermissionMode: 'auto' as const,
+      permissionModes: ['plan', 'auto', 'edit-confirm', 'full', 'sandboxed-auto'],
       onSearchFiles: () => Promise.resolve(null),
       onListBranches: () => Promise.resolve({ ok: true as const, data: { ...REPO_VIEW, branches: [...REPO_VIEW.branches] } }),
       onListGraph: () => Promise.resolve({ ok: true as const, data: { isRepo: true, commits: [], truncated: false } }),
@@ -201,6 +203,7 @@ describe('NewTaskScreen 提交在途（症状：建会话+首条投递卡很久�
         modelOptions={['glm/glm-4.7']}
         noModelsLabel={copy.composer.noModels}
         defaultPermissionMode="auto"
+        permissionModes={['plan', 'auto', 'edit-confirm', 'full', 'sandboxed-auto']}
         onSearchFiles={() => Promise.resolve(null)}
         onListBranches={() => Promise.resolve({ ok: true, data: { isRepo: true, current: 'main', branches: ['main'], dirtyFiles: 0 } })}
         onListGraph={() => Promise.resolve({ ok: true, data: { isRepo: true, commits: [], truncated: false } })}

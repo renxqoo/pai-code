@@ -1,10 +1,12 @@
 import * as React from 'react';
 
-import type { PermMode, ThinkingLevel } from '@paiapp/contracts';
-import { THINKING_LEVEL_ORDER, currentPermModes, thinkingLevelLabel } from '@paiapp/contracts';
+import type { ThinkingLevel } from '@paiapp/contracts';
+import { THINKING_LEVEL_ORDER, thinkingLevelLabel } from '@paiapp/contracts';
 import { SegmentedControl, type SegmentedControlOption } from '@paiapp/ui';
 
 import { copy } from '@/strings';
+import { permModeLabel } from '@/strings/perm-mode-label';
+import type { HubSettingsView } from '@/live/store';
 
 import { SettingsCard } from './settings-card';
 import { SettingsPageHeader } from './settings-page-header';
@@ -12,9 +14,9 @@ import { SettingsRow } from './settings-row';
 
 type PermissionsSectionProps = {
   /** hub 用户级缺省（app/hubSettings；null = 未加载）。 */
-  hubSettings: { permissionDefaultMode: PermMode | null; thinkingDefault: ThinkingLevel | null } | null
+  hubSettings: HubSettingsView | null
   /** 缺省写入（app/setHubSettings；null = 不修改该键）。 */
-  onSaveDefaults: (patch: { permissionDefaultMode?: PermMode | null; thinkingDefault?: ThinkingLevel | null }) => Promise<boolean>
+  onSaveDefaults: (patch: { permissionDefaultMode?: string | null; thinkingDefault?: ThinkingLevel | null }) => Promise<boolean>
 }
 
 type SaveStatus = 'failed' | null;
@@ -27,7 +29,7 @@ type SaveStatus = 'failed' | null;
 function PermissionsSection({ hubSettings, onSaveDefaults }: PermissionsSectionProps) {
   const [status, setStatus] = React.useState<SaveStatus>(null);
 
-  const save = async (patch: { permissionDefaultMode?: PermMode | null; thinkingDefault?: ThinkingLevel | null }): Promise<void> => {
+  const save = async (patch: { permissionDefaultMode?: string | null; thinkingDefault?: ThinkingLevel | null }): Promise<void> => {
     setStatus(null);
     const ok = await onSaveDefaults(patch);
     if (!ok) setStatus('failed');
@@ -43,11 +45,11 @@ function PermissionsSection({ hubSettings, onSaveDefaults }: PermissionsSectionP
   }
 
   /** 选项类型含空串：无缺省（null）时传入 ''，无匹配段即无高亮（hub 无清除语义，不设清除选项）。
-   *  选项面 = host 词表（permission/get_mode modes 收敛；host 缺席回落内置缺省）；
+   *  选项面 = host 词表（app/hubSettings 的 permissionModes 字段随数据走）；
    *  文案未收录档回退 id 本身——新档可见可选，不崩。 */
-  const modeOptions: ReadonlyArray<SegmentedControlOption<PermMode>> = currentPermModes().map((mode) => ({
+  const modeOptions: ReadonlyArray<SegmentedControlOption<string>> = hubSettings.permissionModes.map((mode) => ({
     value: mode,
-    label: copy.settings.permModeOptions[mode] ?? mode,
+    label: permModeLabel(mode),
   }));
   const thinkingOptions: ReadonlyArray<SegmentedControlOption<ThinkingLevel | ''>> = THINKING_LEVEL_ORDER.map((level) => ({
     value: level as ThinkingLevel | '',

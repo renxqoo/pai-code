@@ -248,6 +248,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     keyStore: deps.keyStore,
     restartHost: restartHostForProviders,
     settingsCommands: () => hub().settings,
+    permissionCommands: () => hub().permissions,
     ...(deps.onRouteRejected !== undefined ? { onReject: deps.onRouteRejected } : {}),
   });
   const { providersView, preferencesView } = settings;

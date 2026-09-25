@@ -1,29 +1,23 @@
 import { ChevronDown, Shield } from 'lucide-react';
 
-import type { PermMode } from '@paiapp/contracts';
-import { currentPermModes } from '@paiapp/contracts';
 import { MenuButton, type MenuItemDef } from '@paiapp/ui';
 
 import { copy } from '@/strings';
+import { permModeLabel } from '@/strings/perm-mode-label';
 
 import { menuTriggerClassName } from '@paiapp/ui';
 
 type PermissionModeMenuProps = {
   /** 当前生效模式（permission/mode 读口；normalizePermMode 已收敛为词表值）。 */
-  mode: PermMode
-  onSelectMode: (mode: PermMode) => void
+  mode: string
+  /** 选项面 = host 词表（读口响应的 modes 字段，随数据走——会话菜单取
+   *  sessionPermissionMode.modes、新任务页取 hubSettings.permissionModes；非空由 verb 保证）。 */
+  modes: readonly string[]
+  onSelectMode: (mode: string) => void
 }
 
-/** 权限模式展示名（语言切换后随渲染重估——模块级常量会冻结首个 locale）。
- *  词表外档（host 协议扩展、文案未收录）回退 id 本身——新档可见可选，不崩。 */
-export function permModeLabel(mode: PermMode): string {
-  return copy.settings.permModeOptions[mode] ?? mode;
-}
-
-/** 会话权限模式下拉：读 permission/mode、写 permission/setMode（下一工具裁决生效）。
- *  选项面 = host 词表（permission/get_mode modes 收敛；host 缺席回落内置缺省）。 */
-function PermissionModeMenu({ mode, onSelectMode }: PermissionModeMenuProps) {
-  const modes = currentPermModes();
+/** 会话权限模式下拉：读 permission/mode、写 permission/setMode（下一工具裁决生效）。 */
+function PermissionModeMenu({ mode, modes, onSelectMode }: PermissionModeMenuProps) {
   const items: MenuItemDef[] = modes.map((value) => ({
     kind: 'item' as const,
     id: value,

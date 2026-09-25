@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { ArrowUp, ChevronDown, Plus } from 'lucide-react';
 
-import type { PermMode, SessionStatsView, TokenAnalyticsView } from '@paiapp/contracts';
+import type { SessionStatsView, TokenAnalyticsView } from '@paiapp/contracts';
 
 import { UsageDetails, formatWindowPct } from './usage-details';
 
@@ -50,8 +50,10 @@ type ComposerActionsRowProps = {
   generating: boolean
   onStop: () => void
   /** 会话权限模式（当前生效；null = 未加载/无会话，控件不渲染） */
-  permissionMode: PermMode | null
-  onSelectPermissionMode: (mode: PermMode) => void
+  permissionMode: string | null
+  /** 选项面 = host 词表（读口 modes 字段随数据走） */
+  permissionModes: readonly string[]
+  onSelectPermissionMode: (mode: string) => void
   /** 会话面：工作中子代理状态徽标（不传 = 无会话面，不渲染）。 */
   agents?: { working: number; onOpen: () => void }
   /** 思考档控件（null = 不渲染） */
@@ -87,6 +89,7 @@ function ComposerActionsRow({
   generating,
   onStop,
   permissionMode,
+  permissionModes,
   onSelectPermissionMode,
   agents,
   effort,
@@ -100,7 +103,7 @@ function ComposerActionsRow({
         <Plus strokeWidth={1.9} />
       </IconButton>
       {permissionMode !== null ? (
-        <PermissionModeMenu mode={permissionMode} onSelectMode={onSelectPermissionMode} />
+        <PermissionModeMenu mode={permissionMode} modes={permissionModes} onSelectMode={onSelectPermissionMode} />
       ) : null}
       {agents === undefined ? null : <AgentStatusButton count={agents.working} onOpen={agents.onOpen} />}
       {/* 右组可收缩（min-w-0），收缩量全部由模型名截断吸收；其余控件 shrink-0 保持原宽 */}

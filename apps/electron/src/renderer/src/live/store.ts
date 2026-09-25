@@ -10,13 +10,11 @@ import type {
   SkillView,
   ApiData,
   ModelInfoView,
-  PermMode,
   PluginView,
   PreferencesView,
   ProviderConfigView,
   SavedSessionView,
   SessionView,
-  ThinkingLevel,
   UiEvent,
 } from '@paiapp/contracts';
 import type { SubagentModel, ThreadModel } from '@/thread/thread-model';
@@ -42,17 +40,11 @@ export type PendingDialog = {
   agentName?: string;
 };
 
-/** hub 用户级缺省（app/hubSettings；null 字段 = 未设置按 hub 缺省）。 */
-export type HubSettingsView = {
-  permissionDefaultMode: PermMode | null;
-  thinkingDefault: ThinkingLevel | null;
-};
+/** hub 用户级缺省（app/hubSettings；null 字段 = 未设置按 hub 缺省；permissionModes = host 词表——选项面）。 */
+export type HubSettingsView = ApiData<'app/hubSettings'>;
 
-/** 活跃会话权限模式读口视图（permission/mode）。 */
-export type SessionPermissionModeView = {
-  mode: string;
-  source: 'session' | 'project' | 'user' | 'default';
-};
+/** 活跃会话权限模式读口视图（permission/mode；modes = host 词表——选项面）。 */
+export type SessionPermissionModeView = ApiData<'permission/mode'>;
 
 /** 活跃会话思考档读口视图（session/thinkingLevels）。 */
 export type ThinkingLevelStateView = {
