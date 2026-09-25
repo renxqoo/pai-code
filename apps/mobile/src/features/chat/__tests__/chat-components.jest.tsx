@@ -63,5 +63,6 @@ describe('chat and history components', () => {
     const view = await render(<TestWrapper><WorkspaceSheet /></TestWrapper>);
     await fireEvent.press(view.getByText('Pai Mobile'));
     expect(useNavigationStore.getState().sheet).toBeNull();
+    expect(useConversationStore.getState()).toMatchObject({ workspaceId: 'workspace-mobile' });
   });
 });

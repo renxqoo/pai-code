@@ -47,8 +47,10 @@ describe('composer components', () => {
     const view = await render(<ComposerPanel />);
     await fireEvent.press(view.getByLabelText('移除 a.pdf'));
     expect(useAttachmentStore.getState().items).toHaveLength(0);
+    await act(() => Promise.resolve(useAttachmentStore.getState().addAttachment({ id: '2', name: 'b.pdf', size: 100, kind: 'pdf', status: 'ready' })));
     await view.rerender(<TestWrapper><ComposerPanel /></TestWrapper>);
     await fireEvent.press(view.getByLabelText('发送消息'));
+    expect(useAttachmentStore.getState().items).toHaveLength(0);
     await act(() => Promise.resolve(useComposerStore.setState({ generating: true })));
     await view.rerender(<TestWrapper><ComposerPanel /></TestWrapper>);
     await fireEvent.press(view.getByLabelText('停止生成'));

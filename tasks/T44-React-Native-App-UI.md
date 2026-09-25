@@ -1,6 +1,6 @@
 # Pai Code React Native App UI 方案
 
-> 状态：待对抗审查
+> 状态：已核销
 > 级别：大
 > 范围：`apps/mobile`
 
@@ -110,8 +110,8 @@
 - [x] 设置页与默认偏好完整。
 - [x] iOS/Android 安全区、键盘、返回和无障碍由 SafeArea、KeyboardAvoidingView、Router 与 accessibility 属性承接；iOS/Android Hermes bundle 通过。
 - [x] 组件文件均不超过 300 行且单组件文件纪律成立。
-- [x] 四门与双平台 bundle 通过；移动端覆盖率语句 92.61%、分支 87.06%、函数 90.47%、行 95%。
-- [ ] 独立对抗审查问题清零。
+- [x] 四门与双平台 bundle 通过；移动端覆盖率语句 92.44%、分支 86.30%、函数 90.28%、行 94.91%。
+- [x] 独立对抗审查问题清零：补齐抽屉入口、搜索入口、项目/设备/资产页面、工作空间选择、项目附件与发送清附件。
 - [x] 无 TODO、假成功按钮、密钥、真实网络或凭据。
 
 ## 11. 验证记录
@@ -119,8 +119,8 @@
 - 根级 `bun run lint`：0 warning / 0 error。
 - 根级 `bun run typecheck`：Electron 与 mobile 全部通过。
 - 根级 `bun run build`：Electron 与 Expo Web export 全部通过。
-- 根级 `bun run test`：既有 Bun 2063 pass / 1 skip / 0 fail；移动端 Jest 12 suites / 48 tests 全绿。
+- 根级 `bun run test`：既有 Bun 2063 pass / 1 skip / 0 fail；移动端 Jest 12 suites / 51 tests 全绿。
 - Expo iOS / Android Hermes bundle：全部通过。
 - `expo install --check`：依赖与 SDK 57 官方矩阵一致。
-- bw Web 走查：首屏、抽屉、设置深色、模型、思考、权限、附件 Sheet、真实发送均通过；浏览器 errors/console 为空。
+- bw Web 走查：首屏、抽屉、搜索、设置深色、模型、思考、权限、附件 Sheet、真实发送、设备、资产、项目和工作空间选择均通过；浏览器 errors/console 为空。
 - Expo Doctor 在当前无 npm 的 Bun 环境中：配置 schema 与 peer dependency 检查通过；依赖树/重复链接相关检查因 Doctor 硬调用 npm 未能完整执行，且同版本包在 Bun `.bun` 布局出现重复链接。该工具链限制不掩盖为通过，原生 Metro bundle 另门通过。

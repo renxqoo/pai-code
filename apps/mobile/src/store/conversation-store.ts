@@ -6,10 +6,12 @@ export type PermissionDecision = { id: string; title: string; command: string; a
 type ConversationState = {
   activeSessionId: string | null;
   session: ConversationSession;
+  workspaceId: string | null;
   permissionRequest: PermissionDecision | null;
   startNewSession: () => void;
   openSession: (session: ConversationSession) => void;
   appendMessage: (message: ChatMessage) => void;
+  chooseWorkspace: (id: string, name: string) => void;
   requestPermission: (request: PermissionDecision) => void;
   resolvePermission: (approved: boolean) => void;
 };
@@ -19,10 +21,11 @@ function blankSession(): ConversationSession {
 }
 
 export const useConversationStore = create<ConversationState>((set) => ({
-  activeSessionId: null, session: blankSession(), permissionRequest: null,
+  activeSessionId: null, session: blankSession(), workspaceId: null, permissionRequest: null,
   startNewSession: () => set({ activeSessionId: null, session: blankSession(), permissionRequest: null }),
   openSession: (session) => set({ activeSessionId: session.id, session, permissionRequest: null }),
   appendMessage: (message) => set((state) => ({ session: { ...state.session, messages: [...state.session.messages, message], preview: message.text.slice(0, 80) } })),
+  chooseWorkspace: (workspaceId, name) => set((state) => ({ workspaceId, session: { ...state.session, project: name } })),
   requestPermission: (permissionRequest) => set({ permissionRequest }),
   resolvePermission: (approved) => set((state) => state.permissionRequest === null ? state : { permissionRequest: { ...state.permissionRequest, approved } }),
 }));

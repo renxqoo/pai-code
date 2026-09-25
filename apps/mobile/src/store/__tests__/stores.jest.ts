@@ -15,6 +15,7 @@ describe('mobile UI stores', () => {
     useAttachmentStore.setState({ items: [] });
     useSettingsStore.setState({ theme: 'system', defaultModel: 'gpt-5.2-codex', defaultThinking: 'medium', defaultPermission: 'ask', notifications: true, haptics: true, compactHistory: false });
     useConversationStore.getState().startNewSession();
+    useConversationStore.setState({ workspaceId: null });
   });
 
   it('keeps drawer and sheets mutually exclusive', () => {
@@ -105,5 +106,11 @@ describe('mobile UI stores', () => {
     useConversationStore.getState().requestPermission({ id: 'p1', title: '运行测试', command: 'bun test', approved: null });
     useConversationStore.getState().resolvePermission(true);
     expect(useConversationStore.getState().permissionRequest?.approved).toBe(true);
+  });
+
+  it('chooses a workspace for new tasks', () => {
+    useConversationStore.getState().chooseWorkspace('workspace-mobile', 'Pai Mobile');
+    expect(useConversationStore.getState()).toMatchObject({ workspaceId: 'workspace-mobile' });
+    expect(useConversationStore.getState().session.project).toBe('Pai Mobile');
   });
 });

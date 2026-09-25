@@ -37,6 +37,13 @@ describe('attachment sheet', () => {
     expect(useNavigationStore.getState().sheet).toBeNull();
   });
 
+  it('adds a project file', async () => {
+    await act(() => Promise.resolve(useNavigationStore.getState().openSheet('attachments')));
+    const view = await render(<TestWrapper><AttachmentSheet /></TestWrapper>);
+    await fireEvent.press(view.getByText('从项目导入'));
+    expect(useAttachmentStore.getState().items[0]?.name).toBe('README.md');
+  });
+
   it('adds selected image and handles cancel', async () => {
     mockImagePicker.launchImageLibraryAsync.mockResolvedValueOnce({ canceled: true, assets: null }).mockResolvedValueOnce({ canceled: false, assets: [{ assetId: null, duration: null, fileName: 'i.png', fileSize: 20, height: 100, mimeType: 'image/png', type: 'image', uri: 'file://i.png', width: 100 }] });
     await act(() => Promise.resolve(useNavigationStore.getState().openSheet('attachments')));

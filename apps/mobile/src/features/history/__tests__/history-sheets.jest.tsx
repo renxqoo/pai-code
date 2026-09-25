@@ -36,6 +36,21 @@ describe('history sheets', () => {
     expect(mockPush).toHaveBeenCalledWith('/settings');
   });
 
+  it('navigates to devices, assets, projects and archive', async () => {
+    await act(() => Promise.resolve(useNavigationStore.getState().setDrawerOpen(true)));
+    const view = await render(<TestWrapper><HistoryDrawer /></TestWrapper>);
+    await fireEvent.press(view.getByText('连接电脑'));
+    expect(mockPush).toHaveBeenCalledWith('/devices');
+    await act(() => Promise.resolve(useNavigationStore.getState().setDrawerOpen(true)));
+    await view.rerender(<TestWrapper><HistoryDrawer /></TestWrapper>);
+    await fireEvent.press(view.getByText('资产'));
+    expect(mockPush).toHaveBeenCalledWith('/assets');
+    await act(() => Promise.resolve(useNavigationStore.getState().setDrawerOpen(true)));
+    await view.rerender(<TestWrapper><HistoryDrawer /></TestWrapper>);
+    await fireEvent.press(view.getByText('+ 添加项目'));
+    expect(mockPush).toHaveBeenCalledWith('/projects');
+  });
+
   it('opens a session action sheet from drawer', async () => {
     await act(() => Promise.resolve(useNavigationStore.getState().setDrawerOpen(true)));
     const view = await render(<TestWrapper><HistoryDrawer /></TestWrapper>);

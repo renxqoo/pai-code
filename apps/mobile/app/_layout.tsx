@@ -21,6 +21,9 @@ export default function RootLayout() {
           <Stack.Screen name="models" />
           <Stack.Screen name="usage" />
           <Stack.Screen name="archived" />
+          <Stack.Screen name="assets" />
+          <Stack.Screen name="devices" />
+          <Stack.Screen name="projects" />
           <Stack.Screen name="help" />
           <Stack.Screen name="about" />
           <Stack.Screen name="privacy" />
