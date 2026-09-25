@@ -167,17 +167,27 @@ describe('发送回底信号（threadId 寻址，用户主动投递成功才触�
     expect(uiStore.getState().followLatest).toEqual({ token: 1, threadId: 't1' });
   });
 
-  test('排队条目立即改向成功（consumed）同口径触发；window 不触发', async () => {
+  test('立即改向受理成功（ok）触发回底；撞已消费竞态（已入轮）同口径；window/failed 不触发', async () => {
     seedQueue();
-    jest.spyOn(controller, 'queueSendNow').mockResolvedValueOnce('consumed');
+    jest.spyOn(controller, 'queueSendNow').mockResolvedValueOnce('ok');
     workspaceActions.sendQueuedMessageNow('t1', 'q1');
     await Promise.resolve();
     expect(uiStore.getState().followLatest).toEqual({ token: 1, threadId: 't1' });
 
+    jest.spyOn(controller, 'queueSendNow').mockResolvedValueOnce('consumed');
+    workspaceActions.sendQueuedMessageNow('t1', 'q1');
+    await Promise.resolve();
+    expect(uiStore.getState().followLatest).toEqual({ token: 2, threadId: 't1' });
+
     jest.spyOn(controller, 'queueSendNow').mockResolvedValueOnce('window');
     workspaceActions.sendQueuedMessageNow('t1', 'q1');
     await Promise.resolve();
-    expect(uiStore.getState().followLatest).toEqual({ token: 1, threadId: 't1' });
+    expect(uiStore.getState().followLatest).toEqual({ token: 2, threadId: 't1' });
+
+    jest.spyOn(controller, 'queueSendNow').mockResolvedValueOnce('failed');
+    workspaceActions.sendQueuedMessageNow('t1', 'q1');
+    await Promise.resolve();
+    expect(uiStore.getState().followLatest).toEqual({ token: 2, threadId: 't1' });
   });
 });
 

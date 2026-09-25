@@ -272,7 +272,10 @@ export function createWorkspaceActions(): WorkspaceActions {
         if (outcome === 'window') pushNotice(copy.flow.queuedSendNowUnavailable);
         else if (outcome === 'consumed') {
           pushNotice(copy.flow.queuedEntryConsumed);
-          // 用户主动立即发送：与投递同口径回底跟随
+          // 竞态撞已消费：条目已入轮（消息在流里），与受理同口径回底
+          uiStore.getState().requestFollowLatest(threadId);
+        } else if (outcome === 'ok') {
+          // 立即改向受理成功：消息即刻注入当前轮，用户主动看最新 → 回底跟随
           uiStore.getState().requestFollowLatest(threadId);
         } else if (outcome === 'failed') pushNotice(copy.flow.queueOpFailed);
       });

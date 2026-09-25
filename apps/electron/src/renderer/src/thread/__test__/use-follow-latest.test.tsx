@@ -63,6 +63,20 @@ describe('useFollowLatest', () => {
     view.unmount();
   });
 
+  test('挂载时现存信号视为历史（种子式消费）：不重放旧信号，新信号正常消费', () => {
+    liveStore.setState({ activeThreadId: 't1' });
+    uiStore.getState().requestFollowLatest('t1'); // 挂载前的旧信号
+    const calls: string[] = [];
+    const view = render(<Host calls={calls} scroll={() => calls.push('bottom')} />);
+    expect(bottomCalls(calls)).toEqual([]);
+
+    React.act(() => {
+      uiStore.getState().requestFollowLatest('t1');
+    });
+    expect(bottomCalls(calls)).toEqual(['bottom']);
+    view.unmount();
+  });
+
   test('分批信号各回底一次；同批多信号合并为一次回底（意图幂等）', () => {
     liveStore.setState({ activeThreadId: 't1' });
     const calls: string[] = [];

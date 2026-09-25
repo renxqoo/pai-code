@@ -74,7 +74,7 @@ describe('ThreadStage 空态（T27：水化失败不静默）', () => {
 });
 
 describe('ThreadStage 发送回底（用户主动发送 → 滚到最新）', () => {
-  test('症状「发送后停在历史中部看不到回执」：回底信号命中活跃线程即滚到底', () => {
+  test('症状「发送后停在历史中部看不到回执」：已让位前置态下回底信号即滚到底', () => {
     seedActiveThread();
     const view = render(<ThreadStage />);
     const scroller = view.container.querySelector('.overflow-y-auto');
@@ -95,6 +95,13 @@ describe('ThreadStage 发送回底（用户主动发送 → 滚到最新）', ()
     const original = windowStub.matchMedia;
     windowStub.matchMedia = (query: string): { matches: boolean } => ({ matches: query.includes('prefers-reduced-motion') });
     try {
+      // 建立「已让位」前置态（用户上翻读历史，滚动事件落位）——症状的真实起点
+      React.act(() => {
+        scroller.scrollTop = 500;
+        scroller.dispatchEvent(new Event('scroll'));
+        scroller.scrollTop = 200;
+        scroller.dispatchEvent(new Event('scroll'));
+      });
       React.act(() => {
         uiStore.getState().requestFollowLatest('t1');
       });
