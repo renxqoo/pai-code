@@ -369,14 +369,23 @@ describe('createHostProcess · 直执行形态（T38 hubEntry null = 编译产�
   test('T38：hubEntry null → spawn(bunPath, []) 直接执行自包含可执行，心跳就绪', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'pai-direct-exec-'));
     const binary = join(dir, 'host-hub-bin');
-    writeFileSync(binary, '#!/bin/sh\nwhile true; do printf \'{"type":"heartbeat","rssBytes":1}\\n\'; sleep 1; done\n');
+    writeFileSync(binary, '#!/bin/sh\nwhile true; do printf \'{"type":"heartbeat","rssBytes":1}\\n\'; sleep 0.1; done\n');
     chmodSync(binary, 0o755);
     const harness = makeHarness({
       config: { bunPath: binary, hubEntry: null, agentDir, buildEnv: () => ({}) },
+      // 本用例验 spawn 形态与首心跳就绪，不验挂死检测；冷 shell 启动在全量并行负载下
+      // 可超 300ms 默认窗（会被看门狗伪重启），挂死窗放宽排除调度快慢依赖
+      timing: { ...fastTiming, hangAfterMs: 3_000 },
     });
     const host = launch(harness);
     await waitFor(() => host.phase === 'ready', 8_000, 'direct-exec ready');
     expect(harness.phases).toEqual(['starting', 'ready']);
+    // 症状回归：断言曾与 hang 看门狗（fastTiming hangAfterMs=300）赛跑——夹具心跳慢一拍
+    // 就被看门狗重启，相位串带出重复 starting。心跳相隔压到 100ms（3 倍余量）后，再跨
+    // 一个看门狗窗口钉「不发生伪重启」，断言不再依赖调度快慢
+    await sleep(600);
+    expect(harness.phases).toEqual(['starting', 'ready']);
+    expect(harness.restartCount()).toBe(0);
     await host.dispose();
   });
 });

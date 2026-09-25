@@ -190,7 +190,7 @@ function tapEventNames(runtime: PaiRuntime, names: string[]): void {
 
     // 生效面：新会话装配（= 重开同路径）command/list 含 skill:imported-skill
     const started = (await h.invoke('session/start', { cwd: h.work, trusted: true })) as { ok: boolean; data: { threadId: string } };
-    expect(started.ok).toBe(true);
+    expect(started).toMatchObject({ ok: true }); // 失败时带出 error 载荷（断言诊断面）
     const commands = (await h.invoke('command/list', { threadId: started.data.threadId })) as { ok: boolean; data: Array<{ name: string }> };
     expect(commands.ok).toBe(true);
     expect(commands.data.some((item) => item.name === 'skill:imported-skill')).toBe(true);
@@ -253,7 +253,7 @@ describe('app API 全接口 × 真 x-harness host-hub（script 默认门）', ()
     // 事件面在 bootstrap 前缓冲不发（runtime 契约）——旅程与真实启动序一致先 bootstrap
     expect(((await h.invoke('app/bootstrap', {})) as { ok: boolean }).ok).toBe(true);
     const started = (await h.invoke('session/start', { cwd: h.work, trusted: true })) as { ok: boolean; data: { threadId: string } };
-    expect(started.ok).toBe(true);
+    expect(started).toMatchObject({ ok: true }); // 失败时带出 error 载荷（断言诊断面）
     const threadId = started.data.threadId;
     if (!((await h.invoke('session/prompt', { threadId, message: 'hi' })) as { ok: boolean }).ok) throw new Error('prompt failed');
     expect(await waitFor(() => h.events.includes('turnSettled'), 60_000)).toBe(true);
@@ -288,7 +288,7 @@ describe('app API 全接口 × 真 x-harness host-hub（script 默认门）', ()
 
     // --- 会话生命周期：start → events.jsonl + header.json 落盘 ---
     const started = (await h.invoke('session/start', { cwd: h.work, trusted: true })) as { ok: boolean; data: { threadId: string; sessionPath: string } };
-    expect(started.ok).toBe(true);
+    expect(started).toMatchObject({ ok: true }); // 失败时带出 error 载荷（断言诊断面）
     const threadId = started.data.threadId;
     const sessionPath = started.data.sessionPath;
     expect(sessionPath.endsWith('events.jsonl')).toBe(true);
@@ -476,7 +476,7 @@ describe('app API 全接口 × 真 x-harness host-hub（script 默认门）', ()
     await h.invoke('app/bootstrap', {});
     // full 档起线程：agent_spawn 工具不弹窗（journeys 同款旅程锚）
     const started = (await h.invoke('session/start', { cwd: h.work, trusted: true, permissionMode: 'full' })) as { ok: boolean; data: { threadId: string } };
-    expect(started.ok).toBe(true);
+    expect(started).toMatchObject({ ok: true }); // 失败时带出 error 载荷（断言诊断面）
     const threadId = started.data.threadId;
     const prompted = await h.invoke('session/prompt', { threadId, message: 'spawn one' });
     expect(prompted.ok).toBe(true);
@@ -621,7 +621,7 @@ describe('app API × 真 x-harness host-hub（GLM 真门，opt-in）', () => {
     expect(runtime.host.phase).toBe('ready');
 
     const started = (await routes.invoke('session/start', { cwd: work, modelId: glmModel, trusted: true })) as { ok: boolean; data: { threadId: string } };
-    expect(started.ok).toBe(true);
+    expect(started).toMatchObject({ ok: true }); // 失败时带出 error 载荷（断言诊断面）
     const threadId = started.data.threadId;
     const prompted = (await routes.invoke('session/prompt', { threadId, message: '只回复两个字：收到' })) as { ok: boolean };
     expect(prompted.ok).toBe(true);
