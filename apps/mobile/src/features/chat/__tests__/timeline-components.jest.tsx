@@ -23,8 +23,11 @@ describe("timeline components", () => {
       </>,
     );
     expect(view.getByText("用户")).toBeTruthy();
-    expect(view.getByTestId("user-task-card").props.style).toMatchObject({ borderRadius: 14 });
-    expect(view.getByTestId("user-task-card").props.style.borderBottomRightRadius).toBeUndefined();
+    const card = view.getByTestId("user-task-card");
+    expect(card.props.style).toMatchObject({ borderRadius: 14, alignItems: "flex-end", maxWidth: "86%" });
+    expect(card.props.style.borderBottomRightRadius).toBeUndefined();
+    expect(card.parent?.props.style).toMatchObject({ alignItems: "flex-end" });
+    expect(view.getByText("用户").props.style).toMatchObject({ textAlign: "right" });
     expect(view.getByText("助手")).toBeTruthy();
     expect(view.getByText("系统")).toBeTruthy();
     expect(view.getByText("代码内容")).toBeTruthy();
