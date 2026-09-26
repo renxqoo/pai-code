@@ -196,11 +196,8 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       // 用户回显/通知注入经条目对账到达（消息不走事件流）
       void fetchEntries(event.threadId, state.threads[event.threadId]?.cursor ?? null, false).catch(() => undefined);
     } else if (event.type === 'turnSettled') {
-      // ok=false 的回合失败通报通知条（轮内错误详情由折叠态的 turnFailure 块呈现）；
-      // 用户主动停止引发的 settle 不是失败，不通报
-      if (!event.ok && !state.threads[event.threadId]?.stopping) {
-        store.getState().pushNotice(copy.flow.turnFailed(event.reason ?? ''));
-      }
+      // ok=false 的回合失败不再走通知条（toast）：错误以终态消息（turnFailure 块）
+      // 在轮末常驻呈现——通知条是一次性装饰、刷新即失，不是错误的正确展示面
       // 等条目落盘的短延迟后【轮内窗口重建】：since = 轮首游标，以完整转写替换
       // 本轮 span（根治配对丢失的语义不变，长会话不再每轮 O(全部条目) 全量拉取；
       // 游标失效由主进程兜底全量重拉）。代际守卫：窗口内若新一轮已开始（followUp

@@ -3,7 +3,6 @@ import { expect, test } from 'bun:test';
 import { createLiveController } from '../live-controller';
 import { createLiveStore } from '../store';
 import type { BridgeClient } from '../client-invoke';
-import { copy } from '@/strings';
 
 /**
  * controller 编排回归（对抗审查 B-P1）：
@@ -119,7 +118,7 @@ test('症状回归：StrictMode 双挂载序列（start→dispose→start）下 
   controller.dispose();
 });
 
-test('settled ok=false → 失败通报通知条（turnFailed 文案含 reason）+ 轮内 turnFailure 错误块', async () => {
+test('症状回归「错误只闪 toast 刷新即失」：settled ok=false 不发通知条，失败以轮内终态块常驻', async () => {
   const store = createLiveStore();
   const client = makeClient();
   const controller = createLiveController(client, store);
@@ -127,11 +126,13 @@ test('settled ok=false → 失败通报通知条（turnFailed 文案含 reason�
   const threadId = 't1';
   client.emitToController({ type: 'turnStarted', threadId, at: 1 });
   client.emitToController({ type: 'turnSettled', threadId, ok: false, reason: 'rate limited', usage: null });
-  expect(store.getState().notices.map((notice) => notice.text)).toEqual([copy.flow.turnFailed('rate limited')]);
+  // 失败不再走通知条（toast 是一次性装饰、刷新即失）——唯一展示面是 turnFailure 终态块
+  expect(store.getState().notices).toEqual([]);
   const thread = store.getState().threads[threadId];
   const turn = thread?.items.find((item) => item.kind === 'turn');
   expect(turn).toBeDefined();
-  expect(turn !== undefined && turn.kind === 'turn' ? turn.turn.blocks.some((block) => block.kind === 'turnFailure') : false).toBe(true);
+  const failure = turn !== undefined && turn.kind === 'turn' ? turn.turn.blocks.find((block) => block.kind === 'turnFailure') : undefined;
+  expect(failure).toMatchObject({ kind: 'turnFailure', stopReason: 'error', message: 'rate limited' });
   controller.dispose();
 });
 

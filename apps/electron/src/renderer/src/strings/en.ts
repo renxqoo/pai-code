@@ -204,8 +204,6 @@ export const en = {
     forkFailed: 'Forking the conversation failed. Try again.',
     /** 流式中的 fork 被 hub 拒绝（thread is streaming）：先停止会话再分叉 */
     forkStreaming: 'The conversation is still streaming. Stop it before forking.',
-    /** 回合结算失败（settled ok=false；reason 为 hub/worker 错误文案） */
-    turnFailed: (reason: string): string => (reason.length > 0 ? `The reply failed (${reason}).` : 'The reply failed.'),
     /** 队列单条操作落空（queue/drop、queue/send_now 撞上条目已入轮/已清空的竞态——中性表述） */
     queuedEntryConsumed: 'That message is no longer queued.',
     /** 立即改向落空（无运行中的轮次可注入；条目留在队列随下轮消费） */

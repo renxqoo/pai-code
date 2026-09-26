@@ -201,8 +201,6 @@ export const zh: typeof en = {
     forkFailed: '分叉会话失败，请重试。',
     /** 流式中的 fork 被 hub 拒绝（thread is streaming）：先停止会话再分叉 */
     forkStreaming: '会话正在回复中，请先停止会话再分叉。',
-    /** 回合结算失败（settled ok=false；reason 为 hub/worker 错误文案） */
-    turnFailed: (reason: string): string => (reason.length > 0 ? `本轮回复失败（${reason}）。` : '本轮回复失败。'),
     /** 队列单条操作落空（queue/drop、queue/send_now 撞上条目已入轮/已清空的竞态——中性表述，
      *  入轮与 abort 清空两条路径都成立） */
     queuedEntryConsumed: '该消息已不在排队中。',

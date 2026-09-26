@@ -20,10 +20,11 @@ import { todoSnapshotOf } from './todo-snapshot';
  * （origin=system）；todo 清单工具的 tool/call|result 与 assistant 条目内的对应
  * tool_use 不产生渲染条目（对话流零痕迹——面板进程区由 todo/snapshot 呈现）；
  * todo/snapshot 不产生渲染条目但被折为快照返回（last-wins，进程区数据源）；
- * 其余事件（turn/*、step/*、system/message、request/*、llm/retry、
- * agent/inbox/spliced、autocompact/*、session/meta、
- * session/end-seed、compaction/*、command/*）为元数据/账本域，不产生渲染条目
- * （cursor 仍推进——按行消费，不按渲染条目消费）。
+ * turn/end 的 error/blocked 终局额外产生错误承载条目（空正文 assistant——刷新与
+ * settle 权威替换重建失败块的唯一依据）；其余事件（turn/其余 kind、step/*、
+ * system/message、request/*、llm/retry、agent/inbox/spliced、autocompact/*、
+ * session/meta、session/end-seed、compaction/*、command/*）为元数据/账本域，
+ * 不产生渲染条目（cursor 仍推进——按行消费，不按渲染条目消费）。
  */
 
 const BASH_ENVELOPE = '[bash] $ ';
@@ -37,6 +38,8 @@ export function mapEntries(data: unknown): { items: HistoryItem[]; cursor: numbe
   // 条目 seq 记录（surfaceOp replace 区间折叠用——压缩摘要是位置区间替换，原始
   // WAL 事件仍在流里，水化必须剔除被替换区间否则历史双份，docs/COMPACTION.md §2.A）
   const seqOfItem = new Map<HistoryItem, number>();
+  // 条目 → WAL turn 序号（turn 终局裁决：同轮中断时用户意图优先）
+  const turnOfItem = new Map<HistoryItem, number | undefined>();
   // callId → 最近一个 assistant HistoryItem 的 toolCalls 数组引用（tool/result 并入）
   const pendingTools = new Map<string, AssistantToolCall[]>();
   // tool/call 先于 assistant/message 到达时的暂存（name/args 补齐面）
@@ -86,8 +89,9 @@ export function mapEntries(data: unknown): { items: HistoryItem[]; cursor: numbe
         };
       }).filter((call) => !isTodoTool(call.name));
       // 异常终态收窄（内核词表 stop|max-tokens + interrupted 布尔）：max-tokens 透传，
-      // interrupted（中止/打断）映射 aborted；失败信息在 turn/end reason（live 经
-      // settled reason 呈现），消息级无 error 面——不再杜撰 meta.error 读取
+      // interrupted（中止/打断）映射 aborted；失败信息在 turn/end reason——消息级无
+      // error 面，由 turn/end 分支以错误承载条目落账（刷新重建失败块的唯一依据，
+      // live 的 settled reason 走事件流不经此）
       const rawStopReason = event['stopReason'];
       const interrupted = event['interrupted'] === true;
       const stopReason = rawStopReason === 'max-tokens' ? 'max-tokens' : interrupted ? 'aborted' : null;
@@ -103,6 +107,10 @@ export function mapEntries(data: unknown): { items: HistoryItem[]; cursor: numbe
         stopReason,
         errorMessage: null,
       });
+      turnOfItem.set(
+        items[items.length - 1] as HistoryItem,
+        typeof event['turn'] === 'number' ? event['turn'] : undefined,
+      );
       for (const call of toolCallViews) pendingTools.set(call.id, toolCallViews);
       continue;
     }
@@ -159,6 +167,39 @@ export function mapEntries(data: unknown): { items: HistoryItem[]; cursor: numbe
         };
         break;
       }
+      continue;
+    }
+
+    if (type === 'turn/end') {
+      // 轮终局错误（error/blocked）→ 错误承载条目（空正文 assistant）：刷新与 settle
+      // 权威替换重建失败块（hydrate failureOf）的唯一数据源——错误详情本在 turn/end
+      // reason（WAL 已持久化），此前映射丢弃导致刷新后错误消失。
+      // 裁决：只认 turn/end 终局 reason（内核权威）；completed/aborted 不承载（aborted =
+      // 用户意图，与 live 的 stopping 守卫同口径）；不改写既有条目——承载条目独立成行
+      // （id = 本行 seq），窗口化增量与全量重建幂等同形，绝不落错轮。
+      const reason = recordOf(event['reason']);
+      const kind = str(reason['kind']);
+      if (kind !== 'error' && kind !== 'blocked') continue;
+      const detail = kind === 'error' ? str(reason['message']) : str(reason['reason']);
+      const turnNo = event['turn'];
+      const aborted = items.some(
+        (item) => item.kind === 'assistant' && item.stopReason === 'aborted' && turnOfItem.get(item) === turnNo,
+      );
+      if (aborted) continue;
+      const carrier: HistoryItem = {
+        kind: 'assistant',
+        id,
+        messageTs: at,
+        text: '',
+        thinking: '',
+        at,
+        toolCalls: [],
+        usage: null,
+        stopReason: 'error',
+        errorMessage: detail.length > 0 ? detail : null,
+      };
+      applySurfaceOp(items, seqOfItem, event['surfaceOp'], seq, carrier);
+      turnOfItem.set(carrier, typeof turnNo === 'number' ? turnNo : undefined);
       continue;
     }
 

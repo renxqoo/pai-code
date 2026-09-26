@@ -301,6 +301,142 @@ describe('mapEntries（x-harness WAL 转写真相源）', () => {
 
 
 describe('surfaceOp replace（压缩区间折叠——docs/COMPACTION.md §2.A）', () => {
+
+  test("症状回归「刷新后错误消失」：turn/end 错误产出错误承载条目（空正文 assistant）", () => {
+    const { items } = mapEntries({
+      entries: [
+        row(1, 100, { type: 'user/message', turn: 0, step: 0, content: [{ type: 'text', text: '开始任务' }] }),
+        row(2, 200, {
+          type: 'assistant/message',
+          turn: 0,
+          step: 0,
+          content: [{ type: 'text', text: '我来处理。' }],
+          stopReason: 'stop',
+          interrupted: false,
+        }),
+        row(3, 300, { type: 'turn/end', turn: 0, reason: { kind: 'error', message: 'http-403: insufficient_user_quota' } }),
+      ],
+    });
+    // 承载条目独立成行：既有条目零改写，错误可被 hydrate failureOf 重建
+    const carrier = items.find((item) => item.kind === 'assistant' && item.stopReason === 'error');
+    expect(carrier).toMatchObject({
+      kind: 'assistant',
+      id: 'seq-3',
+      text: '',
+      stopReason: 'error',
+      errorMessage: 'http-403: insufficient_user_quota',
+    });
+    const narration = items.find((item) => item.kind === 'assistant' && item.text === '我来处理。');
+    expect(narration).toMatchObject({ stopReason: null, errorMessage: null });
+  });
+
+  test("症状回归「错误落到上一轮」：零 assistant 输出的失败轮自成承载条目，不污染前轮", () => {
+    const { items } = mapEntries({
+      entries: [
+        row(1, 100, { type: 'user/message', turn: 0, step: 0, content: [{ type: 'text', text: '问1' }] }),
+        row(2, 200, {
+          type: 'assistant/message',
+          turn: 0,
+          step: 0,
+          content: [{ type: 'text', text: '答1' }],
+          stopReason: 'stop',
+          interrupted: false,
+        }),
+        row(3, 300, { type: 'turn/end', turn: 0, reason: { kind: 'completed' } }),
+        row(4, 400, { type: 'user/message', turn: 1, step: 0, content: [{ type: 'text', text: '问2' }] }),
+        row(5, 500, { type: 'turn/end', turn: 1, reason: { kind: 'error', message: 'http-403 quota' } }),
+      ],
+    });
+    const carriers = items.filter((item) => item.kind === 'assistant' && item.stopReason === 'error');
+    expect(carriers).toHaveLength(1);
+    expect(carriers[0]).toMatchObject({ id: 'seq-5', errorMessage: 'http-403 quota' });
+    // 前轮 assistant 零接触
+    const first = items.find((item) => item.kind === 'assistant' && item.text === '答1');
+    expect(first).toMatchObject({ stopReason: null, errorMessage: null });
+  });
+
+  test('blocked 终局同通道落账（live 呈现失败，刷新不得丢）', () => {
+    const { items } = mapEntries({
+      entries: [
+        row(1, 100, {
+          type: 'assistant/message',
+          turn: 0,
+          step: 0,
+          content: [{ type: 'text', text: '被策略拦住' }],
+          stopReason: 'stop',
+          interrupted: false,
+        }),
+        row(2, 200, { type: 'turn/end', turn: 0, reason: { kind: 'blocked', reason: 'policy' } }),
+      ],
+    });
+    const carrier = items.find((item) => item.kind === 'assistant' && item.stopReason === 'error');
+    expect(carrier).toMatchObject({ id: 'seq-2', errorMessage: 'policy' });
+  });
+
+  test('同轮中断（aborted）时用户意图优先：turn/end error 不再挂错误', () => {
+    const { items } = mapEntries({
+      entries: [
+        row(1, 100, {
+          type: 'assistant/message',
+          turn: 0,
+          step: 0,
+          content: [{ type: 'text', text: '中途' }],
+          stopReason: 'stop',
+          interrupted: true,
+        }),
+        row(2, 200, { type: 'turn/end', turn: 0, reason: { kind: 'error', message: 'boom' } }),
+      ],
+    });
+    const carriers = items.filter((item) => item.kind === 'assistant' && item.stopReason === 'error');
+    expect(carriers).toHaveLength(0);
+  });
+
+  test('正常结束与 client-abort 不落账错误（aborted 仍由消息级 interrupted 映射）', () => {
+    const { items } = mapEntries({
+      entries: [
+        row(1, 100, {
+          type: 'assistant/message',
+          turn: 0,
+          step: 0,
+          content: [{ type: 'text', text: '完成' }],
+          stopReason: 'stop',
+          interrupted: false,
+        }),
+        row(2, 200, { type: 'turn/end', turn: 0, reason: { kind: 'completed' } }),
+        row(3, 300, {
+          type: 'assistant/message',
+          turn: 1,
+          step: 0,
+          content: [{ type: 'text', text: '中途' }],
+          stopReason: 'stop',
+          interrupted: true,
+        }),
+        row(4, 400, { type: 'turn/end', turn: 1, reason: { kind: 'aborted', cause: 'client-abort' } }),
+      ],
+    });
+    const assistants = items.filter((item) => item.kind === 'assistant');
+    expect(assistants).toHaveLength(2);
+    expect(assistants[0]).toMatchObject({ stopReason: null, errorMessage: null });
+    expect(assistants[1]).toMatchObject({ stopReason: 'aborted', errorMessage: null });
+  });
+
+  test('增量窗口只带 turn/end 时错误同样落账（settle 权威替换不抹失败块的数据面）', () => {
+    // settle 后轮内窗口重建（rebuildFromTranscript）可能只回带 turn/end 行：
+    // 承载条目必须独立于此窗口产生，否则 120ms 权威替换会抹掉 live 失败块
+    const { items } = mapEntries({
+      entries: [row(7, 700, { type: 'turn/end', turn: 2, reason: { kind: 'error', message: 'worker-died' } })],
+    });
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ kind: 'assistant', id: 'seq-7', stopReason: 'error', errorMessage: 'worker-died' });
+  });
+
+  test('垃圾 reason 形状安全降级（缺 message 不崩溃，errorMessage 归 null）', () => {
+    const { items } = mapEntries({
+      entries: [row(1, 100, { type: 'turn/end', turn: 0, reason: { kind: 'error' } })],
+    });
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ kind: 'assistant', stopReason: 'error', errorMessage: null });
+  });
   test('带 replace 的摘要条目剔除区间内旧条目再追加；append 直通', () => {
     const { items } = mapEntries({
       entries: [
@@ -353,7 +489,7 @@ describe('surfaceOp replace（压缩区间折叠——docs/COMPACTION.md §2.A�
     ]);
   });
 
-  test('turn/end reason 判别穷举（六 kind 均不产渲染条目——cursor 推进）', () => {
+  test('turn/end reason 判别穷举（error/blocked 产承载条目，其余零渲染条目——cursor 均推进）', () => {
     const reasons = [
       { kind: 'completed' },
       { kind: 'aborted', cause: 'client-abort' },
@@ -367,7 +503,10 @@ describe('surfaceOp replace（压缩区间折叠——docs/COMPACTION.md §2.A�
       row(index * 2 + 2, index * 2 + 2, { type: 'turn/end', turn: index, reason }),
     ]);
     const { items, cursor } = mapEntries({ entries });
-    expect(items.map((item) => (item.kind === 'user' ? item.text : ''))).toEqual(['q0', 'q1', 'q2', 'q3', 'q4', 'q5']);
+    // blocked(序 2)/error(序 3) 各产一条错误承载条目；completed/aborted/max-tokens/interrupted 零条目
+    expect(items.map((item) => (item.kind === 'user' ? item.text : item.stopReason === 'error' ? `carrier:${item.errorMessage}` : ''))).toEqual([
+      'q0', 'q1', 'q2', 'carrier:permission', 'q3', 'carrier:boom', 'q4', 'q5',
+    ]);
     expect(cursor).toBe(12);
   });
 });
