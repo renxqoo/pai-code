@@ -2,7 +2,7 @@ import * as React from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { ChevronDown, ChevronRight, CircleAlert, Wrench } from 'lucide-react-native';
 import { useAppTheme } from '@/theme/theme-context';
-import { rhythm, spacing } from '@/theme/tokens';
+import { rhythm, spacing, type } from '@/theme/tokens';
 import { copy } from '@/strings/zh';
 import { rowPressStyle } from '@/components/ui/row-press-style';
 import type { ChatMessage } from '@/types/domain';
@@ -25,8 +25,8 @@ export function ToolGroup({ messages, onOpen }: ToolGroupProps) {
         style={rowPressStyle}
       >
         {running ? <ActivityIndicator color={colors.textFaint} size="small" /> : failed ? <CircleAlert color={colors.destructive} size={16} /> : <Wrench color={colors.textFaint} size={16} />}
-        <Text numberOfLines={1} style={{ color: failed ? colors.destructive : colors.textMuted, flexShrink: 1, fontSize: 12, marginLeft: 8, marginRight: 6 }}>{`${messages.length} ${copy.toolGroupUnit}`}</Text>
-        {running ? <Text numberOfLines={1} style={{ color: colors.textFaint, fontSize: 10, marginLeft: 6, maxWidth: '46%' }}>{`${copy.toolGroupRunning} · ${running.title ?? copy.activityFallback}`}</Text> : null}
+        <Text numberOfLines={1} style={{ color: failed ? colors.destructive : colors.textMuted, flexShrink: 1, fontSize: type.row.fontSize, marginLeft: 8, marginRight: 6 }}>{`${messages.length} ${copy.toolGroupUnit}`}</Text>
+        {running ? <Text numberOfLines={1} style={{ color: colors.textFaint, fontSize: type.meta.fontSize, marginLeft: 6, maxWidth: '46%' }}>{`${copy.toolGroupRunning} · ${running.title ?? copy.activityFallback}`}</Text> : null}
         {expanded ? <ChevronDown color={colors.textFaint} size={15} /> : <ChevronRight color={colors.textFaint} size={15} />}
       </Pressable>
       {expanded ? (

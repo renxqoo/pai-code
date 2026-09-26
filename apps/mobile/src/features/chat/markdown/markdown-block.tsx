@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Text, View } from 'react-native';
 import { useAppTheme } from '@/theme/theme-context';
-import { rhythm, spacing } from '@/theme/tokens';
+import { rhythm, spacing, type } from '@/theme/tokens';
 import type {
   MarkdownBlock as MarkdownBlockNode,
   MarkdownListItem,
@@ -27,12 +27,12 @@ export function MarkdownBlock({ block }: MarkdownBlockProps) {
     return <Text accessibilityRole="header" style={{ color: colors.text, fontSize: headingSize[block.level] ?? 13, fontWeight: '700', marginTop: rhythm.blockGap }}>{renderInlineNodes(block.content)}</Text>;
   }
   if (block.kind === 'paragraph') {
-    return <Text selectable style={{ color: colors.text, fontSize: 15, lineHeight: 24, marginTop: rhythm.blockGap }}>{renderInlineNodes(block.content)}</Text>;
+    return <Text selectable style={{ color: colors.text, fontSize: type.body.fontSize, lineHeight: type.body.lineHeight, marginTop: rhythm.blockGap }}>{renderInlineNodes(block.content)}</Text>;
   }
   if (block.kind === 'quote') {
     return (
       <View testID="markdown-quote" style={{ borderLeftColor: colors.border, borderLeftWidth: 2, marginTop: rhythm.blockGap, paddingLeft: spacing.xs2 }}>
-        <Text selectable style={{ color: colors.textMuted, fontSize: 14, lineHeight: 21 }}>{renderInlineNodes(block.content)}</Text>
+        <Text selectable style={{ color: colors.textMuted, fontSize: type.row.fontSize, lineHeight: type.row.lineHeight }}>{renderInlineNodes(block.content)}</Text>
       </View>
     );
   }
