@@ -24,14 +24,28 @@ const RENDER_BUDGET_MS = 8_000;
 function historyItems(turn: number): HistoryItem[] {
   return [
     { kind: 'user', id: `u-${turn}`, text: `第 ${turn} 个需求`, origin: 'user', images: [], at: turn * 1_000 },
+    // 工具前旁白 + 工具调用（同一条 assistant 消息）：按结果判定契约不得当结果
     {
       kind: 'assistant',
       id: `a-${turn}`,
       messageTs: turn * 1_000 + 1,
-      text: `### 历史轮 ${turn}\n\n结论段落，含 **加粗**、\`行内码\` 与列表：\n\n- 要点一\n- 要点二\n\n\`\`\`ts\nconst answer = ${turn};\n\`\`\`\n`,
+      text: `先检查第 ${turn} 轮的入口文件。`,
       thinking: '',
       at: turn * 1_000 + 2,
       toolCalls: [{ id: `c-${turn}`, name: 'grep', argsPreview: '-r pattern .', output: 'x'.repeat(80), isError: false, diff: null }],
+      usage: null,
+      stopReason: null,
+      errorMessage: null,
+    },
+    // 工具后的结果正文（最终回答）
+    {
+      kind: 'assistant',
+      id: `r-${turn}`,
+      messageTs: turn * 1_000 + 3,
+      text: `### 历史轮 ${turn}\n\n结论段落，含 **加粗**、\`行内码\` 与列表：\n\n- 要点一\n- 要点二\n\n\`\`\`ts\nconst answer = ${turn};\n\`\`\`\n`,
+      thinking: '',
+      at: turn * 1_000 + 4,
+      toolCalls: [],
       usage: null,
       stopReason: null,
       errorMessage: null,
