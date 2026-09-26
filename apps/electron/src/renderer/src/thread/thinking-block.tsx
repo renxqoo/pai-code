@@ -52,10 +52,10 @@ function ThinkingBlock({ text, running }: ThinkingBlockProps) {
             <TypewriterText
               active={running}
               text={text}
-              className="min-w-0 flex-1 text-[12.5px] leading-[20px] text-meta-faint"
+              className="min-w-0 max-w-full truncate text-[12.5px] leading-[20px] text-meta-faint"
             />
           )}
-          <ChevronToggle open={open} className={cn('shrink-0 opacity-70', open && 'ml-auto')} />
+          <ChevronToggle open={open} className="shrink-0 opacity-70" />
         </button>
       </div>
       {open ? (

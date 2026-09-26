@@ -34,7 +34,7 @@ export function ToolRow({ message, onOpen }: ToolRowProps) {
       style={rowPressStyle}
     >
       {toolStatusIcon(message, failed ? colors.destructive : colors.textFaint)}
-      <Text numberOfLines={1} style={{ color: failed ? colors.destructive : colors.textMuted, flex: 1, fontSize: 13, marginLeft: 8 }}>
+      <Text numberOfLines={1} style={{ color: failed ? colors.destructive : colors.textMuted, flexShrink: 1, fontSize: 13, marginLeft: 8, marginRight: 6 }}>
         {toolRowLabel(message)}
       </Text>
       <ChevronRight color={colors.textFaint} size={15} />

@@ -2,7 +2,7 @@ import { fireEvent, render } from '@testing-library/react-native';
 import { describe, expect, it, jest } from '@jest/globals';
 import * as React from 'react';
 import { ToolDetailSheet } from '@/features/chat/tool-detail-sheet';
-import { toolRowLabel } from '@/features/chat/tool-row';
+import { ToolRow, toolRowLabel } from '@/features/chat/tool-row';
 import { StatusLine } from '@/features/chat/status-line';
 import { ThinkingRow } from '@/features/chat/thinking-row';
 import { ToolGroup } from '@/features/chat/tool-group';
@@ -69,6 +69,18 @@ describe('StatusLine and ThinkingRow edge shapes', () => {
   it('falls back to the generic action label for untitled running tools in groups', async () => {
     const view = await render(<ToolGroup messages={[message({ id: 'g1', kind: 'tool', status: 'running' }), message({ id: 'g2', kind: 'tool', status: 'success' })]} onOpen={jest.fn()} />);
     expect(view.getByText(/执行中 · 执行操作/)).toBeTruthy();
+  });
+
+  it('keeps row arrows hugging the label instead of pinning right', async () => {
+    const tool = await render(<ToolRow message={message({ id: 't', kind: 'tool', title: '读取', summary: 'a.ts', status: 'success' })} onOpen={jest.fn()} />);
+    const row = tool.getByLabelText('查看工具详情：读取  a.ts');
+    const rowStyle = row.props.style;
+    expect(rowStyle.flexDirection).toBe('row');
+    // 文本 flexShrink 收缩（非 flex:1 撑满），箭头紧跟文字
+    const label = tool.getByText('读取  a.ts');
+    expect(label.props.style.flex).toBeUndefined();
+    expect(label.props.style.flexShrink).toBe(1);
+    expect(label.props.style.marginRight).toBe(6);
   });
 
   it('exposes press feedback states on rows', () => {
