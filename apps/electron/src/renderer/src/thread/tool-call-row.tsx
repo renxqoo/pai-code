@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { formatElapsed } from './format-elapsed';
 import { autoOpenForCall, callExpandable } from './call-detail';
 import { toolKindOf, toolPreviewMono, type ToolKind } from './tool-kind';
+import { toolSummary } from './tool-summary';
 import { ToolCallDetail } from './tool-call-detail';
 import { ToolStatusIcon } from './tool-status-icon';
 import { resolveOpen, type CollapsePref } from './collapse-state';
@@ -94,7 +95,7 @@ function ToolCallRow({ call }: ToolCallRowProps) {
             running ? 'shimmer-text' : failed ? 'text-diff-del' : 'text-muted-foreground',
           )}
         >
-          {call.argsPreview}
+          {toolSummary(call.argsPreview)}
         </span>
       ) : (
         <>

@@ -55,6 +55,21 @@ describe('visibleTurnBlocks（症状回归：过程整体收起只留最后一�
     expect(visibleTurnBlocks(single, false)).toEqual(single);
   });
 
+  test('症状回归：轮以工具收尾不得把工具前旁白当结果（只取最后一个 tools 块之后的文本）', () => {
+    const narrationFirst = [
+      { kind: 'text' as const, id: 'narration', text: '正在搭建项目' },
+      { kind: 'tools' as const, id: 'calls', calls: [] },
+      { kind: 'text' as const, id: 'result', text: '全部完成' },
+    ];
+    expect(visibleTurnBlocks(narrationFirst, false)).toEqual([{ kind: 'text', id: 'result', text: '全部完成' }]);
+    // 工具收尾、无后续文本：不回退到工具前旁白
+    const toolEnded = [
+      { kind: 'text' as const, id: 'narration', text: '正在搭建项目' },
+      { kind: 'tools' as const, id: 'calls', calls: [] },
+    ];
+    expect(visibleTurnBlocks(toolEnded, false)).toEqual([]);
+  });
+
   test('症状回归：异常终态提示（报错/中止）收起时也可见，跟在最后一条文本之后', () => {
     const failure = { kind: 'turnFailure' as const, id: 'f', stopReason: 'error' as const, message: '401 invalid api key' };
     expect(visibleTurnBlocks([{ kind: 'text' as const, id: 'd', text: '最终回答' }, failure], false)).toEqual([

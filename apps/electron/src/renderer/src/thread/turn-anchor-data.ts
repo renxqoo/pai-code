@@ -1,4 +1,6 @@
 import { formatClockTime } from './format-clock-time';
+import { resultTextBlock } from './turn-state';
+import { toolSummary } from './tool-summary';
 import type { ThreadItem, TurnModel } from './thread-model';
 
 /** 锚点摘要上限（码点数）：超出截断补省略号，tooltip 内最多两行。 */
@@ -28,20 +30,20 @@ export function truncateAnchorSummary(text: string, max: number = ANCHOR_SUMMARY
 
 /**
  * 历史轮锚点的摘要推导（tooltip 文本源）：
- * 最后一条非空文本块的首行（最终回答）→ 首个工具调用（名称 + 参数摘要）→
- * 异常终态提示；全部缺失降级为空串，组件届时只展示轮次时刻。
+ * 结果文本的首行（最后一个 tools 块之后的最终回答；工具前旁白不当结果）→
+ * 首个工具调用（名称 + 参数摘要）→ 异常终态提示；全部缺失降级为空串，
+ * 组件届时只展示轮次时刻。
  */
 export function turnAnchorSummary(turn: Pick<TurnModel, 'blocks'>): string {
-  for (let index = turn.blocks.length - 1; index >= 0; index -= 1) {
-    const block = turn.blocks[index];
-    if (block?.kind !== 'text') continue;
-    const line = firstNonEmptyLine(block.text);
+  const result = resultTextBlock(turn.blocks);
+  if (result?.kind === 'text') {
+    const line = firstNonEmptyLine(result.text);
     if (line.length > 0) return truncateAnchorSummary(line);
   }
   for (const block of turn.blocks) {
     if (block.kind !== 'tools') continue;
     for (const call of block.calls) {
-      const preview = collapseWhitespace(`${call.name} ${call.argsPreview}`);
+      const preview = collapseWhitespace(`${call.name} ${toolSummary(call.argsPreview)}`);
       if (preview.length > 0) return truncateAnchorSummary(preview);
     }
   }

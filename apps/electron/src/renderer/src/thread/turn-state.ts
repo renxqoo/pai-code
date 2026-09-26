@@ -6,17 +6,32 @@ export function isTurnRunning(turn: Pick<TurnModel, 'status'>): boolean {
 }
 
 /**
- * 过程整体收起时的可见块：只保留最后一条文本输出（中间文本属于过程）；
- * 异常终态提示（报错/中止）无论开合都保持可见。
- * 展开时全部块按原顺序可见。
+ * 过程整体收起时的可见块：只保留最终结果文本——最后一个 tools 块之后的最后一条
+ * text（轮以工具收尾且无后续 text 时不取工具前旁白）；无 tools 时取最后一条 text。
+ * 异常终态提示（报错/中止）无论开合都保持可见。展开时全部块按原顺序可见。
  */
 export function visibleTurnBlocks(blocks: readonly TurnBlock[], processOpen: boolean): readonly TurnBlock[] {
   if (processOpen) return blocks;
-  const texts = blocks.filter((block) => block.kind === 'text');
   const failure = blocks.find((block) => block.kind === 'turnFailure');
-  const visible: TurnBlock[] = texts.length > 0 ? [texts[texts.length - 1] as TurnBlock] : [];
+  const result = resultTextBlock(blocks);
+  const visible: TurnBlock[] = result !== null ? [result] : [];
   if (failure !== undefined) visible.push(failure);
   return visible;
+}
+
+/** 结果文本：最后一个 tools 块之后的最后一条非空 text；无 tools 时取最后一条非空
+ * text（整块空白的文本跳过回退）。轮以工具收尾且无后续非空 text 时返回 null，
+ * 不回退到工具前旁白。 */
+export function resultTextBlock(blocks: readonly TurnBlock[]): TurnBlock | null {
+  let lastTools = -1;
+  for (let index = 0; index < blocks.length; index += 1) {
+    if (blocks[index]?.kind === 'tools') lastTools = index;
+  }
+  for (let index = blocks.length - 1; index > lastTools; index -= 1) {
+    const block = blocks[index];
+    if (block?.kind === 'text' && block.text.trim().length > 0) return block;
+  }
+  return null;
 }
 
 /**

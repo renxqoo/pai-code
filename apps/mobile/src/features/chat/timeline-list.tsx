@@ -1,20 +1,23 @@
-import * as React from "react";
-import type { ChatMessage } from "@/types/domain";
-import { groupTimeline } from "@/features/chat/timeline-blocks";
-import { MessageItem } from "@/features/chat/message-item";
-import { ActivityBlock } from "@/features/chat/activity-block";
-import { GenerationIndicator } from "@/features/chat/generation-indicator";
+import * as React from 'react';
+import type { ChatMessage } from '@/types/domain';
+import { buildTurns } from '@/features/chat/turns';
+import { MessageItem } from '@/features/chat/message-item';
+import { ProcessFold } from '@/features/chat/process-fold';
+import { GenerationIndicator } from '@/features/chat/generation-indicator';
 
-type TimelineListProps = { messages: readonly ChatMessage[]; generating: boolean };
+type TimelineListProps = { messages: readonly ChatMessage[]; generating: boolean; elapsedMs?: number | undefined };
 
-export function TimelineList({ messages, generating }: TimelineListProps) {
-  const blocks = React.useMemo(() => groupTimeline(messages), [messages]);
+export function TimelineList({ messages, generating, elapsedMs }: TimelineListProps) {
+  const turns = React.useMemo(() => buildTurns(messages), [messages]);
   return (
     <>
-      {blocks.map((block) => {
-        if (block.kind === "activity") return <ActivityBlock block={block} key={block.key} />;
-        return <MessageItem key={block.key} message={block.message} />;
-      })}
+      {turns.map((turn) => (
+        <React.Fragment key={turn.key}>
+          {turn.user !== null ? <MessageItem message={turn.user} /> : null}
+          {turn.stream.length > 0 ? <ProcessFold elapsedMs={elapsedMs} turn={turn} /> : null}
+          {turn.result !== null ? <MessageItem message={turn.result} /> : null}
+        </React.Fragment>
+      ))}
       {generating ? <GenerationIndicator /> : null}
     </>
   );

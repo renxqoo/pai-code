@@ -24,13 +24,10 @@ describe("chat and history components", () => {
     const session = demoSessions[1];
     if (session === undefined) throw new Error("fixture missing");
     const view = await render(<TimelineList generating={false} messages={session.messages} />);
+    await fireEvent.press(view.getByLabelText(/展开过程流/));
     expect(view.getByText("ComposerPanel.tsx")).toBeTruthy();
     await fireEvent.press(view.getByText("ComposerPanel.tsx"));
     expect(view.getByText("5 个页面，0 个错误")).toBeTruthy();
-    const activityControls = view.getAllByLabelText(/^展开活动详情：/);
-    const resultActivity = activityControls.at(-1);
-    if (resultActivity === undefined) throw new Error("result activity missing");
-    await fireEvent.press(resultActivity);
     expect(view.getByText("已完成移动端视觉走查")).toBeTruthy();
     const release = demoSessions[2];
     if (release === undefined) throw new Error("fixture missing");

@@ -52,6 +52,8 @@ export type ConversationSession = {
   pinned: boolean;
   archived: boolean;
   unread: boolean;
+  startedAtMs?: number;
+  endedAtMs?: number;
   messages: readonly ChatMessage[];
 };
 

@@ -16,10 +16,19 @@ type ToolCallDetailProps = {
 function ToolCallDetail({ call }: ToolCallDetailProps) {
   return (
     <div className="mb-[8px] mt-[2px] overflow-hidden rounded-[8px] border border-border bg-surface-subtle">
-      <div className="flex items-center justify-end gap-[6px] border-b border-border px-[8px] py-[3px]">
+      <div className="flex items-center gap-[8px] border-b border-border px-[8px] py-[3px]">
+        <span
+          title={call.argsPreview}
+          className={cn(
+            'min-w-0 flex-1 truncate font-mono text-[11px] leading-[16px]',
+            call.status === 'running' ? 'shimmer-text' : 'text-muted-foreground/60',
+          )}
+        >
+          {call.argsPreview}
+        </span>
         <span
           className={cn(
-            'text-[11px] leading-[16px]',
+            'shrink-0 text-[11px] leading-[16px]',
             call.status === 'running' ? 'shimmer-text' : 'text-muted-foreground/80',
           )}
         >
