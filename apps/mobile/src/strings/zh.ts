@@ -62,6 +62,7 @@ export const copy = {
   quickFix: '定位并修复问题',
   quickReview: '审查代码质量',
   activityComplete: '已完成',
+  processLabel: '执行过程',
   activityFailed: '执行遇到问题',
   activityRunning: '正在执行',
   activityItemUnit: '项活动',
@@ -77,6 +78,19 @@ export const copy = {
   codeLineUnit: '行',
   codeCollapse: '收起代码',
   expandCodeLines: (count: number) => `展开剩余 ${count} 行`,
+  expandProcess: '展开过程流',
+  collapseProcess: '收起过程流',
+  toolGroupUnit: '个工具',
+  toolGroupRunning: '执行中',
+  expandToolGroup: '展开工具组',
+  collapseToolGroup: '收起工具组',
+  toolDetailTitle: '工具执行详情',
+  toolDetailFallback: '执行操作',
+  thinkingLabel: '深度思考',
+  expandThinking: '展开思考详情',
+  collapseThinking: '收起思考详情',
+  workingFor: (label: string) => `已工作 ${label}`,
+  workedFor: (label: string) => `共工作 ${label}`,
 } as const;
 
 export const models = [

@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@jest/globals';
 import { agentConversation } from '@/fixtures/agent-conversation';
-import { groupTimeline } from '@/features/chat/timeline-blocks';
+import { buildTurns } from '@/features/chat/turns';
 import { parseMarkdown } from '@/features/chat/markdown/parse-markdown';
 
 describe('agentConversation fixture', () => {
@@ -14,8 +14,9 @@ describe('agentConversation fixture', () => {
     expect(messages.some((message) => message.status === 'running')).toBe(true);
     expect(messages.at(-1)?.status).toBe('running');
 
-    const blocks = groupTimeline(messages);
-    expect(blocks.some((block) => block.kind === 'activity')).toBe(true);
+    const turns = buildTurns(messages);
+    expect(turns.some((turn) => turn.stream.length > 0)).toBe(true);
+    expect(turns.some((turn) => turn.result !== null)).toBe(true);
   });
 
   it('keeps every failure followed by a retry in the same journey', () => {

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Text, View } from 'react-native';
 import { useAppTheme } from '@/theme/theme-context';
-import { spacing } from '@/theme/tokens';
+import { rhythm, spacing } from '@/theme/tokens';
 import type {
   MarkdownBlock as MarkdownBlockNode,
   MarkdownListItem,
@@ -24,29 +24,29 @@ type MarkdownBlockProps = { block: MarkdownBlockNode };
 export function MarkdownBlock({ block }: MarkdownBlockProps) {
   const { colors } = useAppTheme();
   if (block.kind === 'heading') {
-    return <Text accessibilityRole="header" style={{ color: colors.text, fontSize: headingSize[block.level] ?? 13, fontWeight: '700', marginTop: spacing.xs3 }}>{renderInlineNodes(block.content)}</Text>;
+    return <Text accessibilityRole="header" style={{ color: colors.text, fontSize: headingSize[block.level] ?? 13, fontWeight: '700', marginTop: rhythm.blockGap }}>{renderInlineNodes(block.content)}</Text>;
   }
   if (block.kind === 'paragraph') {
-    return <Text selectable style={{ color: colors.text, fontSize: 15, lineHeight: 23, marginTop: spacing.xs2 }}>{renderInlineNodes(block.content)}</Text>;
+    return <Text selectable style={{ color: colors.text, fontSize: 15, lineHeight: 24, marginTop: rhythm.blockGap }}>{renderInlineNodes(block.content)}</Text>;
   }
   if (block.kind === 'quote') {
     return (
-      <View testID="markdown-quote" style={{ borderLeftColor: colors.border, borderLeftWidth: 2, marginTop: spacing.xs2, paddingLeft: spacing.xs2 }}>
+      <View testID="markdown-quote" style={{ borderLeftColor: colors.border, borderLeftWidth: 2, marginTop: rhythm.blockGap, paddingLeft: spacing.xs2 }}>
         <Text selectable style={{ color: colors.textMuted, fontSize: 14, lineHeight: 21 }}>{renderInlineNodes(block.content)}</Text>
       </View>
     );
   }
   if (block.kind === 'divider') {
-    return <View accessibilityRole="none" testID="markdown-divider" style={{ backgroundColor: colors.divider, height: 1, marginVertical: spacing.xs3 }} />;
+    return <View accessibilityRole="none" testID="markdown-divider" style={{ backgroundColor: colors.divider, height: 1, marginVertical: rhythm.blockGap }} />;
   }
   if (block.kind === 'code') {
     return <CodeBlock code={block.code} language={block.language.length > 0 ? block.language : undefined} />;
   }
   const markers = listMarkers(block.items, block.ordered, block.start);
   return (
-    <View style={{ marginTop: spacing.xs2 }}>
+    <View style={{ marginTop: rhythm.blockGap }}>
       {block.items.map((item, index) => (
-        <Text key={index} selectable style={{ color: colors.text, fontSize: 15, lineHeight: 23, paddingLeft: spacing.xs3 + item.indent * spacing.xs3, marginTop: index === 0 ? 0 : 4 }}>
+        <Text key={index} selectable style={{ color: colors.text, fontSize: 15, lineHeight: 23, paddingLeft: spacing.xs3 + item.indent * spacing.xs3, marginTop: index === 0 ? 0 : rhythm.listItemGap }}>
           {markers[index]}{renderInlineNodes(item.content)}
         </Text>
       ))}

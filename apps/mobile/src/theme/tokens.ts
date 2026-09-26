@@ -25,3 +25,15 @@ export const layout = {
   composerMinHeight: 112,
   maxContentWidth: 760,
 } as const;
+
+// 消息流单一间距节奏（T50）：块间距只挂 marginTop，值必须取自本表。
+export const rhythm = {
+  turnGap: 20,
+  userToHead: 12,
+  headToRow: 2,
+  rowToRow: 0,
+  processToBody: 8,
+  blockGap: 10,
+  listItemGap: 3,
+  codeMargin: 10,
+} as const;

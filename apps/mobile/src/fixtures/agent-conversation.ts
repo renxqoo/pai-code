@@ -102,6 +102,8 @@ export const agentConversation: ConversationSession = {
   project: 'agent-app',
   timeLabel: '刚刚',
   state: 'working',
+  // 演示态会话计时：2 分钟前开工，运行中实时推进（裁决：已工作/共工作 + 时间）
+  startedAtMs: Date.now() - 2 * 60 * 1000,
   pinned: true,
   archived: false,
   unread: false,

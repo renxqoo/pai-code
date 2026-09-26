@@ -21,7 +21,7 @@ export function CodeBlock({ code, language, title, lineCount }: CodeBlockProps) 
   const lines = code.split('\n');
   const visibleLines = expanded ? lines : lines.slice(0, collapsedLines);
   return (
-    <View testID="timeline-code-block" style={{ backgroundColor: colors.surfaceSubtle, borderRadius: radius.md, marginVertical: 7, overflow: 'hidden' }}>
+    <View testID="timeline-code-block" style={{ borderColor: colors.divider, borderRadius: radius.md, borderWidth: 1, marginVertical: 10, overflow: 'hidden' }}>
       <Pressable accessibilityRole="button" accessibilityState={{ expanded }} onPress={() => setExpanded((value) => !value)} style={{ alignItems: 'center', borderBottomColor: colors.divider, borderBottomWidth: 1, flexDirection: 'row', minHeight: 42, paddingHorizontal: 13 }}>
         <Text style={{ color: colors.text, fontSize: 12, fontWeight: '600' }}>{title ?? copy.codeDefaultTitle}</Text><Text style={{ color: colors.textMuted, fontSize: 10, marginLeft: 8 }}>{language ?? copy.codeDefaultLanguage}</Text><Text style={{ color: colors.textFaint, fontSize: 10, marginLeft: 'auto' }}>{lineCount ?? lines.length} {copy.codeLineUnit}</Text>{expanded ? <ChevronDown color={colors.textFaint} size={16} /> : <ChevronRight color={colors.textFaint} size={16} />}
       </Pressable>

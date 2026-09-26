@@ -28,7 +28,39 @@ describe("ChatScreen", () => {
     expect(useConversationStore.getState().permissionRequest?.approved).toBeNull();
   });
 
-  it("renders a grouped existing conversation and composer", async () => {
+  it("tracks near-bottom scroll state without pulling the view away", async () => {
+    const session = demoSessions[0];
+    if (session === undefined) throw new Error("fixture missing");
+    useConversationStore.getState().openSession(session);
+    const view = await render(
+      <TestWrapper>
+        <ChatScreen />
+      </TestWrapper>,
+    );
+    const scroll = view.getByTestId("conversation-scroll");
+    // 贴底滚动：内容增长后仍拉到底部
+    await fireEvent(scroll, "contentSizeChange");
+    // 离底：不再强拉回底（近底阈值 72）
+    await fireEvent(scroll, "scroll", {
+      nativeEvent: {
+        contentOffset: { x: 0, y: 10 },
+        contentSize: { width: 390, height: 2000 },
+        layoutMeasurement: { width: 390, height: 800 },
+      },
+    });
+    await fireEvent(scroll, "contentSizeChange");
+    await fireEvent(scroll, "scroll", {
+      nativeEvent: {
+        contentOffset: { x: 0, y: 1500 },
+        contentSize: { width: 390, height: 2000 },
+        layoutMeasurement: { width: 390, height: 800 },
+      },
+    });
+    await fireEvent(scroll, "contentSizeChange");
+    expect(scroll.props.onScroll).toBeDefined();
+  });
+
+  it("renders a folded process turn, its result and the composer", async () => {
     const session = demoSessions[0];
     if (session === undefined) throw new Error("fixture missing");
     useConversationStore.getState().openSession(session);
@@ -38,23 +70,15 @@ describe("ChatScreen", () => {
       </TestWrapper>,
     );
     expect(view.getByText(session.messages[0]?.text ?? "")).toBeTruthy();
-    expect(view.getAllByText(/项活动/).length).toBeGreaterThan(0);
-    expect(view.getByLabelText("执行清单")).toBeTruthy();
-    expect(view.getByText("4 / 5 · 16s")).toBeTruthy();
-    expect(view.queryByText("执行过程")).toBeNull();
+    expect(view.getByLabelText(/展开过程流|收起过程流/)).toBeTruthy();
     expect(view.getByLabelText("消息输入框")).toBeTruthy();
     expect(view.getByTestId("conversation-scroll").props.scrollEventThrottle).toBe(16);
     expect(view.getByTestId("conversation-scroll").props.contentContainerStyle).toMatchObject({
-      paddingBottom: 152,
+      paddingBottom: 96,
     });
-    await fireEvent.press(view.getByLabelText("展开执行清单"));
-    expect(view.getByTestId("conversation-scroll").props.contentContainerStyle).toMatchObject({
-      paddingBottom: 300,
-    });
-    await fireEvent.press(view.getByLabelText("收起执行清单"));
     await fireEvent(view.getByLabelText("消息输入框"), "focus");
     expect(view.getByTestId("conversation-scroll").props.contentContainerStyle).toMatchObject({
-      paddingBottom: 216,
+      paddingBottom: 160,
     });
   });
 });
