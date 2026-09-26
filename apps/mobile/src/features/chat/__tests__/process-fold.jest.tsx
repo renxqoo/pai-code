@@ -44,7 +44,7 @@ describe('ProcessFold', () => {
     expect(view.getByText('检查入口')).toBeTruthy();
   });
 
-  it('opens by default for failed turns and shows the failure reason folded', async () => {
+  it('keeps the fold header neutral for failed turns (failure is a turn-end notice)', async () => {
     const view = await render(
       <ProcessFold
         turn={turn(
@@ -53,12 +53,14 @@ describe('ProcessFold', () => {
         )}
       />,
     );
+    // 失败终态不在折叠头：默认收起、无警示图标文案，失败原因由轮末 TurnFailureNotice 呈现
     const header = view.getByLabelText(/展开过程流|收起过程流/);
-    expect(header.props.accessibilityState).toEqual({ expanded: true });
-    expect(view.getByText('2 个用例失败')).toBeTruthy();
-    await fireEvent.press(header);
     expect(header.props.accessibilityState).toEqual({ expanded: false });
-    expect(view.getByText('2 个用例失败')).toBeTruthy();
+    expect(view.queryByTestId('fold-spinner')).toBeNull();
+    expect(view.queryByText('执行遇到问题')).toBeNull();
+    await fireEvent.press(header);
+    expect(header.props.accessibilityState).toEqual({ expanded: true });
+    expect(view.queryByText('2 个用例失败')).toBeNull();
   });
 
   it('shows current action, spinner and elapsed while running', async () => {

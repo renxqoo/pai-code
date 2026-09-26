@@ -54,7 +54,7 @@ describe('buildTurns', () => {
     expect(turns[0]?.failed).toBe(false);
   });
 
-  it('splits multiple user turns and marks failed turns', () => {
+  it('splits multiple user turns; recovered errors stay in stream, terminal errors become failure', () => {
     const turns = buildTurns([
       message({ id: 'u1', kind: 'user' }),
       message({ id: 't1', kind: 'tool', status: 'error' }),
@@ -64,10 +64,24 @@ describe('buildTurns', () => {
     ]);
     expect(turns).toHaveLength(2);
     expect(turns[0]?.result?.id).toBe('a1');
-    expect(turns[0]?.failed).toBe(true);
+    // 错误后有结果 = 已恢复，错误留在过程流，不是轮级失败终态
+    expect(turns[0]?.failed).toBe(false);
+    expect(turns[0]?.failure).toBeNull();
+    expect(turns[0]?.stream.some((item) => item.id === 't1')).toBe(true);
     expect(turns[1]?.result?.id).toBe('a2');
     expect(turns[1]?.stream).toEqual([]);
     expect(turns[1]?.user?.id).toBe('u2');
+  });
+
+  it('marks a turn failed only when the error is the final word (agent stopped)', () => {
+    const turns = buildTurns([
+      message({ id: 'u1', kind: 'user' }),
+      message({ id: 't1', kind: 'tool', status: 'error', summary: '构建失败' }),
+    ]);
+    expect(turns[0]?.failed).toBe(true);
+    expect(turns[0]?.failure?.id).toBe('t1');
+    expect(turns[0]?.stream.some((item) => item.id === 't1')).toBe(false);
+    expect(turns[0]?.result).toBeNull();
   });
 
   it('excludes user messages and code artifacts from result selection', () => {
