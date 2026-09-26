@@ -54,6 +54,7 @@ export function hydrateItems(history: readonly HistoryItem[], turnStartAt: numbe
           role: item.origin === 'system' ? 'system' : 'user',
           text: clip(item.text),
           images: item.images.map(({ data, mediaType }) => ({ data, mimeType: mediaType })),
+          ...(item.meta === 'compaction-summary' ? { meta: { kind: 'compaction-summary' as const, foldedTurns: item.foldedTurns ?? 0 } } : {}),
         },
       });
       anchor = item.at;

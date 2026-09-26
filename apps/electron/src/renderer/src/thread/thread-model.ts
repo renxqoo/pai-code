@@ -12,6 +12,9 @@ export type SessionMessage = {
   text: string;
   /** 用户消息的图片附件（data 为无前缀 base64，data URL 渲染）。 */
   images: ReadonlyArray<{ data: string; mimeType: string }>;
+  /** 压缩摘要标记（CONTEXT-TOKEN-UNIFICATION §3.4）：渲染层折叠呈现的判别位；
+   *  被折叠轮数随标记携带（splice 计数）。缺席 = 普通消息。 */
+  meta?: { kind: 'compaction-summary'; foldedTurns: number };
 };
 
 export type TurnStatus = 'running' | 'completed' | 'stopped';

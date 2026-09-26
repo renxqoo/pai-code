@@ -217,6 +217,8 @@ export const zh: typeof en = {
     bashNoImages: bashImagesRejectedCopy,
     imagesDenied: imagesDeniedCopy,
     imagesTooMany: imagesTooManyCopy,
+    compactionSummaryLabel: (n: number): string => `已压缩前 ${{n}} 轮对话`,
+    compactionSummaryLabelNoCount: '已压缩历史对话',
     systemMessageLabel: '系统',
     sendFailed: (reason: string): string => `消息未发送（${reason}），请重试。`,
     toolFailed: (exitCode: number): string => `退出码 ${exitCode}`,

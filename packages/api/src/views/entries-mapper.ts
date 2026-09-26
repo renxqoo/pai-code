@@ -3,6 +3,7 @@ import { isTodoTool, type HistoryItem, type TodoSnapshotEventData } from '@paiap
 import { assistantText, assistantThinking, assistantToolCalls, flattenUserText, toolResultText, userImages } from './content';
 import { previewArgs } from './args-preview';
 import { diffFromWriteArgs } from './diff-extract';
+import { isCompactionSummary } from './compaction-summary';
 import { isSnapshotFrame } from './snapshot-frame';
 import { subagentsField } from './subagent-spawns';
 import { todoSnapshotOf } from './todo-snapshot';
@@ -67,8 +68,11 @@ export function mapEntries(data: unknown): { items: HistoryItem[]; cursor: numbe
       // replace 型 user/message 是内核压缩摘要（compaction/autocompact L2 的区间落账）：
       // 历史的压缩形态而非用户发言，归系统条展示，不进用户气泡
       const origin: 'user' | 'system' = isReplaceOp(event['surfaceOp']) ? 'system' : 'user';
-      const item = bashItem ?? { kind: 'user', id, text, origin, at, images: userImages(event['content']) } as HistoryItem;
-      applySurfaceOp(items, seqOfItem, event['surfaceOp'], seq, item);
+      const item = bashItem ?? { kind: 'user', id, text, origin, at, images: userImages(event['content']), ...(isCompactionSummary(event) ? { meta: 'compaction-summary' as const } : {}) } as HistoryItem;
+      const folded = applySurfaceOp(items, seqOfItem, event['surfaceOp'], seq, item);
+      // 压缩摘要的折叠轮数（M1：splice 计数而非 endSeq−startSeq——迭代前缀替换后
+      // 端点差非连续可倒挂）回填标记
+      if (folded > 0 && item.kind === 'user' && item.meta === 'compaction-summary') item.foldedTurns = folded;
       pendingTools.clear();
       continue;
     }
@@ -225,15 +229,17 @@ function isReplaceOp(surfaceOp: unknown): boolean {
 
 /** surfaceOp 应用（压缩区间折叠）：append 追加；replace 先剔除 [startSeq,endSeq]
  *  区间内已收集条目再追加携带摘要的本条——历史视图与 session.surface() 对齐。 */
+/** 折叠轮数（被替换区间内的用户消息条数——渲染层「已压缩前 N 轮」标签的数据源） */
 function applySurfaceOp(
   items: HistoryItem[],
   seqOfItem: Map<HistoryItem, number>,
   surfaceOp: unknown,
   seq: number,
   item: HistoryItem,
-): void {
+): number {
   const op = recordOf(surfaceOp);
   const kind = op['op'];
+  let folded = 0;
   if (kind === 'replace') {
     const start = op['startSeq'];
     const end = op['endSeq'];
@@ -243,6 +249,7 @@ function applySurfaceOp(
         if (existing === undefined) continue;
         const existingSeq = seqOfItem.get(existing);
         if (existingSeq !== undefined && existingSeq >= start && existingSeq <= end) {
+          if (existing.kind === 'user' && existing.origin === 'user') folded += 1;
           items.splice(index, 1);
           seqOfItem.delete(existing);
         }
@@ -251,6 +258,7 @@ function applySurfaceOp(
   }
   items.push(item);
   seqOfItem.set(item, seq);
+  return folded;
 }
 
 /** 直执行 bash 信封还原：首行 `[bash] $ <cmd>`、其余为输出。 */

@@ -484,7 +484,8 @@ describe('surfaceOp replace（压缩区间折叠——docs/COMPACTION.md §2.A�
       ],
     });
     expect(items).toEqual([
-      { kind: 'user', id: 'seq-3', text: checkpointSummary, origin: 'system', images: [], at: 3 },
+      // P5：摘要帧附 compaction-summary 标记（折叠呈现）+ 折叠轮数（splice 计数）
+      { kind: 'user', id: 'seq-3', text: checkpointSummary, origin: 'system', images: [], at: 3, meta: 'compaction-summary', foldedTurns: 1 },
       { kind: 'user', id: 'seq-4', text: '问题二', origin: 'user', images: [], at: 4 },
     ]);
   });

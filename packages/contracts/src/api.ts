@@ -49,6 +49,12 @@ export const HistoryItemSchema = z.discriminatedUnion('kind', [
     images: z.array(imagePayload),
     /** 条目时刻（ms）：轮次计时行与排序用。 */
     at: z.number(),
+    /** 压缩摘要标记（CONTEXT-TOKEN-UNIFICATION §3.4 P5）：replace 型落账命中
+     *  isCompactionSummary 谓词时携带——渲染层折叠呈现（单行标记 + 展开）。
+     *  缺席 = 普通用户/系统消息（判别形状不变——可选字段不破坏 discriminated union）。 */
+    meta: z.literal('compaction-summary').optional(),
+    /** 被折叠的历史轮数（splice 计数——M1；meta 在场时有效） */
+    foldedTurns: z.number().int().optional(),
   }),
   z.object({
     kind: z.literal('assistant'),

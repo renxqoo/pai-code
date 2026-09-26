@@ -220,6 +220,8 @@ export const en = {
     imagesDenied: imagesDeniedCopy,
     imagesTooMany: imagesTooManyCopy,
     bashFailed: (reason: string): string => `Command not run (${reason}).`,
+    compactionSummaryLabel: (n: number): string => `Compacted ${{n}} turns of conversation`,
+    compactionSummaryLabelNoCount: 'Conversation compacted',
     systemMessageLabel: 'System',
     sendFailed: (reason: string): string => `Message not sent (${reason}). Try again.`,
     toolFailed: (exitCode: number): string => `exit ${exitCode}`,
