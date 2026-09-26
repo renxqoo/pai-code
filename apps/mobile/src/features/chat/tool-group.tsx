@@ -1,10 +1,13 @@
 import * as React from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { ChevronDown, ChevronRight, CircleAlert, Wrench } from 'lucide-react-native';
 import { useAppTheme } from '@/theme/theme-context';
 import { rhythm, spacing, type } from '@/theme/tokens';
 import { copy } from '@/strings/zh';
 import { rowPressStyle } from '@/components/ui/row-press-style';
+import { Marker } from '@/components/ui/marker';
+import { MarkerContent } from '@/components/ui/marker-content';
+import { MarkerIcon } from '@/components/ui/marker-icon';
 import type { ChatMessage } from '@/types/domain';
 import { ToolRow } from '@/features/chat/tool-row';
 
@@ -24,8 +27,12 @@ export function ToolGroup({ messages, onOpen }: ToolGroupProps) {
         onPress={() => setExpanded((value) => !value)}
         style={rowPressStyle}
       >
-        {running ? <ActivityIndicator color={colors.textFaint} size="small" /> : failed ? <CircleAlert color={colors.destructive} size={16} /> : <Wrench color={colors.textFaint} size={16} />}
-        <Text numberOfLines={1} style={{ color: failed ? colors.destructive : colors.textMuted, flexShrink: 1, fontSize: type.row.fontSize, marginLeft: 8, marginRight: 6 }}>{`${messages.length} ${copy.toolGroupUnit}`}</Text>
+        <Marker style={styles.marker}>
+          <MarkerIcon loading={running !== undefined} color={colors.textFaint} testID="tool-group-spinner">
+            {failed ? <CircleAlert color={colors.destructive} size={16} /> : <Wrench color={colors.textFaint} size={16} />}
+          </MarkerIcon>
+          <MarkerContent shimmer={running !== undefined} numberOfLines={1} style={{ color: failed ? colors.destructive : colors.textMuted, marginRight: 6 }}>{`${messages.length} ${copy.toolGroupUnit}`}</MarkerContent>
+        </Marker>
         {running ? <Text numberOfLines={1} style={{ color: colors.textFaint, fontSize: type.meta.fontSize, marginLeft: 6, maxWidth: '46%' }}>{`${copy.toolGroupRunning} · ${running.title ?? copy.activityFallback}`}</Text> : null}
         {expanded ? <ChevronDown color={colors.textFaint} size={15} /> : <ChevronRight color={colors.textFaint} size={15} />}
       </Pressable>
@@ -37,3 +44,5 @@ export function ToolGroup({ messages, onOpen }: ToolGroupProps) {
     </View>
   );
 }
+
+const styles = { marker: { flexShrink: 1 } };

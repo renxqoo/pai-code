@@ -1,16 +1,20 @@
 import * as React from 'react';
-import { ActivityIndicator, Pressable, Text } from 'react-native';
+import { Pressable } from 'react-native';
 import { Check, ChevronRight, CircleAlert } from 'lucide-react-native';
 import { useAppTheme } from '@/theme/theme-context';
 import { copy } from '@/strings/zh';
 import { rowPressStyle } from '@/components/ui/row-press-style';
-import { type } from '@/theme/tokens';
+import { Marker } from '@/components/ui/marker';
+import { MarkerContent } from '@/components/ui/marker-content';
+import { MarkerIcon } from '@/components/ui/marker-icon';
 import type { ChatMessage } from '@/types/domain';
 
 export function toolStatusIcon(message: ChatMessage, color: string): React.ReactNode {
-  if (message.status === 'running') return <ActivityIndicator color={color} size="small" testID="tool-spinner" />;
-  if (message.status === 'error') return <CircleAlert color={color} size={16} />;
-  return <Check color={color} size={16} />;
+  return (
+    <MarkerIcon loading={message.status === 'running'} color={color} testID={message.status === 'running' ? 'tool-spinner' : undefined}>
+      {message.status === 'error' ? <CircleAlert color={color} size={16} /> : <Check color={color} size={16} />}
+    </MarkerIcon>
+  );
 }
 
 type ToolRowProps = { message: ChatMessage; onOpen: (message: ChatMessage) => void };
@@ -34,11 +38,19 @@ export function ToolRow({ message, onOpen }: ToolRowProps) {
       onPress={() => onOpen(message)}
       style={rowPressStyle}
     >
-      {toolStatusIcon(message, failed ? colors.destructive : colors.textFaint)}
-      <Text numberOfLines={1} style={{ color: failed ? colors.destructive : colors.textMuted, flexShrink: 1, fontSize: type.row.fontSize, marginLeft: 8, marginRight: 6 }}>
-        {toolRowLabel(message)}
-      </Text>
+      <Marker style={styles.marker}>
+        {toolStatusIcon(message, failed ? colors.destructive : colors.textFaint)}
+        <MarkerContent
+          shimmer={message.status === 'running'}
+          numberOfLines={1}
+          style={{ color: failed ? colors.destructive : colors.textMuted, marginRight: 6 }}
+        >
+          {toolRowLabel(message)}
+        </MarkerContent>
+      </Marker>
       <ChevronRight color={colors.textFaint} size={15} />
     </Pressable>
   );
 }
+
+const styles = { marker: { flexShrink: 1 } };
