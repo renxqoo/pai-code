@@ -4,6 +4,7 @@ import { Check, ChevronRight, CircleAlert } from 'lucide-react-native';
 import { useAppTheme } from '@/theme/theme-context';
 import { copy } from '@/strings/zh';
 import { rowPressStyle } from '@/components/ui/row-press-style';
+import { type } from '@/theme/tokens';
 import type { ChatMessage } from '@/types/domain';
 
 export function toolStatusIcon(message: ChatMessage, color: string): React.ReactNode {
@@ -34,7 +35,7 @@ export function ToolRow({ message, onOpen }: ToolRowProps) {
       style={rowPressStyle}
     >
       {toolStatusIcon(message, failed ? colors.destructive : colors.textFaint)}
-      <Text numberOfLines={1} style={{ color: failed ? colors.destructive : colors.textMuted, flexShrink: 1, fontSize: 13, marginLeft: 8, marginRight: 6 }}>
+      <Text numberOfLines={1} style={{ color: failed ? colors.destructive : colors.textMuted, flexShrink: 1, fontSize: type.row.fontSize, marginLeft: 8, marginRight: 6 }}>
         {toolRowLabel(message)}
       </Text>
       <ChevronRight color={colors.textFaint} size={15} />

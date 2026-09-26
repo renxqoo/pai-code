@@ -37,3 +37,12 @@ export const rhythm = {
   listItemGap: 3,
   codeMargin: 10,
 } as const;
+
+// 字体层级（T51）：五级封闭，UI 铬层不得出现越级字号。
+export const type = {
+  display: { fontSize: 25, lineHeight: 32, fontWeight: '600' as const },
+  title: { fontSize: 17, lineHeight: 24, fontWeight: '700' as const },
+  body: { fontSize: 15, lineHeight: 23, fontWeight: '400' as const },
+  row: { fontSize: 13, lineHeight: 20, fontWeight: '500' as const },
+  meta: { fontSize: 11, lineHeight: 15, fontWeight: '400' as const },
+} as const;

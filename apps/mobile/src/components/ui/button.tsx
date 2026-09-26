@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Pressable, Text, type PressableProps, type TextStyle, type ViewStyle } from 'react-native';
 import { useAppTheme } from '@/theme/theme-context';
-import { radius } from '@/theme/tokens';
+import { layout, radius, type } from '@/theme/tokens';
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 type ButtonSize = 'small' | 'medium' | 'large';
@@ -22,10 +22,11 @@ export function Button({ label, variant = 'primary', size = 'medium', disabled, 
     ghost: { background: 'transparent', color: colors.text },
     danger: { background: colors.destructive, color: '#FFFFFF' },
   }[variant];
+  // 触控基线 44pt（T51）：文本容器自带 minHeight，与 padding 无关地命中达标。
   const dimensions = {
-    small: { paddingVertical: 8, paddingHorizontal: 12, fontSize: 13 },
-    medium: { paddingVertical: 11, paddingHorizontal: 16, fontSize: 14 },
-    large: { paddingVertical: 14, paddingHorizontal: 20, fontSize: 15 },
+    small: { fontSize: type.row.fontSize, minHeight: layout.minTouch, paddingHorizontal: 12, paddingVertical: 8 },
+    medium: { fontSize: type.body.fontSize, minHeight: layout.minTouch, paddingHorizontal: 16, paddingVertical: 11 },
+    large: { fontSize: type.body.fontSize, minHeight: 52, paddingHorizontal: 20, paddingVertical: 14 },
   }[size];
   return (
     <Pressable
