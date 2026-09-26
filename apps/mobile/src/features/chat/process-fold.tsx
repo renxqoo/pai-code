@@ -6,10 +6,9 @@ import { rhythm } from '@/theme/tokens';
 import { copy } from '@/strings/zh';
 import { rowPressStyle } from '@/components/ui/row-press-style';
 import type { TurnView } from '@/features/chat/turns';
-import type { ChatMessage } from '@/types/domain';
 import { formatElapsed } from '@/features/chat/format-elapsed';
+import { useNavigationStore } from '@/store/navigation-store';
 import { StreamItems } from '@/features/chat/stream-items';
-import { ToolDetailSheet } from '@/features/chat/tool-detail-sheet';
 
 const firstText = (...values: readonly (string | undefined)[]): string =>
   values.find((value) => value !== undefined && value.trim().length > 0)?.trim() ?? '';
@@ -22,7 +21,7 @@ export function ProcessFold({ turn, elapsedMs }: ProcessFoldProps) {
   const runningMessage = turn.stream.findLast((message) => message.status === 'running');
   const [userExpanded, setUserExpanded] = React.useState<boolean | null>(null);
   const expanded = userExpanded ?? turn.failed;
-  const [onOpenTool, setOnOpenTool] = React.useState<ChatMessage | null>(null);
+  const openToolDetail = useNavigationStore((state) => state.openToolDetail);
   const elapsed = formatElapsed(elapsedMs ?? Number.NaN);
   // 头行裁决：完成「共工作 X」/ 执行中「已工作 X」，不显示「已完成」；无时长数据退化为状态词。
   const label = elapsed !== null
@@ -59,10 +58,9 @@ export function ProcessFold({ turn, elapsedMs }: ProcessFoldProps) {
       </Pressable>
       {expanded ? (
         <View style={{ marginTop: rhythm.headToRow }}>
-          <StreamItems messages={turn.stream} onOpenTool={setOnOpenTool} />
+          <StreamItems messages={turn.stream} onOpenTool={openToolDetail} />
         </View>
       ) : null}
-      <ToolDetailSheet message={onOpenTool} onClose={() => setOnOpenTool(null)} />
     </View>
   );
 }

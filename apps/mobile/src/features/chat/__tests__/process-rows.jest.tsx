@@ -1,4 +1,4 @@
-import { fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
 import { describe, expect, it, jest } from '@jest/globals';
 import * as React from 'react';
 import { ToolDetailSheet } from '@/features/chat/tool-detail-sheet';
@@ -8,6 +8,8 @@ import { ThinkingRow } from '@/features/chat/thinking-row';
 import { ToolGroup } from '@/features/chat/tool-group';
 import type { ChatMessage } from '@/types/domain';
 import { rowPressStyle } from '@/components/ui/row-press-style';
+import { useNavigationStore } from '@/store/navigation-store';
+import { TestWrapper } from '@/test/test-wrapper';
 
 type MessageValues = Pick<ChatMessage, 'id' | 'kind'> & Partial<Omit<ChatMessage, 'id' | 'kind'>>;
 const message = (values: MessageValues): ChatMessage => ({ text: values.id, createdAt: 'now', ...values });
@@ -27,10 +29,10 @@ describe('toolRowLabel', () => {
 });
 
 describe('ToolDetailSheet', () => {
-  it('renders full execution content and swallows close when message is absent', async () => {
-    const onClose = jest.fn();
-    const empty = await render(<ToolDetailSheet message={null} onClose={onClose} />);
-    expect(empty.toJSON()).toBeNull();
+  it('renders full execution content in the shared bottom sheet and closes via store', async () => {
+    useNavigationStore.setState({ toolDetail: null });
+    const empty = await render(<TestWrapper><ToolDetailSheet /></TestWrapper>);
+    expect(empty.queryByText('工具执行详情')).toBeNull();
     const detail = message({
       id: 't',
       kind: 'tool',
@@ -40,20 +42,27 @@ describe('ToolDetailSheet', () => {
       status: 'success',
       durationMs: 1500,
     });
-    const view = await render(<ToolDetailSheet message={detail} onClose={onClose} />);
+    await act(() => Promise.resolve(useNavigationStore.getState().openToolDetail(detail)));
+    const view = await render(<TestWrapper><ToolDetailSheet /></TestWrapper>);
+    // 与任务配置同构：底部 Sheet + 标题 + 分区图标标题（Sheet 标题与分区标题同为 header 语义）
+    expect(view.getByText('工具执行详情')).toBeTruthy();
+    expect(view.getAllByRole('header').length).toBeGreaterThanOrEqual(2);
     expect(view.getByText('运行命令')).toBeTruthy();
     expect(view.getByText('检查 Node 环境')).toBeTruthy();
     expect(view.getByText('cd /Users/wrr/work && bun test')).toBeTruthy();
     expect(view.getByText('共工作 1s')).toBeTruthy();
-    await fireEvent.press(view.getByLabelText('关闭工具详情'));
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(view.getByText('完整命令与输出仅供查证，不在消息列表展示。')).toBeTruthy();
+    await fireEvent.press(view.getByLabelText('关闭'));
+    expect(useNavigationStore.getState().toolDetail).toBeNull();
   });
 
   it('degrades blank metadata without noise', async () => {
-    const view = await render(<ToolDetailSheet message={message({ id: 't', kind: 'tool', durationMs: Number.NaN })} onClose={jest.fn()} />);
+    await act(() => Promise.resolve(useNavigationStore.getState().openToolDetail(message({ id: 't', kind: 'tool', durationMs: Number.NaN }))));
+    const view = await render(<TestWrapper><ToolDetailSheet /></TestWrapper>);
     expect(view.getByText('执行操作')).toBeTruthy();
     expect(view.queryByText(/共工作/)).toBeNull();
     expect(view.queryByText('undefined')).toBeNull();
+    await act(() => Promise.resolve(useNavigationStore.getState().closeToolDetail()));
   });
 });
 

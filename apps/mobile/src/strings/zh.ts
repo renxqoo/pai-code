@@ -85,6 +85,7 @@ export const copy = {
   expandToolGroup: '展开工具组',
   collapseToolGroup: '收起工具组',
   toolDetailTitle: '工具执行详情',
+  toolDetailNote: '完整命令与输出仅供查证，不在消息列表展示。',
   toolDetailFallback: '执行操作',
   thinkingLabel: '深度思考',
   expandThinking: '展开思考详情',
