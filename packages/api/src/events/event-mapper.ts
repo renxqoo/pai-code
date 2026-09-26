@@ -54,6 +54,10 @@ interface StreamState {
   toolStreams: Map<string, Map<string, string>>;
   /** threadId → 已由 turn/end 合成结算（同轮后续 settled 帧吞掉防双结算） */
   settledSynth: Set<string>;
+  /** threadId → 已结算轮水位（turn/end 与 settled 记录；turn/start 推进）——陈旧
+   *  chunk 判据：步坐标轮号 ≤ 水位的 llm/chunk 是结算后迟到/泄漏流（如 hub 内部
+   *  作业流误入主时间线），重开缓冲即上屏 + loading 复燃，丢弃 */
+  settledTurn: Map<string, number>;
   counter: number;
 }
 
@@ -91,12 +95,13 @@ export function payloadSessionOf(payload: Record<string, unknown>): string | und
 }
 
 export function createEventMapper(deps: EventMapDeps): EventMapper {
-  const state: StreamState = { streams: new Map(), calls: new Map(), toolStreams: new Map(), settledSynth: new Set(), counter: 0 };
+  const state: StreamState = { streams: new Map(), calls: new Map(), toolStreams: new Map(), settledSynth: new Set(), settledTurn: new Map(), counter: 0 };
 
   return {
     dispose(threadId: string): void {
       state.streams.delete(threadId);
       state.settledSynth.delete(threadId);
+      state.settledTurn.delete(threadId);
       for (const key of threadBucketKeys(state, threadId)) {
         state.toolStreams.delete(key);
         state.calls.delete(key);
@@ -113,6 +118,9 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
       switch (name) {
         case 'turn/start':
           state.settledSynth.delete(threadId);
+          // 新轮开启：陈旧标记失效（此前结算轮的水位不再适用），不是推进水位——
+          // 推进会把进行中的轮也判成已结算，本轮全部增量被吞
+          state.settledTurn.delete(threadId);
           return [{ type: 'turnStarted', threadId, at: num(payload.time, deps.now()) }];
         case 'turn/end': {
           // 内部驱动轮（delegation notify 等）无 hub settled：turn/end 权威终局就地合成
@@ -121,6 +129,7 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
           // 双结算虽无害但失败通报/窗口重建会双跑，去重更稳。门闩随 turn/start 重置。
           state.streams.delete(threadId);
           state.settledSynth.add(threadId);
+          noteSettledTurn(state, threadId, num(payload.turn, Number.NaN));
           const reason = recordOf(payload.reason);
           const kind = str(reason['kind']);
           const ok = kind !== 'error' && kind !== 'blocked';
@@ -210,8 +219,11 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
           bucket.set(callId, accumulated);
           return [{ type: 'toolUpdated', threadId, callId, output: accumulated }];
         }
-        case 'settled':
+        case 'settled': {
           if (state.settledSynth.delete(threadId)) return []; // turn/end 已合成过本轮结算
+          // settled 帧不带轮号：水位回退用流缓冲轮号（结算而未曾流式 = 无水位可记）。
+          // 先取后删——删了缓冲就拿不到轮号了
+          noteSettledTurn(state, threadId, num(payload.turn, settledWatermarkOf(state, threadId)));
           state.streams.delete(threadId);
           // 轮结算清本线程主会话的记忆桶（callId→工具名 / callId→累积输出）：跨轮
           // callId 不复用，长会话生命周期内无界增长即泄漏。只清主会话桶——子代理
@@ -227,6 +239,7 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
               usage: null,
             },
           ];
+        }
         case 'compaction/landed':
           return [
             { type: 'compacting', threadId, active: false },
@@ -284,6 +297,11 @@ function mapChunk(state: StreamState, threadId: string, payload: Record<string, 
   let buffer = state.streams.get(threadId);
   const boundary = buffer === undefined || buffer.turn !== turn || buffer.step !== step;
   if (boundary && (kind === 'text-delta' || kind === 'thinking-delta')) {
+    // 已结算轮水位的陈旧增量：结算后迟到/泄漏流（hub 内部作业流误入主时间线），
+    // 重开缓冲即上屏 + loading 复燃——丢弃。仅拦「开新缓冲」：有效缓冲内的增量
+    // 照常（轮内步边界与在途流不受影响）；有效轮首（turn/start）已推进水位放行
+    const settledTurn = state.settledTurn.get(threadId);
+    if (settledTurn !== undefined && Number.isFinite(settledTurn) && turn <= settledTurn) return [];
     // 步边界开新缓冲；无缓冲的首增量（订阅窗口边界/竞争）同样开缓冲兜底，不丢单词
     state.counter += 1;
     buffer = { messageId: `stream-${state.counter}`, turn, step, text: '', thinking: '', usage: null };
@@ -293,6 +311,21 @@ function mapChunk(state: StreamState, threadId: string, payload: Record<string, 
   }
   if (buffer === undefined) return [];
   return emitChunk(threadId, buffer, chunk);
+}
+
+/** 结算轮水位记录（只升不降）：turn/end、settled 记录当轮轮号——此后到达的
+ *  轮号 ≤ 水位的「开新缓冲」型 chunk 是结算后迟到/泄漏流（如 hub 内部作业流误入
+ *  主时间线）。NaN = 帧无轮号，不推进也不误拦。轮首（turn/start）清除水位。 */
+function noteSettledTurn(state: StreamState, threadId: string, turn: number): void {
+  if (!Number.isFinite(turn)) return;
+  const existing = state.settledTurn.get(threadId);
+  if (existing !== undefined && existing >= turn) return;
+  state.settledTurn.set(threadId, turn);
+}
+
+/** settled 面的轮号回退：刚被清空前的流缓冲轮号（结算帧无轮号字段）。 */
+function settledWatermarkOf(state: StreamState, threadId: string): number {
+  return state.streams.get(threadId)?.turn ?? Number.NaN;
 }
 
 function emitChunk(threadId: string, buffer: StreamBuffer, chunk: Record<string, unknown>): UiEvent[] {

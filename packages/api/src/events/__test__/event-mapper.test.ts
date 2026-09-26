@@ -301,6 +301,42 @@ describe('createEventMapper · 主线程事件', () => {
     expect(err.mapEvent(frame('turn/end', { session: 'child-1', reason: { kind: 'error', message: 'x' } }))).toEqual([]);
   });
 
+  test('症状回归「结算后泄漏的内部作业流上屏 + loading 永挂」：settle 后同轮陈旧坐标 llm/chunk 丢弃（不重开流缓冲）；新一轮 turn/start 重置水位', () => {
+    const mapper = createEventMapper(deps);
+    mapper.mapEvent(frame('turn/start', { time: 1 }));
+    expect(mapper.mapEvent(chunk(50, 0, 'text-delta', { text: '两路对抗 review 已在后台运行' }))).toEqual([
+      { type: 'messageStarted', threadId: 't', messageId: 'stream-1', at: 1000 },
+      { type: 'textDelta', threadId: 't', messageId: 'stream-1', delta: '两路对抗 review 已在后台运行' },
+    ]);
+    mapper.mapEvent(frame('turn/end', { session: 't', turn: 50, reason: { kind: 'completed' } }));
+    // 结算后到达的同轮陈旧坐标 chunk（hub 内部作业流泄漏形态）——不得重开缓冲上屏
+    expect(mapper.mapEvent(chunk(50, 0, 'text-delta', { text: '<goals>ledger 原文</goals>' }))).toEqual([]);
+    // thinking 同形态同丢弃
+    expect(mapper.mapEvent(chunk(50, 0, 'thinking-delta', { text: 'x' }))).toEqual([]);
+    // 更早轮的陈旧坐标同样丢弃
+    expect(mapper.mapEvent(chunk(49, 2, 'text-delta', { text: '旧轮' }))).toEqual([]);
+    // 新一轮开跑（turn/start 重置水位）后恢复开缓冲
+    mapper.mapEvent(frame('turn/start', { time: 2 }));
+    expect(mapper.mapEvent(chunk(51, 0, 'text-delta', { text: '新一轮正文' }))).toEqual([
+      { type: 'messageStarted', threadId: 't', messageId: 'stream-2', at: 1000 },
+      { type: 'textDelta', threadId: 't', messageId: 'stream-2', delta: '新一轮正文' },
+    ]);
+  });
+
+  test('症状回归（settled 帧路径）：settled 后无 turn/start 的陈旧 chunk 同样丢弃，后续新轮 chunk 放行', () => {
+    const mapper = createEventMapper(deps);
+    mapper.mapEvent(chunk(0, 0, 'text-delta', { text: 'a' }));
+    mapper.mapEvent(frame('settled', { ok: true }));
+    // 无新 turn/start 的同轮陈旧 chunk：丢弃
+    expect(mapper.mapEvent(chunk(0, 0, 'text-delta', { text: '泄漏' }))).toEqual([]);
+    // 但窗口重建后（turn/start 到场）新坐标照常开缓冲——不破坏订阅窗口边界兑底语义
+    mapper.mapEvent(frame('turn/start', { time: 3 }));
+    expect(mapper.mapEvent(chunk(1, 0, 'text-delta', { text: '新窗口' }))).toEqual([
+      { type: 'messageStarted', threadId: 't', messageId: 'stream-2', at: 1000 },
+      { type: 'textDelta', threadId: 't', messageId: 'stream-2', delta: '新窗口' },
+    ]);
+  });
+
   test('compaction/landed → compacting(false) + compacted（replacedNodes → replacedCount 映射；缺省回落 0）', () => {
     expect(createEventMapper(deps).mapEvent(frame('compaction/landed', { replacedNodes: 12 }))).toEqual([
       { type: 'compacting', threadId: 't', active: false },
