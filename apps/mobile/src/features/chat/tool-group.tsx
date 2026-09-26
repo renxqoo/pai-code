@@ -25,7 +25,7 @@ export function ToolGroup({ messages, onOpen }: ToolGroupProps) {
         style={rowPressStyle}
       >
         {running ? <ActivityIndicator color={colors.textFaint} size="small" /> : failed ? <CircleAlert color={colors.destructive} size={16} /> : <Wrench color={colors.textFaint} size={16} />}
-        <Text numberOfLines={1} style={{ color: failed ? colors.destructive : colors.textMuted, flex: 1, fontSize: 12, marginLeft: 8 }}>{`${messages.length} ${copy.toolGroupUnit}`}</Text>
+        <Text numberOfLines={1} style={{ color: failed ? colors.destructive : colors.textMuted, flexShrink: 1, fontSize: 12, marginLeft: 8, marginRight: 6 }}>{`${messages.length} ${copy.toolGroupUnit}`}</Text>
         {running ? <Text numberOfLines={1} style={{ color: colors.textFaint, fontSize: 10, marginLeft: 6, maxWidth: '46%' }}>{`${copy.toolGroupRunning} · ${running.title ?? copy.activityFallback}`}</Text> : null}
         {expanded ? <ChevronDown color={colors.textFaint} size={15} /> : <ChevronRight color={colors.textFaint} size={15} />}
       </Pressable>

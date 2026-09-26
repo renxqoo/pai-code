@@ -90,7 +90,7 @@ function ToolCallRow({ call }: ToolCallRowProps) {
         <span
           title={call.argsPreview}
           className={cn(
-            'min-w-0 flex-1 truncate',
+            'min-w-0 max-w-full truncate',
             toolPreviewMono(kind) ? 'font-mono text-[12.5px]' : 'text-[12.5px]',
             running ? 'shimmer-text' : failed ? 'text-diff-del' : 'text-muted-foreground',
           )}
@@ -120,7 +120,7 @@ function ToolCallRow({ call }: ToolCallRowProps) {
               <span
                 title={spawn.task}
                 className={cn(
-                  'min-w-0 flex-1 truncate text-[12.5px] leading-[20px]',
+                  'min-w-0 max-w-full truncate text-[12.5px] leading-[20px]',
                   running ? 'shimmer-text' : 'text-muted-foreground',
                 )}
               >
@@ -128,7 +128,7 @@ function ToolCallRow({ call }: ToolCallRowProps) {
               </span>
             </>
           ) : (
-            <span className="min-w-0 flex-1" />
+            <span className="min-w-0" />
           )}
         </>
       )}
@@ -159,7 +159,7 @@ function ToolCallRow({ call }: ToolCallRowProps) {
                 {rowContent(spawn, last)}
               </button>
             ) : (
-              <div className="flex min-w-0 flex-1 items-center gap-[8px] px-[6px] py-[3px]">{rowContent(spawn, last)}</div>
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-[8px] px-[6px] py-[3px]">{rowContent(spawn, last)}</div>
             )}
           </div>
         );

@@ -21,7 +21,7 @@ export function ThinkingRow({ message }: ThinkingRowProps) {
         onPress={() => setExpanded((value) => !value)}
         style={rowPressStyle}
       >
-        <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '600' }}>{copy.thinkingLabel}</Text>
+        <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '600', marginRight: 6 }}>{copy.thinkingLabel}</Text>
         {expanded ? <ChevronDown color={colors.textFaint} size={15} /> : <ChevronRight color={colors.textFaint} size={15} />}
       </Pressable>
       {expanded ? (
