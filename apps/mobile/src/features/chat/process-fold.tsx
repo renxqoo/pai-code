@@ -1,8 +1,11 @@
 import * as React from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { ChevronDown, ChevronRight } from 'lucide-react-native';
 import { useAppTheme } from '@/theme/theme-context';
 import { rhythm } from '@/theme/tokens';
+import { Marker } from '@/components/ui/marker';
+import { MarkerContent } from '@/components/ui/marker-content';
+import { MarkerIcon } from '@/components/ui/marker-icon';
 import { copy } from '@/strings/zh';
 import { rowPressStyle } from '@/components/ui/row-press-style';
 import type { TurnView } from '@/features/chat/turns';
@@ -44,9 +47,11 @@ export function ProcessFold({ turn, elapsedMs }: ProcessFoldProps) {
         style={rowPressStyle}
       >
         <View>
-          <View style={{ alignItems: 'center', flexDirection: 'row' }}>
-            {runningMessage ? <ActivityIndicator color={colors.textMuted} size="small" testID="fold-spinner" /> : null}
-            <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 13, fontWeight: '600', marginLeft: runningMessage ? 8 : 0 }}>{label}</Text>
+          <View style={styles.headerRow}>
+            <Marker style={styles.marker}>
+              <MarkerIcon loading={runningMessage !== undefined} color={colors.textMuted} testID="fold-spinner" />
+              <MarkerContent shimmer={runningMessage !== undefined} numberOfLines={1} style={styles.label}>{label}</MarkerContent>
+            </Marker>
             {expanded ? <ChevronDown color={colors.textFaint} size={15} /> : <ChevronRight color={colors.textFaint} size={15} />}
           </View>
           {summary.length > 0 ? <Text numberOfLines={1} style={{ color: colors.textFaint, fontSize: 11, marginTop: 2 }}>{summary}</Text> : null}
@@ -60,3 +65,9 @@ export function ProcessFold({ turn, elapsedMs }: ProcessFoldProps) {
     </View>
   );
 }
+
+const styles = {
+  headerRow: { alignItems: 'center' as const, flexDirection: 'row' as const },
+  label: { fontWeight: '600' as const },
+  marker: { flexShrink: 1 },
+};

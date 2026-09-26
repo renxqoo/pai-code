@@ -5,6 +5,9 @@ import { useAppTheme } from '@/theme/theme-context';
 import { rhythm, type } from '@/theme/tokens';
 import { copy } from '@/strings/zh';
 import { rowPressStyle } from '@/components/ui/row-press-style';
+import { Marker } from '@/components/ui/marker';
+import { MarkerContent } from '@/components/ui/marker-content';
+import { MarkerIcon } from '@/components/ui/marker-icon';
 import type { ChatMessage } from '@/types/domain';
 
 type ThinkingRowProps = { message: ChatMessage };
@@ -21,7 +24,10 @@ export function ThinkingRow({ message }: ThinkingRowProps) {
         onPress={() => setExpanded((value) => !value)}
         style={rowPressStyle}
       >
-        <Text style={{ color: colors.textMuted, fontSize: type.row.fontSize, fontWeight: '600', marginRight: 6 }}>{copy.thinkingLabel}</Text>
+        <Marker style={styles.marker}>
+          <MarkerIcon loading={message.status === 'running'} color={colors.textMuted} testID="thinking-spinner" />
+          <MarkerContent shimmer={message.status === 'running'} style={{ fontWeight: '600', marginRight: 6 }}>{copy.thinkingLabel}</MarkerContent>
+        </Marker>
         {expanded ? <ChevronDown color={colors.textFaint} size={15} /> : <ChevronRight color={colors.textFaint} size={15} />}
       </Pressable>
       {expanded ? (
@@ -32,3 +38,5 @@ export function ThinkingRow({ message }: ThinkingRowProps) {
     </View>
   );
 }
+
+const styles = { marker: { flexShrink: 1 } };

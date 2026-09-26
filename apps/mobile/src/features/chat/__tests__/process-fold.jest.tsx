@@ -56,7 +56,7 @@ describe('ProcessFold', () => {
     // 失败终态不在折叠头：默认收起、无警示图标文案，失败原因由轮末 TurnFailureNotice 呈现
     const header = view.getByLabelText(/展开过程流|收起过程流/);
     expect(header.props.accessibilityState).toEqual({ expanded: false });
-    expect(view.queryByTestId('fold-spinner')).toBeNull();
+    expect(view.queryByTestId('fold-spinner', { includeHiddenElements: true })).toBeNull();
     expect(view.queryByText('执行遇到问题')).toBeNull();
     await fireEvent.press(header);
     expect(header.props.accessibilityState).toEqual({ expanded: true });
@@ -77,7 +77,7 @@ describe('ProcessFold', () => {
     expect(view.getByText('已工作 1m 16s')).toBeTruthy();
     expect(view.getByText('构建 Android')).toBeTruthy();
     expect(view.queryByText('已完成')).toBeNull();
-    expect(view.queryByTestId('fold-spinner')).toBeTruthy();
+    expect(view.queryByTestId('fold-spinner', { includeHiddenElements: true })).toBeTruthy();
   });
 });
 
