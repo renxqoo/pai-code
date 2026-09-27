@@ -14,7 +14,7 @@ const firstText = (...values: readonly (string | undefined)[]): string =>
 
 type StatusLineProps = { message: ChatMessage };
 
-/** 状态信封行：阶段结论一行可见（成功弱化、失败红色整句、运行中 spinner）。 */
+/** 状态信封行：阶段结论一行可见（成功弱化、失败红色整句；运行中不预支结论图标，流光承载运行态）。 */
 export function StatusLine({ message }: StatusLineProps) {
   const { colors } = useAppTheme();
   const failed = message.status === 'failed';
@@ -25,8 +25,8 @@ export function StatusLine({ message }: StatusLineProps) {
   return (
     <View style={{ marginTop: rhythm.rowToRow, minHeight: 32, justifyContent: 'center' }}>
       <Marker>
-        <MarkerIcon loading={running} color={failed ? colors.destructive : colors.textFaint} testID={running ? 'status-spinner' : undefined}>
-          {failed ? <CircleAlert color={tone} size={16} /> : <Check color={colors.textFaint} size={16} />}
+        <MarkerIcon>
+          {running ? null : failed ? <CircleAlert color={tone} size={16} testID="status-failed-icon" /> : <Check color={colors.textFaint} size={16} testID="status-done-icon" />}
         </MarkerIcon>
         <MarkerContent shimmer={running} numberOfLines={1} style={{ color: tone, fontSize: type.meta.fontSize }}>
           {label}

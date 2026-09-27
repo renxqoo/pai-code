@@ -33,8 +33,8 @@ export function ThinkingRow({ message }: ThinkingRowProps) {
         style={rowPressStyle}
       >
         <Marker style={styles.marker}>
-          <MarkerIcon loading={running} color={colors.textMuted} testID={running ? 'thinking-spinner' : undefined}>
-            <Brain color={colors.textMuted} size={15} strokeWidth={1.75} />
+          <MarkerIcon>
+            <Brain color={colors.textMuted} size={15} strokeWidth={1.75} testID="thinking-icon" />
           </MarkerIcon>
           <MarkerContent shimmer={running} style={{ fontWeight: '600', marginRight: 6 }}>{copy.thinkingLabel}</MarkerContent>
           {expanded ? null : (

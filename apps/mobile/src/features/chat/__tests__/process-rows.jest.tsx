@@ -22,10 +22,11 @@ describe('ThinkingRow 思考单元', () => {
     expect(view.getByLabelText(/收起思考详情/).props.accessibilityState).toEqual({ expanded: true });
   });
 
-  it('运行中挂 spinner 并带流光（深度思考进行中可见）', async () => {
+  it('运行中思考行图标不被 loading 顶替（症状：行首只剩旋转图标），流光承载运行态', async () => {
     const view = await render(<ThinkingRow message={message({ id: 't', kind: 'thinking', text: '推理中', status: 'running' })} />);
-    expect(view.queryByTestId('thinking-spinner', { includeHiddenElements: true })).toBeTruthy();
     expect(view.getByText('思考')).toBeTruthy();
+    expect(view.getByTestId('thinking-icon', { includeHiddenElements: true })).toBeTruthy();
+    expect(view.queryAllByTestId('loading-spinner', { includeHiddenElements: true })).toHaveLength(0);
   });
 });
 
@@ -40,9 +41,12 @@ describe('StatusLine 状态信封行', () => {
     expect(failed.getByText('退出码 1')).toBeTruthy();
   });
 
-  it('运行中状态行挂 spinner', async () => {
+  it('运行中状态行不预支结论图标（勾/叹号只属于已定结论），流光承载运行态', async () => {
     const view = await render(<StatusLine message={message({ id: 's', kind: 'status', text: '打包中', status: 'running' })} />);
-    expect(view.queryByTestId('status-spinner', { includeHiddenElements: true })).toBeTruthy();
+    expect(view.getByText('打包中')).toBeTruthy();
+    expect(view.queryByTestId('status-done-icon', { includeHiddenElements: true })).toBeNull();
+    expect(view.queryByTestId('status-failed-icon', { includeHiddenElements: true })).toBeNull();
+    expect(view.queryAllByTestId('loading-spinner', { includeHiddenElements: true })).toHaveLength(0);
   });
 
   it('空文案降级为空行，不显悬空占位', async () => {
@@ -80,9 +84,9 @@ describe('过程流条目顺序（组头 / 执行行 / 思考）', () => {
     expect(thinking).toBeGreaterThanOrEqual(0);
     expect(group).toBeGreaterThan(thinking);
     expect(status).toBeGreaterThan(group);
-    // 思考行与组头触控区同为 ≥44pt
+    // 思考行与组头触控区同为 ≥32pt（用户裁决：过程行密度优先，行盒贴内容）
     const header = view.getByLabelText(/展开思考详情/);
-    const entries = (Array.isArray(header.props.style) ? header.props.style : [header.props.style]) as ReadonlyArray<{ minHeight?: number }>;
-    expect(Math.max(0, ...entries.map((entry) => entry?.minHeight ?? 0))).toBeGreaterThanOrEqual(44);
+    const entries = (Array.isArray(header.props.style) ? header.props.style : [header.props.style]) as readonly { minHeight?: number }[];
+    expect(Math.max(0, ...entries.map((entry) => entry?.minHeight ?? 0))).toBeGreaterThanOrEqual(32);
   });
 });

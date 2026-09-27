@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { Animated, Easing, StyleSheet } from 'react-native';
+import { Animated, Easing, Platform, StyleSheet } from 'react-native';
+import { nativeDriverFor } from '@/components/ui/native-driver';
 import { Loader } from 'lucide-react-native';
 import { useReducedMotion } from '@/components/ui/use-reduced-motion';
 
@@ -9,14 +10,14 @@ type SpinnerProps = {
   testID?: string | undefined;
 };
 
-/** 旋转加载指示（shadcn Spinner 同构）：loader 图标匀速自转；装饰位，对读屏隐藏。 */
-export function Spinner({ color, size = 16, testID }: SpinnerProps) {
+/** 旋转加载指示（shadcn Spinner 同构）：loader 图标匀速自转；装饰位，对读屏隐藏。默认 testID『loading-spinner』给测试全局锚点（旋转 loading 全应用只在底部指示条一处）。 */
+export function Spinner({ color, size = 16, testID = 'loading-spinner' }: SpinnerProps) {
   const reducedMotion = useReducedMotion();
-  const spin = React.useRef(new Animated.Value(0)).current;
+  const [spin] = React.useState(() => new Animated.Value(0));
   React.useEffect(() => {
     if (reducedMotion) return () => undefined;
     const loop = Animated.loop(
-      Animated.timing(spin, { toValue: 1, duration: 1000, easing: Easing.linear, useNativeDriver: true }),
+      Animated.timing(spin, { toValue: 1, duration: 1000, easing: Easing.linear, useNativeDriver: nativeDriverFor(Platform.OS) }),
     );
     loop.start();
     return () => loop.stop();

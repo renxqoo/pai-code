@@ -4,6 +4,7 @@ import * as React from "react";
 import { demoSessions } from "@/fixtures/demo-data";
 import { ChatHeader } from "@/features/chat/chat-header";
 import { EmptyChat } from "@/features/chat/empty-chat";
+import { TurnLoadingRow } from "@/features/chat/turn-loading-row";
 import { PermissionCard } from "@/features/chat/permission-card";
 import { TimelineList } from "@/features/chat/timeline-list";
 import { SessionRow } from "@/features/history/session-row";
@@ -35,9 +36,27 @@ describe("chat and history components", () => {
     expect(view.getByText("Android 权限检查失败")).toBeTruthy();
   });
 
-  it("shows a generation summary when no activity event is available yet", async () => {
-    const view = await render(<TimelineList generating messages={[]} />);
+  it("执行中指示贴消息流末尾、最后一条消息后面且不固定悬浮（用户裁决：与 PC 对话列表同实现）", async () => {
+    const view = await render(
+      <TimelineList generating messages={[{ id: "u1", kind: "user", text: "最后一条消息", createdAt: "now" }]} />,
+    );
+    const order = JSON.stringify(view.toJSON());
+    // 贴在最后一条消息后面：不浮到屏幕最底部，也不进头部
+    expect(order.indexOf("Pai Code 正在生成回复")).toBeGreaterThan(order.indexOf("最后一条消息"));
+    // 不固定：样式里没有任何 position 定位（随消息流滚动）
+    const row = view.getByLabelText("Pai Code 正在生成回复");
+    const styles = (Array.isArray(row.props.style) ? row.props.style : [row.props.style]) as readonly { position?: string }[];
+    expect(styles.every((entry) => entry?.position === undefined)).toBe(true);
+    // 未生成不渲染
+    const idle = await render(<TimelineList generating={false} messages={[]} />);
+    expect(idle.queryByLabelText("Pai Code 正在生成回复")).toBeNull();
+  });
+
+  it("执行中指示视觉本体只有旋转指示（与 PC 同形态）：无可见文案，语义靠读屏；全应用唯一旋转 loading 在这里", async () => {
+    const view = await render(<TurnLoadingRow />);
     expect(view.getByLabelText("Pai Code 正在生成回复")).toBeTruthy();
+    expect(view.queryByText(/正在生成/)).toBeNull();
+    expect(view.getAllByTestId("loading-spinner", { includeHiddenElements: true })).toHaveLength(1);
   });
 
   it("opens empty workspace, demo conversation and quick prompts", async () => {

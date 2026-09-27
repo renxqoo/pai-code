@@ -31,7 +31,7 @@ export function FileDiffRow({ group, onOpen }: FileDiffRowProps) {
       style={rowPressStyle}
     >
       <Marker style={styles.marker}>
-        <MarkerIcon color={colors.textFaint}>
+        <MarkerIcon>
           <Pencil color={colors.textMuted} size={15} strokeWidth={1.75} />
         </MarkerIcon>
         <MarkerContent numberOfLines={1} style={{ color: colors.textMuted, fontWeight: '600', marginRight: 6 }}>

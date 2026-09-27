@@ -27,7 +27,8 @@ export function ToolGroupHeader({ views, open, onToggle }: ToolGroupHeaderProps)
   const running = toolGroupStatus(views) === 'running';
   const failed = toolGroupStatus(views) === 'failed';
   const label = toolGroupLabel(views, toolCopy) || copy.toolDetailFallback;
-  const GroupIcon = toolGroupIcon(views);
+  // 图标取自 ui-thread 注册表（引用查找非组件创建）：createElement + 小写绑定避开静态组件规则误报
+  const groupIcon = toolGroupIcon(views);
   const tone = failed ? colors.destructive : colors.textMuted;
   return (
     <Pressable
@@ -39,8 +40,8 @@ export function ToolGroupHeader({ views, open, onToggle }: ToolGroupHeaderProps)
       style={rowPressStyle}
     >
       <Marker style={styles.marker}>
-        <MarkerIcon loading={running} color={failed ? colors.destructive : colors.textFaint}>
-          <GroupIcon color={tone} size={15} strokeWidth={1.75} />
+        <MarkerIcon>
+          {React.createElement(groupIcon, { color: tone, size: 15, strokeWidth: 1.75, testID: 'group-icon' })}
         </MarkerIcon>
         <MarkerContent shimmer={running} numberOfLines={1} style={{ color: tone, fontWeight: '600', marginRight: 6 }}>
           {label}

@@ -12,7 +12,7 @@ const message = (values: MessageValues): ChatMessage => ({ text: values.id, crea
 
 /** 行触控区高度（Pressable style 经渲染后落成宿主 View 的样式数组，取各段 minHeight 最大值）。 */
 const minTouch = (node: { props: { style?: unknown } }): number => {
-  const entries = (Array.isArray(node.props.style) ? node.props.style : [node.props.style]) as ReadonlyArray<{ minHeight?: number }>;
+  const entries = (Array.isArray(node.props.style) ? node.props.style : [node.props.style]) as readonly { minHeight?: number }[];
   return Math.max(0, ...entries.map((entry) => entry?.minHeight ?? 0));
 };
 
@@ -49,12 +49,13 @@ describe('ToolRow 执行单元行（与 PC 端同信息架构）', () => {
     expect(view.queryByText('已运行')).toBeNull();
   });
 
-  it('运行中行挂 spinner（shimmer 不作用于 SVG）', async () => {
+  it('运行中行图标不被 loading 顶替（症状：行首只剩旋转图标），运行态由流光文案承载', async () => {
     const view = await render(
       <ToolRow message={message({ id: 't', kind: 'tool', toolName: 'bash', argsPreview: 'bun run build', status: 'running' })} onOpen={jest.fn()} />,
     );
-    expect(view.queryByTestId('tool-spinner', { includeHiddenElements: true })).toBeTruthy();
     expect(view.getByText('正在运行')).toBeTruthy();
+    expect(view.getByTestId('tool-icon', { includeHiddenElements: true })).toBeTruthy();
+    expect(view.queryAllByTestId('loading-spinner', { includeHiddenElements: true })).toHaveLength(0);
   });
 
   it('箭头常显（触屏无 hover）：有内容可看的行收起态也有箭头；空行不出死开关', async () => {
@@ -120,10 +121,10 @@ describe('ToolRow 执行单元行（与 PC 端同信息架构）', () => {
     expect(running.getByText('正在调用mcp__x__fetch')).toBeTruthy();
   });
 
-  it('垃圾输入降级：空工具名不出悬空前缀，行整体 ≥44pt 触控区', async () => {
+  it('垃圾输入降级：空工具名不出悬空前缀，行整体 ≥32pt 触控区（用户裁决：过程行密度优先，行盒贴内容）', async () => {
     const view = await render(<ToolRow message={message({ id: 't', kind: 'tool', status: 'ok', text: '' })} onOpen={jest.fn()} />);
     expect(view.getByText('执行操作')).toBeTruthy();
-    expect(minTouch(view.getByLabelText('查看工具详情：执行操作'))).toBeGreaterThanOrEqual(44);
+    expect(minTouch(view.getByLabelText('查看工具详情：执行操作'))).toBeGreaterThanOrEqual(32);
   });
 });
 

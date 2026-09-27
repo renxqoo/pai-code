@@ -1,4 +1,4 @@
-import { fireEvent, render } from "@testing-library/react-native";
+import { fireEvent, render, within } from "@testing-library/react-native";
 import { beforeEach, describe, expect, it } from "@jest/globals";
 import * as React from "react";
 import { ChatScreen } from "@/features/chat/chat-screen";
@@ -73,12 +73,38 @@ describe("ChatScreen", () => {
     expect(view.getByLabelText(/展开过程流|收起过程流/)).toBeTruthy();
     expect(view.getByLabelText("消息输入框")).toBeTruthy();
     expect(view.getByTestId("conversation-scroll").props.scrollEventThrottle).toBe(16);
-    expect(view.getByTestId("conversation-scroll").props.contentContainerStyle).toMatchObject({
-      paddingBottom: 96,
-    });
-    await fireEvent(view.getByLabelText("消息输入框"), "focus");
-    expect(view.getByTestId("conversation-scroll").props.contentContainerStyle).toMatchObject({
-      paddingBottom: 160,
-    });
+  });
+
+  it("底部避让随实测输入区高度走（症状：iOS 上最底部消息/加载行被输入框遮盖）", async () => {
+    const session = demoSessions[0];
+    if (session === undefined) throw new Error("fixture missing");
+    useConversationStore.getState().openSession(session);
+    const view = await render(
+      <TestWrapper>
+        <ChatScreen />
+      </TestWrapper>,
+    );
+    const scroll = view.getByTestId("conversation-scroll");
+    const dock = view.getByTestId("conversation-dock");
+    // 安全区 34 + 实测输入区 64 + 轮间距呼吸 20：消息流末端不进输入框的版面
+    await fireEvent(dock, "layout", { nativeEvent: { layout: { x: 0, y: 0, width: 390, height: 64 } } });
+    expect(scroll.props.contentContainerStyle).toMatchObject({ paddingBottom: 118 });
+    // 输入区长高（聚焦/加附件）自动跟进，不吃魔法数字
+    await fireEvent(dock, "layout", { nativeEvent: { layout: { x: 0, y: 0, width: 390, height: 120 } } });
+    expect(scroll.props.contentContainerStyle).toMatchObject({ paddingBottom: 174 });
+  });
+
+  it("执行中指示在消息流末尾随列表滚动、不悬浮在输入区上方（症状：单条消息时与末消息隔着大片空白）", async () => {
+    const session = demoSessions[0];
+    if (session === undefined) throw new Error("fixture missing");
+    useConversationStore.getState().openSession(session);
+    useComposerStore.setState({ generating: true });
+    const view = await render(
+      <TestWrapper>
+        <ChatScreen />
+      </TestWrapper>,
+    );
+    // 在消息流里（ScrollView 内容末尾），不在输入区上方悬浮
+    expect(within(view.getByTestId("conversation-scroll")).getByLabelText("Pai Code 正在生成回复")).toBeTruthy();
   });
 });

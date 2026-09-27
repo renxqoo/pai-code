@@ -80,7 +80,7 @@ describe('ProcessFold', () => {
     expect(header.props.accessibilityState).toEqual({ expanded: false });
   });
 
-  it('shows current action, spinner and elapsed while running', async () => {
+  it('运行中头行只有走表 + 流光（症状：当前动作曾在头行以第二种布局重复，与过程流运行行撞脸）', async () => {
     const view = await render(
       <ProcessFold
         elapsedMs={76_000}
@@ -90,11 +90,15 @@ describe('ProcessFold', () => {
         )}
       />,
     );
-    // 头行裁决：执行中显示「已工作 X」+ 当前动作摘要，不显示「已完成」、无勾图标
+    // 头行裁决：执行中显示「已工作 X」，不显示「已完成」、无勾图标、无旋转 loading（loading 只在底部）
     expect(view.getByText('已工作 1m 16s')).toBeTruthy();
-    expect(view.getByText('正在运行 bun run build:android')).toBeTruthy();
     expect(view.queryByText('已完成')).toBeNull();
-    expect(view.queryByTestId('fold-spinner', { includeHiddenElements: true })).toBeTruthy();
+    expect(view.queryAllByTestId('loading-spinner', { includeHiddenElements: true })).toHaveLength(0);
+    // 当前动作只由过程流的运行行承担，头行不再重复成第二种布局
+    expect(view.queryByTestId('fold-headline')).toBeNull();
+    expect(view.queryByText('正在运行 bun run build:android')).toBeNull();
+    expect(view.getByText('正在运行')).toBeTruthy();
+    expect(view.getByText('bun run build:android')).toBeTruthy();
   });
 
   it('收起态头行只有耗时，不挂「改了 N 个文件」后缀（用户裁决：头行不加变更计数）', async () => {
@@ -109,22 +113,5 @@ describe('ProcessFold', () => {
     );
     expect(view.queryByText(/改了/)).toBeNull();
     expect(view.queryByText(/共工作/)).toBeNull();
-  });
-
-  it('运行中头行摘要随消息种类走：思考显「思考」，状态行显其正文，空白退化为通用动作', async () => {
-    const thinking = await render(
-      <ProcessFold turn={turn(message({ id: 'u1', kind: 'user' }), message({ id: 't', kind: 'thinking', text: '推理中', status: 'running' }))} />,
-    );
-    expect(thinking.getByTestId('fold-headline').props.children).toBe('思考');
-
-    const status = await render(
-      <ProcessFold turn={turn(message({ id: 'u2', kind: 'user' }), message({ id: 's', kind: 'status', text: '正在打包 Android', status: 'running' }))} />,
-    );
-    expect(status.getByTestId('fold-headline').props.children).toBe('正在打包 Android');
-
-    const blank = await render(
-      <ProcessFold turn={turn(message({ id: 'u3', kind: 'user' }), message({ id: 's', kind: 'status', text: '  ', status: 'running' }))} />,
-    );
-    expect(blank.getByTestId('fold-headline').props.children).toBe('执行操作');
   });
 });

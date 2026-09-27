@@ -3,6 +3,7 @@ import { describe, expect, it, jest } from '@jest/globals';
 import * as React from 'react';
 import { ToolBatch } from '@/features/chat/tool-batch';
 import { ToolGroup } from '@/features/chat/tool-group';
+import { ToolGroupHeader } from '@/features/chat/tool-group-header';
 import { FileDiffSection } from '@/features/chat/file-diff-section';
 import { FileDiffSheet } from '@/features/chat/file-diff-sheet';
 import { DiffLines } from '@/features/chat/diff-lines';
@@ -34,6 +35,11 @@ describe('ToolBatch 批次装配', () => {
   it('空批次不渲染空壳', async () => {
     const view = await render(<ToolBatch messages={[]} onOpen={jest.fn()} onOpenDiff={jest.fn()} />);
     expect(view.toJSON()).toBeNull();
+  });
+
+  it('组头标题合成空缺退化为通用动作（垃圾输入不显空标题、不崩溃）', async () => {
+    const view = await render(<ToolGroupHeader views={[]} open={false} onToggle={jest.fn()} />);
+    expect(view.getByText('执行操作')).toBeTruthy();
   });
 
   it('单一类别桶的组头图标取该桶语义（全是编辑 → 铅笔）', async () => {

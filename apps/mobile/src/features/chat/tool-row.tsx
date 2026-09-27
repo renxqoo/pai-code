@@ -33,7 +33,8 @@ export function ToolRow({ message, onOpen }: ToolRowProps) {
   const label = toolRowLabelOf(view, toolCopy) || copy.toolDetailFallback;
   const summary = toolSummary(view.argsPreview);
   const expandable = summary.length > 0 || callExpandable(view);
-  const RowIcon = toolRowIcon(view.name);
+  // 图标取自 ui-thread 注册表（引用查找非组件创建）：createElement + 小写绑定避开静态组件规则误报
+  const rowIcon = toolRowIcon(view.name);
   const mono = toolPreviewMono(toolKindOf(view.name));
   const tone = failed ? colors.destructive : colors.textMuted;
   const spawns = view.subagents;
@@ -46,12 +47,8 @@ export function ToolRow({ message, onOpen }: ToolRowProps) {
     >
       <View style={styles.block}>
         <Marker style={styles.marker}>
-          <MarkerIcon
-            loading={running}
-            color={failed ? colors.destructive : colors.textFaint}
-            testID={running ? 'tool-spinner' : undefined}
-          >
-            <RowIcon color={tone} size={15} strokeWidth={1.75} />
+          <MarkerIcon>
+            {React.createElement(rowIcon, { color: tone, size: 15, strokeWidth: 1.75, testID: 'tool-icon' })}
           </MarkerIcon>
           <MarkerContent shimmer={running} numberOfLines={1} style={{ color: tone, fontWeight: '600', marginRight: 6 }}>
             {label}
