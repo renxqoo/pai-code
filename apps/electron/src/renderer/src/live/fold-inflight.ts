@@ -48,11 +48,18 @@ export function applyInflight(state: LiveThreadState, view: InflightView, now: n
   if (view.message !== null) {
     const turn = findTurn(next, next.liveTurnId);
     if (turn !== null) {
+      // 消息身份仍用 messageTs（正文/思考靠它对齐）；工具块另用 callId 集合
       const messageKey = String(view.message.messageTs);
       next = updateTurn(next, turn.id, (current) => ({
         ...current,
         // 身份确立即认领匿名块（重订阅后、读口响应前折出的空 id 增量块），否则孤儿中段片段永久滞留
-        blocks: mergeInflightMessage(claimAnonymousBlocks(current.blocks, messageKey), view.message as InflightMessageView),
+        blocks: mergeInflightMessage(
+          // 只认领正文/思考：匿名 tools 块必须由 mergeInflightMessage 按 callId
+          // 键认领（认到 messageTs 键会与下面的 tools-calls:* 不同源 → 双渲染）
+          claimAnonymousTextBlocks(current.blocks, messageKey),
+          view.message as InflightMessageView,
+          messageKey,
+        ),
         streamingThinkingBlockId: null,
       }));
       next = { ...next, liveMessageId: messageKey };
@@ -68,11 +75,49 @@ export function applyInflight(state: LiveThreadState, view: InflightView, now: n
   return next;
 }
 
-function mergeInflightMessage(blocks: readonly TurnBlock[], message: InflightMessageView): TurnBlock[] {
+/**
+ * 只认领匿名正文/思考块（`text-`/`think-`），**不碰 tools**——
+ * 工具块的身份是 callId 集合，由 mergeInflightMessage 用对应键认领。
+ * 两处用同一个 messageTs 键认领会把匿名 tools 认到 `tools-7`，而合并写的是
+ * `tools-calls:c1`，同一批调用仍然双渲染（这正是本改动要治的）。
+ */
+export function claimAnonymousTextBlocks(blocks: readonly TurnBlock[], messageKey: string): readonly TurnBlock[] {
+  return blocks.some((block) => block.id === 'text-' || block.id === 'think-')
+    ? claimAnonymousBlocks(blocks, messageKey)
+    : blocks;
+}
+
+/**
+ * 块身份用 **callId 集合**，不用 messageTs。
+ *
+ * 三条数据路径的「消息身份」本就不同源：转写用 WAL 行 ts、收敛读口用
+ * turnStartedAt、live 流用 `stream-N` 计数器。用它们当块 id 的话，刷新
+ * 落在工具执行中时，同一批调用在 inflight 组与转写组各渲染一次（实测
+ * 双份正文 + 两组工具行，其中一组还丢 editHunks）。
+ *
+ * callId 是协议级的调用身份，在三条路径上天然一致——用它当主键，三路对齐
+ * 就不依赖「消息时间戳恰好相等」这种不成立的前提。
+ */
+function toolsBlockKey(message: InflightMessageView): string {
+  const ids = message.toolCalls.map((call) => call.id).filter((id) => id.length > 0);
+  // 无 callId（hub 在途快照未给）时退回 messageTs——退化路径，不影响正常对齐
+  return ids.length > 0 ? `calls:${ids.join(',')}` : `ts:${message.messageTs}`;
+}
+
+function mergeInflightMessage(
+  blocks: readonly TurnBlock[],
+  message: InflightMessageView,
+  /** 消息身份键（正文/思考用；工具块另用 callId 集合） */
+  messageKey: string,
+): TurnBlock[] {
   // 空正文不建块（思考先行时建一个空 text 块会在正文位置留一行空行）
-  let out = message.text.length > 0 ? upsertText(blocks, `text-${message.messageTs}`, message.text, 'text') : [...blocks];
-  if (message.thinking.length > 0) out = upsertText(out, `think-${message.messageTs}`, message.thinking, 'thinking');
-  if (message.toolCalls.length > 0) out = upsertToolCalls(out, `tools-${message.messageTs}`, message.toolCalls);
+  let out = message.text.length > 0 ? upsertText(blocks, `text-${messageKey}`, message.text, 'text') : [...blocks];
+  if (message.thinking.length > 0) out = upsertText(out, `think-${messageKey}`, message.thinking, 'thinking');
+  if (message.toolCalls.length > 0) {
+    // 匿名 tools 块按 callId 键归位，再合并（键同源才不双渲染）
+    const key = toolsBlockKey(message);
+    out = upsertToolCalls(claimAnonymousBlocks(out, key), `tools-${key}`, message.toolCalls);
+  }
   return out;
 }
 

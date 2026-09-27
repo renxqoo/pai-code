@@ -80,15 +80,34 @@ function bucketPhrase(bucket: ToolGroupBucket): readonly string[] {
 }
 
 /**
- * 并行批次 → 组头标题短语。类别 >3 时取前三并以「等」收口；空批次降级为空串
- * （调用方不渲染组头，标题不参与布局）。
+ * 并行批次 → 组头标题短语。收口按**桶数**（用户规格：「>3 类以等收口」，
+ * 早前按短语数算——`other` 一个类别能出多条短语，两类也会被收口）；
+ * 桶序固定（编辑 → 阅读 → 搜索 → 目录 → 命令 → 子智能体 → 未知），
+ * 同一批次多次渲染标题稳定。
+ *
+ * **命令类保底**：命令是唯一有副作用的类别（其余只读本地），桶序又把它排在
+ * 倒数第二，前 N 截断会系统性吃掉它（实测「编辑了文件阅读了文件搜索了等」——
+ * 批次里跑了命令，标题里却没有命令）。所以收口时给它留位：若它不在入选的前 N
+ * 条内，替换掉最后一条。
+ *
+ * 空批次降级为空串（调用方不渲染组头，标题不参与布局）。
  */
 export function toolGroupLabel(calls: readonly ToolCallModel[]): string {
-  const phrases = toolGroupBuckets(calls).flatMap(bucketPhrase);
+  const buckets = toolGroupBuckets(calls);
+  const phrases = buckets.flatMap(bucketPhrase);
   if (phrases.length === 0) return '';
-  const shown = phrases.slice(0, MAX_PHRASES);
-  if (phrases.length > MAX_PHRASES) shown.push(copy.flow.groupMorePhrase);
-  return copy.flow.groupPhraseJoin(shown);
+  if (buckets.length <= MAX_PHRASES) return copy.flow.groupPhraseJoin(phrases);
+
+  // 桶级收口：前 N 个桶的短语全留，其余桶折成「等」；命令桶保底
+  const shownBuckets = buckets.slice(0, MAX_PHRASES);
+  const restCount = buckets.length - shownBuckets.length;
+  const hasBash = buckets.some((bucket) => bucket.kind === 'bash');
+  const bashInShown = shownBuckets.some((bucket) => bucket.kind === 'bash');
+  if (hasBash && !bashInShown) shownBuckets[MAX_PHRASES - 1] = buckets.find((bucket) => bucket.kind === 'bash') as ToolGroupBucket;
+
+  const shown = shownBuckets.flatMap(bucketPhrase);
+  // 「等」覆盖的桶数变了，文案要跟着变（原先按短语数报数量会对不上）
+  return copy.flow.groupPhraseJoin(restCount > 0 ? [...shown, copy.flow.groupMorePhrase] : shown);
 }
 
 /** 批次聚合态：任一失败 → 失败；任一运行中 → 运行中；任一停止 → 停止；全成功 → 成功。

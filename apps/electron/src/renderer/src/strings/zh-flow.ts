@@ -80,6 +80,8 @@ export const zhFlow: typeof enFlow = {
   rowRunningList: '正在列出',
   rowRunningSubagent: '正在派生子智能体',
   rowRunningOther: (name: string): string => `正在调用${name}`,
+  /** 轮收起时的变更摘要后缀（「共工作 4m · 改了 3 个文件」） */
+  turnChangedFiles: (count: number): string => `· 改了 ${count} 个文件`,
   /** 思考单元收起态标签（运行中同显 思考，运行态由脉冲点区分） */
   thought: '思考',
   turnStoppedSummary: (elapsed: string): string => `已停止 · ${elapsed}`,

@@ -3,18 +3,23 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { TurnStatusLine } from '../turn-status-line';
 
-function render(props: { label: string; expandable: boolean; open: boolean }): string {
+function render(props: { label: string; expandable: boolean; open: boolean; changedFiles?: number | null }): string {
   return renderToStaticMarkup(
-    <TurnStatusLine label={props.label} expandable={props.expandable} open={props.open} onToggle={() => undefined} />,
+    <TurnStatusLine
+      label={props.label}
+      changedFiles={props.changedFiles ?? null}
+      expandable={props.expandable}
+      open={props.open}
+      onToggle={() => undefined}
+    />,
   );
 }
 
 describe('TurnStatusLine 轮级状态行', () => {
-  test('症状回归：收起态也必须显箭头——「已工作 x」是整轮过程唯一的展开入口，\n     箭头若 hover 才显形，用户看不出这行可点（不得回归成 opacity-0）', () => {
+  test('症状回归：收起态也必须显箭头——「已工作 x」是整轮过程唯一的展开入口，箭头若 hover 才显形，用户看不出这行可点', () => {
     const closed = render({ label: '已工作 4m 32s', expandable: true, open: false });
     expect(closed).toContain('已工作 4m 32s');
     expect(closed).toContain('aria-expanded="false"');
-    // 收起态也要有可见箭头
     expect(closed).not.toContain('opacity-0');
     expect(closed).toContain('opacity-70');
   });
@@ -37,5 +42,19 @@ describe('TurnStatusLine 轮级状态行', () => {
     const closed = render({ label: '已工作 4m', expandable: true, open: false });
     expect(closed).not.toContain('group-hover:opacity-70');
     expect(closed).not.toContain('group-focus-within:opacity-70');
+  });
+
+  test('收起时挂变更摘要（正常完成的轮默认收起，不挂就看不到这轮改了哪些文件）', () => {
+    const html = render({ label: '共工作 4m 32s', expandable: true, open: false, changedFiles: 3 });
+    expect(html).toContain('共工作 4m 32s');
+    expect(html).toContain('改了 3 个文件');
+  });
+
+  test('无变更不挂摘要（不凭空多一个后缀）', () => {
+    expect(render({ label: '共工作 4m', expandable: true, open: false, changedFiles: null })).not.toContain('改了');
+  });
+
+  test('单文件用单数（文案随 count 变），零文件不挂', () => {
+    expect(render({ label: '共工作 1m', expandable: true, open: false, changedFiles: 1 })).toContain('改了 1 个文件');
   });
 });

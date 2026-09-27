@@ -83,6 +83,8 @@ export const enFlow = {
   rowRunningList: 'Listing directory',
   rowRunningSubagent: 'Spawning subagent',
   rowRunningOther: (name: string): string => `Calling ${name}`,
+  /** Collapsed-turn change summary suffix */
+  turnChangedFiles: (count: number): string => `· ${count} file${count === 1 ? '' : 's'} changed`,
   /** 思考单元收起态标签（运行中显 Thinking） */
   thought: 'Thought',
   /** 中断轮次的状态行：Stopped · 8m 0s */

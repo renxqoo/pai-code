@@ -16,6 +16,9 @@ import type {
   WorkerRowView,
 } from '@paiapp/contracts';
 
+import { subagentsField } from './subagent-spawns';
+import { editHunksField } from './edit-hunks';
+
 import { previewArgs } from './args-preview';
 
 /**
@@ -119,7 +122,16 @@ function inflightMessageView(value: unknown, turnStartedAt: number | null): Infl
       } catch {
         args = {};
       }
-      toolCalls.push({ id: str(b['id']), name: str(b['name']), argsPreview: blockText.length > 0 ? previewArgs(args) : '' });
+      // subagents / editHunks 一起填：在途的部分工具参数同样带这些面
+      // （edit 的 edits[]、task 的 spawns[]），不填就是「契约声明了但没人读」
+      const name = str(b['name']);
+      toolCalls.push({
+        id: str(b['id']),
+        name,
+        argsPreview: blockText.length > 0 ? previewArgs(args) : '',
+        ...subagentsField(name, args),
+        ...editHunksField(name, args),
+      });
     }
   }
   return { messageTs: turnStartedAt ?? 0, text: text.join('\n'), thinking: thinking.join('\n'), toolCalls };

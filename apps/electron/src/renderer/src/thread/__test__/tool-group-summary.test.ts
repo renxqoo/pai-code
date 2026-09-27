@@ -55,9 +55,20 @@ describe('toolGroupLabel 文案合成（用户指定的四档逐字断言）', (
     expect(toolGroupLabel([call('task'), call('task', 'ok', 't2')])).toBe('派生了子智能体');
   });
 
-  test('类别超过三类：取前三并以「等」收口（标题不随桶数无界增长）', () => {
-    const label = toolGroupLabel([call('edit'), call('read'), call('grep'), call('ls'), call('bash')]);
-    expect(label).toBe('编辑了文件阅读了文件搜索了等');
+  test('类别超过三类：以「等」收口（收口按桶数，不是短语数）', () => {
+    // 无命令的 5 类：桶序前 3 + 等
+    expect(toolGroupLabel([call('edit'), call('read'), call('grep'), call('ls'), call('bash', 'ok', 'b')].filter((x) => x.name !== 'bash'))).toBe('编辑了文件阅读了文件搜索了等');
+    expect(toolGroupLabel([call('edit'), call('read'), call('grep'), call('ls')])).toBe('编辑了文件阅读了文件搜索了等');
+  });
+
+  test('命令类保底：批次里有命令，标题里就得有命令（命令是唯一有副作用的类别）', () => {
+    // 症状回归：桶序把 bash 排倒数第二，前 3 截断会系统性吃掉它
+    expect(toolGroupLabel([call('edit'), call('read'), call('grep'), call('ls'), call('bash', 'ok', 'b')])).toBe('编辑了文件阅读了文件运行了命令等');
+    expect(toolGroupLabel([call('edit'), call('read'), call('grep'), call('bash', 'ok', 'b')])).toBe('编辑了文件阅读了文件运行了命令等');
+  });
+
+  test('两类不收口（`other` 一个类别出多条短语时也不误判）', () => {
+    expect(toolGroupLabel([call('edit'), call('mcp__a'), call('mcp__b', 'ok', 'm2')])).toBe('编辑了文件调用了mcp__a调用了mcp__b');
   });
   test('未知工具：按原始名去重列举', () => {
     expect(toolGroupLabel([call('mcp__a'), call('mcp__a', 'ok', 'x2'), call('mcp__b')])).toBe('调用了mcp__a调用了mcp__b');

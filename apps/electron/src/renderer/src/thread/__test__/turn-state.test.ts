@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { isTurnRunning, turnElapsedMs, turnEndedAbnormally, visibleTurnBlocks } from '../turn-state';
-import type { TurnBlock } from '../thread-model';
+import { changedFileCount, isTurnRunning, turnElapsedMs, turnEndedAbnormally, visibleTurnBlocks } from '../turn-state';
+import type { ToolCallStatus, TurnBlock } from '../thread-model';
 import { turnTextContent } from '../turn-text';
 
 describe('turnElapsedMs', () => {
@@ -111,5 +111,42 @@ describe('turnEndedAbnormally（症状回归：异常结束的轮不折叠消息
   test('正常完成与运行中不算异常', () => {
     expect(turnEndedAbnormally({ status: 'completed', blocks: [{ kind: 'text', id: 't', text: 'done' }] })).toBe(false);
     expect(turnEndedAbnormally({ status: 'running', blocks: [failure] })).toBe(false);
+  });
+});
+
+describe('changedFileCount 轮级变更摘要（Q3：收起时也得看得到动了哪些文件）', () => {
+  const edit = (path: string, id: string, status: ToolCallStatus = 'ok') => ({
+    id,
+    name: 'edit',
+    argsPreview: path,
+    subagents: [],
+    editHunks: [{ oldText: 'a', newText: 'b', path }],
+    output: '',
+    exitCode: 0,
+    durationMs: 1,
+    status,
+  });
+
+  test('成功改动的文件去重计数', () => {
+    const blocks = [
+      { id: 't1', kind: 'tools' as const, calls: [edit('a.ts', 'c1'), edit('a.ts', 'c2'), edit('b.ts', 'c3')] },
+    ];
+    expect(changedFileCount(blocks)).toBe(2);
+  });
+
+  test('只数成功调用：失败/运行中的编辑不算（没改成的东西不报）', () => {
+    const blocks = [
+      {
+        id: 't1',
+        kind: 'tools' as const,
+        calls: [edit('a.ts', 'c1', 'failed'), edit('b.ts', 'c2', 'running')],
+      },
+    ];
+    expect(changedFileCount(blocks)).toBeNull();
+  });
+
+  test('无编辑调用 / 空块 → null（无变更可报，不挂后缀）', () => {
+    expect(changedFileCount([])).toBeNull();
+    expect(changedFileCount([{ id: 't1', kind: 'tools' as const, calls: [] }])).toBeNull();
   });
 });

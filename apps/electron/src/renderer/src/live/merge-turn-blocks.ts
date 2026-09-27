@@ -28,6 +28,17 @@ export function mergeSpanBlocks(live: readonly TurnBlock[], span: readonly TurnB
   for (const block of span) {
     const existing = liveById.get(block.id);
     if (existing === undefined) {
+      // 症状回归（对抗审查 P0-1）：块 id 在三条路径上不同源（转写用 WAL 行 ts、
+      // 读口用 turnStartedAt、live 用 stream-N），id 对不上不等于「是不同的调用」。
+      // tools 块改按 callId 找宿主：id 不同但 callId 重叠时并入同一块，
+      // 否则同一批调用在刷新后渲染两次（实测：双份正文 + 两组工具行）。
+      if (block.kind === 'tools') {
+        const host = findToolsHostByCallId(live, block.calls);
+        if (host !== null) {
+          liveById.set(host.id, { ...host, calls: unionToolCalls(host.calls, block.calls) });
+          continue;
+        }
+      }
       prepend.push(block);
       continue;
     }
@@ -49,6 +60,19 @@ export function mergeSpanBlocks(live: readonly TurnBlock[], span: readonly TurnB
 }
 
 /** diff 恒尾：live 与 span 的文件按 path 并集，转写侧的值覆盖（已结束调用的权威）。 */
+/** 按 callId 重叠找 tools 宿主块：id 不同源时仍能把同一批调用并进同一块。 */
+function findToolsHostByCallId(
+  live: readonly TurnBlock[],
+  calls: readonly { id: string }[],
+): Extract<TurnBlock, { kind: 'tools' }> | null {
+  const ids = new Set(calls.map((call) => call.id));
+  for (const block of live) {
+    if (block.kind !== 'tools') continue;
+    if (block.calls.some((call) => ids.has(call.id))) return block;
+  }
+  return null;
+}
+
 function mergeDiffBlocks(merged: readonly TurnBlock[], prepend: readonly TurnBlock[]): TurnBlock | null {
   const liveDiff = merged.find((block) => block.kind === 'diff');
   const spanDiffs = prepend.filter((block) => block.kind === 'diff');

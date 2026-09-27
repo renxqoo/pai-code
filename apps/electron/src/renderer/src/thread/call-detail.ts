@@ -23,10 +23,17 @@ export function autoOpenForCall(call: Pick<ToolCallModel, 'status'>): boolean {
   return call.status === 'failed';
 }
 
-/** 并行组的自动开合：批次内任一调用失败即常开（错误必须在组级看得见），
- * 失败是终态，只开不关；其余批次默认收起，具体执行按需展开。 */
+/**
+ * 并行组的自动开合，对齐轮级口径（`autoOpenForTurn`：运行中实时展开、
+ * 异常结束保持展开、正常完成收起为摘要）：
+ * - **运行中常开**：用户最想盯的就是运行期，收起态只剩「运行了命令」五个字，
+ *   命令内容与「已…」前缀全不渲染——信息量最低的时刻恰恰是眼睛最盯着的时候。
+ *   同批次的单调用形态本来就是直出行（内容可见），并行却关着，两种形态不一致。
+ * - **失败常开**：错误必须在组级看得见。失败是终态，只开不关。
+ * - 正常完成才收起：让用户按需展开具体执行。
+ */
 export function autoOpenForGroup(calls: readonly Pick<ToolCallModel, 'status'>[]): boolean {
-  return calls.some((call) => call.status === 'failed');
+  return calls.some((call) => call.status === 'failed' || call.status === 'running');
 }
 
 export function detailOutput(call: Pick<ToolCallModel, 'status' | 'output'>): string {

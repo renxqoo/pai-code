@@ -10,6 +10,7 @@ import { TurnBlockView } from './turn-block-view';
 import { TurnStatusLine } from './turn-status-line';
 import { TurnTimestampRow } from './turn-timestamp-row';
 import { useTurnCollapse } from './use-turn-collapse';
+import { changedFileCount } from './turn-state';
 import type { TurnModel } from './thread-model';
 
 type TurnGroupProps = {
@@ -38,6 +39,9 @@ function TurnGroup({ turn, now, onOpenDiff }: TurnGroupProps) {
     <section data-turn-id={turn.id} className="scroll-mt-[24px]">
       <TurnStatusLine
         label={label}
+        // 轮收起时挂变更摘要：正常完成的轮默认收起，不挂的话用户看不到这轮
+        // 动了哪些文件（文件变更被当成「过程」一起折叠了）
+        changedFiles={!collapse.turnOpen ? changedFileCount(turn.blocks) : null}
         expandable={endedAt !== null}
         open={collapse.turnOpen}
         onToggle={collapse.toggleTurn}

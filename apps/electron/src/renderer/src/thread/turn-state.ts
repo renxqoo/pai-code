@@ -6,6 +6,27 @@ export function isTurnRunning(turn: Pick<TurnModel, 'status'>): boolean {
 }
 
 /**
+ * 轮级变更摘要：成功改动的文件数（编辑/写入类调用，去重文件路径）。
+ * 轮收起时挂在状态行旁（`TurnGroup`），**不进块列表**——收起 = 「这个过程
+ * 我不看」，列表里就不该有可点的东西（diff 行是展开控件）。
+ * 无成功编辑返回 null（无变更可报）。
+ */
+export function changedFileCount(blocks: readonly TurnBlock[]): number | null {
+  const paths = new Set<string>();
+  for (const block of blocks) {
+    if (block.kind !== 'tools') continue;
+    for (const call of block.calls) {
+      if (call.status !== 'ok') continue;
+      if (call.editHunks.length === 0) continue;
+      for (const hunk of call.editHunks) {
+        if (hunk.path.length > 0) paths.add(hunk.path);
+      }
+    }
+  }
+  return paths.size > 0 ? paths.size : null;
+}
+
+/**
  * 过程整体收起时的可见块：只保留最终结果文本——最后一个 tools 块之后的最后一条
  * text（轮以工具收尾且无后续 text 时不取工具前旁白）；无 tools 时取最后一条 text。
  * 异常终态提示（报错/中止）无论开合都保持可见。展开时全部块按原顺序可见。

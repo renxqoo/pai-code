@@ -45,31 +45,14 @@ describe("toolSummary 命令忠实展示", () => {
     expect(toolSummary("cat packages/api/src/views/foo.ts")).not.toBe(toolSummary("cat packages/ui/src/views/foo.ts"));
   });
 
-  test("超长命令：截断加省略号；无词边界可退时保量（不只剩动词）", () => {
-    // 症状回归：旧实现回退条件是 lastSpace > budget/2，121 字命令会只剩 61 字
-    expect(toolSummary('b'.repeat(121)).length).toBe(120);
-    expect(toolSummary('/very/long/path/'.repeat(20)).length).toBe(120);
-  });
-
-  test("超长命令：截断加省略号，截在词边界（不把文件名劈两半）", () => {
-    const long = [
-      "cd /Users/wrr/work/agent-app",
-      "sed -n 1,60p",
-      "apps/electron/src/renderer/src/thread/__test__/tool-call-row.test.tsx",
-      "apps/electron/src/renderer/src/live/__test__/convergence-reload.test.tsx",
-    ].join(" && ");
-    const summary = toolSummary(long);
-    expect(summary.endsWith("…")).toBe(true);
-    expect(summary.length).toBeLessThanOrEqual(120);
-    // 截断点是空格，不是词中间
-    const head = summary.slice(0, -1);
-    expect(head).toBe(head.replace(/\s+$/, ""));
-    expect(long.startsWith(head)).toBe(true);
-  });
-
-  test("未超长不加省略号（省略号只表示截断，不表示「还有下文」）", () => {
+  test("摘要层不产省略号：截断交给 CSS truncate（用户裁决口径 A）", () => {
+    // 任何 JS 字符上限都表达不了「一行放不下」：等宽下 CJK 是 ASCII 两倍宽
     expect(toolSummary("bun test")).not.toContain("…");
     expect(toolSummary("sed -n 1,60p apps/mobile/src/chat/timeline-list.tsx")).not.toContain("…");
+    // 超长命令原样透出，由行内 CSS 按真实视觉宽度截断
+    const long = "b".repeat(500);
+    expect(toolSummary(long)).toBe(long);
+    expect(toolSummary(long)).not.toContain("…");
   });
 
   test("多行命令折平成一行（行内不得出现换行/制表）", () => {
