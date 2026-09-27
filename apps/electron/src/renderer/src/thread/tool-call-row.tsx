@@ -1,12 +1,11 @@
 import * as React from 'react';
 
-import { ChevronToggle, DurationTag } from '@paiapp/ui';
+import { ChevronToggle } from '@paiapp/ui';
 
 import type { SubagentSpawnView } from '@paiapp/contracts';
 
 import { copy } from '@/strings';
 import { cn } from '@/lib/utils';
-import { formatElapsed } from './format-elapsed';
 import { autoOpenForCall, callExpandable } from './call-detail';
 import { toolKindOf, toolPreviewMono } from './tool-kind';
 import { toolSummary } from './tool-summary';
@@ -21,7 +20,9 @@ type ToolCallRowProps = {
   call: ToolCallModel
 };
 
-/** 行尾状态：失败退出码 / 停止 / 成功耗时（渲染片段，非独立组件）。 */
+/** 行尾状态：失败退出码 / 停止（渲染片段，非独立组件）。
+ *  成功不挂耗时——执行过程是脚注，一行一个动作短语就够，秒数只添噪声
+ *  （要精确耗时走展开详情与 Agent 面板）。 */
 function callTail(call: ToolCallModel) {
   if (call.status === 'failed') {
     return (
@@ -33,15 +34,14 @@ function callTail(call: ToolCallModel) {
   if (call.status === 'stopped') {
     return <span className="shrink-0 text-[11px] leading-none text-muted-foreground/70">{copy.flow.toolStopped}</span>;
   }
-  if (call.status === 'ok' && call.durationMs !== null) {
-    return <DurationTag>{formatElapsed(call.durationMs)}</DurationTag>;
-  }
   return null;
 }
 
 /**
- * 单个执行单元行：类别图标（骑在过程组竖轨上）+ 带状态的动作短语（已阅读文件 / 正在运行命令）
- * + 参数摘要 + 行尾状态/耗时，有输出时可展开详情。
+ * 单个执行单元行：类别图标 + 带状态的动作短语（已阅读文件 / 正在运行命令）
+ * + 参数摘要 + 行尾状态，有输出时可展开详情。
+ * 参数摘要随容器宽度自适应铺满（flex-1 + 两端 wrap），不设固定上限——
+ * 窗口宽时完整展开，窄时才按可用宽度折行。
  * 行整体弱化灰（执行过程是正文之外的注脚）；开合 = 手动意图优先，无意图跟随自动策略
  * （失败常开）；行内箭头收起态 hover 显形、展开态常显。
  * task 工具按参数展开子代理执行清单：每个 spawn 一行（子智能体 + 蓝色等宽 agent 名 + · 任务描述），
@@ -73,7 +73,9 @@ function ToolCallRow({ call }: ToolCallRowProps) {
         <span
           title={call.argsPreview}
           className={cn(
-            'min-w-0 max-w-full truncate',
+            // 摘要自适应：吃满行内剩余宽度，不设上限——窗口宽时完整展开，
+            // 不再出现「明明放得下却省略号」；行尾元素靠 ml-auto 顶到最右
+            'min-w-0 flex-1 break-words',
             toolPreviewMono(kind) ? 'font-mono text-[12.5px]' : 'text-[12.5px]',
             running ? 'shimmer-text' : failed ? 'text-diff-del' : 'text-muted-foreground',
           )}
@@ -103,7 +105,7 @@ function ToolCallRow({ call }: ToolCallRowProps) {
               <span
                 title={spawn.task}
                 className={cn(
-                  'min-w-0 max-w-full truncate text-[12.5px] leading-[20px]',
+                  'min-w-0 flex-1 break-words text-[12.5px] leading-[20px]',
                   running ? 'shimmer-text' : 'text-muted-foreground',
                 )}
               >
@@ -116,7 +118,7 @@ function ToolCallRow({ call }: ToolCallRowProps) {
         </>
       )}
       {last ? callTail(call) : null}
-      {last && expandable ? <ChevronToggle open={open} className={chevronRevealClass(open)} /> : null}
+      {last && expandable ? <ChevronToggle open={open} className={cn('ml-auto', chevronRevealClass(open))} /> : null}
     </>
   );
 
@@ -142,12 +144,12 @@ function ToolCallRow({ call }: ToolCallRowProps) {
                 type="button"
                 onClick={() => setPref(!open)}
                 aria-expanded={open}
-                className="flex min-w-0 flex-1 cursor-pointer items-center gap-[6px] rounded-md px-[2px] py-[1px] text-left outline-none select-none hover:bg-accent/60 focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="flex min-w-0 flex-1 cursor-pointer flex-wrap items-center gap-x-[6px] gap-y-[2px] rounded-md px-[2px] py-[1px] text-left outline-none select-none hover:bg-accent/60 focus-visible:ring-3 focus-visible:ring-ring/50"
               >
                 {rowContent(spawn, last)}
               </button>
             ) : (
-              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-[6px] px-[2px] py-[1px]">{rowContent(spawn, last)}</div>
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-[6px] gap-y-[2px] px-[2px] py-[1px]">{rowContent(spawn, last)}</div>
             )}
           </div>
         );
