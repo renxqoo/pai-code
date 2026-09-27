@@ -77,6 +77,19 @@ describe('ToolGroup 并行批次组头（用户指定形态）', () => {
     expect(html).toContain('shimmer-text');
   });
 
+  test('症状回归：组头图标不吃 shimmer（文字技法作用在 SVG 上会让描边消失）', () => {
+    const html = renderToStaticMarkup(
+      <ToolGroupHeader
+        calls={[call('read', { status: 'running' }), call('read', { id: 'r2', status: 'running' })]}
+        open
+        onToggle={() => undefined}
+      />,
+    );
+    const icon = html.match(/<svg[^>]*class="([^"]*)"/)?.[1] ?? '';
+    expect(icon).not.toBe('');
+    expect(icon).not.toContain('shimmer-text');
+  });
+
   test('批次内有失败：组头自动展开（错误必须看得见）', () => {
     const html = renderToStaticMarkup(
       <ToolGroup calls={[call('bash', { id: 'a' }), call('edit', { id: 'b', status: 'failed', exitCode: 1 })]} />,

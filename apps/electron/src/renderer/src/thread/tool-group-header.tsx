@@ -28,7 +28,8 @@ function ToolGroupHeader({ calls, open, onToggle }: ToolGroupHeaderProps) {
     <div className="group flex items-center gap-[6px]">
       <ProcessRailIcon>
         <Icon
-          className={cn('size-[13px] shrink-0', running ? 'shimmer-text' : 'text-muted-foreground')}
+          // 同 ToolCallRow：shimmer 是文字技法，作用在 SVG 上会让描边消失
+          className="size-[13px] shrink-0 text-muted-foreground"
           strokeWidth={1.75}
           aria-label={copy.flow.groupTitleAria}
         />

@@ -97,6 +97,17 @@ describe("ToolCallRow 子智能体执行行（参考图样式）", () => {
     expect(html).not.toContain("truncate");
   });
 
+  test("症状回归：运行中图标不得消失——shimmer 是 background-clip:text 文字技法，\n     作用在 SVG 上会因 color:transparent + stroke=currentColor 让描边不可见", () => {
+    const running = renderRow(call({ name: "bash", argsPreview: "bun test", subagents: [], status: "running" }));
+    // 图标元素恒在，且不带 shimmer
+    const icon = running.match(/<svg[^>]*class="([^"]*)"/)?.[1] ?? "";
+    expect(icon).not.toBe("");
+    expect(icon).not.toContain("shimmer-text");
+    expect(icon).toContain("text-muted-foreground");
+    // 文案仍然跑 shimmer（运行态由文字承载）
+    expect(running).toContain("shimmer-text");
+  });
+
   test("行尾停止态：已停止标签", () => {
     const html = renderRow(call({ status: "stopped" }));
     expect(html).toContain("已停止");

@@ -131,7 +131,10 @@ function ToolCallRow({ call }: ToolCallRowProps) {
             {index === 0 ? (
               <ProcessRailIcon>
                 <RowIcon
-                  className={cn('size-[13px] shrink-0', running ? 'shimmer-text' : 'text-muted-foreground')}
+                  // 图标不吃 shimmer：那是 background-clip:text 的文字扫光技法，
+                  // 作用在 SVG 上会因 color:transparent + stroke=currentColor
+                  // 让描边整个消失（运行中图标反而不见了）。运行态由文案承载。
+                  className="size-[13px] shrink-0 text-muted-foreground"
                   strokeWidth={1.75}
                   aria-label={toolRowLabelOf(call)}
                 />
