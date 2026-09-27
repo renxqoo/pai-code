@@ -12,6 +12,9 @@ const message = (values: MessageValues): ChatMessage => ({
 
 const kinds = (messages: readonly ChatMessage[]): string[] => messages.map((item) => item.kind);
 
+const edit = (id: string, path: string, status: 'ok' | 'failed' | 'running' = 'ok'): ChatMessage =>
+  message({ id, kind: 'tool', toolName: 'edit', status, editHunks: [{ path, oldText: 'a', newText: 'b' }] });
+
 describe('buildTurns', () => {
   it('returns an empty turn list for empty input', () => {
     expect(buildTurns([])).toEqual([]);
@@ -32,7 +35,7 @@ describe('buildTurns', () => {
       message({ id: 'u1', kind: 'user' }),
       message({ id: 'n1', kind: 'assistant', text: '先看看现状' }),
       message({ id: 'think', kind: 'thinking' }),
-      message({ id: 'tool', kind: 'tool', status: 'success' }),
+      message({ id: 'tool', kind: 'tool', status: 'ok' }),
       message({ id: 'r1', kind: 'assistant', text: '已完成，结论如下' }),
     ]);
     expect(turns).toHaveLength(1);
@@ -45,7 +48,7 @@ describe('buildTurns', () => {
     const turns = buildTurns([
       message({ id: 'u1', kind: 'user' }),
       message({ id: 'narration', kind: 'assistant', text: '正在搭建项目' }),
-      message({ id: 'tool-a', kind: 'tool', status: 'success' }),
+      message({ id: 'tool-a', kind: 'tool', status: 'ok' }),
       message({ id: 'tool-b', kind: 'tool', status: 'running' }),
     ]);
     expect(turns[0]?.result).toBeNull();
@@ -57,7 +60,7 @@ describe('buildTurns', () => {
   it('splits multiple user turns; recovered errors stay in stream, terminal errors become failure', () => {
     const turns = buildTurns([
       message({ id: 'u1', kind: 'user' }),
-      message({ id: 't1', kind: 'tool', status: 'error' }),
+      message({ id: 't1', kind: 'tool', status: 'failed' }),
       message({ id: 'a1', kind: 'assistant', text: '失败后的结果' }),
       message({ id: 'u2', kind: 'user' }),
       message({ id: 'a2', kind: 'assistant', text: '第二轮结果' }),
@@ -76,7 +79,7 @@ describe('buildTurns', () => {
   it('marks a turn failed only when the error is the final word (agent stopped)', () => {
     const turns = buildTurns([
       message({ id: 'u1', kind: 'user' }),
-      message({ id: 't1', kind: 'tool', status: 'error', summary: '构建失败' }),
+      message({ id: 't1', kind: 'tool', status: 'failed', text: '构建失败' }),
     ]);
     expect(turns[0]?.failed).toBe(true);
     expect(turns[0]?.failure?.id).toBe('t1');
@@ -87,11 +90,31 @@ describe('buildTurns', () => {
   it('excludes user messages and code artifacts from result selection', () => {
     const turns = buildTurns([
       message({ id: 'u1', kind: 'user' }),
-      message({ id: 'tool', kind: 'tool', status: 'success' }),
+      message({ id: 'tool', kind: 'tool', status: 'ok' }),
       message({ id: 'code', kind: 'code', text: 'artifact' }),
       message({ id: 'r1', kind: 'assistant', text: '结果' }),
     ]);
     expect(turns[0]?.result?.id).toBe('r1');
     expect(kinds(turns[0]?.stream ?? [])).toEqual(['tool', 'code']);
+  });
+
+  it('summarizes changed files: same path deduped, failed/running edits excluded', () => {
+    const turns = buildTurns([
+      message({ id: 'u1', kind: 'user' }),
+      edit('e1', 'src/a.ts'),
+      edit('e2', 'src/a.ts'),
+      edit('e3', 'src/b.ts'),
+      edit('e4', 'src/c.ts', 'failed'),
+      edit('e5', 'src/d.ts', 'running'),
+    ]);
+    expect(turns[0]?.changedFiles).toBe(2);
+  });
+
+  it('reports no changed files for turns without successful edits', () => {
+    const turns = buildTurns([
+      message({ id: 'u1', kind: 'user' }),
+      message({ id: 'tool', kind: 'tool', toolName: 'bash', status: 'ok', argsPreview: 'bun test' }),
+    ]);
+    expect(turns[0]?.changedFiles).toBeNull();
   });
 });

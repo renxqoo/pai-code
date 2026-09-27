@@ -29,6 +29,7 @@ export function lintTree(files: Record<string, string>, lintTarget: string): Lin
       ['packages/infra', '@paiapp/infra'],
       ['packages/api', '@paiapp/api'],
       ['packages/ui', '@paiapp/ui'],
+      ['packages/ui-thread', '@paiapp/ui-thread'],
       ['packages/testkit', '@paiapp/testkit'],
       ['apps/electron', '@paiapp/electron'],
     ] as const) {

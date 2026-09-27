@@ -132,4 +132,20 @@ describe('turnAnchors（消息流 items → 锚点带数据）', () => {
     expect(turnAnchors([])).toEqual([]);
     expect(turnAnchors([turnItem(turnFixture('t1', null))])).toEqual([]);
   });
+
+  test('症状回归「水化竞态轮有 endedAt 但 status 钉 running」：单一判据不出锚点（与时间戳行同源）', () => {
+    const racing = { ...turnFixture('t1', new Date(2026, 8, 7, 10, 46).getTime()), status: 'running' as const };
+    expect(turnAnchors([turnItem(racing)])).toEqual([]);
+  });
+
+  test('摘要缓存按 blocks 引用取新：同引用复用不串味，换引用重算', () => {
+    const turn = turnFixture('t1', new Date(2026, 8, 7, 10, 46).getTime());
+    const first = turnAnchors([turnItem(turn)])[0]?.summary;
+    expect(first).toBe('结论 t1');
+    // 同 blocks 引用（缓存命中）：结果一致
+    expect(turnAnchors([turnItem(turn)])[0]?.summary).toBe(first);
+    // 换 blocks 引用（流式替换，不原地改）：重算新摘要
+    const evolved = { ...turn, blocks: [text('t-t1', '新结论')] };
+    expect(turnAnchors([turnItem(evolved)])[0]?.summary).toBe('新结论');
+  });
 });

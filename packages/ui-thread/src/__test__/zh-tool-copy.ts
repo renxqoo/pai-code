@@ -1,0 +1,37 @@
+import type { ToolCopy } from '../tool-copy';
+
+/**
+ * 测试用中文文案表：共享函数的行为断言需要一份具体词表作输入，
+ * 词面与 PC/移动端各自的 strings 适配层一致（形态由 ToolCopy 类型钉住）。
+ */
+export const zhToolCopy: ToolCopy = {
+  groupBashPhrase: '运行了命令',
+  groupListPhrase: '列出了目录',
+  groupEditPhrase: '编辑了文件',
+  groupReadPhrase: '阅读了文件',
+  groupSearchPhrase: '搜索了',
+  groupSubagentPhrase: '派生了智能体',
+  groupOtherPhrase: (name: string): string => `调用了${name}`,
+  groupMorePhrase: '等',
+  groupPhraseJoin: (phrases: readonly string[]): string => phrases.join(''),
+  rowDoneBash: '已运行',
+  rowDoneRead: '已阅读',
+  rowDoneEdit: '已编辑',
+  rowDoneWrite: '已写入',
+  rowDoneSearch: '已搜索',
+  rowDoneList: '已列出',
+  rowDoneSubagent: '已派生智能体',
+  rowDoneOther: (name: string): string => `已调用${name}`,
+  rowFailed: '运行失败',
+  rowStopped: '已停止',
+  rowFailedOther: (name: string): string => `调用失败${name}`,
+  rowStoppedOther: (name: string): string => `已停止${name}`,
+  rowRunningBash: '正在运行',
+  rowRunningRead: '正在阅读',
+  rowRunningEdit: '正在编辑',
+  rowRunningWrite: '正在写入',
+  rowRunningSearch: '正在搜索',
+  rowRunningList: '正在列出',
+  rowRunningSubagent: '正在派生智能体',
+  rowRunningOther: (name: string): string => `正在调用${name}`,
+};

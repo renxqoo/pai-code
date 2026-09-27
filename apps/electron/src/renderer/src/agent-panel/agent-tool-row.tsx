@@ -2,7 +2,7 @@ import { DurationTag } from '@paiapp/ui';
 
 import { copy } from '@/strings';
 import { formatElapsed } from '@/thread/format-elapsed';
-import { toolSummary } from '@/thread/tool-summary';
+import { toolSummary } from '@paiapp/ui-thread';
 import type { ToolCallModel } from '@/thread/thread-model';
 
 type AgentToolRowProps = {

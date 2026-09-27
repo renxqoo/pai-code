@@ -1,108 +1,92 @@
-import { act, fireEvent, render } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
 import { describe, expect, it, jest } from '@jest/globals';
 import * as React from 'react';
-import { ToolDetailSheet } from '@/features/chat/tool-detail-sheet';
-import { ToolRow, toolRowLabel } from '@/features/chat/tool-row';
-import { StatusLine } from '@/features/chat/status-line';
 import { ThinkingRow } from '@/features/chat/thinking-row';
-import { ToolGroup } from '@/features/chat/tool-group';
+import { StatusLine } from '@/features/chat/status-line';
+import { MessageItem } from '@/features/chat/message-item';
+import { StreamItems } from '@/features/chat/stream-items';
 import type { ChatMessage } from '@/types/domain';
-import { rowPressStyle } from '@/components/ui/row-press-style';
-import { useNavigationStore } from '@/store/navigation-store';
-import { TestWrapper } from '@/test/test-wrapper';
 
 type MessageValues = Pick<ChatMessage, 'id' | 'kind'> & Partial<Omit<ChatMessage, 'id' | 'kind'>>;
 const message = (values: MessageValues): ChatMessage => ({ text: values.id, createdAt: 'now', ...values });
 
-describe('toolRowLabel', () => {
-  it('joins action with summary and degrades missing halves safely', () => {
-    expect(toolRowLabel(message({ id: 't', kind: 'tool', title: '写入文件', summary: 'package.json' }))).toBe('写入文件  package.json');
-    expect(toolRowLabel(message({ id: 't', kind: 'tool', title: '写入文件' }))).toBe('写入文件');
-    expect(toolRowLabel(message({ id: 't', kind: 'tool', summary: 'package.json' }))).toBe('package.json');
-    expect(toolRowLabel(message({ id: 't', kind: 'tool', title: '   ', summary: '  ' }))).toBe('执行操作');
-    // T50：行内绝不透出命令原文/绝对路径（text 只进详情弹窗）
-    const raw = message({ id: 't', kind: 'tool', title: '运行命令', summary: '检查 Node 环境', text: 'cd /Users/wrr/work && sed -n 1,60p app.tsx' });
-    expect(toolRowLabel(raw)).toBe('运行命令  检查 Node 环境');
-    expect(toolRowLabel(raw)).not.toContain('/Users/');
-    expect(toolRowLabel(raw)).not.toContain('&&');
+describe('ThinkingRow 思考单元', () => {
+  it('收起显正文预览，点按展开详情；箭头常显（触屏无 hover）', async () => {
+    const view = await render(<ThinkingRow message={message({ id: 't', kind: 'thinking', text: '先摸清页面骨架再定方案' })} />);
+    expect(view.getByText('思考')).toBeTruthy();
+    expect(view.getByText('先摸清页面骨架再定方案')).toBeTruthy();
+    expect(view.queryByTestId('thinking-chevron', { includeHiddenElements: true })).toBeTruthy();
+    const header = view.getByLabelText(/展开思考详情/);
+    expect(header.props.accessibilityState).toEqual({ expanded: false });
+    await fireEvent.press(header);
+    expect(view.getByLabelText(/收起思考详情/).props.accessibilityState).toEqual({ expanded: true });
+  });
+
+  it('运行中思考行图标不被 loading 顶替（症状：行首只剩旋转图标），流光承载运行态', async () => {
+    const view = await render(<ThinkingRow message={message({ id: 't', kind: 'thinking', text: '推理中', status: 'running' })} />);
+    expect(view.getByText('思考')).toBeTruthy();
+    expect(view.getByTestId('thinking-icon', { includeHiddenElements: true })).toBeTruthy();
+    expect(view.queryAllByTestId('loading-spinner', { includeHiddenElements: true })).toHaveLength(0);
   });
 });
 
-describe('ToolDetailSheet', () => {
-  it('renders full execution content in the shared bottom sheet and closes via store', async () => {
-    useNavigationStore.setState({ toolDetail: null });
-    const empty = await render(<TestWrapper><ToolDetailSheet /></TestWrapper>);
-    expect(empty.queryByText('工具执行详情')).toBeNull();
-    const detail = message({
-      id: 't',
-      kind: 'tool',
-      title: '运行命令',
-      summary: '检查 Node 环境',
-      text: 'cd /Users/wrr/work && bun test',
-      status: 'success',
-      durationMs: 1500,
-    });
-    await act(() => Promise.resolve(useNavigationStore.getState().openToolDetail(detail)));
-    const view = await render(<TestWrapper><ToolDetailSheet /></TestWrapper>);
-    // 与任务配置同构：底部 Sheet + 标题 + 分区图标标题（Sheet 标题与分区标题同为 header 语义）
-    expect(view.getByText('工具执行详情')).toBeTruthy();
-    expect(view.getAllByRole('header').length).toBeGreaterThanOrEqual(2);
-    expect(view.getByText('运行命令')).toBeTruthy();
-    expect(view.getByText('检查 Node 环境')).toBeTruthy();
-    expect(view.getByText('cd /Users/wrr/work && bun test')).toBeTruthy();
-    expect(view.getByText('共工作 1s')).toBeTruthy();
-    expect(view.getByText('完整命令与输出仅供查证，不在消息列表展示。')).toBeTruthy();
-    await fireEvent.press(view.getByLabelText('关闭'));
-    expect(useNavigationStore.getState().toolDetail).toBeNull();
-  });
+describe('StatusLine 状态信封行', () => {
+  it('成功弱化一行可见，失败红色整句 + 补充摘要', async () => {
+    const ok = await render(<StatusLine message={message({ id: 's', kind: 'status', text: '基线走查完成', summary: '390×844 无横向溢出', status: 'ok' })} />);
+    expect(ok.getByText('基线走查完成')).toBeTruthy();
+    expect(ok.getByText('390×844 无横向溢出')).toBeTruthy();
 
-  it('degrades blank metadata without noise', async () => {
-    await act(() => Promise.resolve(useNavigationStore.getState().openToolDetail(message({ id: 't', kind: 'tool', durationMs: Number.NaN }))));
-    const view = await render(<TestWrapper><ToolDetailSheet /></TestWrapper>);
-    expect(view.getByText('执行操作')).toBeTruthy();
-    expect(view.queryByText(/共工作/)).toBeNull();
-    expect(view.queryByText('undefined')).toBeNull();
-    await act(() => Promise.resolve(useNavigationStore.getState().closeToolDetail()));
-  });
-});
-
-describe('StatusLine and ThinkingRow edge shapes', () => {
-  it('falls back across blank halves and highlights failures', async () => {
-    const fallback = await render(<StatusLine message={message({ id: 's', kind: 'status', text: '   ', summary: '  ' })} />);
-    expect(fallback.toJSON()).toBeTruthy();
-    const failed = await render(<StatusLine message={message({ id: 's', kind: 'status', text: '构建失败', summary: '退出码 1', status: 'error' })} />);
+    const failed = await render(<StatusLine message={message({ id: 's', kind: 'status', text: '构建失败', summary: '退出码 1', status: 'failed' })} />);
     expect(failed.getByText('构建失败')).toBeTruthy();
     expect(failed.getByText('退出码 1')).toBeTruthy();
   });
 
-  it('falls back to the generic action label for untitled running tools in groups', async () => {
-    const view = await render(<ToolGroup messages={[message({ id: 'g1', kind: 'tool', status: 'running' }), message({ id: 'g2', kind: 'tool', status: 'success' })]} onOpen={jest.fn()} />);
-    expect(view.getByText(/执行中 · 执行操作/)).toBeTruthy();
+  it('运行中状态行不预支结论图标（勾/叹号只属于已定结论），流光承载运行态', async () => {
+    const view = await render(<StatusLine message={message({ id: 's', kind: 'status', text: '打包中', status: 'running' })} />);
+    expect(view.getByText('打包中')).toBeTruthy();
+    expect(view.queryByTestId('status-done-icon', { includeHiddenElements: true })).toBeNull();
+    expect(view.queryByTestId('status-failed-icon', { includeHiddenElements: true })).toBeNull();
+    expect(view.queryAllByTestId('loading-spinner', { includeHiddenElements: true })).toHaveLength(0);
   });
 
-  it('keeps row arrows hugging the label instead of pinning right', async () => {
-    const tool = await render(<ToolRow message={message({ id: 't', kind: 'tool', title: '读取', summary: 'a.ts', status: 'success' })} onOpen={jest.fn()} />);
-    const row = tool.getByLabelText('查看工具详情：读取  a.ts');
-    const rowStyle = row.props.style;
-    expect(rowStyle.flexDirection).toBe('row');
-    // 文本 flexShrink 收缩（非 flex:1 撑满），箭头紧跟文字
-    const label = tool.getByText('读取  a.ts');
-    expect(label.props.style.flex).toBeUndefined();
-    expect(label.props.style.flexShrink).toBe(1);
-    expect(label.props.style.marginRight).toBe(6);
+  it('空文案降级为空行，不显悬空占位', async () => {
+    const view = await render(<StatusLine message={message({ id: 's', kind: 'status', text: '   ', status: 'ok' })} />);
+    expect(view.toJSON()).toBeTruthy();
+    expect(view.queryByText(/undefined/)).toBeNull();
   });
+});
 
-  it('exposes press feedback states on rows', () => {
-    expect(rowPressStyle({ pressed: true })).toMatchObject({ opacity: 0.62, minHeight: 44 });
-    expect(rowPressStyle({ pressed: false })).toMatchObject({ opacity: 1, minHeight: 44 });
+describe('MessageItem 正文分派', () => {
+  it('过程类消息（tool/thinking/status）不落正文渲染（各走专用行组件）', async () => {
+    const view = await render(<MessageItem message={message({ id: 't', kind: 'tool', toolName: 'bash' })} />);
+    expect(view.toJSON()).toBeNull();
   });
+});
 
-  it('expands and collapses thinking detail', async () => {
-    const view = await render(<ThinkingRow message={message({ id: 'think', kind: 'thinking', text: '推理内容' })} />);
-    expect(view.queryByText('推理内容')).toBeNull();
-    await fireEvent.press(view.getByLabelText(/展开思考详情/));
-    expect(view.getByText('推理内容')).toBeTruthy();
-    await fireEvent.press(view.getByLabelText(/收起思考详情/));
-    expect(view.queryByText('推理内容')).toBeNull();
+describe('过程流条目顺序（组头 / 执行行 / 思考）', () => {
+  it('按过程流原始顺序装配：思考行 → 并行组 → 状态行', async () => {
+    const view = await render(
+      <StreamItems
+        messages={[
+          message({ id: 'think', kind: 'thinking', text: '想一想' }),
+          message({ id: 't1', kind: 'tool', toolName: 'edit', status: 'ok', argsPreview: 'a.ts' }),
+          message({ id: 't2', kind: 'tool', toolName: 'bash', status: 'ok', argsPreview: 'bun test' }),
+          message({ id: 's1', kind: 'status', text: '阶段完成', status: 'ok' }),
+        ]}
+        onOpenTool={jest.fn()}
+        onOpenDiff={jest.fn()}
+      />,
+    );
+    const order = JSON.stringify(view.toJSON());
+    const thinking = order.indexOf('展开思考详情');
+    const group = order.indexOf('展开工具组');
+    const status = order.indexOf('阶段完成');
+    expect(thinking).toBeGreaterThanOrEqual(0);
+    expect(group).toBeGreaterThan(thinking);
+    expect(status).toBeGreaterThan(group);
+    // 思考行与组头触控区同为 ≥32pt（用户裁决：过程行密度优先，行盒贴内容）
+    const header = view.getByLabelText(/展开思考详情/);
+    const entries = (Array.isArray(header.props.style) ? header.props.style : [header.props.style]) as readonly { minHeight?: number }[];
+    expect(Math.max(0, ...entries.map((entry) => entry?.minHeight ?? 0))).toBeGreaterThanOrEqual(32);
   });
 });

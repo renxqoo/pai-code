@@ -1,4 +1,7 @@
+import { changedFileCount } from '@paiapp/ui-thread';
+
 import type { ChatMessage } from '@/types/domain';
+import { toolViewOf } from '@/features/chat/tool-message';
 
 const processKinds: readonly ChatMessage['kind'][] = ['thinking', 'tool', 'status'];
 const isProcess = (message: ChatMessage): boolean => processKinds.includes(message.kind);
@@ -12,13 +15,15 @@ export type TurnView = {
   failure: ChatMessage | null;
   running: boolean;
   failed: boolean;
+  /** 轮级变更摘要：成功改动的文件数（null = 无变更，头行不挂后缀）。 */
+  changedFiles: number | null;
 };
 
 function terminalFailure(entries: readonly ChatMessage[]): ChatMessage | null {
   const lastStatus = entries.findLastIndex((message) => message.status !== undefined);
   if (lastStatus < 0) return null;
   const terminal = entries[lastStatus];
-  if (terminal?.status !== 'error') return null;
+  if (terminal?.status !== 'failed') return null;
   // 错误是最后发言才算终态；其后出现 assistant 结果说明已恢复（错误留在过程流）。
   const after = entries.slice(lastStatus + 1);
   return after.some((message) => message.kind === 'assistant') ? null : terminal;
@@ -37,6 +42,7 @@ function finishTurn(key: string, user: ChatMessage | null, entries: readonly Cha
     failure,
     running: entries.some((message) => message.status === 'running'),
     failed: failure !== null,
+    changedFiles: changedFileCount(entries.filter((message) => message.kind === 'tool').map(toolViewOf)),
   };
 }
 

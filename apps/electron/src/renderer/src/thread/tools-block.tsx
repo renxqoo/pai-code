@@ -3,7 +3,7 @@ import * as React from 'react';
 import { ToolCallRow } from './tool-call-row';
 import { ToolGroup } from './tool-group';
 import { FileDiffSection } from './file-diff-section';
-import { toolGroupIsParallel } from './tool-group-summary';
+import { toolGroupIsParallel } from '@paiapp/ui-thread';
 import type { ToolCallModel } from './thread-model';
 
 type ToolsBlockProps = {

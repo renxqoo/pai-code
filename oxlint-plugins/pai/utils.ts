@@ -12,6 +12,7 @@ export const WORKSPACE_MATRIX: Record<string, readonly string[]> = {
   '@paiapp/api': ['@paiapp/contracts'],
   '@paiapp/infra': ['@paiapp/contracts', '@paiapp/core', '@paiapp/api'],
   '@paiapp/ui': ['@paiapp/contracts'],
+  '@paiapp/ui-thread': ['@paiapp/contracts'],
   '@paiapp/testkit': ['@paiapp/contracts'],
 }
 

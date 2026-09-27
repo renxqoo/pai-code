@@ -5,9 +5,9 @@ import { ChevronToggle } from '@paiapp/ui';
 
 import { copy } from '@/strings';
 import { EditHunkList } from './edit-hunk-list';
-import { objectName } from './file-object-name';
+import { objectName } from '@paiapp/ui-thread';
 import { chevronRevealClass, resolveOpen, type CollapsePref } from './collapse-state';
-import type { FileDiffGroup } from './edit-file-groups';
+import type { FileDiffGroup } from '@paiapp/ui-thread';
 
 type FileDiffRowProps = {
   path: string

@@ -3,7 +3,7 @@
  * 会话真相在 hub；由状态机把事件流折叠成这些形状，组件不感知数据来源。
  */
 
-import type { EditHunkView, SubagentSpawnView } from '@paiapp/contracts';
+import type { EditHunkView, SubagentSpawnView, ToolCallStatus } from '@paiapp/contracts';
 
 /** system = 后台任务通知/子代理上报等以用户角色注入的系统信封消息（api.md §7.5）。 */
 export type SessionMessage = {
@@ -17,9 +17,6 @@ export type SessionMessage = {
 };
 
 export type TurnStatus = 'running' | 'completed' | 'stopped';
-
-/** 单次工具调用的展示状态：非零退出码必须能区别于成功。 */
-export type ToolCallStatus = 'running' | 'ok' | 'failed' | 'stopped';
 
 export type ToolCallModel = {
   id: string;

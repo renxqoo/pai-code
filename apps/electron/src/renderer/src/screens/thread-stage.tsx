@@ -9,6 +9,7 @@ import { ThreadHeader } from '@/thread/thread-header';
 import { useThreadHeaderAssembly } from '@/thread/use-thread-header-assembly';
 import { TurnAnchorRail } from '@/thread/turn-anchor-rail';
 import { turnAnchors } from '@/thread/turn-anchor-data';
+import { useCurrentAnchorIndex } from '@/thread/use-current-anchor-index';
 import { useElapsedNow } from '@/thread/use-elapsed-now';
 import { useFollowLatest } from '@/thread/use-follow-latest';
 import { useStickToBottom } from '@/thread/use-stick-to-bottom';
@@ -55,6 +56,9 @@ function ThreadStage(): React.JSX.Element {
   const { containerRef: scrollRef, onScroll, atBottom, scrollToBottom } = useStickToBottom();
   useFollowLatest(scrollToBottom);
   const turnAnchorList = React.useMemo(() => turnAnchors(activeThread.items), [activeThread.items]);
+  const anchorIds = React.useMemo(() => turnAnchorList.map((anchor) => anchor.id), [turnAnchorList]);
+  /** 当前阅读轮（T55 窗口中心）：随滚动在锚点集上滑动，锚点带只展示 ±10 邻域 */
+  const currentAnchorIndex = useCurrentAnchorIndex(scrollRef, anchorIds);
   const jumpToTurn = React.useCallback((turnId: string) => {
     const container = scrollRef.current;
     if (container === null) return;
@@ -105,7 +109,7 @@ function ThreadStage(): React.JSX.Element {
           onForkUserMessage={forkUserMessage}
         />
       </div>
-      <TurnAnchorRail anchors={turnAnchorList} onJump={jumpToTurn} />
+      <TurnAnchorRail anchors={turnAnchorList} currentIndex={currentAnchorIndex} onJump={jumpToTurn} />
       {atBottom ? null : (
         <div className="animate-in fade-in duration-150">
           <ScrollToBottomButton onClick={scrollToBottom} style={{ bottom: bottomInset + 14, right: 68 }} />

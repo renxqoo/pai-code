@@ -19,7 +19,7 @@ describe('Marker 族（shadcn marker 同构）', () => {
     expect(withIcon.getByText('✓', { includeHiddenElements: true })).toBeTruthy();
     expect(withIcon.getByText('读取配置')).toBeTruthy();
 
-    // 可配置是否需要 MarkerIcon：无图标内容时槽位不渲染
+    // 可整体省略 MarkerIcon：调用方不要图标列就不渲染图标槽
     const withoutIcon = await render(
       <Marker>
         <MarkerContent>今天</MarkerContent>
@@ -28,10 +28,10 @@ describe('Marker 族（shadcn marker 同构）', () => {
     expect(withoutIcon.getByText('今天')).toBeTruthy();
   });
 
-  it('loading 时 spinner 顶替静态图标，文字走流光', async () => {
+  it('运行态由文字流光承载，图标不被顶替（用户裁决：旋转 loading 只在底部输入区）', async () => {
     const view = await render(
       <Marker>
-        <MarkerIcon loading testID="icon-slot">
+        <MarkerIcon testID="icon-slot">
           <Text>✓</Text>
         </MarkerIcon>
         <MarkerContent shimmer testID="content">
@@ -39,16 +39,16 @@ describe('Marker 族（shadcn marker 同构）', () => {
         </MarkerContent>
       </Marker>,
     );
-    // spinner 顶替静态图标（装饰位，查询需含隐藏元素）
-    expect(view.queryByTestId('icon-slot', { includeHiddenElements: true })).toBeTruthy();
-    expect(view.queryByText('✓', { includeHiddenElements: true })).toBeNull();
+    // 症状回归：旧实现 spinner 顶替静态图标，行首只剩旋转图标
+    expect(view.getByText('✓', { includeHiddenElements: true })).toBeTruthy();
+    expect(view.queryAllByTestId('loading-spinner', { includeHiddenElements: true })).toHaveLength(0);
     expect(view.getByText('Thinking…')).toBeTruthy();
   });
 
-  it('非 loading 且无图标内容时图标槽不占位', async () => {
+  it('无图标内容时图标槽不渲染（用户裁决：没有图标就不占位空间）', async () => {
     const view = await render(
       <Marker>
-        <MarkerIcon />
+        <MarkerIcon testID="icon-slot" />
         <MarkerContent>共工作 3s</MarkerContent>
       </Marker>,
     );

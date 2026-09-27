@@ -4,10 +4,11 @@ import { ChevronToggle } from '@paiapp/ui';
 
 import { copy } from '@/strings';
 import { cn } from '@/lib/utils';
+import { toolGroupIcon } from './tool-icons';
+import { toolCopy } from '@/strings/tool-copy';
 import { chevronRevealClass } from './collapse-state';
 import { ProcessRailIcon } from './process-rail-icon';
-import { toolGroupIcon } from './tool-group-icon';
-import { toolGroupLabel, toolGroupStatus } from './tool-group-summary';
+import { toolGroupLabel, toolGroupStatus } from '@paiapp/ui-thread';
 import type { ToolCallModel } from './thread-model';
 
 type ToolGroupHeaderProps = {
@@ -46,7 +47,7 @@ function ToolGroupHeader({ calls, open, onToggle }: ToolGroupHeaderProps) {
             running ? 'shimmer-text' : 'text-muted-foreground',
           )}
         >
-          {toolGroupLabel(calls)}
+          {toolGroupLabel(calls, toolCopy())}
         </span>
         <ChevronToggle open={open} variant="disclose" className={chevronRevealClass(open)} />
       </button>

@@ -2,8 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { FileDiffSection } from '../file-diff-section';
-import { groupEditsByFile } from '../edit-file-groups';
-import { objectName } from '../file-object-name';
+import { groupEditsByFile, objectName } from '@paiapp/ui-thread';
 import type { ToolCallModel } from '../thread-model';
 
 function call(id: string, hunks: ToolCallModel['editHunks']): ToolCallModel {

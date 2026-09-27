@@ -112,3 +112,45 @@ describe('ThreadStage 发送回底（用户主动发送 → 滚到最新）', ()
     }
   });
 });
+
+describe('ThreadStage 锚点带窗口（T55）', () => {
+  test('症状回归「50 轮会话锚点带刻痕挤满栏沟」：25 轮滚动到第 13 轮 → 恰 21 刻痕且窗口对准', () => {
+    const items = Array.from({ length: 25 }, (_, i) => ({
+      kind: 'turn' as const,
+      turn: {
+        id: `turn-${i}`,
+        status: 'completed' as const,
+        startedAt: 0,
+        endedAt: 1_000 + i,
+        blocks: [{ kind: 'text' as const, id: `text-${i}`, text: `结论 ${String(i).padStart(2, '0')}` }],
+        streamingThinkingBlockId: null,
+      },
+    }));
+    seedActiveThread({ items });
+    const view = render(<ThreadStage />);
+    const scroller = view.container.querySelector('.overflow-y-auto');
+    if (!(scroller instanceof HTMLDivElement)) throw new Error('thread scroller not found');
+    // 桩轮次 section 顶边：判读线 = 视口顶 +24px，只有 turn-0..turn-12 越线（当前 = 第 13 轮）
+    for (let i = 0; i < 25; i += 1) {
+      const section = scroller.querySelector(`[data-turn-id="turn-${i}"]`);
+      if (section === null) throw new Error(`section not found: turn-${i}`);
+      const top = (i - 12) * 400;
+      Object.defineProperty(section, 'getBoundingClientRect', {
+        value: () => ({ top, bottom: top + 380 }) as DOMRect,
+        configurable: true,
+      });
+    }
+    React.act(() => {
+      scroller.dispatchEvent(new Event('scroll'));
+    });
+    const ticks = view.container.querySelectorAll('nav button');
+    expect(ticks).toHaveLength(21);
+    // 窗口 = 当前轮 ±10：刻痕只带 turn-02..turn-22 摘要，头尾越窗口不渲染（两位补零防子串误匹配）
+    const railHtml = view.container.querySelector('nav')?.innerHTML ?? '';
+    expect(railHtml).toContain('结论 02');
+    expect(railHtml).toContain('结论 22');
+    expect(railHtml).not.toContain('结论 01');
+    expect(railHtml).not.toContain('结论 23');
+    view.unmount();
+  });
+});

@@ -3,7 +3,7 @@ import * as React from 'react';
 import { ToolCallRow } from './tool-call-row';
 import { ToolGroupHeader } from './tool-group-header';
 import { FileDiffSection } from './file-diff-section';
-import { autoOpenForGroup } from './call-detail';
+import { autoOpenForGroup } from '@paiapp/ui-thread';
 import type { ToolCallModel } from './thread-model';
 
 type ToolGroupProps = {
