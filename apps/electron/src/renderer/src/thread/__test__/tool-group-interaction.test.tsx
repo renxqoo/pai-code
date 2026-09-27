@@ -7,7 +7,7 @@ import { installDom } from '@/testing/dom';
 import { render } from '@/testing/render';
 
 function call(name: string, id: string): ToolCallModel {
-  return { id, name, argsPreview: `${name} 参数`, subagents: [], editHunks: [], output: '', exitCode: 0, durationMs: 10, status: 'ok' };
+  return { id, name, argsPreview: `${name} src/a.ts`, subagents: [], editHunks: [], output: '', exitCode: 0, durationMs: 10, status: 'ok' };
 }
 
 function groupHeader(container: HTMLElement): HTMLButtonElement {
@@ -22,20 +22,20 @@ describe('ToolGroup 开合交互（客户端渲染）', () => {
     const view = render(<ToolGroup calls={[call('bash', 'a'), call('edit', 'b')]} />);
     const button = groupHeader(view.container);
     expect(button.getAttribute('aria-expanded')).toBe('false');
-    expect(view.container.textContent).not.toContain('bash 参数');
+    expect(view.container.textContent).not.toContain('bash a.ts');
 
     React.act(() => {
       button.click();
     });
     expect(groupHeader(view.container).getAttribute('aria-expanded')).toBe('true');
-    expect(view.container.textContent).toContain('bash 参数');
-    expect(view.container.textContent).toContain('edit 参数');
+    expect(view.container.textContent).toContain('bash a.ts');
+    expect(view.container.textContent).toContain('edit a.ts');
 
     React.act(() => {
       groupHeader(view.container).click();
     });
     expect(groupHeader(view.container).getAttribute('aria-expanded')).toBe('false');
-    expect(view.container.textContent).not.toContain('bash 参数');
+    expect(view.container.textContent).not.toContain('bash a.ts');
     view.unmount();
   });
 
