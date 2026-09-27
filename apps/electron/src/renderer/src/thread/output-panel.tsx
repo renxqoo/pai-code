@@ -5,8 +5,7 @@ import { CopyButton } from '@paiapp/ui';
 import { copy } from '@/strings';
 import { cn } from '@/lib/utils';
 import { writeClipboardText } from '@/lib/clipboard';
-import { detailOutput } from './call-detail';
-import { toolSummary } from './tool-summary';
+import { detailOutput, toolSummary } from '@paiapp/ui-thread';
 import type { ToolCallModel } from './thread-model';
 
 type OutputPanelProps = {

@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { FileContentPanel } from './file-content-panel';
 import { OutputPanel } from './output-panel';
-import { toolKindOf } from './tool-kind';
+import { toolKindOf } from '@paiapp/ui-thread';
 import type { ToolCallModel } from './thread-model';
 
 type ToolCallDetailProps = {

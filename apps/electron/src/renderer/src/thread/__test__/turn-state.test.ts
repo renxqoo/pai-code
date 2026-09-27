@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
 import { changedFileCount, isTurnRunning, turnElapsedMs, turnEndedAbnormally, visibleTurnBlocks } from '../turn-state';
-import type { ToolCallStatus, TurnBlock } from '../thread-model';
+import type { ToolCallStatus } from '@paiapp/contracts';
+import type { TurnBlock } from '../thread-model';
 import { turnTextContent } from '../turn-text';
 
 describe('turnElapsedMs', () => {

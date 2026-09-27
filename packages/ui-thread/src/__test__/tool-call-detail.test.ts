@@ -1,14 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 
-import { autoOpenForCall, callExpandable, detailOutput } from '../call-detail';
+import { autoOpenForCall, autoOpenForGroup, callExpandable, detailOutput } from '../tool-call-detail';
 
 describe('callExpandable', () => {
   test('有输出可展开，无输出（尚未产出/纯状态单元）不可展开', () => {
-    expect(callExpandable({ output: 'line', editHunks: [] })).toBe(true);
-    expect(callExpandable({ output: '', editHunks: [] })).toBe(false);
+    expect(callExpandable({ output: 'line' })).toBe(true);
+    expect(callExpandable({ output: '' })).toBe(false);
   });
 
-  test('症状回归：edit 无输出不可展开——补丁已迁到文件级 diff 区，留在行详情里会变成「有箭头、点了空白」的死开关', () => {
+  test('症状回归：edit 无输出不可展开——补丁在文件级 diff 区，留在行详情里会变成「有箭头、点了空白」的死开关', () => {
     expect(callExpandable({ output: '' })).toBe(false);
   });
 });
@@ -22,6 +22,19 @@ describe('autoOpenForCall（症状回归：bash 短命令闪现输出面板）',
     expect(autoOpenForCall({ status: 'failed' })).toBe(true);
     expect(autoOpenForCall({ status: 'ok' })).toBe(false);
     expect(autoOpenForCall({ status: 'stopped' })).toBe(false);
+  });
+});
+
+describe('autoOpenForGroup（与轮级同一口径）', () => {
+  test('运行中常开（收起态只剩组头短语，恰是信息量最低的时刻）', () => {
+    expect(autoOpenForGroup([{ status: 'ok' }, { status: 'running' }])).toBe(true);
+  });
+
+  test('失败常开（错误必须在组级看得见）；全成功收起', () => {
+    expect(autoOpenForGroup([{ status: 'ok' }, { status: 'failed' }])).toBe(true);
+    expect(autoOpenForGroup([{ status: 'ok' }, { status: 'stopped' }])).toBe(false);
+    expect(autoOpenForGroup([{ status: 'ok' }])).toBe(false);
+    expect(autoOpenForGroup([])).toBe(false);
   });
 });
 

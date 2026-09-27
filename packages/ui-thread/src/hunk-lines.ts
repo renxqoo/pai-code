@@ -10,18 +10,18 @@ import type { EditHunkView } from '@paiapp/contracts';
  */
 
 export type HunkLine = {
-  key: string
-  text: string
-  tone: 'remove' | 'add' | 'plain'
+  key: string;
+  text: string;
+  tone: 'remove' | 'add' | 'plain';
   /** 本行是所属片段的首行，且**不是**本次编辑的第一个片段（渲染层据此画段间分隔线） */
-  startsHunk: boolean
-}
+  startsHunk: boolean;
+};
 
 /**
  * 按行分行：统一 CRLF/CR/LF（`\r` 残留会在复制出的 diff 里变成 `^M`），
  * 并丢弃**末尾**空行（片段常以换行结尾，那不是内容行）。
  * 片段本身是「纯换行」时（插入/删除一个空行——最常见的编辑之一），
- * 返回一行空格占位：早前让它落进兜底分支，把含 `\n` 的原文塞进单行渲染，
+ * 返回一行空格占位：让它落进兜底分支会把含 `\n` 的原文塞进单行渲染，
  * pre-wrap 下渲成一个双倍高的空白块且无红绿提示。
  */
 function splitLines(text: string): string[] {
@@ -58,5 +58,7 @@ export function hunkLines(hunk: EditHunkView, index: number): HunkLine[] {
  * 再画一条线会在容器口上多出一道横杠。
  */
 export function allHunkLines(hunks: readonly EditHunkView[]): HunkLine[] {
-  return hunks.flatMap((hunk, index) => hunkLines(hunk, index).map((line) => ({ ...line, startsHunk: index > 0 && line.startsHunk })));
+  return hunks.flatMap((hunk, index) =>
+    hunkLines(hunk, index).map((line) => ({ ...line, startsHunk: index > 0 && line.startsHunk })),
+  );
 }

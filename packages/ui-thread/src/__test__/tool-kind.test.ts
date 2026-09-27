@@ -14,6 +14,8 @@ describe('toolKindOf', () => {
     expect(toolKindOf('glob')).toBe('search');
     expect(toolKindOf('ls')).toBe('list');
     expect(toolKindOf('task')).toBe('subagent');
+    // 生产名（x-harness agent-delegation 注册名）
+    expect(toolKindOf('agent_spawn')).toBe('subagent');
   });
 
   test('大小写与首尾空白不敏感（演示/扩展出现过 Bash 首字母大写）', () => {

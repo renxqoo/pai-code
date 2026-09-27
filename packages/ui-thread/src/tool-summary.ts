@@ -13,10 +13,11 @@
  *
  * 不做的加工（都试过并被否掉——它们让显示的不再是原命令）：
  * 剥 flag（`bun test` 与 `bun test --coverage` 是两回事）、剥目录前缀（monorepo 里
- * `tool-row.tsx` 在 electron 与 mobile 各有一份，剥成 basename 后界面上是两行
- * 一模一样的文字）、切命令链（`cd /a && b` 会只剩 `cd`）、剥引号（`"./lint.sh" --fix`
- * 剥成 `./lint.sh" --fix` 是撕破命令）、长度截断（交给 CSS `truncate` 按真实渲染
- * 宽度裁剪——等宽字体下 CJK 是 ASCII 两倍宽，任何 JS 字符上限都表达不了「一行放不下」）。
+ * 同名文件剥成 basename 后界面上是两行一模一样的文字）、切命令链（`cd /a && b`
+ * 会只剩 `cd`）、剥引号（`"./lint.sh" --fix` 剥成 `./lint.sh" --fix` 是撕破命令）、
+ * 长度截断（交给视觉层按真实渲染宽度裁剪——PC 是 CSS truncate、移动端是
+ * numberOfLines；等宽字体下 CJK 是 ASCII 两倍宽，任何 JS 字符上限都表达不了
+ * 「一行放不下」）。
  */
 
 /** 整行 shell 注释（`#` / `;` 起头）。只匹配整行——行内注释（`ls # x`）折平后

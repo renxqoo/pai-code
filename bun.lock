@@ -28,6 +28,7 @@
         "@paiapp/core": "workspace:*",
         "@paiapp/infra": "workspace:*",
         "@paiapp/ui": "workspace:*",
+        "@paiapp/ui-thread": "workspace:*",
         "@streamdown/cjk": "^1.0.3",
         "@streamdown/code": "^1.1.1",
         "@streamdown/math": "^1.0.2",
@@ -44,8 +45,8 @@
         "happy-dom": "^20.14.3",
         "katex": "0.16.47",
         "lucide-react": "^1.41.0",
-        "react": "^19.2.0",
-        "react-dom": "^19.2.0",
+        "react": "19.2.8",
+        "react-dom": "19.2.8",
         "shadcn": "^4.21.0",
         "shiki": "3.23.0",
         "streamdown": "^2.6.0",
@@ -140,13 +141,19 @@
         "cmdk": "^1.1.1",
         "cn": "^0.2.6",
         "lucide-react": "^1.41.0",
-        "react": "^19.2.0",
+        "react": "19.2.8",
         "recharts": "^3.10.1",
       },
       "devDependencies": {
         "@types/react": "^19.2.0",
         "@types/react-dom": "^19.2.0",
-        "react-dom": "^19.2.0",
+        "react-dom": "19.2.8",
+      },
+    },
+    "packages/ui-thread": {
+      "name": "@paiapp/ui-thread",
+      "dependencies": {
+        "@paiapp/contracts": "workspace:*",
       },
     },
   },
@@ -714,6 +721,8 @@
     "@paiapp/testkit": ["@paiapp/testkit@workspace:packages/testkit"],
 
     "@paiapp/ui": ["@paiapp/ui@workspace:packages/ui"],
+
+    "@paiapp/ui-thread": ["@paiapp/ui-thread@workspace:packages/ui-thread"],
 
     "@peculiar/asn1-schema": ["@peculiar/asn1-schema@2.9.4", "", { "dependencies": { "@peculiar/utils": "^2.0.2", "asn1js": "^3.0.10", "tslib": "^2.8.1" } }, "sha512-GjzePcT9Iw8NzeOPf73iNS9xM+TBhd/FilAfP+RQGkTMQJTVWtytN3JHJACCjf/ABNau5S7mS3g+DcuxmRgYEg=="],
 

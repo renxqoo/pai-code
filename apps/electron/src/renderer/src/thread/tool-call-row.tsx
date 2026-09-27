@@ -5,14 +5,19 @@ import { ChevronToggle } from '@paiapp/ui';
 import type { SubagentSpawnView } from '@paiapp/contracts';
 
 import { copy } from '@/strings';
+import { toolCopy } from '@/strings/tool-copy';
 import { cn } from '@/lib/utils';
-import { autoOpenForCall, callExpandable } from './call-detail';
-import { toolKindOf, toolPreviewMono } from './tool-kind';
-import { toolSummary } from './tool-summary';
+import {
+  autoOpenForCall,
+  callExpandable,
+  toolKindOf,
+  toolPreviewMono,
+  toolRowLabelOf,
+  toolSummary,
+} from '@paiapp/ui-thread';
 import { ToolCallDetail } from './tool-call-detail';
 import { ProcessRailIcon } from './process-rail-icon';
-import { toolRowIcon } from './tool-row-icon';
-import { toolRowLabelOf } from './tool-row-label';
+import { toolRowIcon } from './tool-icons';
 import { chevronRevealClass, resolveOpen, type CollapsePref } from './collapse-state';
 import type { ToolCallModel } from './thread-model';
 
@@ -56,6 +61,7 @@ function ToolCallRow({ call }: ToolCallRowProps) {
   const failed = call.status === 'failed';
   const running = call.status === 'running';
   const RowIcon = toolRowIcon(call.name);
+  const rowLabel = toolRowLabelOf(call, toolCopy());
   const spawns: readonly (SubagentSpawnView | null)[] =
     kind === 'subagent' && call.subagents.length > 0 ? call.subagents : [null];
 
@@ -67,7 +73,7 @@ function ToolCallRow({ call }: ToolCallRowProps) {
           running ? 'shimmer-text' : 'text-muted-foreground',
         )}
       >
-        {toolRowLabelOf(call)}
+        {rowLabel}
       </span>
       {spawn === null ? (
         <span
@@ -138,7 +144,7 @@ function ToolCallRow({ call }: ToolCallRowProps) {
                   // 让描边整个消失（运行中图标反而不见了）。运行态由文案承载。
                   className="size-[13px] shrink-0 text-muted-foreground"
                   strokeWidth={1.75}
-                  aria-label={toolRowLabelOf(call)}
+                  aria-label={rowLabel}
                 />
               </ProcessRailIcon>
             ) : (

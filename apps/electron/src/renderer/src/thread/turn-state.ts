@@ -1,3 +1,4 @@
+import { changedFileCount as changedFileCountOfCalls } from '@paiapp/ui-thread';
 import type { TurnBlock, TurnModel } from './thread-model';
 
 /** 轮次是否仍在走表（细节实时展开、状态行实时计时）。 */
@@ -6,24 +7,13 @@ export function isTurnRunning(turn: Pick<TurnModel, 'status'>): boolean {
 }
 
 /**
- * 轮级变更摘要：成功改动的文件数（编辑/写入类调用，去重文件路径）。
+ * 轮级变更摘要：成功改动的文件数（编辑类调用，去重文件路径）。
  * 轮收起时挂在状态行旁（`TurnGroup`），**不进块列表**——收起 = 「这个过程
  * 我不看」，列表里就不该有可点的东西（diff 行是展开控件）。
- * 无成功编辑返回 null（无变更可报）。
+ * 无成功编辑返回 null（无变更可报）。计数语义在共享包（只收成功调用、按路径去重）。
  */
 export function changedFileCount(blocks: readonly TurnBlock[]): number | null {
-  const paths = new Set<string>();
-  for (const block of blocks) {
-    if (block.kind !== 'tools') continue;
-    for (const call of block.calls) {
-      if (call.status !== 'ok') continue;
-      if (call.editHunks.length === 0) continue;
-      for (const hunk of call.editHunks) {
-        if (hunk.path.length > 0) paths.add(hunk.path);
-      }
-    }
-  }
-  return paths.size > 0 ? paths.size : null;
+  return changedFileCountOfCalls(blocks.flatMap((block) => (block.kind === 'tools' ? block.calls : [])));
 }
 
 /**

@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { ToolGroup } from '../tool-group';
 import { ToolGroupHeader } from '../tool-group-header';
 import { ToolsBlock } from '../tools-block';
-import { toolGroupIcon } from '../tool-group-icon';
+import { toolGroupIcon } from '../tool-icons';
 import type { ToolCallModel } from '../thread-model';
 
 function call(name: string, overrides: Partial<ToolCallModel> = {}): ToolCallModel {

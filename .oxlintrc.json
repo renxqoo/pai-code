@@ -14,7 +14,7 @@
     // ═══ 架构宪法（本仓插件：依赖白名单矩阵 + 环境面纪律）═══
     // electron 只在宿主层（apps/electron main/preload）；renderer 走 preload 桥
     "pai/no-electron-outside-host": "error",
-    // workspace 包间依赖只准按矩阵向下（contracts ← core ← infra ← api；ui/testkit 只认 contracts）
+    // workspace 包间依赖只准按矩阵向下（contracts ← core ← infra ← api；ui/ui-thread/testkit 只认 contracts）
     "pai/no-cross-package-imports": "error",
     // contracts/ui/renderer 环境无关：禁 node/bun 内建，系统能力一律走 Port
     "pai/no-node-in-browser-code": "error",

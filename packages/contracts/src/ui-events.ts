@@ -40,6 +40,10 @@ export const ToolCallViewSchema = z.object({
 });
 export type ToolCallView = z.infer<typeof ToolCallViewSchema>;
 
+/** 工具调用的展示状态词表：渲染层状态机派生（运行中标记 / 退出码 / 中止信号），
+ *  非零退出必须能区别于成功。执行行状态前缀与批次聚合态都以此为准。 */
+export type ToolCallStatus = 'running' | 'ok' | 'failed' | 'stopped';
+
 /** 文件变更视图（edit/write 工具的展示形态；write 的 deletions 恒 0，基线不可得）。 */
 export const DiffFileViewSchema = z.object({
   path: z.string(),

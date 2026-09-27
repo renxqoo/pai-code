@@ -56,6 +56,23 @@ describe('pai/no-cross-package-imports', () => {
     expect(exitCode).toBe(0)
     expect(ruleCount(stdout, 'no-cross-package-imports')).toBe(0)
   })
+
+  test('ui-thread 只认 contracts（共享派生层不碰其他包）', () => {
+    const { exitCode, stdout } = lintTree(
+      { ...MINI_TREE, 'packages/ui-thread/src/t.ts': "import type {} from '@paiapp/contracts';\nexport {};\n" },
+      'packages/ui-thread/src/t.ts',
+    )
+    expect(exitCode).toBe(0)
+    expect(ruleCount(stdout, 'no-cross-package-imports')).toBe(0)
+  })
+
+  test('ui-thread 越层 import core：报', () => {
+    const { stdout } = lintTree(
+      { ...MINI_TREE, 'packages/ui-thread/src/bad.ts': "import type {} from '@paiapp/core';\nexport {};\n" },
+      'packages/ui-thread/src/bad.ts',
+    )
+    expect(ruleCount(stdout, 'no-cross-package-imports')).toBe(1)
+  })
 })
 
 describe('pai/no-cross-package-imports · api/infra/testkit 矩阵锁定', () => {

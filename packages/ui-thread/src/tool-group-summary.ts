@@ -6,9 +6,10 @@
  * 标题不带调用计数——执行过程是脚注，标题要短；要看多少次由展开后的调用行承担。
  */
 
-import { copy } from '@/strings';
+import type { ToolCallStatus } from '@paiapp/contracts';
+import type { ToolCopy } from './tool-copy';
 import { toolKindOf, type ToolKind } from './tool-kind';
-import type { ToolCallModel, ToolCallStatus } from './thread-model';
+import type { ToolNameRef, ToolStatusRef } from './tool-refs';
 
 /** 组头类别桶：edit 桶含 edit 与 write（两者都是文件改写，标题统一说「文件」）。 */
 export type GroupBucketKind = 'edit' | 'read' | 'search' | 'list' | 'bash' | 'subagent' | 'other';
@@ -57,7 +58,7 @@ function pushBucket(buckets: Map<GroupBucketKind, ToolGroupBucket>, kind: GroupB
 }
 
 /** 并行批次 → 有序类别桶（按固定桶序，与调用到达序无关）。 */
-export function toolGroupBuckets(calls: readonly ToolCallModel[]): readonly ToolGroupBucket[] {
+export function toolGroupBuckets(calls: readonly ToolNameRef[]): readonly ToolGroupBucket[] {
   const buckets = new Map<GroupBucketKind, ToolGroupBucket>();
   for (const call of calls) pushBucket(buckets, bucketOf(call.name), call.name.trim());
   return BUCKET_ORDER.flatMap((kind) => {
@@ -67,52 +68,54 @@ export function toolGroupBuckets(calls: readonly ToolCallModel[]): readonly Tool
 }
 
 /** 每个桶的人话短语（不带计数：执行过程是脚注，标题从简）。 */
-function bucketPhrase(bucket: ToolGroupBucket): readonly string[] {
-  if (bucket.kind === 'bash') return [copy.flow.groupBashPhrase];
-  if (bucket.kind === 'list') return [copy.flow.groupListPhrase];
-  if (bucket.kind === 'edit') return [copy.flow.groupEditPhrase];
-  if (bucket.kind === 'read') return [copy.flow.groupReadPhrase];
-  if (bucket.kind === 'search') return [copy.flow.groupSearchPhrase];
-  if (bucket.kind === 'subagent') return [copy.flow.groupSubagentPhrase];
-  const names = bucket.names.slice(0, MAX_OTHER_NAMES).map((name) => copy.flow.groupOtherPhrase(name));
-  if (bucket.names.length > MAX_OTHER_NAMES) names.push(copy.flow.groupMorePhrase);
+function bucketPhrase(bucket: ToolGroupBucket, copy: ToolCopy): readonly string[] {
+  if (bucket.kind === 'bash') return [copy.groupBashPhrase];
+  if (bucket.kind === 'list') return [copy.groupListPhrase];
+  if (bucket.kind === 'edit') return [copy.groupEditPhrase];
+  if (bucket.kind === 'read') return [copy.groupReadPhrase];
+  if (bucket.kind === 'search') return [copy.groupSearchPhrase];
+  if (bucket.kind === 'subagent') return [copy.groupSubagentPhrase];
+  const names = bucket.names.slice(0, MAX_OTHER_NAMES).map((name) => copy.groupOtherPhrase(name));
+  if (bucket.names.length > MAX_OTHER_NAMES) names.push(copy.groupMorePhrase);
   return names;
 }
 
 /**
  * 并行批次 → 组头标题短语。收口按**桶数**（用户规格：「>3 类以等收口」，
- * 早前按短语数算——`other` 一个类别能出多条短语，两类也会被收口）；
+ * 按短语数算会让 `other` 一个类别出多条短语时两类也被收口）；
  * 桶序固定（编辑 → 阅读 → 搜索 → 目录 → 命令 → 子智能体 → 未知），
  * 同一批次多次渲染标题稳定。
  *
  * **命令类保底**：命令是唯一有副作用的类别（其余只读本地），桶序又把它排在
- * 倒数第二，前 N 截断会系统性吃掉它（实测「编辑了文件阅读了文件搜索了等」——
- * 批次里跑了命令，标题里却没有命令）。所以收口时给它留位：若它不在入选的前 N
- * 条内，替换掉最后一条。
+ * 倒数第二，前 N 截断会系统性吃掉它（批次里跑了命令，标题里却没有命令）。
+ * 所以收口时给它留位：若它不在入选的前 N 条内，替换掉最后一条。
  *
  * 空批次降级为空串（调用方不渲染组头，标题不参与布局）。
  */
-export function toolGroupLabel(calls: readonly ToolCallModel[]): string {
+export function toolGroupLabel(calls: readonly ToolNameRef[], copy: ToolCopy): string {
   const buckets = toolGroupBuckets(calls);
-  const phrases = buckets.flatMap(bucketPhrase);
+  const phrases = buckets.flatMap((bucket) => bucketPhrase(bucket, copy));
   if (phrases.length === 0) return '';
-  if (buckets.length <= MAX_PHRASES) return copy.flow.groupPhraseJoin(phrases);
+  if (buckets.length <= MAX_PHRASES) return copy.groupPhraseJoin(phrases);
 
   // 桶级收口：前 N 个桶的短语全留，其余桶折成「等」；命令桶保底
   const shownBuckets = buckets.slice(0, MAX_PHRASES);
   const restCount = buckets.length - shownBuckets.length;
   const hasBash = buckets.some((bucket) => bucket.kind === 'bash');
   const bashInShown = shownBuckets.some((bucket) => bucket.kind === 'bash');
-  if (hasBash && !bashInShown) shownBuckets[MAX_PHRASES - 1] = buckets.find((bucket) => bucket.kind === 'bash') as ToolGroupBucket;
+  if (hasBash && !bashInShown) {
+    const bashBucket = buckets.find((bucket) => bucket.kind === 'bash');
+    if (bashBucket !== undefined) shownBuckets[MAX_PHRASES - 1] = bashBucket;
+  }
 
-  const shown = shownBuckets.flatMap(bucketPhrase);
-  // 「等」覆盖的桶数变了，文案要跟着变（原先按短语数报数量会对不上）
-  return copy.flow.groupPhraseJoin(restCount > 0 ? [...shown, copy.flow.groupMorePhrase] : shown);
+  const shown = shownBuckets.flatMap((bucket) => bucketPhrase(bucket, copy));
+  // 「等」覆盖的桶数变了，文案要跟着变（按短语数报数量会对不上）
+  return copy.groupPhraseJoin(restCount > 0 ? [...shown, copy.groupMorePhrase] : shown);
 }
 
 /** 批次聚合态：任一失败 → 失败；任一运行中 → 运行中；任一停止 → 停止；全成功 → 成功。
  * 失败最高优先——批次里只要有一条报错，组级就得是失败色。空批次降级为成功。 */
-export function toolGroupStatus(calls: readonly ToolCallModel[]): ToolCallStatus {
+export function toolGroupStatus(calls: readonly ToolStatusRef[]): ToolCallStatus {
   if (calls.some((call) => call.status === 'failed')) return 'failed';
   if (calls.some((call) => call.status === 'running')) return 'running';
   if (calls.some((call) => call.status === 'stopped')) return 'stopped';
@@ -120,6 +123,6 @@ export function toolGroupStatus(calls: readonly ToolCallModel[]): ToolCallStatus
 }
 
 /** 批次是否构成并行分组：单调用不套组头（无并行可言，与单行形态完全一致）。 */
-export function toolGroupIsParallel(calls: readonly ToolCallModel[]): boolean {
+export function toolGroupIsParallel(calls: readonly ToolNameRef[]): boolean {
   return calls.length > 1;
 }

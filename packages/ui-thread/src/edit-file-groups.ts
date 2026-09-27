@@ -13,15 +13,15 @@ import type { EditHunkView } from '@paiapp/contracts';
 
 export type FileDiffGroup = {
   /** 文件路径（未知时为空串——UI 自行决定占位文案，不塞合成键） */
-  path: string
+  path: string;
   /** 本组的全部补丁（多次编辑的片段按序堆叠） */
-  hunks: readonly EditHunkView[]
-}
+  hunks: readonly EditHunkView[];
+};
 
 /**
  * 未知路径的 Map 键前缀。**只作 Map 键用，不进 `group.path`**——
  * 展示路径仍是空串（UI 自己决定怎么显示「未知文件」）。
- * 早前把它当展示路径用，且断言「真实路径不会以此开头」是纯口头保证：
+ * 把它当展示路径用、并断言「真实路径不会以此开头」是纯口头保证：
  * `unknown-path-0` 本身就是个合法文件名，缺 path 的补丁会被并进真实文件的 diff。
  */
 const UNKNOWN_KEY_PREFIX = '\u0000unknown:';

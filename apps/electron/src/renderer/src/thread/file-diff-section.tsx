@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { FileDiffRow } from './file-diff-row';
-import { groupEditsByFile } from './edit-file-groups';
+import { groupEditsByFile } from '@paiapp/ui-thread';
 import type { ToolCallModel } from './thread-model';
 
 type FileDiffSectionProps = {

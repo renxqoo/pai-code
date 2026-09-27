@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { cn } from '@/lib/utils';
-import { allHunkLines } from './hunk-lines';
+import { allHunkLines } from '@paiapp/ui-thread';
 import type { EditHunkView } from '@paiapp/contracts';
 
 type EditHunkListProps = {

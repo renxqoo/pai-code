@@ -6,7 +6,7 @@ import { copy } from '@/strings';
 import { cn } from '@/lib/utils';
 import { writeClipboardText } from '@/lib/clipboard';
 import { fileLines, readFooterHint } from './file-lines';
-import { toolSummary } from './tool-summary';
+import { toolSummary } from '@paiapp/ui-thread';
 import type { ToolCallModel } from './thread-model';
 
 type FileContentPanelProps = {
