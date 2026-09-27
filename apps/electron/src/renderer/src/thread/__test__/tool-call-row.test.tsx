@@ -163,11 +163,12 @@ describe("ToolCallRow 状态前缀（用户裁决 3：每条执行带上「已�
     );
   });
 
-  test("失败与停止也是过去式（发生过的事，不改时态）", () => {
-    expect(renderRow(call({ name: "bash", argsPreview: "ls", subagents: [], status: "failed", exitCode: 2 }))).toContain(
-      "已运行",
-    );
-    expect(renderRow(call({ name: "bash", argsPreview: "ls", subagents: [], status: "stopped" }))).toContain("已运行");
+  test("失败与停止各自成句（不靠行尾红字区分）", () => {
+    const failed = renderRow(call({ name: "bash", argsPreview: "ls", subagents: [], status: "failed", exitCode: 2 }));
+    expect(failed).toContain("运行失败");
+    expect(failed).not.toContain("已运行");
+    expect(failed).toContain("退出码 2");
+    expect(renderRow(call({ name: "bash", argsPreview: "ls", subagents: [], status: "stopped" }))).toContain("已停止");
   });
 
   test("未知工具不翻译：前缀直接点名工具", () => {

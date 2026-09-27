@@ -29,16 +29,24 @@ const RUNNING_BY_KIND: Readonly<Partial<Record<ToolKind, string>>> = {
 };
 
 /**
- * 执行行前缀：运行中用进行时（未完成），其余终态一律过去式（完成/失败/停止都发生过）。
- * 未知工具直呼原名。垃圾输入（空工具名）降级为「other」桶的空串，不显悬空前缀。
+ * 执行行前缀：运行中用进行时（未完成），成功用过去式。
+ * **失败与停止各自成句**（「运行失败 bun test」而不是「已运行 bun test」+
+ * 行尾一个红字退出码）——一列执行行里失败的那条必须一眼能找到，
+ * 只靠行尾颜色扫不出来。
+ * 未知工具直呼原名。垃圾输入（空工具名）降级为空串，不显悬空前缀。
  */
 export function toolRowLabel(name: string, status: ToolCallStatus): string {
   const kind = toolKindOf(name);
   const trimmed = name.trim();
   if (kind === 'other') {
     if (trimmed.length === 0) return '';
-    return status === 'running' ? copy.flow.rowRunningOther(trimmed) : copy.flow.rowDoneOther(trimmed);
+    if (status === 'running') return copy.flow.rowRunningOther(trimmed);
+    if (status === 'failed') return copy.flow.rowFailedOther(trimmed);
+    if (status === 'stopped') return copy.flow.rowStoppedOther(trimmed);
+    return copy.flow.rowDoneOther(trimmed);
   }
+  if (status === 'failed') return copy.flow.rowFailed;
+  if (status === 'stopped') return copy.flow.rowStopped;
   const table = status === 'running' ? RUNNING_BY_KIND : DONE_BY_KIND;
   return table[kind] ?? '';
 }

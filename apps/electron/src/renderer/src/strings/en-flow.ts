@@ -69,6 +69,11 @@ export const enFlow = {
   rowDoneList: 'Listed directory',
   rowDoneSubagent: 'Spawned subagent',
   rowDoneOther: (name: string): string => `Called ${name}`,
+  /** Single-call failure prefix (whole clause, not just a red exit code) */
+  rowFailed: 'Failed',
+  rowStopped: 'Stopped',
+  rowFailedOther: (name: string): string => `Failed: ${name}`,
+  rowStoppedOther: (name: string): string => `Stopped: ${name}`,
   /** Single-call row prefix in the present continuous (running state) */
   rowRunningBash: 'Running command',
   rowRunningRead: 'Reading file',

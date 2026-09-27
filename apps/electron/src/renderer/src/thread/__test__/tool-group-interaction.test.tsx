@@ -22,20 +22,20 @@ describe('ToolGroup 开合交互（客户端渲染）', () => {
     const view = render(<ToolGroup calls={[call('bash', 'a'), call('edit', 'b')]} />);
     const button = groupHeader(view.container);
     expect(button.getAttribute('aria-expanded')).toBe('false');
-    expect(view.container.textContent).not.toContain('bash a.ts');
+    expect(view.container.textContent).not.toContain('bash src/a.ts');
 
     React.act(() => {
       button.click();
     });
     expect(groupHeader(view.container).getAttribute('aria-expanded')).toBe('true');
-    expect(view.container.textContent).toContain('bash a.ts');
-    expect(view.container.textContent).toContain('edit a.ts');
+    expect(view.container.textContent).toContain('bash src/a.ts');
+    expect(view.container.textContent).toContain('edit src/a.ts');
 
     React.act(() => {
       groupHeader(view.container).click();
     });
     expect(groupHeader(view.container).getAttribute('aria-expanded')).toBe('false');
-    expect(view.container.textContent).not.toContain('bash a.ts');
+    expect(view.container.textContent).not.toContain('bash src/a.ts');
     view.unmount();
   });
 

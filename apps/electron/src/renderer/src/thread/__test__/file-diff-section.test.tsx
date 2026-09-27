@@ -73,7 +73,7 @@ describe('objectName 路径 → 文件名', () => {
 });
 
 describe('FileDiffSection 文件级 diff 区', () => {
-  test('一个文件一行标题（只显文件名），默认收起不挂补丁；箭头紧跟文件名', () => {
+  test('一个文件一行标题，默认收起不挂补丁；箭头紧跟文件名', () => {
     const html = renderToStaticMarkup(
       <FileDiffSection
         calls={[
@@ -88,6 +88,16 @@ describe('FileDiffSection 文件级 diff 区', () => {
     expect(html).not.toContain('const a = 1;');
     // 症状回归：箭头紧跟文件名（6px gap），不得被推到行尾
     expect(html).not.toContain('ml-auto');
+  });
+
+  test('症状回归：文件 diff 行与执行行同形态（图标 + 动作 + 文件名）——同一份编辑不该两种长相', () => {
+    const html = renderToStaticMarkup(
+      <FileDiffSection calls={[call('c1', [hunk('apps/x/file-diff-section.test.tsx', 'a', 'b')])]} />,
+    );
+    expect(html).toContain('lucide-pencil');  // 图标（编辑类）
+    expect(html).toContain('已编辑');         // 动作短语
+    expect(html).toContain('file-diff-section.test.tsx'); // 文件名
+    expect(html).toContain('font-mono');      // 文件名等宽，与执行行摘要一致
   });
 
   test('无编辑调用不渲染任何内容', () => {

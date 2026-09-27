@@ -1,11 +1,13 @@
 import * as React from 'react';
+import { Pencil } from 'lucide-react';
 
 import { ChevronToggle } from '@paiapp/ui';
 
+import { copy } from '@/strings';
 import { cn } from '@/lib/utils';
 import { EditHunkList } from './edit-hunk-list';
 import { objectName } from './file-object-name';
-import { resolveOpen, type CollapsePref } from './collapse-state';
+import { chevronRevealClass, resolveOpen, type CollapsePref } from './collapse-state';
 import type { FileDiffGroup } from './edit-file-groups';
 
 type FileDiffRowProps = {
@@ -13,7 +15,12 @@ type FileDiffRowProps = {
   hunks: FileDiffGroup['hunks']
 }
 
-/** 单个文件的 diff 行：文件名 + 展开箭头，展开是该文件全部补丁堆叠（默认收起）。 */
+/**
+ * 单个文件的 diff 行。**与执行行同形态**（图标 + 动作 + 文件名 + 箭头）：
+ * 这行展示的就是上面那些执行行做的编辑，同一件事不该有两种长相——
+ * 一个带图标带动作、一个光秃秃只剩文件名，读起来像两样东西。
+ * 图标恒为铅笔（这里只可能是编辑），动作恒为「已编辑」（渲染时机即已落定）。
+ */
 function FileDiffRow({ path, hunks }: FileDiffRowProps) {
   const [pref, setPref] = React.useState<CollapsePref>(null);
   const open = resolveOpen(pref, false);
@@ -25,18 +32,15 @@ function FileDiffRow({ path, hunks }: FileDiffRowProps) {
         aria-expanded={open}
         className="group flex cursor-pointer items-center gap-[6px] rounded-md px-[2px] py-[1px] text-left outline-none select-none hover:bg-accent/60 focus-visible:ring-3 focus-visible:ring-ring/50"
       >
-        <span className="shrink-0 text-[12.5px] leading-[20px] text-muted-foreground">{objectName(path)}</span>
-        <ChevronToggle
-          open={open}
-          variant="disclose"
-          className={cn(
-            // 紧跟文件名：箭头是这行的展开开关，飘到行尾会与文件名失联
-            'ml-[2px] shrink-0',
-            open
-              ? 'opacity-70'
-              : 'opacity-0 transition-opacity duration-150 group-hover:opacity-70 group-focus-within:opacity-70 motion-reduce:transition-none',
-          )}
-        />
+        <Pencil className="size-[13px] shrink-0 text-muted-foreground" strokeWidth={1.75} />
+        <span className="shrink-0 text-[12.5px] leading-[20px] font-medium text-muted-foreground">
+          {copy.flow.rowDoneEdit}
+        </span>
+        <span className="min-w-0 shrink break-words font-mono text-[12.5px] leading-[20px] text-muted-foreground">
+          {objectName(path)}
+        </span>
+        {/* 箭头紧跟文件名：它是这行的展开开关，飘到行尾会与文件名失联 */}
+        <ChevronToggle open={open} variant="disclose" className={cn('shrink-0', chevronRevealClass(open))} />
       </button>
       {open ? <EditHunkList hunks={hunks} /> : null}
     </div>

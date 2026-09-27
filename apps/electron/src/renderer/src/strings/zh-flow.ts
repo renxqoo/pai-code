@@ -66,6 +66,11 @@ export const zhFlow: typeof enFlow = {
   rowDoneList: '已列出',
   rowDoneSubagent: '已派生子智能体',
   rowDoneOther: (name: string): string => `已调用${name}`,
+  /** 单条执行行的失败前缀（整句成「运行失败」，不靠行尾颜色区分） */
+  rowFailed: '运行失败',
+  rowStopped: '已停止',
+  rowFailedOther: (name: string): string => `调用失败${name}`,
+  rowStoppedOther: (name: string): string => `已停止${name}`,
   /** 单条执行行的运行中前缀（进行时，与已完成态区分） */
   rowRunningBash: '正在运行',
   rowRunningRead: '正在阅读',

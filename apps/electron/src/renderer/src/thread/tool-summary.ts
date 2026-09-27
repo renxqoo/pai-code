@@ -1,127 +1,78 @@
 /**
- * 工具行摘要派生（文案为主）：argsPreview 可能是完整命令串、shell 链或绝对路径，
- * 列表行只显示人话摘要（动作 + 对象名），完整内容在展开详情。
- * 三条硬规则：不透出绝对路径/目录前缀、不透出 shell 标志与数值参数、不透出命令链。
- * 外加两条展示面硬规则：摘要是**一行**，且只描述「对什么做了什么」——
- * 参数值（`bash -c` 的脚本、`grep` 的正则、heredoc 正文）原样截断后
- * 塞进行内会变成几百字正文，一行根本读不完，也不该在这里读。
+ * 工具行命令摘要：命令**忠实展示**，一行放不下才截断加省略号。
+ *
+ * 语义：用户要在这行一眼看到「到底执行了什么」——剥 flag、剥目录前缀、
+ * 丢掉脚本正文都会让命令不再是原命令（`bun test` 与 `bun test --coverage`
+ * 是两回事，同名文件在不同包下也是两个文件）。所以这里不做任何内容改写，
+ * 只做两件事：折叠空白、按容器宽度截断。
+ *
+ * 命令链（`cd a && b`）取首个实质段（跳过 cd/export/set——它们只改上下文，
+ * 不是这行要做的事）；`|`/`;` 之后的段同样不进摘要。
  */
 
-const SHELL_OPERATORS = /\s*(?:&&|\|\||;|\||>|<)\s*/;
+/** shell 运算符：把命令链切成段，取第一段展示。
+ *  管道是 `\|`（转义），末尾不得再跟一个裸 `|`——那会变成「或 + 空」的
+ *  可选匹配，把命令按字符切开（曾把 `bun test` 切成 b/u/n/t/e/s/t）。 */
+const SHELL_OPERATORS = /\s*(?:&&|\|\||;|\|)\s*/;
+/** 重定向不属于「这行在做什么」，切掉（`cat > f` → `cat f`）。
+ *  字符类里 `>` 是字面量（不是量词），不必转义。 */
+const REDIRECT = /\s*(?:>>?|<|>)\s*/;
+/** 只改上下文、不产出结果的前置段。 */
 const CHANGE_DIR_VERBS = new Set(['cd', 'export', 'set']);
-const FLAG = /^-/;
-const NUMERIC_ARG = /^[0-9]+(?:[,:][0-9]*)*p?$/;
 
-/** 摘要字符上限：超出的词丢弃（不是截断加省略号——省略号会被读成「还有下文」，
- * 而摘要的语义本就是「只取动作与对象」，丢掉后面的词才是对的）。 */
-const MAX_SUMMARY_CHARS = 60;
+/** 孤零零的 `-`：heredoc 的 stdin 标记（`python3 - <<EOF`），不是对象。
+ *  去掉它，`python3 - <<EOF` 才显示为 `python3` 而不是 `python3 -`。 */
+const STDIN_MARK = /(^|\s)-$/;
 
 /**
- * 对象名长度上限：按**文件名**（剥掉目录后）判，不是原始 token——
- * `packages/api/src/views/__test__/entries-mapper-edit-hunks.test.ts`
- * 整串 60+ 字符，但它的对象名 `entries-mapper-edit-hunks.test.ts`（33）
- * 完全是正常文件名，按整串长度卡会把这类路径全滤光，只剩动词。
- * 40 容纳带连字符的长测试名，又不至于让散文混进来。
+ * 摘要字符上限：单行可容纳的量级。超出则截断加「…」。
+ * 上限不随窗口宽度变（摘要派生是纯函数，不读 DOM）——宁可略保守，
+ * 也不要让同一命令在两个窗口里显示成两副样子。
  */
-const MAX_NAME_CHARS = 40;
-
-/**
- * 「散文」判据：靠标点密度与 CJK，而不是字符数。
- * 之前用 `.{28,}` 当长句特征，结果把 `entries-mapper-edit-hunks.test.ts`
- * 这类正常长文件名一并滤光（33 字符的连字符测试名是常态）。
- * 真正的散文必带标点空格或中日韩字，且文件名不会有。
- */
-const PROSE = /[，。；：？！、（）【】《》“”‘’\n\r]|[一-鿿぀-ヿ]|^(?:[a-z]+\s+){4,}/i;
-
-/**
- * 整段脚本 flag：它们吃掉的下一个 token 是完整脚本/代码，那不是「对象名」
- * 而是参数值——后面的词全部属于它，一并丢掉。
- * 判据必须是**动词 + flag 组合**（bash -c / node -e），只看 flag 字母会
- * 误伤 `sed -e` 这类只吃单个短参的情形。
- */
-const SCRIPT_PAIRS: Readonly<Record<string, ReadonlySet<string>>> = {
-  bash: new Set(['-c']),
-  sh: new Set(['-c']),
-  zsh: new Set(['-c']),
-  node: new Set(['-e', '-E', '-p']),
-  bun: new Set(['-e']),
-  python: new Set(['-c']),
-  python3: new Set(['-c']),
-};
-
-/** shell 注释与 heredoc 正文标记：后面的内容全是笔记/散文，不是对象名。 */
-const COMMENT_MARK = /^[#/]/;
+const MAX_SUMMARY_CHARS = 120;
 
 function stripQuotes(token: string): string {
   return token.replace(/^["'`]+|["'`]+$/g, '');
 }
 
-/** 路径化 token 归一为对象名：`apps/mobile/src/strings/zh.ts` → `zh.ts`。 */
-function objectName(token: string): string {
-  const clean = stripQuotes(token);
-  const segments = clean.split(/[\\/]/);
-  return segments.at(-1) ?? clean;
+/** 折叠空白 + 按行折平（多行命令在行内必须变成一行）。 */
+function flatten(text: string): string {
+  return text.replace(/\s+/g, ' ').trim();
 }
 
-function tokenize(segment: string): string[] {
-  return segment.trim().split(/\s+/).map(stripQuotes).filter((token) => token.length > 0);
+/** 命令链 → 首个实质段（跳过 cd/export/set），去掉重定向与 stdin 标记。 */
+function primarySegment(raw: string): string {
+  const segments = raw
+    .split(SHELL_OPERATORS)
+    .map((part) => part.split(REDIRECT)[0] ?? '')
+    .map((part) => part.replace(STDIN_MARK, '$1').trim())
+    .filter((part) => part.length > 0);
+  const primaryIndex = segments.findIndex((part) => !CHANGE_DIR_VERBS.has(stripQuotes(part.split(/\s+/)[0] ?? '')));
+  return segments[primaryIndex] ?? segments[0] ?? '';
+}
+
+/** 截断加省略号：截在词边界上，不把文件名劈成两半。
+ *  结果长度含省略号不超过 MAX_SUMMARY_CHARS（上限是展示面承诺）。 */
+function clip(text: string): string {
+  if (text.length <= MAX_SUMMARY_CHARS) return text;
+  const budget = MAX_SUMMARY_CHARS - 1; // 给省略号留位
+  const cut = text.slice(0, budget);
+  const lastSpace = cut.lastIndexOf(' ');
+  const head = lastSpace > budget / 2 ? cut.slice(0, lastSpace) : cut;
+  return `${head.replace(/[\s,;]+$/, '')}…`;
 }
 
 /**
- * 对象位收窄：只留「像对象名」的词（命令名/文件名/包名/标识符）。
- * 长句、CJK 正文、含标点的散文一律丢弃——它们是参数值或正文，
- * 该去详情区看，不该占着一行摘要的位置。
- */
-function isObjectish(token: string): boolean {
-  if (token.length === 0 || token.length > MAX_NAME_CHARS) return false;
-  if (PROSE.test(token)) return false;
-  if (COMMENT_MARK.test(token)) return false;
-  return true;
-}
-
-/**
- * 人话摘要：命令链取首个实质段（跳过 cd/export），剥路径前缀、丢 flag 与数值参数，
- * 保留动词与对象词干；只留能当「对象」的词，整体封顶一行。
+ * 命令摘要：命令链取首个实质段，重定向剥掉，空白折叠，按上限截断加省略号。
  * 垃圾输入安全降级空串。
  */
 export function toolSummary(argsPreview: string): string {
-  const raw = argsPreview.trim();
+  const raw = flatten(argsPreview);
   if (raw.length === 0) return '';
-  // 整段引号短语（如任务描述）原样保留，不再拆词。
+  // 整段引号短语（如任务描述）原样保留。
   const quoted = raw.match(/^["'`](.*)["'`]$/s);
   if (quoted?.[1] !== undefined && quoted[1].trim().length > 0) {
-    return clipSummary(quoted[1].trim());
+    return clip(flatten(quoted[1]));
   }
-  const segments = raw.split(SHELL_OPERATORS).filter((part) => part.trim().length > 0);
-  const primaryIndex = segments.findIndex((part) => {
-    const verb = stripQuotes(part.trim().split(/\s+/)[0] ?? '');
-    return !CHANGE_DIR_VERBS.has(verb);
-  });
-  const primary = segments[primaryIndex] ?? segments[0] ?? '';
-  const words = objectWords(tokenize(primary));
-  return clipSummary(words.join(' '));
-}
-
-/** token → 对象词：越过第一个「动词+脚本flag」组合后全部丢弃，其余按对象名规则过滤。 */
-function objectWords(tokens: readonly string[]): string[] {
-  const scriptFlags = SCRIPT_PAIRS[stripQuotes(tokens[0] ?? '')] ?? null;
-  const out: string[] = [];
-  for (const token of tokens) {
-    if (scriptFlags?.has(token) === true) break;
-    if (FLAG.test(token)) continue;
-    if (NUMERIC_ARG.test(token)) continue;
-    // 先归一为对象名（剥目录前缀）再判合格——顺序反了会把
-    // `apps/…/timeline-list.tsx` 这类长路径在剥前缀前就当噪声丢掉
-    const name = objectName(token);
-    if (out.length > 0 && !isObjectish(name)) continue;
-    out.push(name);
-  }
-  return out;
-}
-
-/** 封顶一行：超长时只留动词（动作是摘要的主体，对象可有可无）。 */
-function clipSummary(text: string): string {
-  if (text.length <= MAX_SUMMARY_CHARS) return text;
-  const verb = text.split(' ')[0] ?? '';
-  return verb;
+  return clip(primarySegment(raw));
 }
