@@ -85,10 +85,12 @@ describe("ToolCallRow 子智能体执行行（参考图样式）", () => {
   test("症状回归：展开箭头紧跟文案（gap 6px），不得被推到行尾", () => {
     const html = renderRow(call({ name: "bash", argsPreview: "bun test", subagents: [], status: "ok", output: "hi" }));
     expect(html).not.toContain("ml-auto");
+    // 行内不得折行（折行会把箭头挤到第二行）
+    expect(html).not.toContain("flex-wrap");
     // 摘要 span 不得 flex-1 撑满——那会把行尾元素（箭头）全推到右缘。
     // （按钮容器上的 flex-1 是点击区，正确）
     const summary = html.match(/<span title="[^"]*" class="([^"]*)"/)?.[1] ?? "";
-    expect(summary).toContain("min-w-0 shrink break-words");
+    expect(summary).toContain("min-w-0 shrink truncate");
     expect(summary).not.toContain("flex-1");
   });
 
@@ -99,12 +101,15 @@ describe("ToolCallRow 子智能体执行行（参考图样式）", () => {
     expect(closed).toContain("group");
   });
 
-  test("参数摘要自适应铺满：不吃 truncate、不吃固定上限（用户裁决 1：省掉省略号）", () => {
+  test("摘要单行不折行：超长由字符上限截断，不靠 CSS 折行", () => {
     const html = renderRow(call({ name: "bash", argsPreview: "bun run build", subagents: [], status: "ok" }));
-    expect(html).toContain("flex-1");
-    expect(html).toContain("break-words");
-    expect(html).not.toContain("max-w-full");
-    expect(html).not.toContain("truncate");
+    const summary = html.match(/<span title="[^"]*" class="([^"]*)"/)?.[1] ?? "";
+    // 症状回归：break-words 会让长命令折行，把行尾箭头挤到第二行
+    expect(summary).not.toContain("break-words");
+    // truncate 只是兜底防溢出，截断本体在 toolSummary（截在词边界）
+    expect(summary).toContain("truncate");
+    // 摘要不抢占剩余空间（那会把箭头推到右缘）
+    expect(summary).not.toContain("flex-1");
   });
 
   test("症状回归：运行中图标不得消失——shimmer 是 background-clip:text 文字技法，\n     作用在 SVG 上会因 color:transparent + stroke=currentColor 让描边不可见", () => {

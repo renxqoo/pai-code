@@ -73,10 +73,10 @@ function ToolCallRow({ call }: ToolCallRowProps) {
         <span
           title={call.argsPreview}
           className={cn(
-            // 摘要自适应但不抢占剩余空间：flex-shrink（可折行/可收缩）而非
-            // flex-1（撑满）。flex-1 会把行尾元素全推到右缘——展开箭头会
-            // 飘离它控制的文案。这里「文案有多宽就占多宽，窄了才折行」。
-            'min-w-0 shrink break-words',
+            // 单行不折行：超长由 toolSummary 按字符上限截断（截在词边界，
+            // 尾字是「…」），CSS 的 truncate 只兜底极端窄窗。曾用 break-words
+            // 让长命令折行，折行会把行尾箭头挤到第二行，破坏单行形态。
+            'min-w-0 shrink truncate',
             toolPreviewMono(kind) ? 'font-mono text-[12.5px]' : 'text-[12.5px]',
             running ? 'shimmer-text' : failed ? 'text-diff-del' : 'text-muted-foreground',
           )}
@@ -106,7 +106,7 @@ function ToolCallRow({ call }: ToolCallRowProps) {
               <span
                 title={spawn.task}
                 className={cn(
-                  'min-w-0 shrink break-words text-[12.5px] leading-[20px]',
+                  'min-w-0 shrink truncate text-[12.5px] leading-[20px]',
                   running ? 'shimmer-text' : 'text-muted-foreground',
                 )}
               >
@@ -120,7 +120,7 @@ function ToolCallRow({ call }: ToolCallRowProps) {
       )}
       {last ? callTail(call) : null}
       {/* 箭头紧跟文案：它是这行的展开开关，飘到行尾会与操作对象失联 */}
-      {last && expandable ? <ChevronToggle open={open} className={cn('shrink-0', chevronRevealClass(open))} /> : null}
+      {last && expandable ? <ChevronToggle open={open} className={chevronRevealClass(open)} /> : null}
     </>
   );
 
@@ -149,12 +149,12 @@ function ToolCallRow({ call }: ToolCallRowProps) {
                 type="button"
                 onClick={() => setPref(!open)}
                 aria-expanded={open}
-                className="flex min-w-0 flex-1 cursor-pointer flex-wrap items-center gap-x-[6px] gap-y-[2px] rounded-md px-[2px] py-[1px] text-left outline-none select-none hover:bg-accent/60 focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="flex min-w-0 flex-1 cursor-pointer items-center gap-[6px] rounded-md px-[2px] py-[1px] text-left outline-none select-none hover:bg-accent/60 focus-visible:ring-3 focus-visible:ring-ring/50"
               >
                 {rowContent(spawn, last)}
               </button>
             ) : (
-              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-[6px] gap-y-[2px] px-[2px] py-[1px]">{rowContent(spawn, last)}</div>
+              <div className="flex min-w-0 flex-1 items-center gap-[6px] px-[2px] py-[1px]">{rowContent(spawn, last)}</div>
             )}
           </div>
         );

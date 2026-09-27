@@ -4,7 +4,6 @@ import { Pencil } from 'lucide-react';
 import { ChevronToggle } from '@paiapp/ui';
 
 import { copy } from '@/strings';
-import { cn } from '@/lib/utils';
 import { EditHunkList } from './edit-hunk-list';
 import { objectName } from './file-object-name';
 import { chevronRevealClass, resolveOpen, type CollapsePref } from './collapse-state';
@@ -40,7 +39,7 @@ function FileDiffRow({ path, hunks }: FileDiffRowProps) {
           {objectName(path)}
         </span>
         {/* 箭头紧跟文件名：它是这行的展开开关，飘到行尾会与文件名失联 */}
-        <ChevronToggle open={open} variant="disclose" className={cn('shrink-0', chevronRevealClass(open))} />
+        <ChevronToggle open={open} variant="disclose" className={chevronRevealClass(open)} />
       </button>
       {open ? <EditHunkList hunks={hunks} /> : null}
     </div>
