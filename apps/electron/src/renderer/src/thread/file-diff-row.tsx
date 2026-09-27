@@ -35,7 +35,7 @@ function FileDiffRow({ path, hunks }: FileDiffRowProps) {
         <span className="shrink-0 text-[12.5px] leading-[20px] font-medium text-muted-foreground">
           {copy.flow.rowDoneEdit}
         </span>
-        <span className="min-w-0 shrink break-words font-mono text-[12.5px] leading-[20px] text-muted-foreground">
+        <span className="min-w-0 shrink truncate font-mono text-[12.5px] leading-[20px] text-muted-foreground">
           {objectName(path)}
         </span>
         {/* 箭头紧跟文件名：它是这行的展开开关，飘到行尾会与文件名失联 */}

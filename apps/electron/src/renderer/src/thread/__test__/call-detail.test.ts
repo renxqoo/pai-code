@@ -8,8 +8,8 @@ describe('callExpandable', () => {
     expect(callExpandable({ output: '', editHunks: [] })).toBe(false);
   });
 
-  test('症状回归：edit 成功但无输出——补丁片段本身就是详情，仍可展开看「改了什么」', () => {
-    expect(callExpandable({ output: '', editHunks: [{ oldText: 'a', newText: 'b' }] })).toBe(true);
+  test('症状回归：edit 无输出不可展开——补丁已迁到文件级 diff 区，留在行详情里会变成「有箭头、点了空白」的死开关', () => {
+    expect(callExpandable({ output: '' })).toBe(false);
   });
 });
 

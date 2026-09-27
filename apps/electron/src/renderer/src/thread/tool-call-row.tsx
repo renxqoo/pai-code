@@ -20,19 +20,19 @@ type ToolCallRowProps = {
   call: ToolCallModel
 };
 
-/** 行尾状态：失败退出码 / 停止（渲染片段，非独立组件）。
- *  成功不挂耗时——执行过程是脚注，一行一个动作短语就够，秒数只添噪声
- *  （要精确耗时走展开详情与 Agent 面板）。 */
+/**
+ * 行尾补充信息：**只有失败的退出码**。
+ * 成功不挂耗时（执行过程是脚注，秒数只添噪声）；停止态的「已停止」已由前缀
+ * 成句承担（`toolRowLabel`），行尾再挂一遍是逐字重复。
+ * 退出码未知时**不显标签**——编造一个「退出码 1」是在编造事实。
+ */
 function callTail(call: ToolCallModel) {
-  if (call.status === 'failed') {
+  if (call.status === 'failed' && call.exitCode !== null) {
     return (
       <span className="shrink-0 font-mono text-[11px] leading-none tabular-nums text-diff-del">
-        {copy.flow.toolFailed(call.exitCode ?? 1)}
+        {copy.flow.toolFailed(call.exitCode)}
       </span>
     );
-  }
-  if (call.status === 'stopped') {
-    return <span className="shrink-0 text-[11px] leading-none text-muted-foreground/70">{copy.flow.toolStopped}</span>;
   }
   return null;
 }

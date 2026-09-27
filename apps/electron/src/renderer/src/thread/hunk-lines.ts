@@ -17,11 +17,18 @@ export type HunkLine = {
   startsHunk: boolean
 }
 
-/** 按行号分行（丢弃末尾空行：原文/新文多以换行结尾，不是内容行）。 */
+/**
+ * 按行分行：统一 CRLF/CR/LF（`\r` 残留会在复制出的 diff 里变成 `^M`），
+ * 并丢弃**末尾**空行（片段常以换行结尾，那不是内容行）。
+ * 片段本身是「纯换行」时（插入/删除一个空行——最常见的编辑之一），
+ * 返回一行空格占位：早前让它落进兜底分支，把含 `\n` 的原文塞进单行渲染，
+ * pre-wrap 下渲成一个双倍高的空白块且无红绿提示。
+ */
 function splitLines(text: string): string[] {
   if (text.length === 0) return [];
-  const lines = text.split('\n');
+  const lines = text.split(/\r\n|\r|\n/);
   while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
+  if (lines.length === 0) return [' '];
   return lines;
 }
 

@@ -1,4 +1,4 @@
-import type { EditHunkView } from '@paiapp/contracts';
+import { clipText, type EditHunkView } from '@paiapp/contracts';
 
 /**
  * edit 工具参数 → 补丁片段对。x-harness edit 工具入参 {path, edits:[{oldText, newText}]}：
@@ -31,13 +31,11 @@ function hunkOf(value: unknown, path: string): EditHunkView | null {
   return { oldText: clip(oldText), newText: clip(newText), path };
 }
 
-/** UTF-16 截断（不劈代理对）：与 args-preview 同口径。 */
+/** 截断（不劈代理对 + 超限加省略号）：走 contracts 共享实现。
+ * 省略号是必需的——静默截断会让 diff 面的红绿行数骗人（曾把 5000 字的
+ * 大段重写显示成「删 1999 字」，用户无从得知还有 3000 字被吃掉）。 */
 function clip(text: string): string {
-  if (text.length <= HUNK_CHARS) return text;
-  const cut = text.slice(0, HUNK_CHARS - 1);
-  const last = cut.charCodeAt(cut.length - 1);
-  const loneHighSurrogate = last >= 0xd800 && last <= 0xdbff;
-  return loneHighSurrogate ? cut.slice(0, -1) : cut;
+  return clipText(text, HUNK_CHARS);
 }
 
 /** edit 工具入参 → 补丁片段对；非 edit 工具或垃圾形状返回空数组。 */

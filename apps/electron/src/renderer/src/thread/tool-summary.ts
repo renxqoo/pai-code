@@ -14,10 +14,14 @@
  * 加省略号。除此之外一个字符都不动。
  */
 
+import { clipAtWord } from '@paiapp/contracts';
+
 /**
- * 摘要字符上限：单行可容纳的量级（12.5px 等宽字体在对话列宽下约 120 字符）。
- * 超出则截断加「…」。上限不随窗口宽度变（摘要是纯函数，不读 DOM）——
- * 宁可略保守，也不要让同一命令在两个窗口里显示成两副样子。
+ * 摘要字符上限：单行可容纳的量级。**这是 JS 层的兜底，不是排版保证**——
+ * 对话列有 max-w-[960px] 硬上限，等宽 12.5px 下满宽约 114 字符，默认窗约 100、
+ * 最小窗约 60，所以真正决定显示量的是 CSS truncate；这里只保证
+ * 「DOM 里不进超长文本」与「省略号由我们统一产出，不与 CSS 的省略号叠加」。
+ * 取 120 = 最宽合法窗口的保守上界。
  */
 const MAX_SUMMARY_CHARS = 120;
 
@@ -26,27 +30,13 @@ function flatten(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
 }
 
-/** 截断加省略号：截在词边界上，不把文件名劈成两半。
- *  结果长度含省略号不超过 MAX_SUMMARY_CHARS（上限是展示面承诺）。 */
-function clip(text: string): string {
-  if (text.length <= MAX_SUMMARY_CHARS) return text;
-  const budget = MAX_SUMMARY_CHARS - 1; // 给省略号留位
-  const cut = text.slice(0, budget);
-  const lastSpace = cut.lastIndexOf(' ');
-  const head = lastSpace > budget / 2 ? cut.slice(0, lastSpace) : cut;
-  return `${head.replace(/[\s,;]+$/, '')}…`;
-}
-
 /**
- * 命令摘要：原样展示（空白折叠），超长截断加省略号。垃圾输入降级空串。
+ * 命令摘要：原样展示（只折叠空白），超长按词边界截断加省略号。
+ *
+ * 不剥引号：引号对 shell 是语法内容（`"./lint.sh" --fix "src/**"` 剥成
+ * `./lint.sh" --fix "src/**` 是撕破命令，比多两个字符糟得多）。
+ * 截断走 `clipAtWord` 共享实现（不劈代理对 + 有词边界才回退）。
  */
 export function toolSummary(argsPreview: string): string {
-  const raw = flatten(argsPreview);
-  if (raw.length === 0) return '';
-  // 整段引号短语（如子代理任务描述）脱去外层引号——引号不是内容。
-  const quoted = raw.match(/^["'`](.*)["'`]$/s);
-  if (quoted?.[1] !== undefined && quoted[1].trim().length > 0) {
-    return clip(flatten(quoted[1]));
-  }
-  return clip(raw);
+  return clipAtWord(flatten(argsPreview), MAX_SUMMARY_CHARS);
 }

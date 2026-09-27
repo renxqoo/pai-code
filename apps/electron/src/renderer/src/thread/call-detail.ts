@@ -2,8 +2,9 @@ import type { ToolCallModel } from './thread-model';
 
 /**
  * 工具单元详情区的展开与内容策略：
- * - 可展开 = 有详情可看（输出即详情；edit 的补丁片段也是详情——编辑类调用常常
- *   成功且无输出，只有片段才看得到「改了什么」）；
+ * - 可展开 = 行详情里有东西可看。**只看 output**：edit 的补丁已迁到批次级
+ *   FileDiffSection（同一文件多次编辑合成一个 diff），行详情里只剩输出。
+ *   把 editHunks 计入会让「成功的 edit」变成死开关——有箭头、点了空白。
  * - 自动开合 = 只有失败自动展开（错误必须可见）；失败是终态，只开不关。
  *   运行中不自动展开：「开始输出即展开、成功即收起」的开合对会让短命令闪现
  *   输出面板；实时尾部由用户手动展开（CollapsePref 覆盖自动值，与轮级同一套
@@ -14,8 +15,8 @@ import type { ToolCallModel } from './thread-model';
 
 const LIVE_HEAD_CHARS = 2000;
 
-export function callExpandable(call: Pick<ToolCallModel, 'output' | 'editHunks'>): boolean {
-  return call.output.length > 0 || call.editHunks.length > 0;
+export function callExpandable(call: Pick<ToolCallModel, 'output'>): boolean {
+  return call.output.length > 0;
 }
 
 export function autoOpenForCall(call: Pick<ToolCallModel, 'status'>): boolean {

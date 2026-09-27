@@ -45,6 +45,12 @@ describe("toolSummary 命令忠实展示", () => {
     expect(toolSummary("cat packages/api/src/views/foo.ts")).not.toBe(toolSummary("cat packages/ui/src/views/foo.ts"));
   });
 
+  test("超长命令：截断加省略号；无词边界可退时保量（不只剩动词）", () => {
+    // 症状回归：旧实现回退条件是 lastSpace > budget/2，121 字命令会只剩 61 字
+    expect(toolSummary('b'.repeat(121)).length).toBe(120);
+    expect(toolSummary('/very/long/path/'.repeat(20)).length).toBe(120);
+  });
+
   test("超长命令：截断加省略号，截在词边界（不把文件名劈两半）", () => {
     const long = [
       "cd /Users/wrr/work/agent-app",
@@ -80,8 +86,12 @@ describe("toolSummary 命令忠实展示", () => {
     expect(toolSummary("  bun test  ")).toBe("bun test");
   });
 
-  test("整段引号短语（任务描述）脱去外层引号——引号不是内容", () => {
-    expect(toolSummary('"quoted task description"')).toBe("quoted task description");
+  test("引号原样保留：引号对 shell 是语法内容（撕破它比多两个字符糟得多）", () => {
+    // 症状回归：曾把 `"./lint.sh" --fix "src/**"` 剥成
+    // `./lint.sh" --fix "src/**`（引号不平衡的破命令）
+    expect(toolSummary('"./lint.sh" --fix "src/**"')).toBe('"./lint.sh" --fix "src/**"');
+    expect(toolSummary('`git status`')).toBe("`git status`");
+    expect(toolSummary('"quoted task description"')).toBe('"quoted task description"');
   });
 
   test("垃圾输入安全降级", () => {

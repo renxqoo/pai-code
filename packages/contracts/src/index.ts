@@ -19,3 +19,4 @@ export * from './ports';
 export * from './hub-commands';
 export * from './hub-data';
 export * from './hub-events';
+export * from './text-clip';

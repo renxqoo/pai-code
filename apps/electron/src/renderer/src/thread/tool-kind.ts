@@ -2,6 +2,10 @@
  * 工具名 → 展示种类：执行单元的图标语义、人话标签与摘要字体由这一个判定出发。
  * 工具名大小写不敏感（协议侧 bash/read 小写，演示与扩展出现过 Bash/Read 首字母大写）。
  * 未知工具不猜测，落 other（标签直接显示原始工具名）。
+ *
+ * 词表与 `packages/api/src/views/subagent-spawns.ts` 必须一致：子代理的
+ * `subagents` 面是按 `agent_spawn` 填的，若这里不认它，数据填了却没人消费
+ * ——组头会显示「调用了agent_spawn」、子代理清单永不展开（实测过）。
  */
 
 export type ToolKind = 'bash' | 'read' | 'edit' | 'write' | 'search' | 'list' | 'subagent' | 'other';
@@ -20,6 +24,9 @@ const KIND_BY_NAME: Readonly<Record<string, ToolKind>> = {
   search: 'search',
   ls: 'list',
   dir: 'list',
+  // 生产名（x-harness agent-delegation 注册名，subagent-spawns.ts 认它）
+  agent_spawn: 'subagent',
+  // 兼容别名：早期演示数据与部分扩展用这些名字
   task: 'subagent',
   subagent: 'subagent',
   agent: 'subagent',

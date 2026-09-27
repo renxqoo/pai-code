@@ -42,7 +42,10 @@ function bucketOf(name: string): GroupBucketKind {
   return BUCKET_BY_KIND[toolKindOf(name)] ?? 'other';
 }
 
+/** 空工具名不进桶：否则组头会拼出悬空的「调用了」（toolRowLabel 已有的裁决，
+ *  同一「空名」事实不该两处不同命）。 */
 function pushBucket(buckets: Map<GroupBucketKind, ToolGroupBucket>, kind: GroupBucketKind, name: string): void {
+  if (name.trim().length === 0) return;
   const existing = buckets.get(kind);
   if (existing === undefined) {
     buckets.set(kind, { kind, names: kind === 'other' ? [name] : [] });

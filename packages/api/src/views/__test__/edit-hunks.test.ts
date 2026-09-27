@@ -2,6 +2,20 @@ import { describe, expect, test } from 'bun:test';
 
 import { editHunksField, editHunksOf } from '../edit-hunks';
 
+/** 孤立高位代理项计数：高位码元后面不跟低位代理 = 半个字符。 */
+function loneHighSurrogates(text: string): number {
+  let count = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    const code = text.charCodeAt(i);
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next = text.charCodeAt(i + 1);
+      if (next >= 0xdc00 && next <= 0xdfff) i += 1;
+      else count += 1;
+    }
+  }
+  return count;
+}
+
 const ARGS = {
   path: 'src/a.ts',
   edits: [
@@ -55,14 +69,19 @@ describe('editHunksOf：edit 工具参数 → 补丁片段', () => {
     expect(editHunksOf('edit', many)).toHaveLength(8);
   });
 
-  test('超长片段截断（模型违规大段重写）：不劈代理对', () => {
+  test('超长片段截断（模型违规大段重写）：有省略号、且不劈代理对', () => {
     const long = 'x'.repeat(5000);
     const [hunk] = editHunksOf('edit', { edits: [{ oldText: long, newText: 'n' }] });
-    expect(hunk?.oldText.length).toBeLessThan(long.length);
-    // 代理对边界：半个高位代理不得出现在截断结果里
+    expect(hunk?.oldText.length).toBe(2000);
+    // 静默截断会让 diff 面的红绿行数骗人——必须出省略号
+    expect(hunk?.oldText.endsWith('…')).toBe(true);
+
+    // 代理对边界：精确断言「无孤立代理项」——不用 includes('\uFFFD')，
+    // 那恒真（slice 产出的是孤立代理项 U+D83C，不是替换符），删掉保护也照绿
     const emoji = '😀'.repeat(1200);
     const [emojiHunk] = editHunksOf('edit', { edits: [{ oldText: emoji, newText: 'n' }] });
-    expect(emojiHunk?.oldText.includes('�')).toBe(false);
+    expect(emojiHunk?.oldText.length).toBeLessThanOrEqual(2000);
+    expect(loneHighSurrogates(emojiHunk?.oldText ?? '')).toBe(0);
   });
 });
 
