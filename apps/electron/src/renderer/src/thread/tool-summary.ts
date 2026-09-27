@@ -44,6 +44,7 @@ export function toolSummary(argsPreview: string): string {
     .filter((token) => !FLAG.test(token))
     .filter((token) => !NUMERIC_ARG.test(token))
     .map((token, index) => (index === 0 && !token.includes('/') ? token : objectName(token)));
-  const suffix = segments.length > 1 ? '…' : '';
-  return `${words.join(' ')}${suffix}`;
+  // 不补省略号：摘要已经吃满整行宽度（自适应铺满），再画个「…」
+  // 只会读成「内容被截断了」——多段命令本就只取首段，这是既定口径
+  return words.join(' ');
 }

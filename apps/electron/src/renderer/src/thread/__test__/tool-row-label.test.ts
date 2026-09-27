@@ -13,12 +13,12 @@ function iconName(name: string): string {
 
 describe('toolRowLabel 单条执行行的状态前缀（用户裁决 3）', () => {
   test.each([
-    ['bash', '已运行命令', '正在运行命令'],
-    ['read', '已阅读文件', '正在阅读文件'],
-    ['edit', '已编辑文件', '正在编辑文件'],
-    ['write', '已写入文件', '正在写入文件'],
+    ['bash', '已运行', '正在运行'],
+    ['read', '已阅读', '正在阅读'],
+    ['edit', '已编辑', '正在编辑'],
+    ['write', '已写入', '正在写入'],
     ['grep', '已搜索', '正在搜索'],
-    ['ls', '已列出目录', '正在列出目录'],
+    ['ls', '已列出', '正在列出'],
     ['task', '已派生子智能体', '正在派生子智能体'],
   ] as ReadonlyArray<readonly [string, string, string]>)('%s：终态过去式 / 运行中现在进行时', (tool, done, running) => {
     expect(toolRowLabel(tool, 'ok')).toBe(done);
@@ -33,7 +33,7 @@ describe('toolRowLabel 单条执行行的状态前缀（用户裁决 3）', () =
   });
 
   test('工具名大小写不敏感（协议侧小写，扩展可能首字母大写）', () => {
-    expect(toolRowLabel('Bash', 'ok')).toBe('已运行命令');
+    expect(toolRowLabel('Bash', 'ok')).toBe('已运行');
   });
 
   test('空工具名降级为空串（不悬空前缀）', () => {
@@ -42,8 +42,8 @@ describe('toolRowLabel 单条执行行的状态前缀（用户裁决 3）', () =
   });
 
   test('toolRowLabelOf 从调用本体取类型与状态', () => {
-    expect(toolRowLabelOf({ name: 'read', status: 'ok' })).toBe('已阅读文件');
-    expect(toolRowLabelOf({ name: 'read', status: 'running' })).toBe('正在阅读文件');
+    expect(toolRowLabelOf({ name: 'read', status: 'ok' })).toBe('已阅读');
+    expect(toolRowLabelOf({ name: 'read', status: 'running' })).toBe('正在阅读');
   });
 });
 

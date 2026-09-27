@@ -129,12 +129,12 @@ describe("ToolCallRow 子智能体执行行（参考图样式）", () => {
 
 describe("ToolCallRow 状态前缀（用户裁决 3：每条执行带上「已…」）", () => {
   test.each([
-    ["bash 行命令本体", "bash", "git status", "已运行命令", "lucide-square-terminal"],
-    ["read", "read", "src/a.ts", "已阅读文件", "lucide-book-open"],
-    ["edit", "edit", "src/a.ts", "已编辑文件", "lucide-pencil"],
-    ["write", "write", "src/a.ts", "已写入文件", "lucide-pencil"],
+    ["bash 行命令本体", "bash", "git status", "已运行", "lucide-square-terminal"],
+    ["read", "read", "src/a.ts", "已阅读", "lucide-book-open"],
+    ["edit", "edit", "src/a.ts", "已编辑", "lucide-pencil"],
+    ["write", "write", "src/a.ts", "已写入", "lucide-pencil"],
     ["grep 归搜索", "grep", "TODO", "已搜索", "lucide-wrench"],
-    ["ls 归列目录", "ls", "src", "已列出目录", "lucide-wrench"],
+    ["ls 归列目录", "ls", "src", "已列出", "lucide-wrench"],
   ])("其他工具 %s：已完成前缀 + 类别图标 + 参数摘要", (_name, tool, preview, label, icon) => {
     const html = renderRow(call({ name: tool, argsPreview: preview, subagents: [], status: "ok" }));
     expect(html).toContain(label);
@@ -146,18 +146,18 @@ describe("ToolCallRow 状态前缀（用户裁决 3：每条执行带上「已�
 
   test("运行中：前缀切进行时（状态写进动词）", () => {
     expect(renderRow(call({ name: "bash", argsPreview: "ls", subagents: [], status: "running" }))).toContain(
-      "正在运行命令",
+      "正在运行",
     );
     expect(renderRow(call({ name: "read", argsPreview: "a.ts", subagents: [], status: "running" }))).toContain(
-      "正在阅读文件",
+      "正在阅读",
     );
   });
 
   test("失败与停止也是过去式（发生过的事，不改时态）", () => {
     expect(renderRow(call({ name: "bash", argsPreview: "ls", subagents: [], status: "failed", exitCode: 2 }))).toContain(
-      "已运行命令",
+      "已运行",
     );
-    expect(renderRow(call({ name: "bash", argsPreview: "ls", subagents: [], status: "stopped" }))).toContain("已运行命令");
+    expect(renderRow(call({ name: "bash", argsPreview: "ls", subagents: [], status: "stopped" }))).toContain("已运行");
   });
 
   test("未知工具不翻译：前缀直接点名工具", () => {

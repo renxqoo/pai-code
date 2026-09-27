@@ -101,7 +101,7 @@ describe('ToolGroup 并行批次组头（用户指定形态）', () => {
   test('单调用不套组头：直接一个执行单元行（带类别图标 + 状态前缀）', () => {
     const html = renderToStaticMarkup(<ToolsBlock calls={[call('bash', { status: 'ok' })]} />);
     expect(html).toContain('bash 参数');
-    expect(html).toContain('已运行命令');
+    expect(html).toContain('已运行');
     expect(html).toContain('lucide-square-terminal');
     expect(html).not.toContain('aria-expanded');
   });

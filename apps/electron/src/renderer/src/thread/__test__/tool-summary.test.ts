@@ -7,7 +7,9 @@ describe("toolSummary 文案化派生", () => {
     const raw =
       'cd /Users/wrr/work/agent-app && sed -n 1,60p apps/mobile/src/features/chat/timeline-list.tsx && echo "---activi...';
     const summary = toolSummary(raw);
-    expect(summary).toBe("sed timeline-list.tsx…");
+    // 不补省略号（用户裁决 2）：摘要已吃满整行宽度，再画「…」读成内容被截断
+    expect(summary).toBe("sed timeline-list.tsx");
+    expect(summary).not.toContain("…");
     expect(summary).not.toContain("/Users/");
     expect(summary).not.toContain("&&");
     expect(summary).not.toContain("sed -n 1,60p");
