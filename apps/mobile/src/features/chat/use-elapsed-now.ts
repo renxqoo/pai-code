@@ -5,9 +5,13 @@ export function useElapsedNow(active: boolean): number {
   const [now, setNow] = React.useState(() => Date.now());
   React.useEffect(() => {
     if (!active) return undefined;
-    setNow(Date.now());
+    // 激活瞬间的刷新挪到宏任务（避免 effect 内同步 setState 级联渲染），其余交给 1Hz 快照
+    const kickoff = setTimeout(() => setNow(Date.now()), 0);
     const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
+    return () => {
+      clearTimeout(kickoff);
+      clearInterval(timer);
+    };
   }, [active]);
   return now;
 }

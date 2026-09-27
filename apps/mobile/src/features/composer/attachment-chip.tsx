@@ -2,8 +2,7 @@ import * as React from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { FileText, Image as ImageIcon, X } from 'lucide-react-native';
 import { useAppTheme } from '@/theme/theme-context';
-import { type } from '@/theme/tokens';
-import { radius, spacing } from '@/theme/tokens';
+import { radius, spacing, type } from '@/theme/tokens';
 import type { Attachment } from '@/types/domain';
 
 type AttachmentChipProps = { attachment: Attachment; onRemove?: () => void };

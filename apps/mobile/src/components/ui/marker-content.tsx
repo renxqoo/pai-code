@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { Animated, Easing, StyleSheet, type StyleProp, type TextStyle } from 'react-native';
+import { Animated, Easing, Platform, StyleSheet, type StyleProp, type TextStyle } from 'react-native';
+import { nativeDriverFor } from '@/components/ui/native-driver';
 import { useAppTheme } from '@/theme/theme-context';
 import { type } from '@/theme/tokens';
 import { useReducedMotion } from '@/components/ui/use-reduced-motion';
@@ -23,7 +24,7 @@ type MarkerContentProps = {
 export function MarkerContent({ children, shimmer = false, numberOfLines, shrink = false, style, testID }: MarkerContentProps) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
-  const glow = React.useRef(new Animated.Value(1)).current;
+  const [glow] = React.useState(() => new Animated.Value(1));
   const animated = shimmer && !reducedMotion;
   React.useEffect(() => {
     if (!animated) {
@@ -32,8 +33,8 @@ export function MarkerContent({ children, shimmer = false, numberOfLines, shrink
     }
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(glow, { toValue: 0.55, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-        Animated.timing(glow, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(glow, { toValue: 0.55, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: nativeDriverFor(Platform.OS) }),
+        Animated.timing(glow, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: nativeDriverFor(Platform.OS) }),
       ]),
     );
     loop.start();

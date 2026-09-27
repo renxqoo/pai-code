@@ -1,8 +1,7 @@
 import * as React from 'react';
 import { TextInput } from 'react-native';
 import { useAppTheme } from '@/theme/theme-context';
-import { type } from '@/theme/tokens';
-import { spacing } from '@/theme/tokens';
+import { spacing, type } from '@/theme/tokens';
 
 type ComposerInputProps = { focused: boolean; value: string; onChangeText: (value: string) => void; onFocus?: () => void; onBlur?: () => void };
 
