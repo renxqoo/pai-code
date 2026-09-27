@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { ChevronDown, ChevronRight } from 'lucide-react-native';
 
-import { changedFileCount, toolRowLabelOf, toolSummary } from '@paiapp/ui-thread';
+import { toolRowLabelOf, toolSummary } from '@paiapp/ui-thread';
 
 import { useAppTheme } from '@/theme/theme-context';
 import { rhythm, type } from '@/theme/tokens';
@@ -54,7 +54,6 @@ export function ProcessFold({ turn, elapsedMs }: ProcessFoldProps) {
         ? copy.activityRunning
         : copy.processLabel;
   const summary = runningMessage === undefined ? '' : runningHeadline(runningMessage);
-  const changed = changedFileCount(turn.stream.map(toolViewOf));
   return (
     <View style={{ marginTop: rhythm.turnGap }}>
       <Pressable
@@ -62,6 +61,7 @@ export function ProcessFold({ turn, elapsedMs }: ProcessFoldProps) {
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
         onPress={() => setPref(!open)}
+        testID="process-fold-toggle"
         style={rowPressStyle}
       >
         <View style={styles.headBlock}>
@@ -70,11 +70,6 @@ export function ProcessFold({ turn, elapsedMs }: ProcessFoldProps) {
               <MarkerIcon loading={runningMessage !== undefined} color={colors.textMuted} testID="fold-spinner" />
               <MarkerContent shimmer={runningMessage !== undefined} numberOfLines={1} style={styles.label}>{label}</MarkerContent>
             </Marker>
-            {changed !== null ? (
-              <Text numberOfLines={1} style={{ color: colors.textFaint, fontSize: type.meta.fontSize, marginLeft: 6 }}>
-                {copy.turnChangedFiles(changed)}
-              </Text>
-            ) : null}
             {open ? <ChevronDown color={colors.textFaint} size={15} /> : <ChevronRight color={colors.textFaint} size={15} />}
           </View>
           {summary.length > 0 ? (

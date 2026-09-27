@@ -46,7 +46,7 @@ export function MarkdownBlock({ block }: MarkdownBlockProps) {
   return (
     <View style={{ marginTop: rhythm.blockGap }}>
       {block.items.map((item, index) => (
-        <Text key={index} selectable style={{ color: colors.text, fontSize: 15, lineHeight: 23, paddingLeft: spacing.xs3 + item.indent * spacing.xs3, marginTop: index === 0 ? 0 : rhythm.listItemGap }}>
+        <Text key={index} selectable style={{ color: colors.text, fontSize: type.row.fontSize, lineHeight: type.row.lineHeight, paddingLeft: spacing.xs3 + item.indent * spacing.xs3, marginTop: index === 0 ? 0 : rhythm.listItemGap }}>
           {markers[index]}{renderInlineNodes(item.content)}
         </Text>
       ))}

@@ -29,6 +29,7 @@ export function ThinkingRow({ message }: ThinkingRowProps) {
         accessibilityRole="button"
         accessibilityState={{ expanded }}
         onPress={() => setExpanded((value) => !value)}
+        testID="thinking-toggle"
         style={rowPressStyle}
       >
         <Marker style={styles.marker}>

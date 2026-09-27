@@ -35,6 +35,7 @@ export function ToolGroupHeader({ views, open, onToggle }: ToolGroupHeaderProps)
       accessibilityRole="button"
       accessibilityState={{ expanded: open }}
       onPress={onToggle}
+      testID="tool-group-toggle"
       style={rowPressStyle}
     >
       <Marker style={styles.marker}>

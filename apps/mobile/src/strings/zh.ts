@@ -89,7 +89,6 @@ export const copy = {
   fileDiffTitle: '改动详情',
   fileDiffUnknown: '未知文件',
   fileDiffDetailLabel: (name: string) => `查看改动详情：${name}`,
-  turnChangedFiles: (count: number) => `· 改了 ${count} 个文件`,
   thinkingLabel: '思考',
   expandThinking: '展开思考详情',
   collapseThinking: '收起思考详情',

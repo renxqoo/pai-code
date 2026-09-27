@@ -97,7 +97,7 @@ describe('ProcessFold', () => {
     expect(view.queryByTestId('fold-spinner', { includeHiddenElements: true })).toBeTruthy();
   });
 
-  it('carries the changed-file suffix so a folded turn still shows what it touched', async () => {
+  it('收起态头行只有耗时，不挂「改了 N 个文件」后缀（用户裁决：头行不加变更计数）', async () => {
     const view = await render(
       <ProcessFold
         turn={turn(
@@ -107,7 +107,7 @@ describe('ProcessFold', () => {
         )}
       />,
     );
-    expect(view.getByText('· 改了 1 个文件')).toBeTruthy();
+    expect(view.queryByText(/改了/)).toBeNull();
     expect(view.queryByText(/共工作/)).toBeNull();
   });
 
