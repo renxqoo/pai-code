@@ -73,7 +73,7 @@ describe('objectName 路径 → 文件名', () => {
 });
 
 describe('FileDiffSection 文件级 diff 区', () => {
-  test('一个文件一行标题（只显文件名），默认收起不挂补丁', () => {
+  test('一个文件一行标题（只显文件名），默认收起不挂补丁；箭头紧跟文件名', () => {
     const html = renderToStaticMarkup(
       <FileDiffSection
         calls={[
@@ -86,6 +86,9 @@ describe('FileDiffSection 文件级 diff 区', () => {
     expect(html.split('a.ts').length - 1).toBeGreaterThan(0);
     expect(html.match(/aria-expanded/g) ?? []).toHaveLength(1);
     expect(html).not.toContain('const a = 1;');
+    // 症状回归：箭头不得被推到行尾
+    expect(html).not.toContain('ml-auto');
+    expect(html).toContain('ml-[2px] shrink-0');
   });
 
   test('无编辑调用不渲染任何内容', () => {

@@ -30,7 +30,8 @@ function FileDiffRow({ path, hunks }: FileDiffRowProps) {
           open={open}
           variant="disclose"
           className={cn(
-            'shrink-0',
+            // 紧跟文件名：箭头是这行的展开开关，飘到行尾会与文件名失联
+            'ml-[2px] shrink-0',
             open
               ? 'opacity-70'
               : 'opacity-0 transition-opacity duration-150 group-hover:opacity-70 group-focus-within:opacity-70 motion-reduce:transition-none',

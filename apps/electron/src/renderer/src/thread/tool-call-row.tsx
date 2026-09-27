@@ -74,7 +74,7 @@ function ToolCallRow({ call }: ToolCallRowProps) {
           title={call.argsPreview}
           className={cn(
             // 摘要自适应：吃满行内剩余宽度，不设上限——窗口宽时完整展开，
-            // 不再出现「明明放得下却省略号」；行尾元素靠 ml-auto 顶到最右
+            // 不再出现「明明放得下却省略号」；摘要吃满行宽自适应折行
             'min-w-0 flex-1 break-words',
             toolPreviewMono(kind) ? 'font-mono text-[12.5px]' : 'text-[12.5px]',
             running ? 'shimmer-text' : failed ? 'text-diff-del' : 'text-muted-foreground',
@@ -118,7 +118,8 @@ function ToolCallRow({ call }: ToolCallRowProps) {
         </>
       )}
       {last ? callTail(call) : null}
-      {last && expandable ? <ChevronToggle open={open} className={cn('ml-auto', chevronRevealClass(open))} /> : null}
+      {/* 箭头紧跟文案：它是这行的展开开关，飘到行尾会与操作对象失联 */}
+      {last && expandable ? <ChevronToggle open={open} className={cn('ml-[2px] shrink-0', chevronRevealClass(open))} /> : null}
     </>
   );
 

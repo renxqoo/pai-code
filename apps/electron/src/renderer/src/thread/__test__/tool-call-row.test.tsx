@@ -82,6 +82,13 @@ describe("ToolCallRow 子智能体执行行（参考图样式）", () => {
     expect(html).not.toContain("lucide-x");
   });
 
+  test("症状回归：展开箭头紧跟文案，不得被推到行尾（飘到行尾会与操作对象失联）", () => {
+    const html = renderRow(call({ name: "bash", argsPreview: "bun test", subagents: [], status: "ok", output: "hi" }));
+    expect(html).not.toContain("ml-auto");
+    // 箭头跟在摘要 span 之后（同一 flex 行内，gap 6px）
+    expect(html).toContain("ml-[2px] shrink-0");
+  });
+
   test("行内箭头收起态 hover 才显形（用户裁决 2）", () => {
     const closed = renderRow(call({ status: "ok", output: "hi" }));
     expect(closed).toContain("opacity-0");
