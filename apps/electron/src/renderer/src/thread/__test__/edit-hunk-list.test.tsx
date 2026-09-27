@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { EditHunkList } from '../edit-hunk-list';
-import { hunkLines } from '../hunk-lines';
+import { allHunkLines, hunkLines } from '../hunk-lines';
 import { ToolCallDetail } from '../tool-call-detail';
 import type { ToolCallModel } from '../thread-model';
 
@@ -24,9 +24,9 @@ function call(overrides: Partial<ToolCallModel>): ToolCallModel {
 describe('hunkLines 片段 → 展示行', () => {
   test('原文行标删除、新文行标新增，删除段在前', () => {
     expect(hunkLines({ oldText: 'a\nb', newText: 'c' }, 0)).toEqual([
-      { key: '0-r0', text: 'a', tone: 'remove' },
-      { key: '0-r1', text: 'b', tone: 'remove' },
-      { key: '0-a0', text: 'c', tone: 'add' },
+      { key: '0-r0', text: 'a', tone: 'remove', startsHunk: true },
+      { key: '0-r1', text: 'b', tone: 'remove', startsHunk: false },
+      { key: '0-a0', text: 'c', tone: 'add', startsHunk: false },
     ]);
   });
 
@@ -39,9 +39,19 @@ describe('hunkLines 片段 → 展示行', () => {
     const second = hunkLines({ oldText: 'a', newText: 'b' }, 1)[0]?.key;
     expect(first).not.toBe(second);
   });
+
+  test('startsHunk 只标后续片段的首行（首片段顶边就是容器边，再画线多一道横杠）', () => {
+    const lines = allHunkLines([
+      { oldText: 'a', newText: 'b' },
+      { oldText: 'c', newText: 'd' },
+    ]);
+    // 两段两个首行，但只有第 2 段需要分隔线
+    expect(lines.filter((line) => line.startsHunk).map((line) => line.key)).toEqual(['1-r0']);
+    expect(lines.map((line) => line.key)).toEqual(['0-r0', '0-a0', '1-r0', '1-a0']);
+  });
 });
 
-describe('EditHunkList 补丁展示', () => {
+describe('EditHunkList 补丁展示（GitHub diff 形态）', () => {
   test('删除行红底、新增行绿底，各带 +/- 前缀', () => {
     const html = renderToStaticMarkup(
       <EditHunkList hunks={[{ oldText: 'const a = 1;', newText: 'const a = 2;' }]} />,
@@ -50,6 +60,31 @@ describe('EditHunkList 补丁展示', () => {
     expect(html).toContain('text-diff-add');
     expect(html).toContain('const a = 1;');
     expect(html).toContain('const a = 2;');
+  });
+
+  test('症状回归：一次编辑的多段补丁只占一个容器（逐段套框会读成改了几个文件）', () => {
+    const html = renderToStaticMarkup(
+      <EditHunkList
+        hunks={[
+          { oldText: 'a', newText: 'b' },
+          { oldText: 'c', newText: 'd' },
+          { oldText: 'e', newText: 'f' },
+        ]}
+      />,
+    );
+    // 容器 = 一个带边框的面包屑 + 一个滚动区
+    expect(html.split('rounded-[8px] border border-border')).toHaveLength(2);
+    // 段间用分隔线，不用独立边框
+    expect(html).toContain('border-t border-border/60');
+    expect(html).not.toContain('rounded-[6px]');
+    expect(html).toContain('a');
+    expect(html).toContain('d');
+    expect(html).toContain('f');
+  });
+
+  test('单段补丁不画段间分隔线（首行没有「另一段」可分）', () => {
+    const html = renderToStaticMarkup(<EditHunkList hunks={[{ oldText: 'a', newText: 'b' }]} />);
+    expect(html).not.toContain('border-t border-border/60');
   });
 
   test('空片段列表不渲染任何内容', () => {
