@@ -82,11 +82,14 @@ describe("ToolCallRow 子智能体执行行（参考图样式）", () => {
     expect(html).not.toContain("lucide-x");
   });
 
-  test("症状回归：展开箭头紧跟文案，不得被推到行尾（飘到行尾会与操作对象失联）", () => {
+  test("症状回归：展开箭头紧跟文案（gap 6px），不得被推到行尾", () => {
     const html = renderRow(call({ name: "bash", argsPreview: "bun test", subagents: [], status: "ok", output: "hi" }));
     expect(html).not.toContain("ml-auto");
-    // 箭头跟在摘要 span 之后（同一 flex 行内，gap 6px）
-    expect(html).toContain("ml-[2px] shrink-0");
+    // 摘要 span 不得 flex-1 撑满——那会把行尾元素（箭头）全推到右缘。
+    // （按钮容器上的 flex-1 是点击区，正确）
+    const summary = html.match(/<span title="[^"]*" class="([^"]*)"/)?.[1] ?? "";
+    expect(summary).toContain("min-w-0 shrink break-words");
+    expect(summary).not.toContain("flex-1");
   });
 
   test("行内箭头收起态 hover 才显形（用户裁决 2）", () => {

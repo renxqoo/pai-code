@@ -73,9 +73,10 @@ function ToolCallRow({ call }: ToolCallRowProps) {
         <span
           title={call.argsPreview}
           className={cn(
-            // 摘要自适应：吃满行内剩余宽度，不设上限——窗口宽时完整展开，
-            // 不再出现「明明放得下却省略号」；摘要吃满行宽自适应折行
-            'min-w-0 flex-1 break-words',
+            // 摘要自适应但不抢占剩余空间：flex-shrink（可折行/可收缩）而非
+            // flex-1（撑满）。flex-1 会把行尾元素全推到右缘——展开箭头会
+            // 飘离它控制的文案。这里「文案有多宽就占多宽，窄了才折行」。
+            'min-w-0 shrink break-words',
             toolPreviewMono(kind) ? 'font-mono text-[12.5px]' : 'text-[12.5px]',
             running ? 'shimmer-text' : failed ? 'text-diff-del' : 'text-muted-foreground',
           )}
@@ -105,7 +106,7 @@ function ToolCallRow({ call }: ToolCallRowProps) {
               <span
                 title={spawn.task}
                 className={cn(
-                  'min-w-0 flex-1 break-words text-[12.5px] leading-[20px]',
+                  'min-w-0 shrink break-words text-[12.5px] leading-[20px]',
                   running ? 'shimmer-text' : 'text-muted-foreground',
                 )}
               >
@@ -119,7 +120,7 @@ function ToolCallRow({ call }: ToolCallRowProps) {
       )}
       {last ? callTail(call) : null}
       {/* 箭头紧跟文案：它是这行的展开开关，飘到行尾会与操作对象失联 */}
-      {last && expandable ? <ChevronToggle open={open} className={cn('ml-[2px] shrink-0', chevronRevealClass(open))} /> : null}
+      {last && expandable ? <ChevronToggle open={open} className={cn('shrink-0', chevronRevealClass(open))} /> : null}
     </>
   );
 
