@@ -46,6 +46,14 @@ export function hydrateItems(history: readonly HistoryItem[], turnStartAt: numbe
 
   for (const item of history) {
     if (item.kind === 'user') {
+      // 压缩摘要不进对话流（用户裁决：前端不展示压缩信息）。它是内核上下文的
+      // 断代落账，不是对话内容——若在此透传，会掉进 system 消息分支被渲染成
+      // 「系统通知」卡片，把摘要正文亮出来，比压缩标记本身更吵。
+      if (item.meta === 'compaction-summary') {
+        flushTurn();
+        anchor = item.at;
+        continue;
+      }
       flushTurn();
       items.push({
         kind: 'message',
@@ -54,7 +62,6 @@ export function hydrateItems(history: readonly HistoryItem[], turnStartAt: numbe
           role: item.origin === 'system' ? 'system' : 'user',
           text: clip(item.text),
           images: item.images.map(({ data, mediaType }) => ({ data, mimeType: mediaType })),
-          ...(item.meta === 'compaction-summary' ? { meta: { kind: 'compaction-summary' as const, foldedTurns: item.foldedTurns ?? 0 } } : {}),
         },
       });
       anchor = item.at;

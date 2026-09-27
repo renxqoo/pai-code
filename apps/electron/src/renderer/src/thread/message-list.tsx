@@ -5,7 +5,6 @@ import { EmptyThread } from '@/thread/empty-thread';
 import { TextBlock } from '@/thread/text-block';
 import { TurnGroup } from '@/thread/turn-group';
 import { TurnLoadingRow } from '@/thread/turn-loading-row';
-import { CompactionSummaryRow } from '@/thread/compaction-summary-row';
 import { SystemMessageRow } from '@/thread/system-message-row';
 import { CONVERSATION_COLUMN_CLASS } from '@/thread/conversation-column';
 import { UserMessageRow } from '@/thread/user-message-row';
@@ -69,11 +68,7 @@ function MessageList({ thread, now, loading, bottomInset, emptyTitle, emptyHint,
                     }
                   />
                 ) : item.message.role === 'system' ? (
-                  item.message.meta?.kind === 'compaction-summary' ? (
-                    <CompactionSummaryRow message={item.message} foldedTurns={item.message.meta.foldedTurns} />
-                  ) : (
-                    <SystemMessageRow message={item.message} />
-                  )
+                  <SystemMessageRow message={item.message} />
                 ) : (
                   <TextBlock text={item.message.text} />
                 )
