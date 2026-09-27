@@ -15,6 +15,11 @@ export type ColorScheme = {
   accentSoft: string;
   destructive: string;
   success: string;
+  /** diff 行对照色：新增/删除的前景与软底（红绿成对，两端同语义） */
+  diffAdd: string;
+  diffAddSoft: string;
+  diffDel: string;
+  diffDelSoft: string;
   overlay: string;
   code: string;
 };
@@ -36,6 +41,10 @@ export const lightColors: ColorScheme = {
   accentSoft: '#F4F4F5',
   destructive: '#DC2626',
   success: '#16A34A',
+  diffAdd: '#15803D',
+  diffAddSoft: '#E7F6EC',
+  diffDel: '#DC2626',
+  diffDelSoft: '#FBEAEA',
   overlay: 'rgba(0, 0, 0, 0.45)',
   code: '#18181B',
 };
@@ -57,6 +66,10 @@ export const darkColors: ColorScheme = {
   accentSoft: '#1C1C1F',
   destructive: '#EF4444',
   success: '#22C55E',
+  diffAdd: '#4ADE80',
+  diffAddSoft: 'rgba(74, 222, 128, 0.12)',
+  diffDel: '#F87171',
+  diffDelSoft: 'rgba(248, 113, 113, 0.12)',
   overlay: 'rgba(0, 0, 0, 0.72)',
   code: '#09090B',
 };

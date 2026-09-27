@@ -1,48 +1,36 @@
 import * as React from 'react';
-import { Pressable, Text, View } from 'react-native';
-import { ChevronDown, ChevronRight, CircleAlert, Wrench } from 'lucide-react-native';
-import { useAppTheme } from '@/theme/theme-context';
-import { rhythm, spacing, type } from '@/theme/tokens';
-import { copy } from '@/strings/zh';
-import { rowPressStyle } from '@/components/ui/row-press-style';
-import { Marker } from '@/components/ui/marker';
-import { MarkerContent } from '@/components/ui/marker-content';
-import { MarkerIcon } from '@/components/ui/marker-icon';
+import { View } from 'react-native';
+
+import { autoOpenForGroup } from '@paiapp/ui-thread';
+
+import { rhythm } from '@/theme/tokens';
 import type { ChatMessage } from '@/types/domain';
+import type { FileDiffGroup } from '@paiapp/ui-thread';
+import { toolViewOf } from '@/features/chat/tool-message';
+import { ToolGroupHeader } from '@/features/chat/tool-group-header';
 import { ToolRow } from '@/features/chat/tool-row';
+import { FileDiffSection } from '@/features/chat/file-diff-section';
 
-type ToolGroupProps = { messages: readonly ChatMessage[]; onOpen: (message: ChatMessage) => void };
+type ToolGroupProps = {
+  messages: readonly ChatMessage[];
+  onOpen: (message: ChatMessage) => void;
+  onOpenDiff: (group: FileDiffGroup) => void;
+};
 
-export function ToolGroup({ messages, onOpen }: ToolGroupProps) {
-  const { colors } = useAppTheme();
-  const failed = messages.some((message) => message.status === 'error');
-  const running = messages.findLast((message) => message.status === 'running');
-  const [expanded, setExpanded] = React.useState(false);
+/**
+ * 并行执行组（同批次的多个工具调用）：可开合组头聚合本批执行，展开后是
+ * 各调用行 + 文件级 diff 入口。开合 = 手动意图优先于自动（与 PC 端同一套
+ * 策略：运行中/失败常开——错误必须看得见；正常完成收起为标题摘要）。
+ */
+export function ToolGroup({ messages, onOpen, onOpenDiff }: ToolGroupProps) {
+  const views = React.useMemo(() => messages.map(toolViewOf), [messages]);
+  const [pref, setPref] = React.useState<boolean | null>(null);
+  const open = pref ?? autoOpenForGroup(views);
   return (
     <View style={{ marginTop: rhythm.rowToRow }}>
-      <Pressable
-        accessibilityLabel={`${expanded ? copy.collapseToolGroup : copy.expandToolGroup}：${messages.length} 个工具`}
-        accessibilityRole="button"
-        accessibilityState={{ expanded }}
-        onPress={() => setExpanded((value) => !value)}
-        style={rowPressStyle}
-      >
-        <Marker style={styles.marker}>
-          <MarkerIcon loading={running !== undefined} color={colors.textFaint} testID="tool-group-spinner">
-            {failed ? <CircleAlert color={colors.destructive} size={16} /> : <Wrench color={colors.textFaint} size={16} />}
-          </MarkerIcon>
-          <MarkerContent shimmer={running !== undefined} numberOfLines={1} style={{ color: failed ? colors.destructive : colors.textMuted, marginRight: 6 }}>{`${messages.length} ${copy.toolGroupUnit}`}</MarkerContent>
-        </Marker>
-        {running ? <Text numberOfLines={1} style={{ color: colors.textFaint, fontSize: type.meta.fontSize, marginLeft: 6, maxWidth: '46%' }}>{`${copy.toolGroupRunning} · ${running.title ?? copy.activityFallback}`}</Text> : null}
-        {expanded ? <ChevronDown color={colors.textFaint} size={15} /> : <ChevronRight color={colors.textFaint} size={15} />}
-      </Pressable>
-      {expanded ? (
-        <View style={{ borderLeftColor: colors.divider, borderLeftWidth: 1, marginLeft: 7, paddingLeft: spacing.xs2 }}>
-          {messages.map((message) => <ToolRow key={message.id} message={message} onOpen={onOpen} />)}
-        </View>
-      ) : null}
+      <ToolGroupHeader views={views} open={open} onToggle={() => setPref(!open)} />
+      {open ? messages.map((message) => <ToolRow key={message.id} message={message} onOpen={onOpen} />) : null}
+      {open ? <FileDiffSection messages={messages} onOpen={onOpenDiff} /> : null}
     </View>
   );
 }
-
-const styles = { marker: { flexShrink: 1 } };

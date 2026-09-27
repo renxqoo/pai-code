@@ -22,7 +22,7 @@ export function TurnFailureNotice({ message }: TurnFailureNoticeProps) {
         <Text accessibilityRole="header" style={{ color: colors.destructive, fontSize: type.row.fontSize, fontWeight: '700', marginLeft: 8 }}>{copy.activityFailed}</Text>
       </View>
       <Text selectable style={{ color: colors.destructive, fontSize: type.body.fontSize, lineHeight: type.body.lineHeight, marginTop: 6 }}>
-        {firstText(message.text, message.summary, message.title)}
+        {firstText(message.text, message.summary)}
       </Text>
       {firstText(message.summary).length > 0 && firstText(message.summary) !== firstText(message.text) ? (
         <Text selectable style={{ color: colors.textMuted, fontSize: type.row.fontSize, lineHeight: type.row.lineHeight, marginTop: 4 }}>{message.summary}</Text>

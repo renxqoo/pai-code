@@ -1,23 +1,30 @@
 import * as React from 'react';
+import type { FileDiffGroup } from '@paiapp/ui-thread';
+
 import type { ChatMessage } from '@/types/domain';
 import { MessageItem } from '@/features/chat/message-item';
 import { ThinkingRow } from '@/features/chat/thinking-row';
 import { StatusLine } from '@/features/chat/status-line';
-import { ToolRow } from '@/features/chat/tool-row';
-import { ToolGroup } from '@/features/chat/tool-group';
+import { ToolBatch } from '@/features/chat/tool-batch';
 
-type StreamItemsProps = { messages: readonly ChatMessage[]; onOpenTool: (message: ChatMessage) => void };
+type StreamItemsProps = {
+  messages: readonly ChatMessage[];
+  onOpenTool: (message: ChatMessage) => void;
+  onOpenDiff: (group: FileDiffGroup) => void;
+};
 
-export function StreamItems({ messages, onOpenTool }: StreamItemsProps) {
+/**
+ * 过程流条目装配：连续的工具调用合成一个执行批次（≥2 条套并行组头），
+ * 思考/状态各自一行，其余按消息形态渲染。
+ */
+export function StreamItems({ messages, onOpenTool, onOpenDiff }: StreamItemsProps) {
   const nodes: React.ReactNode[] = [];
   let toolRun: ChatMessage[] = [];
   const flushTools = (): void => {
     const [first] = toolRun;
     if (first === undefined) return;
     nodes.push(
-      toolRun.length === 1
-        ? <ToolRow key={first.id} message={first} onOpen={onOpenTool} />
-        : <ToolGroup key={first.id} messages={toolRun} onOpen={onOpenTool} />,
+      <ToolBatch key={first.id} messages={toolRun} onOpen={onOpenTool} onOpenDiff={onOpenDiff} />,
     );
     toolRun = [];
   };
