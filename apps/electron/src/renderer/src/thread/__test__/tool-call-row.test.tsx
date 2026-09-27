@@ -29,14 +29,14 @@ function renderRow(model: ToolCallModel): string {
 describe("ToolCallRow 子智能体执行行（参考图样式）", () => {
   test("单 spawn 行：状态前缀 + 蓝色等宽 agent 名 + · 任务描述三段齐备", () => {
     const html = renderRow(call({ status: "running" }));
-    expect(html).toContain("正在派生子智能体");
+    expect(html).toContain("正在派生智能体");
     expect(html).toContain("Explore");
     expect(html).toContain("·");
     expect(html).toContain("分析 host-hub sandbox 现状");
     // 运行中整行走 shimmer（全应用执行中语言），落定后 agent 名显蓝色等宽
     expect(html).toContain("font-mono");
     const settled = renderRow(call({ status: "ok", durationMs: 1200 }));
-    expect(settled).toContain("已派生子智能体");
+    expect(settled).toContain("已派生智能体");
     expect(settled).toContain("text-link");
   });
 
@@ -131,7 +131,7 @@ describe("ToolCallRow 子智能体执行行（参考图样式）", () => {
   test("agent 缺失只显任务描述（垃圾参数空形态降级，不悬挂分隔点）", () => {
     const html = renderRow(call({ subagents: [{ agent: "", task: "分析现状" }] }));
     expect(html).toContain("分析现状");
-    expect(html).toContain("正在派生子智能体");
+    expect(html).toContain("正在派生智能体");
     expect(html).not.toContain(">·</span>");
   });
 
@@ -183,7 +183,7 @@ describe("ToolCallRow 状态前缀（用户裁决 3：每条执行带上「已�
 
   test("subagents 为空的 task 调用回退 argsPreview 单行", () => {
     const html = renderRow(call({ subagents: [] }));
-    expect(html).toContain("正在派生子智能体");
+    expect(html).toContain("正在派生智能体");
     expect(html).toContain("Explore");
     expect(html).not.toContain("text-link");
   });

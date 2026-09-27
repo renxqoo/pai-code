@@ -18,7 +18,7 @@ describe('toolRowLabel 单条执行行的状态前缀（用户裁决 3）', () =
     ['write', '已写入', '正在写入'],
     ['grep', '已搜索', '正在搜索'],
     ['ls', '已列出', '正在列出'],
-    ['task', '已派生子智能体', '正在派生子智能体'],
+    ['task', '已派生智能体', '正在派生智能体'],
   ] as ReadonlyArray<readonly [string, string, string]>)('%s：成功过去式 / 运行中现在进行时', (tool, done, running) => {
     expect(toolRowLabel(tool, 'ok')).toBe(done);
     expect(toolRowLabel(tool, 'running')).toBe(running);

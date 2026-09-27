@@ -52,7 +52,7 @@ describe('toolGroupLabel 文案合成（用户指定的四档逐字断言）', (
   test('搜索/目录/子智能体各自成短语', () => {
     expect(toolGroupLabel([call('grep'), call('grep', 'ok', 'g2')])).toBe('搜索了');
     expect(toolGroupLabel([call('ls'), call('ls', 'ok', 'l2')])).toBe('列出了目录');
-    expect(toolGroupLabel([call('task'), call('task', 'ok', 't2')])).toBe('派生了子智能体');
+    expect(toolGroupLabel([call('task'), call('task', 'ok', 't2')])).toBe('派生了智能体');
   });
 
   test('类别超过三类：以「等」收口（收口按桶数，不是短语数）', () => {
