@@ -108,6 +108,7 @@ function upsertToolCalls(
     name: call.name,
     argsPreview: call.argsPreview,
     subagents: call.subagents ?? [],
+    editHunks: call.editHunks ?? [],
     output: '',
     exitCode: null,
     durationMs: null,

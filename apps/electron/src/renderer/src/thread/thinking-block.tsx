@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { BrainCircuit } from 'lucide-react';
+import { Brain } from 'lucide-react';
 
 import { ChevronToggle, TypewriterText } from '@paiapp/ui';
 
@@ -7,7 +7,8 @@ import { copy } from '@/strings';
 import { cn } from '@/lib/utils';
 import { thinkingParagraphs } from './thinking-paragraphs';
 import { useStickToBottom } from './use-stick-to-bottom';
-import { resolveOpen, type CollapsePref } from './collapse-state';
+import { chevronRevealClass, resolveOpen, type CollapsePref } from './collapse-state';
+import { ProcessRailIcon } from './process-rail-icon';
 
 type ThinkingBlockProps = {
   text: string;
@@ -27,18 +28,15 @@ function ThinkingBlock({ text, running }: ThinkingBlockProps) {
   if (text.length === 0) return null;
   return (
     <div className="flex flex-col">
-      <div className="relative flex min-h-[26px] items-center">
-        <span
-          aria-hidden="true"
-          className="absolute top-[3px] -left-[26px] flex h-[18px] w-[26px] shrink-0 items-center justify-center bg-background"
-        >
-          <BrainCircuit className="size-[13px] shrink-0 text-muted-foreground" strokeWidth={1.75} />
-        </span>
+      <div className="group flex items-center gap-[6px]">
+        <ProcessRailIcon>
+          <Brain className="size-[13px] shrink-0 text-muted-foreground" strokeWidth={1.75} />
+        </ProcessRailIcon>
         <button
           type="button"
           onClick={() => setPref(!open)}
           aria-expanded={open}
-          className="flex min-w-0 flex-1 cursor-pointer items-center gap-[8px] rounded-md px-[6px] py-[3px] text-left outline-none select-none hover:bg-accent/60 focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="flex min-w-0 flex-1 cursor-pointer items-center gap-[6px] rounded-md px-[2px] py-[1px] text-left outline-none select-none hover:bg-accent/60 focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           <span
             className={cn(
@@ -55,14 +53,14 @@ function ThinkingBlock({ text, running }: ThinkingBlockProps) {
               className="min-w-0 max-w-full truncate text-[12.5px] leading-[20px] text-meta-faint"
             />
           )}
-          <ChevronToggle open={open} className="shrink-0 opacity-70" />
+          <ChevronToggle open={open} className={chevronRevealClass(open)} />
         </button>
       </div>
       {open ? (
         <div
           ref={stick.containerRef}
           onScroll={stick.onScroll}
-          className="scroll-thin mb-[4px] ml-[6px] flex max-h-[200px] flex-col gap-[6px] overflow-y-auto border-l border-border py-[2px] pl-[14px] text-[13px] leading-[21px] text-muted-foreground"
+          className="scroll-thin mb-[4px] ml-[4px] flex max-h-[200px] flex-col gap-[6px] overflow-y-auto border-l border-border py-[2px] pl-[12px] text-[13px] leading-[21px] text-muted-foreground"
         >
           {thinkingParagraphs(text).map((paragraph, i) => (
             <p key={i} className="whitespace-pre-wrap break-words">

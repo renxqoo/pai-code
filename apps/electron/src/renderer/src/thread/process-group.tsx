@@ -13,13 +13,12 @@ type ProcessGroupProps = {
 
 /**
  * 过程组：相邻思考/工具块共享的执行时间线容器。
- * 左侧 2px 竖轨贯穿整组，各单元的状态图标骑在轨上（背景遮罩），
- * 让执行过程与正文消息在层级上一眼可分。
+ * 过程行与正文左对齐（不缩进），行首图标内联在文案前——执行过程是正文旁边的脚注，
+ * 不是另一级内容；容器只负责把相邻过程行收拢成连续的一段。
  */
 function ProcessGroup({ blocks, streamingThinkingBlockId }: ProcessGroupProps) {
   return (
-    <div className="relative flex flex-col pl-[26px]">
-      <span aria-hidden="true" className="absolute top-[10px] bottom-[10px] left-[12px] w-[2px] rounded-full bg-border" />
+    <div className="flex flex-col gap-[4px]">
       {blocks.map((block) =>
         block.kind === 'thinking' ? (
           <ThinkingBlock key={block.id} text={block.text} running={streamingThinkingBlockId === block.id} />

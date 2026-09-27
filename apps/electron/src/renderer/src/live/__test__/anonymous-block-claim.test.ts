@@ -198,6 +198,7 @@ describe('匿名块认领（空 id 增量在身份确立前折出的中转块）
       name: 'bash',
       argsPreview: id,
       subagents: [],
+      editHunks: [],
       output: '',
       exitCode: null,
       durationMs: null,

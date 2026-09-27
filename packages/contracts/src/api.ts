@@ -5,7 +5,7 @@ import { GitBranchesViewSchema, GitGraphViewSchema, GitStatusViewSchema } from '
 import { PermModeSchema } from './permissions';
 import { RuntimeSnapshotViewSchema } from './runtime';
 import { InflightViewSchema, PendingDialogViewSchema, SubagentSnapshotViewSchema } from './inflight-views';
-import { DiffFileViewSchema, SessionViewSchema, SubagentSpawnViewSchema } from './ui-events';
+import { DiffFileViewSchema, EditHunkViewSchema, SessionViewSchema, SubagentSpawnViewSchema } from './ui-events';
 import { IdleRecycleMinutesSchema, ProviderModelSchema } from './settings';
 import { TodoSnapshotEventDataSchema } from './todo-views';
 import { THINKING_LEVEL_ORDER } from './thinking-levels';
@@ -77,6 +77,8 @@ export const HistoryItemSchema = z.discriminatedUnion('kind', [
         diff: z.array(DiffFileViewSchema).nullable(),
         /** agent 委派工具的子代理执行清单；其余工具不携带。 */
         subagents: z.array(SubagentSpawnViewSchema).optional(),
+        /** edit 工具的补丁片段（精确文本替换的原文/新文对）；其余工具不携带。 */
+        editHunks: z.array(EditHunkViewSchema).optional(),
       }),
     ),
     usage: z.object({ input: z.number(), output: z.number() }).nullable(),

@@ -16,12 +16,23 @@ export const SubagentSpawnViewSchema = z.object({
 });
 export type SubagentSpawnView = z.infer<typeof SubagentSpawnViewSchema>;
 
+/** edit 工具参数展开出的补丁片段（一次精确文本替换的一对原文/新文）。 */
+export const EditHunkViewSchema = z.object({
+  /** 被替换的原文片段 */
+  oldText: z.string(),
+  /** 替换后的新文片段 */
+  newText: z.string(),
+});
+export type EditHunkView = z.infer<typeof EditHunkViewSchema>;
+
 export const ToolCallViewSchema = z.object({
   id: z.string(),
   name: z.string(),
   argsPreview: z.string(),
   /** task 工具的子代理执行清单（single/parallel/chain 统一展开）；其余工具不携带。 */
   subagents: z.array(SubagentSpawnViewSchema).optional(),
+  /** edit 工具的补丁片段（精确文本替换的原文/新文对）；其余工具不携带。 */
+  editHunks: z.array(EditHunkViewSchema).optional(),
 });
 export type ToolCallView = z.infer<typeof ToolCallViewSchema>;
 

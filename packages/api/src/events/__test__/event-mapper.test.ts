@@ -215,6 +215,28 @@ describe('createEventMapper · 主线程事件', () => {
     ]);
   });
 
+  test('edit 工具的补丁片段随 toolCallAdded 下发（live 侧渲染层展开「改了什么」的数据源）', () => {
+    const mapper = createEventMapper(deps);
+    mapper.mapEvent(chunk(0, 0, 'text-delta', { text: 'a' }));
+    expect(
+      mapper.mapEvent(
+        frame('tool/call', {
+          callId: 'tc6',
+          name: 'edit',
+          arguments: JSON.stringify({ path: 'a.ts', edits: [{ oldText: 'x', newText: 'y' }] }),
+        }),
+      ),
+    ).toEqual([
+      {
+        type: 'toolCallAdded',
+        threadId: 't',
+        messageId: 'stream-1',
+        call: { id: 'tc6', name: 'edit', argsPreview: 'a.ts', editHunks: [{ oldText: 'x', newText: 'y' }] },
+        diff: null,
+      },
+    ]);
+  });
+
   test('tool/call 降级：无流缓冲 messageId 空串；arguments 对象形态与坏 JSON 空参数', () => {
     const mapper = createEventMapper(deps);
     expect(mapper.mapEvent(frame('tool/call', { callId: 'tc0', name: 'bash', arguments: JSON.stringify({ command: 'ls' }) }))).toEqual([

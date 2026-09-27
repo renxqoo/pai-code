@@ -3,6 +3,7 @@ import { isTodoTool, type UiEvent, type UsageView } from '@paiapp/contracts';
 import { previewArgs } from '../views/args-preview';
 import { diffFromToolCall } from '../views/diff-extract';
 import { subagentsField } from '../views/subagent-spawns';
+import { editHunksField } from '../views/edit-hunks';
 import { todoSnapshotOf } from '../views/todo-snapshot';
 
 /**
@@ -186,7 +187,7 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
               type: 'toolCallAdded',
               threadId,
               messageId: buffer?.messageId ?? '',
-              call: { id: callId, name: toolName, argsPreview: previewArgs(args), ...subagentsField(toolName, args) },
+              call: { id: callId, name: toolName, argsPreview: previewArgs(args), ...subagentsField(toolName, args), ...editHunksField(toolName, args) },
               diff: diffFromToolCall(toolName, args),
             },
           ];

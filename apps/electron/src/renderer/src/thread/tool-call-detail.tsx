@@ -1,49 +1,33 @@
 import * as React from 'react';
 
-import { CopyButton } from '@paiapp/ui';
-
-import { copy } from '@/strings';
-import { cn } from '@/lib/utils';
-import { writeClipboardText } from '@/lib/clipboard';
-import { detailOutput } from './call-detail';
+import { EditHunkList } from './edit-hunk-list';
+import { FileContentPanel } from './file-content-panel';
+import { OutputPanel } from './output-panel';
+import { toolKindOf } from './tool-kind';
 import type { ToolCallModel } from './thread-model';
 
 type ToolCallDetailProps = {
   call: ToolCallModel
 };
 
-/** 工具单元详情：输出面板（标签 + 复制 + 定高滚动）；复制入口复制全量，运行中面板只展示尾部流。 */
+/**
+ * 工具单元详情按种类分派：read 看文件内容（行号 + 内容），edit 看补丁片段
+ * （改了哪几行，不是整个文件），其余走通用输出面板。
+ * 编辑类片段在前、输出在后（write 无基线可比，只剩输出面板）。
+ */
 function ToolCallDetail({ call }: ToolCallDetailProps) {
-  return (
-    <div className="mb-[8px] mt-[2px] overflow-hidden rounded-[8px] border border-border bg-surface-subtle">
-      <div className="flex items-center gap-[8px] border-b border-border px-[8px] py-[3px]">
-        <span
-          title={call.argsPreview}
-          className={cn(
-            'min-w-0 flex-1 truncate font-mono text-[11px] leading-[16px]',
-            call.status === 'running' ? 'shimmer-text' : 'text-muted-foreground/60',
-          )}
-        >
-          {call.argsPreview}
-        </span>
-        <span
-          className={cn(
-            'shrink-0 text-[11px] leading-[16px]',
-            call.status === 'running' ? 'shimmer-text' : 'text-muted-foreground/80',
-          )}
-        >
-          {copy.flow.outputLabel}
-        </span>
-        <CopyButton
-          label={copy.flow.copyOutput}
-          copiedLabel={copy.flow.copied}
-          value={call.output}
-          onCopy={writeClipboardText}
-        />
+  const hasOutput = call.output.length > 0;
+  if (toolKindOf(call.name) === 'read' && hasOutput) {
+    return (
+      <div className="mt-[2px] flex flex-col gap-[6px]">
+        <FileContentPanel call={call} />
       </div>
-      <pre className="max-h-[176px] overflow-auto px-[10px] py-[8px] font-mono text-[11px] leading-[17px] whitespace-pre-wrap break-words text-muted-foreground">
-        {detailOutput(call)}
-      </pre>
+    );
+  }
+  return (
+    <div className="mt-[2px] flex flex-col gap-[6px]">
+      {call.editHunks.length > 0 ? <EditHunkList hunks={call.editHunks} /> : null}
+      {hasOutput ? <OutputPanel call={call} /> : null}
     </div>
   );
 }

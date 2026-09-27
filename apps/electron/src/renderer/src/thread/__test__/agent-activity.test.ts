@@ -8,6 +8,7 @@ const call = (overrides: Partial<ToolCallModel>): ToolCallModel => ({
   name: 'Read',
   argsPreview: 'src/index.ts',
   subagents: [],
+  editHunks: [],
   output: '',
   exitCode: 0,
   durationMs: 1200,

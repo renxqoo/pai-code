@@ -3,7 +3,7 @@
  * 会话真相在 hub；由状态机把事件流折叠成这些形状，组件不感知数据来源。
  */
 
-import type { SubagentSpawnView } from '@paiapp/contracts';
+import type { EditHunkView, SubagentSpawnView } from '@paiapp/contracts';
 
 /** system = 后台任务通知/子代理上报等以用户角色注入的系统信封消息（api.md §7.5）。 */
 export type SessionMessage = {
@@ -30,6 +30,8 @@ export type ToolCallModel = {
   argsPreview: string;
   /** task 工具的子代理执行清单（每个 item 一行展示）；其余工具为空数组 */
   subagents: readonly SubagentSpawnView[];
+  /** edit 工具的补丁片段（原文/新文对，展开看「改了什么」）；其余工具为空数组 */
+  editHunks: readonly EditHunkView[];
   output: string;
   /** null = 尚未结束 */
   exitCode: number | null;

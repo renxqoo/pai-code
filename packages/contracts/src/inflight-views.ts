@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { SubagentSpawnViewSchema } from './ui-events';
+import { EditHunkViewSchema, SubagentSpawnViewSchema } from './ui-events';
 
 /**
  * 收敛读口视图（get_inflight / get_subagents / get_pending_dialogs）。
@@ -39,6 +39,8 @@ export const InflightMessageViewSchema = z.object({
       name: z.string(),
       argsPreview: z.string(),
       subagents: z.array(SubagentSpawnViewSchema).optional(),
+      /** edit 工具的补丁片段（精确文本替换的原文/新文对）；其余工具不携带。 */
+      editHunks: z.array(EditHunkViewSchema).optional(),
     }),
   ),
 });

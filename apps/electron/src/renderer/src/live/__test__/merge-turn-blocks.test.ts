@@ -6,7 +6,7 @@ import type { ToolCallModel, TurnBlock } from '@/thread/thread-model';
 /** 尾 span 合入幂等并集（T35 M2a）：同 id 保 live、tools 按 callId 并集、diff 恒尾。 */
 
 function call(id: string, overrides: Partial<ToolCallModel> = {}): ToolCallModel {
-  return { id, name: 'bash', argsPreview: '', subagents: [], output: '', exitCode: null, durationMs: null, status: 'running', ...overrides };
+  return { id, name: 'bash', argsPreview: '', subagents: [], editHunks: [], output: '', exitCode: null, durationMs: null, status: 'running', ...overrides };
 }
 
 const text = (id: string, value: string): TurnBlock => ({ kind: 'text', id, text: value });

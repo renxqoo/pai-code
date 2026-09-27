@@ -1,5 +1,7 @@
 import { ChevronToggle } from '@paiapp/ui';
 
+import { chevronRevealClass } from './collapse-state';
+
 type TurnStatusLineProps = {
   label: string
   /** 结束的轮次可整轮展开/收起；运行中的轮次只显示计时（计时文字带波纹加载态） */
@@ -28,7 +30,7 @@ function TurnStatusLine({ label, expandable, open, onToggle }: TurnStatusLinePro
       className="-mx-[4px] flex cursor-pointer items-center gap-[6px] rounded-md px-[4px] py-[2px] text-left outline-none select-none hover:bg-accent/60 focus-visible:ring-3 focus-visible:ring-ring/50"
     >
       <span className="shrink-0 text-[13.5px] leading-[21px] text-muted-foreground">{label}</span>
-      <ChevronToggle open={open} variant="disclose" className="opacity-70" />
+      <ChevronToggle open={open} variant="disclose" className={chevronRevealClass(open)} />
     </button>
   );
 }

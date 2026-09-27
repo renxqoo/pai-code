@@ -4,8 +4,12 @@ import { autoOpenForCall, callExpandable, detailOutput } from '../call-detail';
 
 describe('callExpandable', () => {
   test('有输出可展开，无输出（尚未产出/纯状态单元）不可展开', () => {
-    expect(callExpandable({ output: 'line' })).toBe(true);
-    expect(callExpandable({ output: '' })).toBe(false);
+    expect(callExpandable({ output: 'line', editHunks: [] })).toBe(true);
+    expect(callExpandable({ output: '', editHunks: [] })).toBe(false);
+  });
+
+  test('症状回归：edit 成功但无输出——补丁片段本身就是详情，仍可展开看「改了什么」', () => {
+    expect(callExpandable({ output: '', editHunks: [{ oldText: 'a', newText: 'b' }] })).toBe(true);
   });
 });
 

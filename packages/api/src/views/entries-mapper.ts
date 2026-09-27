@@ -6,6 +6,7 @@ import { diffFromWriteArgs } from './diff-extract';
 import { isCompactionSummary } from './compaction-summary';
 import { isSnapshotFrame } from './snapshot-frame';
 import { subagentsField } from './subagent-spawns';
+import { editHunksField, editHunksOf } from './edit-hunks';
 import { todoSnapshotOf } from './todo-snapshot';
 
 /**
@@ -90,6 +91,7 @@ export function mapEntries(data: unknown): { items: HistoryItem[]; cursor: numbe
           isError: false,
           diff: name === 'write' ? writeDiffOf(args) : null,
           ...subagentsField(name, args),
+          ...editHunksField(name, args),
         };
       }).filter((call) => !isTodoTool(call.name));
       // 异常终态收窄（内核词表 stop|max-tokens + interrupted 布尔）：max-tokens 透传，
@@ -141,6 +143,13 @@ export function mapEntries(data: unknown): { items: HistoryItem[]; cursor: numbe
             isError: call.isError,
             diff: name === 'write' ? writeDiffOf(args) : call.diff,
             ...(call.subagents !== undefined ? { subagents: call.subagents } : {}),
+            // 片段面优先取本帧参数，缺席时回退调用已带的（tool/call 与 assistant 的
+            // tool_use 同源但到达序不定，两处任一有片段都得保住）
+            ...(editHunksOf(name, args).length > 0
+              ? editHunksField(name, args)
+              : call.editHunks !== undefined
+                ? { editHunks: call.editHunks }
+                : {}),
           };
           break;
         }
@@ -165,9 +174,11 @@ export function mapEntries(data: unknown): { items: HistoryItem[]; cursor: numbe
           argsPreview: call.argsPreview,
           output: toolResultText(event['content']),
           isError: event['isError'] === true,
-          // write 的 diff 来自参数（执行前已知），tool/result 无 diff 面不得清掉
+          // write 的 diff 来自参数（执行前已知），tool/result 无 diff 面不得清掉；
+          // edit 的补丁片段同理——本事件只补结果面，其余面原样透传
           diff: call.diff,
           subagents: call.subagents,
+          editHunks: call.editHunks,
         };
         break;
       }
