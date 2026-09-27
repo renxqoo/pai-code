@@ -16,8 +16,22 @@ const NUMERIC_ARG = /^[0-9]+(?:[,:][0-9]*)*p?$/;
  * 而摘要的语义本就是「只取动作与对象」，丢掉后面的词才是对的）。 */
 const MAX_SUMMARY_CHARS = 60;
 
-/** 明显不是「动作」的词：长句、代码、路径残骸、标点密布——出现在对象位只会占满整行。 */
-const NOISE = /[，。；：？！、（）【】《》“”‘’\n\r]|^\s*\d+\s*$|.{28,}/;
+/**
+ * 对象名长度上限：按**文件名**（剥掉目录后）判，不是原始 token——
+ * `packages/api/src/views/__test__/entries-mapper-edit-hunks.test.ts`
+ * 整串 60+ 字符，但它的对象名 `entries-mapper-edit-hunks.test.ts`（33）
+ * 完全是正常文件名，按整串长度卡会把这类路径全滤光，只剩动词。
+ * 40 容纳带连字符的长测试名，又不至于让散文混进来。
+ */
+const MAX_NAME_CHARS = 40;
+
+/**
+ * 「散文」判据：靠标点密度与 CJK，而不是字符数。
+ * 之前用 `.{28,}` 当长句特征，结果把 `entries-mapper-edit-hunks.test.ts`
+ * 这类正常长文件名一并滤光（33 字符的连字符测试名是常态）。
+ * 真正的散文必带标点空格或中日韩字，且文件名不会有。
+ */
+const PROSE = /[，。；：？！、（）【】《》“”‘’\n\r]|[一-鿿぀-ヿ]|^(?:[a-z]+\s+){4,}/i;
 
 /**
  * 整段脚本 flag：它们吃掉的下一个 token 是完整脚本/代码，那不是「对象名」
@@ -59,11 +73,9 @@ function tokenize(segment: string): string[] {
  * 该去详情区看，不该占着一行摘要的位置。
  */
 function isObjectish(token: string): boolean {
-  if (token.length === 0 || token.length > 24) return false;
-  if (NOISE.test(token)) return false;
+  if (token.length === 0 || token.length > MAX_NAME_CHARS) return false;
+  if (PROSE.test(token)) return false;
   if (COMMENT_MARK.test(token)) return false;
-  // CJK 连续文本（模型写的中文笔记/说明）不是对象名
-  if (/[一-鿿぀-ヿ]/.test(token)) return false;
   return true;
 }
 

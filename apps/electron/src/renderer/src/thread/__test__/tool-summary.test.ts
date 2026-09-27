@@ -57,3 +57,80 @@ describe("toolSummary 文案化派生", () => {
     expect(toolSummary("cat /Users/wrr/work/agent-app/apps/strings/zh.ts")).toBe("cat zh.ts");
   });
 });
+
+/**
+ * 命令摘要的展示面回归网（用户反馈驱动）：
+ * 每一行都是真机上出现过的命令形态，逐条钉住「行内显示什么」。
+ * 判据是语义（动作 + 对象名），不是 class——class 断言在重构时会假红。
+ */
+describe("toolSummary 命令形态全覆盖（真机走查逐条）", () => {
+  test.each([
+    // 简单形态：动作 + 对象原样
+    ["bun test", "bun test"],
+    ["git status", "git status"],
+    ["ls src", "ls src"],
+    ["grep TODO src", "grep TODO src"],
+    ["npm run lint", "npm run lint"],
+    ["bun run build --filter x", "bun run build x"],
+    // 短文件名
+    ["sed -n 1,20p a.ts", "sed a.ts"],
+    ["cat zh.ts", "cat zh.ts"],
+    ["wc -l src/a.ts", "wc a.ts"],
+    // 长文件名（症状回归：.{28,} 散文判据曾把它们全滤光）
+    [
+      "cd /Users/wrr/work/agent-app && sed -n 44,56p packages/api/src/views/__test__/entries-mapper-edit-hunks.test.ts",
+      "sed entries-mapper-edit-hunks.test.ts",
+    ],
+    [
+      "sed -n 1,5p apps/electron/src/renderer/src/thread/thread-model.ts",
+      "sed thread-model.ts",
+    ],
+    // cd 跳过：取首个实质段
+    ["cd /Users/x/repo && npm run lint", "npm run lint"],
+    ["cd /a && cd /b && bun test", "bun test"],
+    ["export FOO=1 && bun test", "bun test"],
+    // 重定向 / 管道分段
+    ["bun test | tee out.log", "bun test"],
+    ["cat file.txt && wc -l file.txt", "cat file.txt"],
+    ["bun test; bun run lint", "bun test"],
+    // heredoc：正文不得泄进摘要
+    ["python3 - <<'EOF'\nimport pathlib\np = pathlib.Path('server.mjs')\nEOF", "python3"],
+    ["node - <<EOF\nconst x = 1\nEOF", "node"],
+    ["cat > /tmp/x.md <<EOF\n# 标题\n正文\nEOF", "cat"],
+    // 整段脚本：内容不进摘要
+    ['bash -c "一大段中文说明"', "bash"],
+    ['node -e "console.log(1)"', "node"],
+    ['python3 -c "print(1)"', "python3"],
+    // flag 不误伤：sed -e 只吃短参
+    ["sed -e s/a/b/ a.tsx", "sed a.tsx"],
+    // 垃圾与边界
+    ["", ""],
+    ["   ", ""],
+    ['"quoted task description"', "quoted task description"],
+  ] as ReadonlyArray<readonly [string, string]>)("%s", (input, want) => {
+    expect(toolSummary(input)).toBe(want);
+  });
+
+  test("绝不泄出：绝对路径 / shell 运算符 / 省略号 / 完整命令串", () => {
+    const nasty = [
+      "cd /Users/wrr/work/benchmark/dashboard && python3 - <<'EOF'\nimport pathlib\nEOF",
+      "git commit -m 'fix: 修复渲染' && git push",
+      "cd /a && sed -n 1,60p b/c/d.tsx && echo '---done'",
+    ];
+    for (const raw of nasty) {
+      const summary = toolSummary(raw);
+      expect(summary).not.toContain("/Users/");
+      expect(summary).not.toContain("&&");
+      expect(summary).not.toContain("…");
+      expect(summary.length).toBeLessThanOrEqual(60);
+      expect(summary).not.toMatch(/[一-鿿]/);
+    }
+  });
+
+  test("摘要恒为一行：无换行、无制表", () => {
+    const messy = "echo 'line1\nline2\ttabbed'";
+    const summary = toolSummary(messy);
+    expect(summary).not.toContain("\n");
+    expect(summary).not.toContain("\t");
+  });
+});
