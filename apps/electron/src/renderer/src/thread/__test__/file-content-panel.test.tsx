@@ -76,12 +76,11 @@ describe('ToolCallDetail 按种类分派', () => {
     expect(html).toContain('total 8');
   });
 
-  test('edit：走补丁片段（无输出也可展开）', () => {
+  test('edit：补丁不在行详情（已迁到文件级 diff 区，行详情无输出即不渲染）', () => {
     const html = renderToStaticMarkup(
-      <ToolCallDetail call={call({ name: 'edit', editHunks: [{ oldText: 'old', newText: 'new' }] })} />,
+      <ToolCallDetail call={call({ name: 'edit', editHunks: [{ oldText: 'old', newText: 'new', path: 'a.ts' }] })} />,
     );
-    expect(html).toContain('text-diff-del');
-    expect(html).toContain('text-diff-add');
+    expect(html).not.toContain('text-diff-del');
   });
 
   test('read 但无输出：降级不渲染空壳', () => {

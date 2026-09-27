@@ -30,7 +30,7 @@ describe('mapEntries：edit 补丁片段贯通到条目（渲染层展开「改�
     });
     expect(assistantToolCall(items[0] as Record<string, unknown>)).toMatchObject({
       name: 'edit',
-      editHunks: [{ oldText: 'a', newText: 'b' }],
+      editHunks: [{ oldText: 'a', newText: 'b', path: 'src/a.ts' }],
     });
   });
 
@@ -49,7 +49,7 @@ describe('mapEntries：edit 补丁片段贯通到条目（渲染层展开「改�
     });
     const call = assistantToolCall(items[0] as Record<string, unknown>);
     expect(call['name']).toBe('edit');
-    expect(call['editHunks']).toEqual([{ oldText: 'x', newText: 'y' }]);
+    expect(call['editHunks']).toEqual([{ oldText: 'x', newText: 'y', path: 'src/a.ts' }]);
   });
 
   test('非编辑工具不带 editHunks 字段（wire 精简，与 subagents 同一约定）', () => {

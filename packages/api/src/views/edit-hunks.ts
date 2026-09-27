@@ -4,8 +4,12 @@ import type { EditHunkView } from '@paiapp/contracts';
  * edit 工具参数 → 补丁片段对。x-harness edit 工具入参 {path, edits:[{oldText, newText}]}：
  * 每次精确文本替换是一对原文/新文——渲染层据此展示「改了什么」而不是整个文件
  * （模型要求 oldText 尽量小，片段本身就是最小改动面）。
+ *
+ * path 逐片段携带：模型常对同一文件连续调用 edit，渲染层以 path 为主键把
+ * 多次编辑合成一个 diff（GitHub 的「一个文件一个 diff」），而不是按调用拆成多块。
+ * 缺 path（垃圾形状）降级为空串——归并时视作未知路径，各自成块。
+ *
  * write 工具是整文件重写、无基线可比，不在此列（其 diff 走行数统计）。
- * 垃圾形状（非数组、缺字段、片段过长）降级为空数组，不抛不崩。
  */
 
 /** 单片段字符上限：超长片段是模型违规（大段重写），截断保展示面稳定。 */
@@ -17,14 +21,14 @@ const MAX_HUNKS = 8;
 const EDIT_TOOL = 'edit';
 
 /** 单条 edits 元素 → 片段对；缺 oldText/newText 或非对象降级 null。 */
-function hunkOf(value: unknown): EditHunkView | null {
+function hunkOf(value: unknown, path: string): EditHunkView | null {
   if (typeof value !== 'object' || value === null) return null;
   const record = value as Record<string, unknown>;
   const oldText = record['oldText'];
   const newText = record['newText'];
   if (typeof oldText !== 'string' || typeof newText !== 'string') return null;
   if (oldText === newText) return null;
-  return { oldText: clip(oldText), newText: clip(newText) };
+  return { oldText: clip(oldText), newText: clip(newText), path };
 }
 
 /** UTF-16 截断（不劈代理对）：与 args-preview 同口径。 */
@@ -41,10 +45,12 @@ export function editHunksOf(name: string, args: Record<string, unknown>): EditHu
   if (name.trim().toLowerCase() !== EDIT_TOOL) return [];
   const edits = args['edits'];
   if (!Array.isArray(edits)) return [];
+  const rawPath = args['path'];
+  const path = typeof rawPath === 'string' ? rawPath : '';
   const hunks: EditHunkView[] = [];
   for (const item of edits) {
     if (hunks.length >= MAX_HUNKS) break;
-    const hunk = hunkOf(item);
+    const hunk = hunkOf(item, path);
     if (hunk !== null) hunks.push(hunk);
   }
   return hunks;

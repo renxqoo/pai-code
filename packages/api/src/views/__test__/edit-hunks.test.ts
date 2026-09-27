@@ -11,10 +11,20 @@ const ARGS = {
 };
 
 describe('editHunksOf：edit 工具参数 → 补丁片段', () => {
+  test('path 逐片段携带（渲染层按 path 归并同一文件的多次编辑）', () => {
+    const [first] = editHunksOf('edit', ARGS);
+    expect(first?.path).toBe('src/a.ts');
+  });
+
+  test('缺 path 降级为空串（归并时视作未知路径，不与真实文件合并）', () => {
+    const [first] = editHunksOf('edit', { edits: [{ oldText: 'a', newText: 'b' }] });
+    expect(first?.path).toBe('');
+  });
+
   test('正常形状：逐条映射为原文/新文对', () => {
     expect(editHunksOf('edit', ARGS)).toEqual([
-      { oldText: 'const a = 1;', newText: 'const a = 2;' },
-      { oldText: 'old line\nkeep', newText: 'new line\nkeep' },
+      { oldText: 'const a = 1;', newText: 'const a = 2;', path: 'src/a.ts' },
+      { oldText: 'old line\nkeep', newText: 'new line\nkeep', path: 'src/a.ts' },
     ]);
   });
 

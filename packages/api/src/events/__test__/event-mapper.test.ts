@@ -231,7 +231,7 @@ describe('createEventMapper · 主线程事件', () => {
         type: 'toolCallAdded',
         threadId: 't',
         messageId: 'stream-1',
-        call: { id: 'tc6', name: 'edit', argsPreview: 'a.ts', editHunks: [{ oldText: 'x', newText: 'y' }] },
+        call: { id: 'tc6', name: 'edit', argsPreview: 'a.ts', editHunks: [{ oldText: 'x', newText: 'y', path: 'a.ts' }] },
         diff: null,
       },
     ]);

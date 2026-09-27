@@ -16,12 +16,16 @@ export const SubagentSpawnViewSchema = z.object({
 });
 export type SubagentSpawnView = z.infer<typeof SubagentSpawnViewSchema>;
 
-/** edit 工具参数展开出的补丁片段（一次精确文本替换的一对原文/新文）。 */
+/** edit 工具参数展开出的补丁片段（一次精确文本替换的一对原文/新文）。
+ *  path 是归并主键：模型常对同一文件多次调用 edit，渲染层据此把多次编辑
+ *  合成一个 diff（一个文件一个 diff，GitHub 形态），而不是按调用拆成多块。 */
 export const EditHunkViewSchema = z.object({
   /** 被替换的原文片段 */
   oldText: z.string(),
   /** 替换后的新文片段 */
   newText: z.string(),
+  /** 被编辑的文件路径（工具入参 path；'' = 未知，归并时各自成块） */
+  path: z.string(),
 });
 export type EditHunkView = z.infer<typeof EditHunkViewSchema>;
 

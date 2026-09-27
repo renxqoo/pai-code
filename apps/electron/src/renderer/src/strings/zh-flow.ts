@@ -42,7 +42,7 @@ export const zhFlow: typeof enFlow = {
   executing: '正在执行…',
   toolStopped: '已停止',
   toolRunning: '运行中',
-  /** 并行执行组的标题短语（不带计数——执行过程是脚注，标题从简） */
+  /** 并行执行组的标题短语（不带计数；组头不跟具体摘要，名词保留） */
   groupBashPhrase: '运行了命令',
   groupListPhrase: '列出了目录',
   groupEditPhrase: '编辑了文件',
@@ -57,22 +57,22 @@ export const zhFlow: typeof enFlow = {
   groupTitleAria: '工具执行组',
   /** 文件内容面板头（read 工具详情） */
   fileContentLabel: '文件内容',
-  /** 单条执行行的已完成前缀（状态写进动词：已阅读文件 / 已运行命令） */
-  rowDoneBash: '已运行命令',
-  rowDoneRead: '已阅读文件',
-  rowDoneEdit: '已编辑文件',
-  rowDoneWrite: '已写入文件',
+  /** 单条执行行的已完成前缀（状态写进动词；后面紧跟具体文件/命令摘要，不带名词） */
+  rowDoneBash: '已运行',
+  rowDoneRead: '已阅读',
+  rowDoneEdit: '已编辑',
+  rowDoneWrite: '已写入',
   rowDoneSearch: '已搜索',
-  rowDoneList: '已列出目录',
+  rowDoneList: '已列出',
   rowDoneSubagent: '已派生子智能体',
   rowDoneOther: (name: string): string => `已调用${name}`,
   /** 单条执行行的运行中前缀（进行时，与已完成态区分） */
-  rowRunningBash: '正在运行命令',
-  rowRunningRead: '正在阅读文件',
-  rowRunningEdit: '正在编辑文件',
-  rowRunningWrite: '正在写入文件',
+  rowRunningBash: '正在运行',
+  rowRunningRead: '正在阅读',
+  rowRunningEdit: '正在编辑',
+  rowRunningWrite: '正在写入',
   rowRunningSearch: '正在搜索',
-  rowRunningList: '正在列出目录',
+  rowRunningList: '正在列出',
   rowRunningSubagent: '正在派生子智能体',
   rowRunningOther: (name: string): string => `正在调用${name}`,
   /** 思考单元收起态标签（运行中同显 思考，运行态由脉冲点区分） */

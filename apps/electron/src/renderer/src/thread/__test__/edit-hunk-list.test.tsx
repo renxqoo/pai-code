@@ -35,15 +35,15 @@ describe('hunkLines 片段 → 展示行', () => {
   });
 
   test('片段序号进 key：多片段行的 React 身份稳定', () => {
-    const first = hunkLines({ oldText: 'a', newText: 'b' }, 0)[0]?.key;
-    const second = hunkLines({ oldText: 'a', newText: 'b' }, 1)[0]?.key;
+    const first = hunkLines({ oldText: 'a', newText: 'b', path: 'a.ts' }, 0)[0]?.key;
+    const second = hunkLines({ oldText: 'a', newText: 'b', path: 'a.ts' }, 1)[0]?.key;
     expect(first).not.toBe(second);
   });
 
   test('startsHunk 只标后续片段的首行（首片段顶边就是容器边，再画线多一道横杠）', () => {
     const lines = allHunkLines([
-      { oldText: 'a', newText: 'b' },
-      { oldText: 'c', newText: 'd' },
+      { oldText: 'a', newText: 'b', path: 'a.ts' },
+      { oldText: 'c', newText: 'd', path: 'a.ts' },
     ]);
     // 两段两个首行，但只有第 2 段需要分隔线
     expect(lines.filter((line) => line.startsHunk).map((line) => line.key)).toEqual(['1-r0']);
@@ -66,9 +66,9 @@ describe('EditHunkList 补丁展示（GitHub diff 形态）', () => {
     const html = renderToStaticMarkup(
       <EditHunkList
         hunks={[
-          { oldText: 'a', newText: 'b' },
-          { oldText: 'c', newText: 'd' },
-          { oldText: 'e', newText: 'f' },
+          { oldText: 'a', newText: 'b', path: 'a.ts' },
+          { oldText: 'c', newText: 'd', path: 'a.ts' },
+          { oldText: 'e', newText: 'f', path: 'a.ts' },
         ]}
       />,
     );
@@ -83,7 +83,7 @@ describe('EditHunkList 补丁展示（GitHub diff 形态）', () => {
   });
 
   test('单段补丁不画段间分隔线（首行没有「另一段」可分）', () => {
-    const html = renderToStaticMarkup(<EditHunkList hunks={[{ oldText: 'a', newText: 'b' }]} />);
+    const html = renderToStaticMarkup(<EditHunkList hunks={[{ oldText: 'a', newText: 'b', path: 'a.ts' }]} />);
     expect(html).not.toContain('border-t border-border/60');
   });
 
@@ -93,13 +93,11 @@ describe('EditHunkList 补丁展示（GitHub diff 形态）', () => {
 });
 
 describe('ToolCallDetail 详情区内容', () => {
-  test('edit：先展示补丁片段（改了什么），不再只有输出面板', () => {
+  test('edit：补丁不在行详情（已迁到文件级 diff 区，见 file-diff-section 用例）', () => {
     const html = renderToStaticMarkup(
-      <ToolCallDetail call={call({ editHunks: [{ oldText: 'old', newText: 'new' }] })} />,
+      <ToolCallDetail call={call({ editHunks: [{ oldText: 'old', newText: 'new', path: 'a.ts' }] })} />,
     );
-    expect(html).toContain('old');
-    expect(html).toContain('new');
-    expect(html).toContain('text-diff-del');
+    expect(html).not.toContain('text-diff-del');
   });
 
   test('read：输出即详情（文件内容面板），无补丁片段', () => {
