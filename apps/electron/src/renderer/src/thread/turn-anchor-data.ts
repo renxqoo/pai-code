@@ -1,5 +1,5 @@
 import { formatClockTime } from './format-clock-time';
-import { resultTextBlock } from './turn-state';
+import { resultTextBlock, turnEndedAt } from './turn-state';
 import { toolSummary } from '@paiapp/ui-thread';
 import type { ThreadItem, TurnModel } from './thread-model';
 
@@ -66,18 +66,29 @@ export type TurnAnchorDatum = {
 };
 
 /**
- * 消息流 items → 锚点带数据：只保留已结束轮次（endedAt 非 null；
- * running 轮时刻未落，无可跳目标），非 turn 项跳过，顺序与消息流一致。
+ * 摘要缓存（WeakMap 按 blocks 引用，与 sessionCardsOf 同口径）：流式期 items 每事件
+ * 换引用，不缓存则每个事件全量重算所有轮摘要（O(总块数)×事件数）。blocks 被替换
+ * （不原地改）故引用即新鲜度；旧 blocks 随 WeakMap 自然回收。
+ */
+const summaryCache = new WeakMap<TurnModel['blocks'], string>();
+
+/**
+ * 消息流 items → 锚点带数据：只保留已结束轮次（turnEndedAt 单一判据，与 TurnGroup
+ * 时间戳行同源；running 轮时刻未落，无可跳目标），非 turn 项跳过，顺序与消息流一致。
  */
 export function turnAnchors(items: readonly ThreadItem[]): TurnAnchorDatum[] {
   const anchors: TurnAnchorDatum[] = [];
   for (const item of items) {
     if (item.kind !== 'turn') continue;
-    if (item.turn.endedAt === null) continue;
+    const endedAt = turnEndedAt(item.turn);
+    if (endedAt === null) continue;
+    const cached = summaryCache.get(item.turn.blocks);
+    const summary = cached ?? turnAnchorSummary(item.turn);
+    summaryCache.set(item.turn.blocks, summary);
     anchors.push({
       id: item.turn.id,
-      time: formatClockTime(item.turn.endedAt),
-      summary: turnAnchorSummary(item.turn),
+      time: formatClockTime(endedAt),
+      summary,
     });
   }
   return anchors;

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { changedFileCount, isTurnRunning, turnElapsedMs, turnEndedAbnormally, visibleTurnBlocks } from '../turn-state';
+import { changedFileCount, isTurnRunning, turnElapsedMs, turnEndedAbnormally, turnEndedAt, visibleTurnBlocks } from '../turn-state';
 import type { ToolCallStatus } from '@paiapp/contracts';
 import type { TurnBlock } from '../thread-model';
 import { turnTextContent } from '../turn-text';
@@ -31,6 +31,19 @@ describe('isTurnRunning', () => {
   test('状态判别', () => {
     expect(isTurnRunning({ status: 'running' })).toBe(true);
     expect(isTurnRunning({ status: 'stopped' })).toBe(false);
+  });
+});
+
+describe('turnEndedAt（已结束轮单一判据，锚点带与时间戳行同源）', () => {
+  test('running 钉死未结束：即使 endedAt 已写入（水化/停止竞态暂态）', () => {
+    expect(turnEndedAt({ status: 'running', endedAt: 1_000 })).toBeNull();
+    expect(turnEndedAt({ status: 'running', endedAt: null })).toBeNull();
+  });
+
+  test('completed / stopped 取 endedAt（含 null）', () => {
+    expect(turnEndedAt({ status: 'completed', endedAt: 1_000 })).toBe(1_000);
+    expect(turnEndedAt({ status: 'stopped', endedAt: 2_000 })).toBe(2_000);
+    expect(turnEndedAt({ status: 'completed', endedAt: null })).toBeNull();
   });
 });
 

@@ -10,7 +10,8 @@ import { TurnBlockView } from './turn-block-view';
 import { TurnStatusLine } from './turn-status-line';
 import { TurnTimestampRow } from './turn-timestamp-row';
 import { useTurnCollapse } from './use-turn-collapse';
-import { changedFileCount } from './turn-state';
+import { changedFileCount, turnEndedAt } from './turn-state';
+import { TURN_SCROLL_MARGIN_PX } from './turn-scroll-margin';
 import type { TurnModel } from './thread-model';
 
 type TurnGroupProps = {
@@ -32,11 +33,11 @@ function TurnGroup({ turn, now, onOpenDiff }: TurnGroupProps) {
     turn.status === 'stopped'
       ? copy.flow.turnStoppedSummary(formatElapsed(elapsed))
       : `${turn.status === 'running' ? copy.flow.workingFor : copy.flow.workedFor} ${formatElapsed(elapsed)}`;
-  const endedAt = turn.status === 'running' ? null : turn.endedAt;
+  const endedAt = turnEndedAt(turn);
   const runs = processRuns(visibleTurnBlocks(turn.blocks, collapse.turnOpen));
 
   return (
-    <section data-turn-id={turn.id} className="scroll-mt-[24px]">
+    <section data-turn-id={turn.id} style={{ scrollMarginTop: TURN_SCROLL_MARGIN_PX }}>
       <TurnStatusLine
         label={label}
         // 轮收起时挂变更摘要：正常完成的轮默认收起，不挂的话用户看不到这轮

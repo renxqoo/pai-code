@@ -7,6 +7,15 @@ export function isTurnRunning(turn: Pick<TurnModel, 'status'>): boolean {
 }
 
 /**
+ * 已结束轮的结束时刻（单一判据，锚点带与时间戳行共用）：status 钉 running 时即使
+ * endedAt 已写入（水化/停止竞态暂态）也视为未结束——两侧判据分叉会出现「有锚点
+ * 但轮次区无时间戳行」的错位。其余形态取 endedAt（含 null）。
+ */
+export function turnEndedAt(turn: Pick<TurnModel, 'status' | 'endedAt'>): number | null {
+  return isTurnRunning(turn) ? null : turn.endedAt;
+}
+
+/**
  * 轮级变更摘要：成功改动的文件数（编辑类调用，去重文件路径）。
  * 轮收起时挂在状态行旁（`TurnGroup`），**不进块列表**——收起 = 「这个过程
  * 我不看」，列表里就不该有可点的东西（diff 行是展开控件）。
