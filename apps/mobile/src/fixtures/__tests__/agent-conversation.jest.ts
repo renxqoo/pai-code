@@ -1,7 +1,20 @@
 import { describe, expect, it } from '@jest/globals';
 import { agentConversation } from '@/fixtures/agent-conversation';
 import { buildTurns } from '@/features/chat/turns';
-import { parseMarkdown } from '@/features/chat/markdown/parse-markdown';
+import { MarkedLexer, type Token } from 'react-native-marked';
+
+/** 递归收集 marked 词法类型（夹具词表覆盖门：块级 + 行内）。 */
+function collectTokenTypes(tokens: readonly Token[], acc: Set<string>): void {
+  for (const token of tokens) {
+    acc.add(token.type);
+    const nested = (token as { tokens?: readonly Token[] }).tokens;
+    if (nested !== undefined) collectTokenTypes(nested, acc);
+    const items = (token as { items?: readonly { tokens?: readonly Token[] }[] }).items;
+    if (items !== undefined) {
+      for (const item of items) if (item.tokens !== undefined) collectTokenTypes(item.tokens, acc);
+    }
+  }
+}
 
 describe('agentConversation fixture', () => {
   it('covers the real multi-turn journey with system notices and a running step', () => {
@@ -29,32 +42,23 @@ describe('agentConversation fixture', () => {
     }
   });
 
-  it('renders every markdown block kind through the parser', () => {
-    const markdown = agentConversation.messages
-      .filter((message) => message.kind === 'assistant')
-      .map((message) => parseMarkdown(message.text))
-      .flat();
-    const kinds = new Set(markdown.map((block) => block.kind));
+  it('covers every markdown block/inline kind through the marked lexer', () => {
+    const kinds = new Set<string>();
+    for (const message of agentConversation.messages) {
+      if (message.kind !== 'assistant') continue;
+      collectTokenTypes(MarkedLexer(message.text), kinds);
+    }
     expect(kinds).toContain('heading');
     expect(kinds).toContain('paragraph');
     expect(kinds).toContain('list');
-    expect(kinds).toContain('quote');
-    expect(kinds).toContain('divider');
+    expect(kinds).toContain('blockquote');
+    expect(kinds).toContain('hr');
     expect(kinds).toContain('code');
 
-    const inlineKinds = new Set(
-      markdown.flatMap((block) =>
-        block.kind === 'list'
-          ? block.items.flatMap((item) => item.content.map((node) => node.kind))
-          : block.kind === 'code' || block.kind === 'divider'
-            ? []
-            : block.content.map((node) => node.kind),
-      ),
-    );
-    expect(inlineKinds).toContain('strong');
-    expect(inlineKinds).toContain('emphasis');
-    expect(inlineKinds).toContain('code');
-    expect(inlineKinds).toContain('link');
+    expect(kinds).toContain('strong');
+    expect(kinds).toContain('em');
+    expect(kinds).toContain('codespan');
+    expect(kinds).toContain('link');
   });
 
   it('exercises the execution IA: 并行批次、同文件归并、子代理清单、失败退出码、命令摘要', () => {

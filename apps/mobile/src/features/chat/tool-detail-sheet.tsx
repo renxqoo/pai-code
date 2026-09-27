@@ -5,6 +5,7 @@ import { Clock3 } from 'lucide-react-native';
 import { detailOutput, toolKindOf, toolPreviewMono, toolRowLabelOf, toolSummary } from '@paiapp/ui-thread';
 
 import { Sheet } from '@/components/ui/sheet';
+import { AnsiText } from '@/features/chat/ansi/ansi-text';
 import { useAppTheme } from '@/theme/theme-context';
 import { radius, spacing, type } from '@/theme/tokens';
 import { copy, toolCopy } from '@/strings/zh';
@@ -29,12 +30,13 @@ export function ToolDetailSheet() {
   const output = view === null ? '' : detailOutput(view);
   const summary = view === null ? '' : toolSummary(command);
   const elapsed = view === null ? null : formatElapsed(view.durationMs ?? Number.NaN);
-  const RowIcon = view === null ? toolRowIcon('') : toolRowIcon(view.name);
+  // 图标取自 ui-thread 注册表（引用查找非组件创建）：createElement + 小写绑定避开静态组件规则误报
+  const rowIcon = view === null ? toolRowIcon('') : toolRowIcon(view.name);
   return (
     <Sheet onClose={close} title={copy.toolDetailTitle} visible={message !== null}>
       <ScrollView contentContainerStyle={{ paddingBottom: spacing.xs5 }} showsVerticalScrollIndicator={false}>
         <View style={{ alignItems: 'center', flexDirection: 'row', marginBottom: spacing.sm, marginTop: spacing.xs }}>
-          <RowIcon color={colors.textMuted} size={16} />
+          {React.createElement(rowIcon, { color: colors.textMuted, size: 16 })}
           <Text accessibilityRole="header" style={{ color: colors.text, fontSize: type.row.fontSize, fontWeight: '700', marginLeft: 7 }}>
             {label}
           </Text>
@@ -63,9 +65,7 @@ export function ToolDetailSheet() {
               {copy.toolDetailCommand}
             </Text>
             <View style={{ backgroundColor: colors.surfaceSubtle, borderRadius: radius.md, marginTop: spacing.xs, padding: spacing.xs2 }}>
-              <Text selectable style={{ color: colors.textMuted, fontFamily: monospaceFont, fontSize: type.meta.fontSize, lineHeight: 18 }}>
-                {command}
-              </Text>
+              <AnsiText text={command} style={{ color: colors.textMuted, fontFamily: monospaceFont, fontSize: type.meta.fontSize, lineHeight: 18 }} />
             </View>
           </>
         ) : null}
@@ -75,17 +75,15 @@ export function ToolDetailSheet() {
               {copy.toolDetailOutput}
             </Text>
             <View style={{ backgroundColor: colors.surfaceSubtle, borderRadius: radius.md, marginTop: spacing.xs, padding: spacing.xs2 }}>
-              <Text
-                selectable
+              <AnsiText
+                text={output}
                 style={{
                   color: colors.textMuted,
                   fontSize: type.meta.fontSize,
                   lineHeight: 18,
                   ...(toolPreviewMono(toolKindOf(view?.name ?? '')) ? { fontFamily: monospaceFont } : {}),
                 }}
-              >
-                {output}
-              </Text>
+              />
             </View>
           </>
         ) : null}

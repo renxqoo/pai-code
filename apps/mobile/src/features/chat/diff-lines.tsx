@@ -4,6 +4,7 @@ import { Text, View } from 'react-native';
 import { allHunkLines, type HunkLine } from '@paiapp/ui-thread';
 
 import { useAppTheme } from '@/theme/theme-context';
+import { wordDiffByLine } from '@/features/chat/diff-word';
 import type { ColorScheme } from '@/theme/colors';
 import { radius, spacing, type } from '@/theme/tokens';
 import { monospaceFont } from '@/components/monospace-font';
@@ -18,7 +19,8 @@ type DiffLinesProps = { hunks: readonly EditHunkView[] };
  */
 export function DiffLines({ hunks }: DiffLinesProps) {
   const { colors } = useAppTheme();
-  const lines = allHunkLines(hunks);
+  const lines = React.useMemo(() => allHunkLines(hunks), [hunks]);
+  const words = React.useMemo(() => wordDiffByLine(lines), [lines]);
   if (lines.length === 0) return null;
   return (
     <View style={{ backgroundColor: colors.surfaceSubtle, borderRadius: radius.md, overflow: 'hidden' }}>
@@ -38,7 +40,12 @@ export function DiffLines({ hunks }: DiffLinesProps) {
             {line.tone === 'add' ? '+' : line.tone === 'remove' ? '-' : ' '}
           </Text>
           <Text selectable style={{ color: toneColor(line, colors), flex: 1, fontFamily: monospaceFont, fontSize: type.meta.fontSize, lineHeight: 17 }}>
-            {line.text}
+            {(words.get(line.key) ?? []).map((part, index) => (
+              <Text key={index} style={part.changed ? { fontWeight: '700' } : undefined}>
+                {part.text}
+              </Text>
+            ))}
+            {words.has(line.key) ? null : line.text}
           </Text>
         </View>
       ))}
