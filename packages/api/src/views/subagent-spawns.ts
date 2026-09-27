@@ -1,6 +1,6 @@
 import type { SubagentSpawnView } from '@paiapp/contracts';
 
-import { clip } from './args-preview';
+import { clipOneLine } from './args-preview';
 
 /**
  * 子代理委派工具参数 → 子代理执行清单。x-harness agent_spawn 工具入参
@@ -13,9 +13,9 @@ const AGENT_SPAWN_TOOL = 'agent_spawn';
 
 export function subagentSpawnsOf(name: string, args: Record<string, unknown>): SubagentSpawnView[] {
   if (name.trim().toLowerCase() !== AGENT_SPAWN_TOOL) return [];
-  const type = clip(textOf(args['subagent_type']));
-  const description = clip(textOf(args['description']));
-  const prompt = clip(textOf(args['prompt']));
+  const type = clipOneLine(textOf(args['subagent_type']));
+  const description = clipOneLine(textOf(args['description']));
+  const prompt = clipOneLine(textOf(args['prompt']));
   const agent = type.length > 0 ? type : description.length > 0 ? description : 'agent';
   if (prompt.length === 0 && agent === 'agent') return [];
   return [{ agent, task: prompt }];

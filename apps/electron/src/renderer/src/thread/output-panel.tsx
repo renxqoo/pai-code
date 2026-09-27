@@ -6,6 +6,7 @@ import { copy } from '@/strings';
 import { cn } from '@/lib/utils';
 import { writeClipboardText } from '@/lib/clipboard';
 import { detailOutput } from './call-detail';
+import { toolSummary } from './tool-summary';
 import type { ToolCallModel } from './thread-model';
 
 type OutputPanelProps = {
@@ -28,7 +29,7 @@ function OutputPanel({ call }: OutputPanelProps) {
             running ? 'shimmer-text' : 'text-muted-foreground/60',
           )}
         >
-          {call.argsPreview}
+          {toolSummary(call.argsPreview)}
         </span>
         <span
           className={cn(

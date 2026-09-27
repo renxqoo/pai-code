@@ -6,6 +6,7 @@ import { copy } from '@/strings';
 import { cn } from '@/lib/utils';
 import { writeClipboardText } from '@/lib/clipboard';
 import { fileLines, readFooterHint } from './file-lines';
+import { toolSummary } from './tool-summary';
 import type { ToolCallModel } from './thread-model';
 
 type FileContentPanelProps = {
@@ -31,7 +32,7 @@ function FileContentPanel({ call }: FileContentPanelProps) {
             running ? 'shimmer-text' : 'text-muted-foreground/60',
           )}
         >
-          {call.argsPreview}
+          {toolSummary(call.argsPreview)}
         </span>
         <span
           className={cn(

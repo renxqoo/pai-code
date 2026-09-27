@@ -20,8 +20,9 @@ describe('previewArgs · 字段优先级与防御', () => {
     expect(previewArgs(args as Record<string, unknown>)).toBe(expected);
   });
 
-  test('多行与超长压缩为单行并截断到 160', () => {
-    expect(previewArgs({ command: 'echo a\n  b\tc' })).toBe('echo a b c');
+  test('多行保留换行（口径 B：行边界留给渲染层）、超长截断到 160', () => {
+    // 换行不折叠：命令预览要保住分行结构，折叠后注释/heredoc 的边界不可恢复
+    expect(previewArgs({ command: 'echo a\n  b\tc' })).toBe('echo a\n  b\tc');
     const long = previewArgs({ command: 'x'.repeat(300) });
     expect(long.length).toBe(160);
     expect(long.endsWith('…')).toBe(true);
@@ -36,5 +37,38 @@ describe('previewArgs · 字段优先级与防御', () => {
     expect(wholeEmoji).toBe(`${'x'.repeat(157)}😀…`);
     expect(splitPoint).not.toContain('\uFFFD');
     expect(wholeEmoji).not.toContain('\uFFFD');
+  });
+});
+
+describe('clip · 保留换行（口径 B：对齐 pi 的 formatShellCall）', () => {
+  test('症状回归：模型写在命令前的 shell 注释不得与命令粘连（用户实拍 # meter 54 用例全绿…）', () => {
+    // 早前 clip 做 \s+→' '，注释与命令压成一行，界面上看起来像
+    // 「思考被写进工具执行的消息里」——那不是 thinking，是 # 注释
+    const raw = '# meter 54 用例全绿。四门全跑（worktree 全仓）\ncd /Users/wrr/work/x-harness-turn-reduction && bun run ci';
+    const preview = previewArgs({ command: raw });
+    // 换行保留 = 边界还在，下游 toolSummary 才能把注释整行去掉
+    expect(preview).toContain('\n');
+    expect(preview.split('\n')[0]).toBe('# meter 54 用例全绿。四门全跑（worktree 全仓）');
+    expect(preview.split('\n')[1]).toBe('cd /Users/wrr/work/x-harness-turn-reduction && bun run ci');
+  });
+
+  test('换行原样保留（不折叠、不 strip）', () => {
+    expect(clip('a\nb\nc')).toBe('a\nb\nc');
+    expect(clip('cd /x\n  && bun test')).toBe('cd /x\n  && bun test');
+  });
+
+  test('超长时按行边界截断（不把一行劈成两半）', () => {
+    const long = `${'x'.repeat(100)}\n${'y'.repeat(100)}`;
+    const out = clip(long);
+    expect(out.endsWith('…')).toBe(true);
+    expect(out.length).toBeLessThanOrEqual(160);
+    // 第一行完整保留，没被从中间切断
+    expect(out.startsWith('x'.repeat(100))).toBe(true);
+  });
+
+  test('单行长命令仍按字符截断（无换行可依）', () => {
+    const out = clip('z'.repeat(400));
+    expect(out.endsWith('…')).toBe(true);
+    expect(out.length).toBe(160);
   });
 });

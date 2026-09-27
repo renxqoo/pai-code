@@ -71,11 +71,11 @@ function ToolCallRow({ call }: ToolCallRowProps) {
       </span>
       {spawn === null ? (
         <span
+          // title 给原始命令（argsPreview 保留换行，hover 能看到真实分行结构）；
+          // 行内是折平后的单行摘要。截断交给 CSS truncate 按真实渲染宽度裁剪——
+          // 曾用 break-words 让长命令折行，折行会把行尾箭头挤到第二行。
           title={call.argsPreview}
           className={cn(
-            // 单行不折行：超长由 toolSummary 按字符上限截断（截在词边界，
-            // 尾字是「…」），CSS 的 truncate 只兜底极端窄窗。曾用 break-words
-            // 让长命令折行，折行会把行尾箭头挤到第二行，破坏单行形态。
             'min-w-0 shrink truncate',
             toolPreviewMono(kind) ? 'font-mono text-[12.5px]' : 'text-[12.5px]',
             running ? 'shimmer-text' : failed ? 'text-diff-del' : 'text-muted-foreground',

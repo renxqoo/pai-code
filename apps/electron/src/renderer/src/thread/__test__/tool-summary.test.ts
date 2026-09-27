@@ -45,6 +45,21 @@ describe("toolSummary 命令忠实展示", () => {
     expect(toolSummary("cat packages/api/src/views/foo.ts")).not.toBe(toolSummary("cat packages/ui/src/views/foo.ts"));
   });
 
+  test("症状回归：模型写在命令前的 shell 注释不进摘要（用户实拍 # meter 54 用例全绿…）", () => {
+    // 换行由 previewArgs 保留（口径 B），注释在摘要层按整行去掉——
+    // 折平后注释与命令连成一行，界面上看起来像「思考被写进工具执行的消息里」
+    expect(toolSummary("# meter 54 用例全绿。四门全跑\ncd /x && bun run ci")).toBe("cd /x && bun run ci");
+    expect(toolSummary("# a\n# b\nbun test")).toBe("bun test");
+    expect(toolSummary("; 说明\nbun test")).toBe("bun test");
+  });
+
+  test("引号内的 # 不是注释，完整保留（不能误伤实参）", () => {
+    expect(toolSummary('grep -n "#" src')).toBe('grep -n "#" src');
+    expect(toolSummary('sed -i "/#/d" a.txt')).toBe('sed -i "/#/d" a.txt');
+    expect(toolSummary("curl https://x.com/#frag")).toBe("curl https://x.com/#frag");
+    expect(toolSummary("a#b")).toBe("a#b");
+  });
+
   test("摘要层不产省略号：截断交给 CSS truncate（用户裁决口径 A）", () => {
     // 任何 JS 字符上限都表达不了「一行放不下」：等宽下 CJK 是 ASCII 两倍宽
     expect(toolSummary("bun test")).not.toContain("…");
@@ -55,13 +70,14 @@ describe("toolSummary 命令忠实展示", () => {
     expect(toolSummary(long)).not.toContain("…");
   });
 
-  test("多行命令折平成一行（行内不得出现换行/制表）", () => {
+  test("多行命令折平成一行（行内不得出现换行/制表），但内容一字不少", () => {
     const messy = "python3 - <<'PY'\nimport os\nprint('中文')\nPY";
     const summary = toolSummary(messy);
     expect(summary).not.toContain("\n");
     expect(summary).not.toContain("\t");
-    // 正文确实在（忠实展示），只是被折平
+    // heredoc 正文确实在（忠实展示），只是被折平
     expect(summary).toContain("import os");
+    expect(summary).toContain("中文");
   });
 
   test("空白折叠：多余空格不撑宽行", () => {
