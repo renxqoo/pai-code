@@ -78,7 +78,7 @@ describe('速览面板旅程', () => {
     expect(text).toContain('1 工作中');
     expect(text).toContain('装置加装');
     // 底部运行条（运行中才出；计数在无障碍名）
-    expect(page.container.querySelector('[aria-label="1 个子智能体运行中，打开 Agents 面板"]')).not.toBeNull();
+    expect(page.container.querySelector('[aria-label="1 个智能体运行中，打开 Agents 面板"]')).not.toBeNull();
     page.unmount();
 
     // 事件折叠 last-wins：新快照整体替换（全完成态）
@@ -94,7 +94,7 @@ describe('速览面板旅程', () => {
     expect(text2).toContain('1/1');
     expect(text2).not.toContain('批次 B');
     // 无运行中：运行条消失
-    expect(page2.container.querySelector('[aria-label="1 个子智能体运行中，打开 Agents 面板"]')).toBeNull();
+    expect(page2.container.querySelector('[aria-label="1 个智能体运行中，打开 Agents 面板"]')).toBeNull();
     page2.unmount();
   });
 
@@ -108,7 +108,7 @@ describe('速览面板旅程', () => {
     expect(text).toContain('1 工作中');
     expect(text).not.toContain('更改');
     // 运行胶囊（收起态的运行状态载体）随运行态在场
-    expect(page.container.querySelector('[aria-label="1 个子智能体运行中，打开 Agents 面板"]')).not.toBeNull();
+    expect(page.container.querySelector('[aria-label="1 个智能体运行中，打开 Agents 面板"]')).not.toBeNull();
     page.unmount();
   });
 

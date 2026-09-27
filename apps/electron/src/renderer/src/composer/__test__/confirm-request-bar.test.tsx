@@ -43,7 +43,7 @@ describe('ConfirmRequestBar 内联确认条', () => {
     const html = renderToStaticMarkup(
       <ConfirmRequestBar dialog={{ ...base, agentName: 'explorer' }} remaining={0} {...noop} />,
     );
-    expect(html).toContain('子智能体请求');
+    expect(html).toContain('智能体请求');
     expect(html).toContain('explorer');
   });
 

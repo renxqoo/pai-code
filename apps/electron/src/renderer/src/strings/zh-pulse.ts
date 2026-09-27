@@ -29,10 +29,10 @@ export const zhPulse: typeof enPulse = {
   agents: {
     section: '智能体',
     working: (count: number): string => `${count} 工作中`,
-    rowAria: (name: string): string => `子智能体 ${name}，打开 Agents 面板`,
+    rowAria: (name: string): string => `智能体 ${name}，打开 Agents 面板`,
   },
   running: {
-    aria: (count: number): string => `${count} 个子智能体运行中，打开 Agents 面板`,
+    aria: (count: number): string => `${count} 个智能体运行中，打开 Agents 面板`,
     more: (count: number): string => `+${count}`,
   },
 };

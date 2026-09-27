@@ -43,13 +43,13 @@ describe('RunningBar', () => {
     expect(html).toContain('装置加装');
     expect(html).toContain('1m 0s');
     expect(html).not.toContain('+');
-    expect(html).toContain('1 个子智能体运行中');
+    expect(html).toContain('1 个智能体运行中');
   });
 
   test('多运行中：+N 归并（无障碍名含总数；只显首个任务）', () => {
     const html = renderToStaticMarkup(<RunningBar running={[running('a', 'alpha-task'), running('b', 'beta-task')]} now={2_000} onOpen={noop} />);
     expect(html).toContain('+1');
-    expect(html).toContain('2 个子智能体运行中');
+    expect(html).toContain('2 个智能体运行中');
     expect(html).toContain('alpha-task');
     expect(html).not.toContain('beta-task');
   });

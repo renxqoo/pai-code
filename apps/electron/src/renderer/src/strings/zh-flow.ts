@@ -10,7 +10,7 @@ import {
 
 export const zhFlow: typeof enFlow = {
   openDiff: '打开 Diff',
-  steerPlaceholder: '向该子智能体注入指令…',
+  steerPlaceholder: '向该智能体注入指令…',
   steerFailed: (reason: string): string => `改向失败（${reason}）。`,
   /** 思考档词表外值（hub 静默忽略——渲染层先行拒绝提示） */
   thinkingInvalid: '该思考档不可用。',
@@ -33,11 +33,11 @@ export const zhFlow: typeof enFlow = {
   captionMaximize: '最大化',
   captionRestore: '还原',
   captionClose: '关闭',
-  agentsWorking: (count: number): string => `${count} 个子智能体工作中，打开 Agents 面板`,
+  agentsWorking: (count: number): string => `${count} 个智能体工作中，打开 Agents 面板`,
   changedFiles: (count: number): string => (count === 1 ? '1 个文件变更' : `${count} 个文件变更`),
-  toggleAgents: '切换子智能体面板',
+  toggleAgents: '切换智能体面板',
   toggleDiff: '切换 Diff 面板',
-  agentsPanelEmpty: '尚未派生子智能体',
+  agentsPanelEmpty: '尚未派生智能体',
   diffPanelEmpty: '本会话暂无文件变更',
   executing: '正在执行…',
   toolStopped: '已停止',
@@ -48,7 +48,7 @@ export const zhFlow: typeof enFlow = {
   groupEditPhrase: '编辑了文件',
   groupReadPhrase: '阅读了文件',
   groupSearchPhrase: '搜索了',
-  groupSubagentPhrase: '派生了子智能体',
+  groupSubagentPhrase: '派生了智能体',
   /** 未知工具桶：直接点名工具（混合桶超过列举上限以「等」收口） */
   groupOtherPhrase: (name: string): string => `调用了${name}`,
   groupMorePhrase: '等',
@@ -64,7 +64,7 @@ export const zhFlow: typeof enFlow = {
   rowDoneWrite: '已写入',
   rowDoneSearch: '已搜索',
   rowDoneList: '已列出',
-  rowDoneSubagent: '已派生子智能体',
+  rowDoneSubagent: '已派生智能体',
   rowDoneOther: (name: string): string => `已调用${name}`,
   /** 单条执行行的失败前缀（整句成「运行失败」，不靠行尾颜色区分） */
   rowFailed: '运行失败',
@@ -78,7 +78,7 @@ export const zhFlow: typeof enFlow = {
   rowRunningWrite: '正在写入',
   rowRunningSearch: '正在搜索',
   rowRunningList: '正在列出',
-  rowRunningSubagent: '正在派生子智能体',
+  rowRunningSubagent: '正在派生智能体',
   rowRunningOther: (name: string): string => `正在调用${name}`,
   /** 轮收起时的变更摘要后缀（「共工作 4m · 改了 3 个文件」） */
   turnChangedFiles: (count: number): string => `· 改了 ${count} 个文件`,
@@ -112,7 +112,7 @@ export const zhFlow: typeof enFlow = {
   forkedImageName: (index: number): string => `图片 ${index}`,
   resumeFailed: resumeFailedCopy,
   stopConfirmTitle: '停止全部任务？',
-  stopConfirmHint: '将终止全部前台与后台子智能体，且不可恢复。',
+  stopConfirmHint: '将终止全部前台与后台智能体，且不可恢复。',
   stopConfirmYes: '全部停止',
   stopConfirmNo: '取消',
   bashNoImages: bashImagesRejectedCopy,

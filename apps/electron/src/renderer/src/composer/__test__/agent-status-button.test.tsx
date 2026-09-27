@@ -33,8 +33,8 @@ describe('输入框子代理状态徽标（AgentStatusButton）', () => {
   });
 
   test('双语单复数分叉：en 表 1/2 两支成型，zh 表无分叉恒同型', () => {
-    expect(en.flow.agentsWorking(1)).toBe('1 subagent working — open the Agents panel');
-    expect(en.flow.agentsWorking(2)).toBe('2 subagents working — open the Agents panel');
+    expect(en.flow.agentsWorking(1)).toBe('1 agent working — open the Agents panel');
+    expect(en.flow.agentsWorking(2)).toBe('2 agents working — open the Agents panel');
     expect(zh.flow.agentsWorking(1)).toBe(zh.flow.agentsWorking(2).replace('2', '1'));
   });
 });

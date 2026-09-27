@@ -148,7 +148,7 @@ export const zh: typeof en = {
     stop: '停止生成',
     sending: '发送中',
     usageSummary: '用量',
-    steerPlaceholder: '向该子智能体注入指令…',
+    steerPlaceholder: '向该智能体注入指令…',
     steerFailed: (reason: string): string => `改向失败（${reason}）。`,
     noModels: '还没有模型——去设置添加',
     hostDownModels: '宿主未连接——模型暂不可选',
@@ -178,7 +178,7 @@ export const zh: typeof en = {
     deny: '拒绝',
     cancel: '取消',
     morePending: (count: number): string => (count === 1 ? '还有 1 个请求等待' : `还有 ${count} 个请求等待`),
-    fromSubagent: (agent: string): string => `子智能体请求 · ${agent}`,
+    fromSubagent: (agent: string): string => `智能体请求 · ${agent}`,
   },
   settings: zhSettings,
   newTask: {

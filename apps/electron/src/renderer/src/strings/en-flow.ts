@@ -35,12 +35,12 @@ export const enFlow = {
   captionClose: 'Close',
   /** 输入框徽标：工作子代理计数（按钮无障碍名） */
   agentsWorking: (count: number): string =>
-    count === 1 ? '1 subagent working — open the Agents panel' : `${count} subagents working — open the Agents panel`,
+    count === 1 ? '1 agent working — open the Agents panel' : `${count} agents working — open the Agents panel`,
   /** 折叠摘要：375 changed files */
   changedFiles: (count: number): string => (count === 1 ? '1 changed file' : `${count} changed files`),
   toggleAgents: 'Toggle agents panel',
   toggleDiff: 'Toggle diff panel',
-  agentsPanelEmpty: 'No subagents spawned yet',
+  agentsPanelEmpty: 'No agents spawned yet',
   diffPanelEmpty: 'No file changes in this session yet',
   executing: 'Working…',
   toolStopped: 'Stopped',
@@ -51,7 +51,7 @@ export const enFlow = {
   groupEditPhrase: 'Edited files',
   groupReadPhrase: 'Read files',
   groupSearchPhrase: 'Searched',
-  groupSubagentPhrase: 'Spawned a subagent',
+  groupSubagentPhrase: 'Spawned an agent',
   /** Unknown-tool bucket: name the tool, capped with a trailing "and others" */
   groupOtherPhrase: (name: string): string => `Called ${name}`,
   groupMorePhrase: 'and others',
@@ -67,7 +67,7 @@ export const enFlow = {
   rowDoneWrite: 'Wrote file',
   rowDoneSearch: 'Searched',
   rowDoneList: 'Listed directory',
-  rowDoneSubagent: 'Spawned subagent',
+  rowDoneSubagent: 'Spawned agent',
   rowDoneOther: (name: string): string => `Called ${name}`,
   /** Single-call failure prefix (whole clause, not just a red exit code) */
   rowFailed: 'Failed',
@@ -81,7 +81,7 @@ export const enFlow = {
   rowRunningWrite: 'Writing file',
   rowRunningSearch: 'Searching',
   rowRunningList: 'Listing directory',
-  rowRunningSubagent: 'Spawning subagent',
+  rowRunningSubagent: 'Spawning agent',
   rowRunningOther: (name: string): string => `Calling ${name}`,
   /** Collapsed-turn change summary suffix */
   turnChangedFiles: (count: number): string => `· ${count} file${count === 1 ? '' : 's'} changed`,
@@ -114,7 +114,7 @@ export const enFlow = {
   forkedImageName: (index: number): string => `Image ${index}`,
   resumeFailed: resumeFailedCopy,
   stopConfirmTitle: 'Stop everything?',
-  stopConfirmHint: 'This terminates all foreground and background subagents and cannot be undone.',
+  stopConfirmHint: 'This terminates all foreground and background agents and cannot be undone.',
   stopConfirmYes: 'Stop all',
   stopConfirmNo: 'Cancel',
   bashNoImages: bashImagesRejectedCopy,
