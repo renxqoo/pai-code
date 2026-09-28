@@ -209,6 +209,15 @@ export const zh: typeof en = {
     loading: '正在读取分支…',
     unavailable: '分支列表读取失败，请重试。',
     dirtyFiles: (count: number): string => `未提交的更改：${count} 个文件`,
+    /** 锁因行（D6：锁因可见 + 三出路——静默禁用是人机交互反模式） */
+    lockReason: (count: number): string => `${count} 个会话运行中——切分支会改写它们的工作基线`,
+    lockHintCreate: '可先「创建并检出新分支」（不改工作树，安全）；或停止会话后再切换',
+    /** 占用标注（A5：该分支被其他 worktree 检出——行禁用 + 占用者路径） */
+    occupiedBy: (path: string): string => `已被 worktree 占用：${path}`,
+    /** 冲突确认弹窗（D2' 试探式：git 自身拒绝的覆盖清单——知情裁决） */
+    conflictTitle: '切换会被未提交改动阻止',
+    conflictFilesTitle: (count: number): string => `以下 ${count} 个文件的未提交改动会被覆盖：`,
+    conflictHint: '先提交或暂存这些文件后再切换（可让会话中的 agent 代办）。',
     createBranch: '创建并检出新分支…',
     openGraph: 'Git 图谱',
     createTitle: '创建并检出新分支',
@@ -301,7 +310,7 @@ export const zh: typeof en = {
     filterDead: '异常',
     columnSession: '会话',
     /** 会话副行：项目名 + git 分支（分支在场才拼接——worktree/分支如实呈现） */
-    sessionSubline: (project: string, branch: string | null): string => (branch === null ? project : `${project} @ ${branch}`),
+    sessionSubline: (project: string, branch: string | null, worktree?: string | null): string => (worktree !== null && worktree !== undefined ? `[wt] ${project}${branch === null ? '' : ` @ ${branch}`} — ${worktree}` : branch === null ? project : `${project} @ ${branch}`),
     columnState: '状态',
     columnIdle: '空闲',
     columnModel: '模型',

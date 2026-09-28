@@ -5,7 +5,7 @@ import { thinkingLevelLabel, thinkingLevelOfLabel, type ApiOutcome, type Command
 
 import { branchSegmentOf } from '@/composer/branch-segment';
 import { BranchPanel } from '@/composer/branch-panel';
-import { branchSwitchLocked } from '@/composer/branch-switch-lock';
+import { branchSwitchLockState } from '@/composer/branch-switch-lock';
 import { ComposerActionsRow } from '@/composer/composer-actions-row';
 import { thinkingLevelOptions } from '@/composer/composer-selection';
 import { CreateBranchDialog } from '@/composer/create-branch-dialog';
@@ -126,11 +126,12 @@ function NewTaskScreen({
   const graph = useGitGraph(cwd, onListGraph, 0, dialog === 'graph');
   /** 分支切换锁（与线程页同一把，T36 引用 T23 裁决）：所选目录上任一线程在跑即锁定——
    * 新建任务页可选中运行中会话的目录，不放锁就能从这页拆台运行中的 agent。 */
-  const branchLocked = useStore(liveStore, (s) => branchSwitchLocked(s.sessions, s.threads, cwd));
+  const branchLock = useStore(liveStore, (s) => branchSwitchLockState(s.sessions, s.threads, cwd));
+  const branchLocked = branchLock.locked;
 
   /** 锁定期间已开的分支面板/创建弹窗就地收口（触发器会消失，但已开的模态弹窗不会自灭） */
   React.useEffect(() => {
-    if (branchLocked && (dialog === 'branch' || dialog === 'create-branch')) setDialog(null);
+    if (branchLocked && dialog === 'create-branch') setDialog(null); // 面板锁因可见不收；创建收
   }, [branchLocked, dialog]);
 
   /** 面板打开即重拉：脏计数随工作区实时变化，缓存快照会过期（cwd 不变不会自动重拉） */
@@ -275,7 +276,7 @@ function NewTaskScreen({
                     ...segment,
                     ariaLabel: copy.composer.branchSegment,
                     // 非仓库/加载中/目录上有线程在跑不给面板入口（列表为空或切基线拆台运行中 agent）
-                    ...(branches.view?.isRepo === true && !branchLocked
+                    ...(branches.view?.isRepo === true
                       ? {
                           panel: {
                             open: dialog === 'branch',
@@ -286,6 +287,7 @@ function NewTaskScreen({
                                 loading={branches.loading}
                                 failed={branches.failed}
                                 busy={checkingOut}
+                                lock={branchLocked ? { runningCount: branchLock.runningCount } : null}
                                 onSelect={switchBranch}
                                 onCreate={() => {
                                   setBranchError(null);

@@ -117,6 +117,13 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
       const session = payloadSessionOf(payload);
       if (session !== undefined && session !== threadId) return [];
       switch (name) {
+        case 'git/changed': {
+          // hub 自产帧：cwd 必在、branch 键缺席 = detached
+          const cwd = str(payload.cwd);
+          if (cwd.length === 0) return [];
+          const branch = str(payload.branch);
+          return [{ type: 'gitChanged', threadId, cwd, ...(branch.length > 0 ? { branch } : {}) }];
+        }
         case 'turn/start':
           state.settledSynth.delete(threadId);
           // 新轮开启：陈旧标记失效（此前结算轮的水位不再适用），不是推进水位——

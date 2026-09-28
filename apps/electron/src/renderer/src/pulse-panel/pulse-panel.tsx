@@ -5,7 +5,7 @@ import { Minimize2 } from 'lucide-react';
 import type { TodoSnapshotTask } from '@paiapp/contracts';
 
 import { FloatingPanel, IconButton } from '@paiapp/ui';
-import { branchSwitchLocked } from '@/composer/branch-switch-lock';
+import { branchSwitchLockState } from '@/composer/branch-switch-lock';
 import { useGitBranches } from '@/hooks/use-git-branches';
 import { useGitStatus } from '@/hooks/use-git-status';
 import { store as liveStore, workspaceActions } from '@/live/workspace-runtime';
@@ -41,7 +41,11 @@ function PulsePanel(): React.JSX.Element | null {
   const branchRevision = useStore(uiStore, (s) => s.branchRevision);
 
   const activeCwd = activeSession?.cwd ?? '';
-  const branchLocked = useStore(liveStore, (s) => branchSwitchLocked(s.sessions, s.threads, activeCwd));
+  // 选择器拆原始值（对象字面量 → zustand 相等判定恒不等 → 无限渲染）；两个 hook
+  // 无条件调用（条件 hook 违 React 规则），消费点拼对象
+  const branchLocked = useStore(liveStore, (s) => branchSwitchLockState(s.sessions, s.threads, activeCwd).locked);
+  const branchRunningCount = useStore(liveStore, (s) => branchSwitchLockState(s.sessions, s.threads, activeCwd).runningCount);
+  const branchLock = branchLocked ? { runningCount: branchRunningCount } : null;
 
   const tasks = todo?.tasks ?? EMPTY_TASKS;
   const running = runningAgentsOf(agents);
@@ -96,7 +100,7 @@ function PulsePanel(): React.JSX.Element | null {
                 branches={branches.view}
                 branchesLoading={branches.loading}
                 branchesFailed={branches.failed}
-                branchLocked={branchLocked}
+                branchLock={branchLock}
                 branchRevision={branchRevision}
                 onOpenDiff={() => uiStore.getState().openDiffPane()}
               />

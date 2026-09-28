@@ -3,6 +3,7 @@ import type { CommandView, ImagePayload, PreferencesView, ProviderModel, UiEvent
 import { isSettableThinkingLevel } from '@paiapp/contracts';
 
 import { copy } from '@/strings';
+import { uiStore } from '@/ui/ui-store';
 import { copyOfError } from '@/lib/error-text';
 import type { BridgeClient } from './client-invoke';
 import { createRuntimeController } from './runtime-controller';
@@ -134,6 +135,12 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
   const onEvent = (event: UiEvent): void => {
     const state = store.getState();
     state.applyEvent(event, Date.now());
+    if (event.type === 'gitChanged') {
+      // hub git/changed（外部 checkout 失效信号）：bump 分支代次——use-git-branches 按
+      // cwd 匹配的会话分支视图重拉（ui-store 全局单值——多余重拉为已知可接受项）
+      uiStore.getState().bumpBranchRevision();
+      return;
+    }
     if (event.type === 'host' && (event.phase === 'restarting' || event.phase === 'failed')) {
       // host 进程消亡：乐观登记的「已恢复」随 worker 全灭失效（对账会重发 parked 视图）；
       // 挂起弹窗兜底 timer 与轮首游标全部随进程消亡回收（与 dispose 同口径）

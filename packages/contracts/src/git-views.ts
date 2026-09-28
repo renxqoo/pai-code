@@ -5,7 +5,19 @@ import { z } from 'zod';
  * 单文件行数预算内保持内聚）。
  */
 
-/** 本地 git 分支视图（两页分支面板共用）：非 git 目录 isRepo=false + 空列表（降级不报错）。 */
+/** 分支被 linked worktree 占用的事实（列表禁用标注与占用文案的数据源）。 */
+export const GitWorktreeRefSchema = z
+  .object({
+    branch: z.string().min(1),
+    /** worktree 绝对路径（占用者——文案/跳转用）。 */
+    path: z.string().min(1),
+  })
+  .strict();
+export type GitWorktreeRef = z.infer<typeof GitWorktreeRefSchema>;
+
+/** 本地 git 分支视图（两页分支面板共用）：非 git 目录 isRepo=false + 空列表（降级不报错）。
+ *  gitDir/worktrees：主进程本地 watch 兜底锚（HEAD 所在——linked worktree 在主仓
+ *  .git/worktrees/<n> 下）与占用表（docs/GIT-INTERACTION-REDESIGN §2.2）。 */
 export const GitBranchesViewSchema = z
   .object({
     isRepo: z.boolean(),
@@ -13,6 +25,10 @@ export const GitBranchesViewSchema = z
     branches: z.array(z.string()),
     /** 未提交更改的已跟踪文件数（与切换守卫同口径，不含未跟踪文件）。 */
     dirtyFiles: z.number().int().min(0),
+    /** gitdir 绝对路径（非 git 目录键省略——zod optional）；分支菜单失效信号的 watch 锚。 */
+    gitDir: z.string().min(1).optional(),
+    /** linked worktree 占用表（无占用/非仓键省略）。 */
+    worktrees: z.array(GitWorktreeRefSchema).optional(),
   })
   .strict();
 export type GitBranchesView = z.infer<typeof GitBranchesViewSchema>;

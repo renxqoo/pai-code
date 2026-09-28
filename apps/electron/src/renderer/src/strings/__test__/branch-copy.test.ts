@@ -10,6 +10,8 @@ const branchKinds = [
   'branch_exists',
   'invalid_branch',
   'dirty_worktree',
+  'branch_in_other_worktree',
+  'conflict_files',
   'unknown_branch',
   'not_a_repo',
   'git_unavailable',

@@ -62,7 +62,7 @@ export type AppErrorCode =
   | 'malformed_response' | 'unknown_session' | 'thread_id_mismatch'
   | 'session_path_forbidden' | 'cwd_not_allowed' | 'cwd_forbidden' | 'cwd_not_found'
   | 'export_failed' | 'dialog_unavailable' | 'editor_not_found' | 'skill_not_found'
-  | 'branch_exists' | 'invalid_branch' | 'dirty_worktree' | 'unknown_branch' | 'not_a_repo' | 'git_unavailable'
+  | 'branch_exists' | 'invalid_branch' | 'dirty_worktree' | 'conflict_files' | 'branch_in_other_worktree' | 'unknown_branch' | 'not_a_repo' | 'git_unavailable'
   | 'empty_message' | 'no_active_session' | 'resume_failed' | 'bootstrap_crashed' | 'compact_images_rejected'
   | 'bash_images_rejected'
   | 'skill_source_invalid' | 'skill_invalid' | 'skill_name_invalid' | 'skill_exists'

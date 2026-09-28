@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -197,26 +197,33 @@ describe('git 路由 × 真 git（隔离世界）', () => {
     rmSync(work, { recursive: true, force: true });
   });
 
-  test('列表：当前分支 main + 分支集升序；非仓库目录空形态', async () => {
-    expect(await routes.invoke('git/branches', { cwd: repo })).toEqual({
-      ok: true,
-      data: { isRepo: true, current: 'main', branches: ['dev', 'main'], dirtyFiles: 0 },
-    });
+  test('列表：当前分支 main + 分支集升序 + gitDir 归一（新契约）；非仓库目录空形态', async () => {
+    const listed = (await routes.invoke('git/branches', { cwd: repo })) as { ok: boolean; data: { gitDir?: string } & Record<string, unknown> };
+    expect(listed.ok).toBe(true);
+    expect(listed.data['isRepo']).toBe(true);
+    expect(listed.data['current']).toBe('main');
+    expect(listed.data['branches']).toEqual(['dev', 'main']);
+    expect(listed.data['dirtyFiles']).toBe(0);
+    expect(listed.data.gitDir).toBe(join(repo, '.git')); // 相对串 resolve 归一（F1 坑锚）
     // outside 不在白名单 → 门禁先拦（这是安全面，不是 git 面）
     expect(await routes.invoke('git/branches', { cwd: outside })).toEqual({ ok: false, error: { kind: 'cwd_not_allowed' } });
   });
 
   test('切换成功：当前分支真变为 dev；创建并检出后新分支出现', async () => {
     expect(await routes.invoke('git/checkout', { cwd: repo, branch: 'dev' })).toEqual({ ok: true, data: { branch: 'dev' } });
-    const after = await routes.invoke('git/branches', { cwd: repo });
-    expect(after).toEqual({ ok: true, data: { isRepo: true, current: 'dev', branches: ['dev', 'main'], dirtyFiles: 0 } });
+    const after = (await routes.invoke('git/branches', { cwd: repo })) as { ok: boolean; data: Record<string, unknown> };
+    expect(after.ok).toBe(true);
+    expect(after.data['current']).toBe('dev');
+    expect(after.data['branches']).toEqual(['dev', 'main']);
 
     expect(await routes.invoke('git/checkout', { cwd: repo, branch: 'feat/new', create: true })).toEqual({
       ok: true,
       data: { branch: 'feat/new' },
     });
-    const created = await routes.invoke('git/branches', { cwd: repo });
-    expect(created).toEqual({ ok: true, data: { isRepo: true, current: 'feat/new', branches: ['dev', 'feat/new', 'main'], dirtyFiles: 0 } });
+    const created = (await routes.invoke('git/branches', { cwd: repo })) as { ok: boolean; data: Record<string, unknown> };
+    expect(created.ok).toBe(true);
+    expect(created.data['current']).toBe('feat/new');
+    expect(created.data['branches']).toEqual(['dev', 'feat/new', 'main']);
     // 同名再创建 → branch_exists（不静默覆盖）
     expect(await routes.invoke('git/checkout', { cwd: repo, branch: 'feat/new', create: true })).toEqual({
       ok: false,
@@ -243,13 +250,16 @@ describe('git 路由 × 真 git（隔离世界）', () => {
     expect(execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: repo }).toString().trim()).not.toBe('HEAD');
   });
 
-  test('脏工作区拒绝切换：改动未被 checkout 丢掉（业务终态）', async () => {
+  test('脏工作区随行切换（D2\' 试探式）：非冲突改动随 checkout 保留（业务终态）', async () => {
     git('checkout', 'main');
     writeFileSync(join(repo, 'tracked.txt'), 'dirty\n');
-    expect(await routes.invoke('git/checkout', { cwd: repo, branch: 'dev' })).toEqual({ ok: false, error: { kind: 'dirty_worktree' } });
-    expect(execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: repo }).toString().trim()).toBe('main');
+    // dev 与 main 同基点——tracked.txt 改动不冲突 → git 自身放行，改动随行
+    expect(await routes.invoke('git/checkout', { cwd: repo, branch: 'dev' })).toEqual({ ok: true, data: { branch: 'dev' } });
+    expect(execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: repo }).toString().trim()).toBe('dev');
+    expect(readFileSync(join(repo, 'tracked.txt'), 'utf8')).toBe('dirty\n'); // 改动未丢
     // 收尾：恢复干净工作区（同一隔离世界内后续断言依赖）
     git('checkout', '--', 'tracked.txt');
+    git('checkout', 'main');
   });
 
   test('图谱：merge 提交双 parents；HEAD 装饰与短哈希（业务终态）', async () => {

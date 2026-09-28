@@ -560,3 +560,22 @@ describe('agent/tool-stream 增量累积（桥发 delta 批非快照）', () => 
   });
 });
 
+
+describe('git/changed（hub 自产帧——外部 checkout 失效信号）', () => {
+  const mapper = createEventMapper({ now: () => 1_000 });
+
+  test('payload {cwd, branch} → gitChanged {threadId, cwd, branch}', () => {
+    expect(mapper.mapEvent(frame('git/changed', { cwd: '/w/repo', branch: 'feat/x' }))).toEqual([
+      { type: 'gitChanged', threadId: 't', cwd: '/w/repo', branch: 'feat/x' },
+    ]);
+  });
+
+  test('branch 键缺席（detached 已分离）→ gitChanged 无 branch 键', () => {
+    expect(mapper.mapEvent(frame('git/changed', { cwd: '/w/repo' }))).toEqual([{ type: 'gitChanged', threadId: 't', cwd: '/w/repo' }]);
+  });
+
+  test('cwd 缺失/空（垃圾帧）→ 丢弃（不产半生事件）', () => {
+    expect(mapper.mapEvent(frame('git/changed', {}))).toEqual([]);
+    expect(mapper.mapEvent(frame('git/changed', { cwd: '', branch: 'x' }))).toEqual([]);
+  });
+});

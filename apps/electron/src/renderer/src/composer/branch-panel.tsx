@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Check, GitBranch, GitGraph, Plus, Search } from 'lucide-react';
+import { Check, GitBranch, GitGraph, Lock, Plus, Search } from 'lucide-react';
 
 import type { GitBranchesView } from '@paiapp/contracts';
 
@@ -13,6 +13,9 @@ type BranchPanelProps = {
   failed: boolean
   /** 检出在途：行与动作入口禁用 */
   busy: boolean
+  /** 切换锁（D6 锁因可见）：非 null = 切换被锁（行禁用）但「创建新分支」放行
+   *  （不改工作树不拆台）；值为运行中会话数（锁因行文案）。 */
+  lock: { runningCount: number } | null
   onSelect: (branch: string) => void
   /** 打开「创建并检出新分支」弹窗 */
   onCreate: () => void
@@ -40,13 +43,16 @@ const ACTION_CLASS_NAME =
  * 不含定位/开合逻辑——由通用锚定底座承载；一切数据与回调走 props，不发 IPC。
  * 空态优先级：loading → failed → 过滤无结果。
  */
-function BranchPanel({ view, loading, failed, busy, onSelect, onCreate, onOpenGraph }: BranchPanelProps) {
+function BranchPanel({ view, loading, failed, busy, lock, onSelect, onCreate, onOpenGraph }: BranchPanelProps) {
   const [query, setQuery] = React.useState('');
   const branches = view?.branches ?? [];
   const current = view?.current ?? null;
   const dirtyFiles = view?.dirtyFiles ?? 0;
   const filtered = filterBranches(branches, query);
   const emptyLabel = loading ? copy.branch.loading : failed ? copy.branch.unavailable : copy.branch.empty;
+  /** 分支 → 占用 worktree 路径（A5：行禁用 + 标注） */
+  const occupantOf = new Map((view?.worktrees ?? []).map((ref) => [ref.branch, ref.path]));
+  const switchDisabled = busy || lock !== null;
   return (
     <>
       <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-3.5">
@@ -64,6 +70,14 @@ function BranchPanel({ view, loading, failed, busy, onSelect, onCreate, onOpenGr
       </div>
       <div className="max-h-[264px] overflow-y-auto p-2">
         <div className="px-2.5 pt-1 pb-1.5 text-xs leading-none text-muted-foreground">{copy.branch.panelTitle}</div>
+        {/* 锁因行（D6：锁因可见 + 出路提示——静默禁用是人机交互反模式） */}
+        {lock !== null ? (
+          <div className="mx-2 mb-1.5 rounded-lg bg-muted px-2.5 py-2 text-xs leading-4 text-muted-foreground">
+            <Lock aria-hidden="true" className="mr-1 inline size-3.5 align-[-2px]" strokeWidth={1.75} />
+            {copy.branch.lockReason(lock.runningCount)}
+            <span className="mt-0.5 block opacity-80">{copy.branch.lockHintCreate}</span>
+          </div>
+        ) : null}
         {/* detached HEAD 无当前行可挂脏计数：置顶一行弱提示，保住「展示的数字就是会阻止切换的数字」 */}
         {view?.current == null && dirtyFiles > 0 ? (
           <div className="px-2.5 pb-1.5 text-xs leading-4 text-muted-foreground">{copy.branch.dirtyFiles(dirtyFiles)}</div>
@@ -71,12 +85,15 @@ function BranchPanel({ view, loading, failed, busy, onSelect, onCreate, onOpenGr
         <div className="flex flex-col gap-0.5">
           {filtered.map((name) => {
             const isCurrent = name === current;
+            const occupant = occupantOf.get(name) ?? null;
+            const rowDisabled = busy || occupant !== null || (switchDisabled && !isCurrent);
             return (
               <button
                 key={name}
                 type="button"
-                disabled={busy}
+                disabled={rowDisabled}
                 aria-current={isCurrent ? 'true' : undefined}
+                title={occupant !== null ? copy.branch.occupiedBy(occupant) : undefined}
                 onClick={() => onSelect(name)}
                 className={cn(ROW_CLASS_NAME, isCurrent && 'bg-muted hover:bg-muted')}
               >
@@ -86,6 +103,11 @@ function BranchPanel({ view, loading, failed, busy, onSelect, onCreate, onOpenGr
                   {isCurrent && dirtyFiles > 0 ? (
                     <span className="mt-1 block text-xs leading-4 text-muted-foreground">
                       {copy.branch.dirtyFiles(dirtyFiles)}
+                    </span>
+                  ) : null}
+                  {occupant !== null ? (
+                    <span className="mt-1 block truncate text-xs leading-4 text-muted-foreground">
+                      {copy.branch.occupiedBy(occupant)}
                     </span>
                   ) : null}
                 </span>
@@ -102,6 +124,7 @@ function BranchPanel({ view, loading, failed, busy, onSelect, onCreate, onOpenGr
         <button type="button" disabled={busy} onClick={onCreate} className={ACTION_CLASS_NAME}>
           <Plus aria-hidden="true" className="size-4 shrink-0" strokeWidth={1.75} />
           {copy.branch.createBranch}
+          {/* 锁时仍可用（D6 三出路之一：create 不改工作树不拆台） */}
         </button>
         <button type="button" disabled={busy} onClick={onOpenGraph} className={ACTION_CLASS_NAME}>
           <GitGraph aria-hidden="true" className="size-4 shrink-0" strokeWidth={1.75} />

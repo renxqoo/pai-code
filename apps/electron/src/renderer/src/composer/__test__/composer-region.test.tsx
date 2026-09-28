@@ -428,7 +428,7 @@ describe('ComposerRegion 分支面板接线（T36）', () => {
     view.unmount();
   });
 
-  test('运行中线程（streaming）：工作目录被分支切换锁锁定，分支段退回只读（无触发器）', async () => {
+  test('运行中线程（streaming）：锁时触发器仍在（锁不再是摘除条件——D6 锁因入面板）', async () => {
     seedLive({ threads: { t1: { streaming: true } } });
     jest.spyOn(workspaceActions, 'listGitBranches').mockResolvedValue({
       ok: true,
@@ -436,9 +436,10 @@ describe('ComposerRegion 分支面板接线（T36）', () => {
     });
     const view = render(<ComposerRegion />);
     await flushAsync();
-    expect(branchTrigger(view)).toBeUndefined();
-    // 只读段仍展示分支名（span 而非按钮）
-    expect(view.container.textContent).toContain('main');
+    // 旧语义：锁=触发器摘除（undefined）。新语义（D6）：触发器保留——锁因行在面板内
+    // 呈现（BranchPanel 单测钉住锁因行/行禁用/create 放行），此处钉接线形态
+    expect(branchTrigger(view)).toBeDefined();
+    expect(view.container.textContent).toContain('main'); // 分支名照常展示
     view.unmount();
   });
 

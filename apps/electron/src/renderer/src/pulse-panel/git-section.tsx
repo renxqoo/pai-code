@@ -23,7 +23,7 @@ type GitSectionProps = {
   branches: GitBranchesView | null
   branchesLoading: boolean
   branchesFailed: boolean
-  branchLocked: boolean
+  branchLock: { runningCount: number } | null
   /** 分支失效代次（checkout 成功递增，图谱随之重拉） */
   branchRevision: number
   onOpenDiff: () => void
@@ -97,7 +97,7 @@ function GitSection(props: GitSectionProps): React.JSX.Element {
         loading={props.branchesLoading}
         failed={props.branchesFailed}
         cwd={props.cwd}
-        locked={props.branchLocked}
+        lock={props.branchLock}
         onOpenGraph={() => setGraphOpen(true)}
       />
       {(view.ahead > 0 || view.behind > 0) && (

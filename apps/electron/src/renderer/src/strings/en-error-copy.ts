@@ -100,6 +100,8 @@ export const enErrorCopy = {
   branch_exists: 'A branch with that name already exists. Pick another name.',
   invalid_branch: 'That branch name is not valid. Pick another name.',
   dirty_worktree: 'The working tree has uncommitted changes. Commit or stash them before switching branches.',
+  branch_in_other_worktree: 'This branch is already checked out in another worktree (see path in the error detail).',
+  conflict_files: 'Switching would overwrite uncommitted files (see list in the error detail).',
   unknown_branch: 'That branch no longer exists. Refresh and try again.',
   not_a_repo: 'That folder is not a git repository.',
   git_unavailable: 'git was not found on this system, so branches cannot be changed.',

@@ -1,5 +1,5 @@
 import { realpathSync, statSync } from 'node:fs';
-import { basename as baseName, dirname as dirnamePath, join as joinPaths, resolve as resolvePath, sep as pathSep } from 'node:path';
+import { basename as baseName, dirname as dirnamePath, isAbsolute, join as joinPaths, resolve, resolve as resolvePath, sep as pathSep } from 'node:path';
 
 import {
   appError,
@@ -209,7 +209,8 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     });
   };
 
-  const git = deps.git ?? createGitBranches(runGit);
+  // 路径能力注入（api 包无 node 域）：gitDir 相对串 resolve 归一
+  const git = deps.git ?? createGitBranches(runGit, { isAbsolute, resolve });
   const graph = deps.graph ?? createGitGraph(runGit);
   const gitStatus = deps.gitStatus ?? createGitStatus(runGit);
   const openLocation = deps.openLocation ?? createOpenLocation();

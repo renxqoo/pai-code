@@ -19,8 +19,8 @@ type BranchMenuProps = {
   loading: boolean
   failed: boolean
   cwd: string
-  /** 工作目录上任一线程在跑（切基线锁——T36 引用 T23 裁决） */
-  locked: boolean
+  /** 切换锁计数形态（D6：触发器不再静默禁用——面板内锁因行呈现；null=未锁） */
+  lock: { runningCount: number } | null
   /** 打开「Git 图谱」弹窗（入口在 Git 分区） */
   onOpenGraph: () => void
 };
@@ -29,7 +29,7 @@ type BranchMenuProps = {
  * 分支行下拉（速览面板）：AnchoredPanel + BranchPanel 复用线程页分支面板交互
  * （切换守卫 / 创建并检出 / 图谱入口），检出成功 bump 分支失效代次。
  */
-function BranchMenu({ view, current: currentFallback, loading, failed, cwd, locked, onOpenGraph }: BranchMenuProps) {
+function BranchMenu({ view, current: currentFallback, loading, failed, cwd, lock, onOpenGraph }: BranchMenuProps) {
   const [open, setOpen] = React.useState(false);
   const [createOpen, setCreateOpen] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
@@ -39,7 +39,7 @@ function BranchMenu({ view, current: currentFallback, loading, failed, cwd, lock
   const current = view?.current ?? currentFallback;
 
   const switchBranch = (branchName: string): void => {
-    if (busyRef.current || locked) return;
+    if (busyRef.current || lock !== null) return; // 锁=切换只读（面板行已禁用，此闸双保险）
     busyRef.current = true;
     setBusy(true);
     setOpen(false);
@@ -61,7 +61,7 @@ function BranchMenu({ view, current: currentFallback, loading, failed, cwd, lock
   };
 
   const createBranch = (branchName: string): void => {
-    if (busyRef.current || locked) return;
+    if (busyRef.current) return; // 创建不受锁（D6 三出路：create 不改工作树）
     busyRef.current = true;
     setBusy(true);
     setError(null);
@@ -95,7 +95,6 @@ function BranchMenu({ view, current: currentFallback, loading, failed, cwd, lock
         trigger={
           <button
             type="button"
-            disabled={locked}
             aria-label={copy.pulse.git.branchAria(current ?? '')}
             className="flex h-8 w-full cursor-pointer items-center gap-2 rounded-lg px-1.5 text-left outline-none select-none hover:bg-accent/50 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
           >
@@ -111,6 +110,7 @@ function BranchMenu({ view, current: currentFallback, loading, failed, cwd, lock
           failed={failed}
           busy={busy}
           onSelect={switchBranch}
+          lock={lock}
           onCreate={() => {
             setError(null);
             setCreateOpen(true);
