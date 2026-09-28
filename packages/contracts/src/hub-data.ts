@@ -41,7 +41,8 @@ export interface ModelCatalogEntry {
   source: 'preset' | 'custom';
 }
 
-/** thread/list 表项（host 投影）。 */
+/** thread/list 表项（host 投影）。gitBranch 现算（仅 live 系行；键省略 = 非 git 仓/
+ *  detached/cwd 脏数据——hub 侧不落账，轮询自动跟随分支切换）。 */
 export interface ThreadListEntry {
   threadId: string;
   cwd: string;
@@ -51,6 +52,7 @@ export interface ThreadListEntry {
   rssBytes: number | null;
   keepalive: boolean;
   isStreaming: boolean;
+  gitBranch?: string;
 }
 
 /** thread/list_saved 会话摘要（无 sessionPath；app 按 agentDir/sessions/<id>/events.jsonl 布局重建）。 */
@@ -72,13 +74,16 @@ export interface ThreadOpenData {
   cwd: string;
   sessionPath: string;
   projectSettingsPresent?: true;
+  /** 装配期 git 分支快照（thread/start|resume 响应；键省略 = 非 git 仓/detached） */
+  gitBranch?: string;
 }
 
-/** fork/clone 响应。 */
+/** fork/clone 响应。gitBranch 与 start/resume 同位（重装配 cwd 未变，值同源）。 */
 export interface ForkData {
   threadId: string;
   previousThreadId: string;
   sessionPath: string;
+  gitBranch?: string;
 }
 
 /** thread/delete 响应（本次实际删除的目录名集；幂等 = 空集）。 */

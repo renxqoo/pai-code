@@ -26,7 +26,9 @@ export const HostInfoViewSchema = z.object({
 export type HostInfoView = z.infer<typeof HostInfoViewSchema>;
 
 /** thread/list 行收窄（worker 表：hub 是进程态真相；host-hub 无 subagents 计数字段——
- *  在途徽标数据源 = agent/status 事件 / get_subagents）。 */
+ *  在途徽标数据源 = agent/status 事件 / get_subagents）。gitBranch 每次轮询现算
+ * （分支是易变事实不落账）；仅 live 系行携带，键省略 = 非 git 仓 / detached /
+ * cwd 脏数据（host-hub docs/WORKTREE-CONTEXT-AWARENESS §1.5）。 */
 export const WorkerRowViewSchema = z.object({
   threadId: z.string(),
   cwd: z.string(),
@@ -36,6 +38,7 @@ export const WorkerRowViewSchema = z.object({
   idleMs: z.number().int().nonnegative(),
   rssBytes: z.number().int().nullable(),
   keepalive: z.boolean(),
+  gitBranch: z.string().optional(),
 });
 export type WorkerRowView = z.infer<typeof WorkerRowViewSchema>;
 

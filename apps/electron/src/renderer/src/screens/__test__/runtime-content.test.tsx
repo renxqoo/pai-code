@@ -176,3 +176,23 @@ describe('RuntimeContent', () => {
     expect(html).toContain(copy.runtime.healthFailed);
   });
 });
+
+
+describe('运行状态会话副行（git 分支如实呈现——worktree 上下文感知）', () => {
+  test('gitBranch 在场：副行渲染 项目名 @ 分支', () => {
+    const html = renderScreen({ rows: [row({ cwd: '/Users/w/work/.x-harness-worktrees/x-harness-worktree-context', gitBranch: 'feat/worktree-context' })] });
+    expect(html).toContain('@ feat/worktree-context');
+    expect(html).toContain('x-harness-worktree-context @ feat/worktree-context');
+  });
+
+  test('gitBranch 缺席（非 git 仓/detached/hub 旧版）：副行仅项目名，无 @ 残留', () => {
+    const html = renderScreen({ rows: [row()] });
+    expect(html).toContain('>app<');
+    expect(html).not.toContain('@ feat');
+  });
+
+  test('sessionSubline 工厂：缺席仅项目名、在场拼接 @ 分支（zh 同型编译期对齐）', () => {
+    expect(copy.runtime.sessionSubline('proj', null)).toBe('proj');
+    expect(copy.runtime.sessionSubline('proj', 'b/x')).toBe('proj @ b/x');
+  });
+});

@@ -30,7 +30,10 @@ function RuntimeWorkerRow({ row, onStop, onRetire, onForceRetire, onToggleKeepal
       <td className={cn(cellClass, 'min-w-[160px]')}>
         <div className="flex min-w-0 flex-col gap-[3px]">
           <span className="truncate text-[12px] leading-none font-medium text-foreground">{row.title}</span>
-          <span className="truncate text-[10.5px] leading-none text-muted-foreground">{projectNameOf(row)}</span>
+          {/* 副行 = 项目名 @ git 分支（分支现算随轮询跟随——worktree 工作如实呈现） */}
+          <span className="truncate text-[10.5px] leading-none text-muted-foreground" title={row.cwd}>
+            {copy.runtime.sessionSubline(projectNameOf(row), row.gitBranch ?? null)}
+          </span>
         </div>
       </td>
       <td className={cellClass}>

@@ -360,6 +360,8 @@ export function threadListRows(data: unknown): WorkerRowView[] {
       idleMs: num(t.idleMs, 0),
       rssBytes: typeof t.rssBytes === 'number' && Number.isFinite(t.rssBytes) ? t.rssBytes : null,
       keepalive: t.keepalive === true,
+      // gitBranch 现算透传（非 string/空串丢弃——键省略即不显示；hub 旧版无此键天然兼容）
+      ...(typeof t.gitBranch === 'string' && t.gitBranch.length > 0 ? { gitBranch: t.gitBranch } : {}),
     });
   }
   return out;
