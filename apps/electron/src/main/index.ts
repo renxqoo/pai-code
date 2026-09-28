@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, Notification, shell } from 'electron';
 
 import { registerIpcWindowActions } from './window-actions-ipc';
+import { createMobileBridge } from './mobile-bridge/server';
 import { join } from 'node:path';
 import { existsSync, statSync } from 'node:fs';
 import { seedBundledRg } from './rg-seed';
@@ -90,9 +91,22 @@ void app.whenReady().then(async () => {
    *  同管道先发事件帧后发 response，直发下事件恒先于 invoke 结果到达渲染层。 */
   const emitToRenderer = (event: UiEvent): void => {
     notifyIfBlurred(event);
+    emitToMobile(event);
     const target = mainWindow;
     if (target === null || target.isDestroyed()) return;
     target.webContents.send('pai:event', event);
+  };
+
+  // T57 mobile bridge：手机 App 经 WS 接入（同 LAN）。invoke 与渲染层 IPC 同门（routes.invoke）；
+  // 事件是 emit 泵的第二扇（与 pai:event 全序一致）。装配失败不阻断桌面（bridge 不可用）。
+  let mobileBridge: ReturnType<typeof createMobileBridge> | null = null;
+  let mobileBridgeEnabled = true;
+  const emitToMobile = (event: UiEvent): void => {
+    try {
+      mobileBridge?.publishEvent(event);
+    } catch {
+      // bridge 半开（stop 中途）不抛给事件泵
+    }
   };
 
   /** K1 系统通知：窗口失焦时的权限弹窗（confirm）与 host 失败。
@@ -136,6 +150,7 @@ void app.whenReady().then(async () => {
     if (quitting) return;
     quitting = true;
     monitor?.stop();
+    void mobileBridge?.stop();
     const stopHost = runtime !== null ? runtime.stop().catch(() => undefined) : Promise.resolve();
     void stopHost.finally(() => {
       app.quit();
@@ -292,6 +307,22 @@ void app.whenReady().then(async () => {
         }
       },
     });
+    // T57 mobile bridge 启动：settings.mobileTokens 持久化（patch 面）；routes.invoke 同门
+    if (mobileBridgeEnabled) {
+      mobileBridge = createMobileBridge({
+        now: () => Date.now(),
+        persistToken: (token, deviceName) => {
+          const current = settings.get().mobileTokens;
+          void settings.patch({ mobileTokens: { ...current, [token]: deviceName } });
+        },
+        knownTokens: () => new Map(Object.entries(settings.get().mobileTokens)),
+        invoke: async (method, params) =>
+          routes === null ? { ok: false, error: { kind: 'transient', face: 'host_unavailable' } } : await routes.invoke(method, params),
+        serverInfo: () => ({ appVersion: app.getVersion(), hostPhase: runtime?.hostPhase() ?? null }),
+        log: (message) => loggingToMonitor.log(message),
+      });
+    }
+
     await runtime.start();
   } catch (error) {
     logger.log(`runtime_start_failed:${error instanceof Error ? error.message : String(error)}`);
@@ -311,6 +342,28 @@ void app.whenReady().then(async () => {
     monitor.noteHostPhase(host.phase);
     host.onPhase((phase) => monitor.noteHostPhase(phase));
   }
+
+  // T57 桌面 UI 钩子：设备页展示配对码与已连接设备；开关即时启停 bridge
+  ipcMain.handle('pai:mobile-state', () => ({
+    enabled: mobileBridgeEnabled,
+    pairCode: mobileBridge === null ? null : (() => {
+      const current = mobileBridge.pairing.currentCode();
+      return current === null ? null : { code: current.code, expiresAt: current.expiresAt };
+    })(),
+    lockedUntil: mobileBridge === null ? 0 : mobileBridge.pairing.lockedUntil(),
+    devices: mobileBridge === null ? [] : mobileBridge.connectedDevices(),
+  }));
+  ipcMain.handle('pai:mobile-set-enabled', (_event, enabled: unknown) => {
+    if (typeof enabled !== 'boolean') return { ok: false as const };
+    if (enabled === mobileBridgeEnabled) return { ok: true as const };
+    mobileBridgeEnabled = enabled;
+    if (!enabled) {
+      void mobileBridge?.stop().then(() => {
+        mobileBridge = null;
+      });
+    }
+    return { ok: true as const };
+  });
 
   ipcMain.handle('pai:invoke', (_event, payload: unknown) => {
     if (typeof payload !== 'object' || payload === null) {

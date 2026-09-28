@@ -4,6 +4,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider } from '@/theme/theme-provider';
 import { useSettingsStore } from '@/store/settings-store';
 import { AppStatusBar } from '@/components/app-status-bar';
+import { BridgeGate } from '@/mobile/bridge-gate';
 
 export default function RootLayout() {
   const theme = useSettingsStore((state) => state.theme);
@@ -11,6 +12,7 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ThemeProvider preference={theme}>
         <AppStatusBar />
+        <BridgeGate />
         <Stack screenOptions={{ animation: 'slide_from_right', contentStyle: { backgroundColor: 'transparent' }, headerShown: false }}>
           <Stack.Screen name="index" />
           <Stack.Screen name="search" />

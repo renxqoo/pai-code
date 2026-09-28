@@ -84,6 +84,8 @@ export const SettingsSchema = z
     hiddenProjects: z.array(z.string()).default([]),
     /** worker 闲置自动回收时长（分钟；spawn env HUB_IDLE_RETIRE_MS 注入 + 运行期 set_idle_retire_ms 同步）。 */
     idleRecycleMinutes: IdleRecycleMinutesSchema.default(5),
+    /** mobile bridge 已配对设备令牌（token → 设备名；撤销 = 删行）。 */
+    mobileTokens: z.record(z.string(), z.string()).default({}),
   })
   .strict();
 

@@ -21,3 +21,4 @@ export * from './hub-data';
 export * from './hub-events';
 export * from './text-clip';
 export * from './comment-line';
+export * from './mobile-bridge';

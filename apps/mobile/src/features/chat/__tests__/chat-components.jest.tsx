@@ -12,10 +12,15 @@ import { WorkspaceSheet } from "@/features/workspace/workspace-sheet";
 import { useConversationStore } from "@/store/conversation-store";
 import { useNavigationStore } from "@/store/navigation-store";
 import { TestWrapper } from "@/test/test-wrapper";
+import { useDemoModeStore } from "@/store/demo-mode-store";
 
 jest.mock("expo-router", () => ({ useRouter: () => ({ push: jest.fn(), back: jest.fn() }) }));
 
 describe("chat and history components", () => {
+  beforeEach(() => {
+    useDemoModeStore.getState().setEnabled(true);
+  });
+
   beforeEach(() => {
     useNavigationStore.setState({ drawerOpen: false, sheet: null });
     useConversationStore.getState().startNewSession();
@@ -94,7 +99,8 @@ describe("chat and history components", () => {
     );
     await view.rerender(<PermissionCard />);
     await fireEvent.press(view.getByText("允许一次"));
-    expect(useConversationStore.getState().permissionRequest?.approved).toBe(true);
+    // 应答即清卡（dialog/respond 发送；裁决经事件流对账）
+    expect(useConversationStore.getState().permissionRequest).toBeNull();
   });
 
   it("renders chat header and opens history/task configuration", async () => {

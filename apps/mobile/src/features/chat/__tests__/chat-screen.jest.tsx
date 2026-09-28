@@ -6,10 +6,12 @@ import { demoSessions } from "@/fixtures/demo-data";
 import { useConversationStore } from "@/store/conversation-store";
 import { useNavigationStore } from "@/store/navigation-store";
 import { useComposerStore } from "@/store/composer-store";
+import { useDemoModeStore } from "@/store/demo-mode-store";
 import { TestWrapper } from "@/test/test-wrapper";
 
 describe("ChatScreen", () => {
   beforeEach(() => {
+    useDemoModeStore.getState().setEnabled(true);
     useConversationStore.getState().startNewSession();
     useNavigationStore.setState({ drawerOpen: false, sheet: null });
     useComposerStore.setState({ generating: false });

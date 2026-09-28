@@ -136,6 +136,7 @@ describe('Settings zod：round-trip 与拒绝表', () => {
       hiddenProjects: ['/w/gone'],
       idleRecycleMinutes: 15,
       archivedSessions: ['/b.jsonl'],
+      mobileTokens: { tok1: 'iPhone 15' },
     };
     expect(SettingsSchema.parse(input)).toEqual(input);
   });

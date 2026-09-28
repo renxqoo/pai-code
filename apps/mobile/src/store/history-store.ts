@@ -1,7 +1,8 @@
 import { create } from 'zustand';
+import type { ConversationSession } from '@/types/domain';
+import { useDemoModeStore } from '@/store/demo-mode-store';
 import { agentConversation } from '@/fixtures/agent-conversation';
 import { demoSessions } from '@/fixtures/demo-data';
-import type { ConversationSession } from '@/types/domain';
 
 type HistoryState = {
   sessions: readonly ConversationSession[];
@@ -12,13 +13,19 @@ type HistoryState = {
   archiveSession: (id: string) => void;
   deleteSession: (id: string) => void;
   renameSession: (id: string, title: string) => void;
+  /** bridge 数据源装载（真实会话列表整体替换）。 */
+  replaceSessions: (sessions: readonly ConversationSession[]) => void;
 };
 
 const updateSession = (sessions: readonly ConversationSession[], id: string, update: (session: ConversationSession) => ConversationSession): ConversationSession[] =>
   sessions.map((session) => session.id === id ? update(session) : session);
 
+/** 数据源：演示模式 = fixtures；连接模式 = bridge（replaceSessions 驱动）。 */
+const initialSessions = (): readonly ConversationSession[] =>
+  useDemoModeStore.getState().enabled ? [agentConversation, ...demoSessions] : [];
+
 export const useHistoryStore = create<HistoryState>((set) => ({
-  sessions: [agentConversation, ...demoSessions], query: '',
+  sessions: initialSessions(), query: '',
   setQuery: (query) => set({ query: query.slice(0, 120) }),
   selectSession: (id) => set((state) => ({ sessions: state.sessions.map((session) => session.id === id ? { ...session, unread: false } : session) })),
   togglePinned: (id) => set((state) => ({ sessions: updateSession(state.sessions, id, (session) => ({ ...session, pinned: !session.pinned })) })),
@@ -29,4 +36,5 @@ export const useHistoryStore = create<HistoryState>((set) => ({
     if (next.length === 0) return;
     set((state) => ({ sessions: updateSession(state.sessions, id, (session) => ({ ...session, title: next })) }));
   },
+  replaceSessions: (sessions) => set({ sessions }),
 }));

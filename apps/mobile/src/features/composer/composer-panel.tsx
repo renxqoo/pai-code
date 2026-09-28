@@ -8,6 +8,9 @@ import { AttachmentChip } from '@/features/composer/attachment-chip';
 import { CompactComposer } from '@/features/composer/compact-composer';
 import { FocusedComposer } from '@/features/composer/focused-composer';
 import { useComposerSubmit } from '@/features/composer/use-composer-submit';
+import { useDemoModeStore } from '@/store/demo-mode-store';
+import { getBridge } from '@/mobile/bridge-runtime';
+import { useConversationStore } from '@/store/conversation-store';
 
 type ComposerPanelProps = { embedded?: boolean | undefined };
 
@@ -22,7 +25,20 @@ export function ComposerPanel({ embedded = false }: ComposerPanelProps) {
   const openSheet = useNavigationStore((state) => state.openSheet);
   const submit = useComposerSubmit();
   const canSend = draft.trim().length > 0;
-  const send = () => generating ? toggleGeneration() : submit();
+  // 生成中发送键 = 停止：演示模式仅翻转本地标志；连接模式真发 session/abort
+  const send = () => {
+    if (!generating) {
+      submit();
+      return;
+    }
+    toggleGeneration();
+    if (useDemoModeStore.getState().enabled) return;
+    const bridge = getBridge();
+    const threadId = useConversationStore.getState().activeSessionId;
+    if (bridge?.status === 'ready' && threadId !== null) {
+      void bridge.client.invoke('session/abort', { threadId });
+    }
+  };
   return (
     <View style={embedded ? undefined : { marginBottom: spacing.xs3, marginHorizontal: spacing.xs4 }}>
       {items.length > 0 ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm }}>{items.map((item) => <AttachmentChip attachment={item} key={item.id} onRemove={() => removeAttachment(item.id)} />)}</View> : null}

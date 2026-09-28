@@ -15,6 +15,7 @@ type ComposerState = {
   selectPermission: (permission: PermissionMode) => void;
   submitDraft: () => boolean;
   toggleGeneration: () => void;
+  setGenerating: (generating: boolean) => void;
   setContextPercent: (percent: number) => void;
 };
 
@@ -31,5 +32,6 @@ export const useComposerStore = create<ComposerState>((set, get) => ({
     return true;
   },
   toggleGeneration: () => set((state) => ({ generating: !state.generating, sending: false })),
+  setGenerating: (generating) => set({ generating }),
   setContextPercent: (contextPercent) => set({ contextPercent: Math.max(0, Math.min(100, Math.round(contextPercent))) }),
 }));

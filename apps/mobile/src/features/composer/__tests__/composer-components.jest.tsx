@@ -9,6 +9,7 @@ import { useComposerStore } from '@/store/composer-store';
 import { useConversationStore } from '@/store/conversation-store';
 import { useNavigationStore } from '@/store/navigation-store';
 import { TestWrapper } from '@/test/test-wrapper';
+import { useDemoModeStore } from '@/store/demo-mode-store';
 
 describe('composer components', () => {
   beforeEach(() => {
@@ -98,5 +99,21 @@ describe('composer components', () => {
     const view = await render(<ComposerPanel />);
     await fireEvent.press(view.getByLabelText('停止生成'));
     expect(useComposerStore.getState().generating).toBe(false);
+  });
+});
+
+describe('TaskConfigSheet 连接模式（写档同步链）', () => {
+  it('配置项切换在非连接态不崩（syncRemote 早退）', async () => {
+    useDemoModeStore.getState().setEnabled(false);
+    const view = await render(
+      <TestWrapper>
+        <TaskConfigSheet />
+      </TestWrapper>,
+    );
+    const rows = view.queryAllByLabelText(/gpt|claude|gemini/i);
+    if (rows.length > 0) {
+      await fireEvent.press(rows[0] as never);
+    }
+    expect(view).toBeTruthy();
   });
 });

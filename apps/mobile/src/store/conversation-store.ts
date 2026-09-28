@@ -11,9 +11,12 @@ type ConversationState = {
   startNewSession: () => void;
   openSession: (session: ConversationSession) => void;
   appendMessage: (message: ChatMessage) => void;
+  /** bridge 会话流整体替换（事件归并器驱动——权威模型，append 只服务演示模式）。 */
+  appendMessages: (messages: readonly ChatMessage[]) => void;
   chooseWorkspace: (id: string, name: string) => void;
   requestPermission: (request: PermissionDecision) => void;
   resolvePermission: (approved: boolean) => void;
+  clearPermission: () => void;
 };
 
 function blankSession(): ConversationSession {
@@ -25,7 +28,9 @@ export const useConversationStore = create<ConversationState>((set) => ({
   startNewSession: () => set({ activeSessionId: null, session: blankSession(), permissionRequest: null }),
   openSession: (session) => set({ activeSessionId: session.id, session, permissionRequest: null }),
   appendMessage: (message) => set((state) => ({ session: { ...state.session, messages: [...state.session.messages, message], preview: message.text.slice(0, 80) } })),
+  appendMessages: (messages) => set((state) => ({ session: { ...state.session, messages, preview: messages.length > 0 ? (messages[messages.length - 1]?.text ?? '').slice(0, 80) : state.session.preview } })),
   chooseWorkspace: (workspaceId, name) => set((state) => ({ workspaceId, session: { ...state.session, project: name } })),
   requestPermission: (permissionRequest) => set({ permissionRequest }),
   resolvePermission: (approved) => set((state) => state.permissionRequest === null ? state : { permissionRequest: { ...state.permissionRequest, approved } }),
+  clearPermission: () => set({ permissionRequest: null }),
 }));
