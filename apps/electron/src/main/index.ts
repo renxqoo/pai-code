@@ -385,13 +385,19 @@ void app.whenReady().then(async () => {
       }
       kept[token] = name;
     }
-    if (removed) void settings.patch({ mobileTokens: tokens });
+    if (!removed) return { ok: false as const };
+    // 写回剔除后的 kept（此前误写回原 tokens——撤销形同虚设；写失败如实回报）
+    const written = settings.patch({ mobileTokens: kept });
+    if (!written.ok) {
+      logger.log('mobile_revoke_write_failed');
+      return { ok: false as const };
+    }
     // 撤销后断开全部已连接会话（令牌已无效——立即生效，不等自然断开）
     void mobileBridge?.stop().then(() => {
       mobileBridge = null;
       if (mobileBridgeEnabled) rebuildMobileBridge();
     });
-    return { ok: removed as boolean };
+    return { ok: true as const };
   });
 
     await runtime.start();

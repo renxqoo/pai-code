@@ -24,8 +24,11 @@ export const BridgePairFrameSchema = z
   })
   .strict();
 
-/** 鉴权：配对签发的令牌。 */
-export const BridgeAuthFrameSchema = z.object({ type: z.literal('auth'), token: z.string().min(1) }).strict();
+/** 鉴权：配对签发的令牌；lastSeq = 客户端已见事件水位（重连续传缺口的服务端依据，
+ *  缺省 0 = 全量重放——契约帧演进字段，旧客户端不携带即维持旧语义）。 */
+export const BridgeAuthFrameSchema = z
+  .object({ type: z.literal('auth'), token: z.string().min(1), lastSeq: z.number().int().nonnegative().optional() })
+  .strict();
 
 /** API 调用：method 在 ApiSchemas（路由侧 zod 二次校验）；id 手机侧唯一关联响应。 */
 export const BridgeInvokeFrameSchema = z
@@ -110,3 +113,9 @@ export const BRIDGE_PAIR_MAX_ATTEMPTS = 5;
 export const BRIDGE_PAIR_LOCKOUT_MS = 5 * 60 * 1000;
 /** 事件环形缓冲上限（重连续传窗口；超出丢最旧——客户端以 entries 水化兜底）。 */
 export const BRIDGE_EVENT_BUFFER_LIMIT = 2000;
+/** 单帧字节上限（服务端 ws maxPayload；两端预算对齐）。 */
+export const BRIDGE_MAX_PAYLOAD_BYTES = 1 << 20;
+/** 并发连接上限。 */
+export const BRIDGE_MAX_CONNECTIONS = 8;
+/** 鉴权超时（ms）。 */
+export const BRIDGE_AUTH_TIMEOUT_MS = 10_000;

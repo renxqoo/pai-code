@@ -1,21 +1,35 @@
 /**
- * bridge 本地存储（T57 §5）：令牌与主机地址的移动端持久面。
- * 一期 AsyncStorage 等价实现（react-native 无 localStorage；expo-secure-store
- * 是后续升级位——令牌敏感性注释钉住）。
+ * bridge 本地存储（T57 §5）：令牌（敏感——expo-secure-store）与主机地址
+ * （async-storage）的移动端持久面。驱动异步初始化 + 模块缓存同步读：
+ * App 启动时 preloadBridgeStorage() 一次，之后 loadToken/loadHost 同步返回。
  */
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
+
 const TOKEN_KEY = 'pai.mobile.bridge.token';
 const HOST_KEY = 'pai.mobile.bridge.host';
 
-/** 存储注入（测试内存实现；生产 react-native）。 */
+/** 同步缓存面（既有消费者零改动；测试注入用）。 */
 export interface BridgeStorageDriver {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
   removeItem(key: string): void;
 }
 
-/** RN 异步存储同步包装（ AsyncStorage 的同步面不存在——用模块级缓存 + 启动加载）。
- *  生产实现：AppState 变化/退出时 flush。一期用内存 + 单例（冷启动后首次
- *  devices 页手动连接；后续任务替换为真异步存储——接口已隔离）。 */
+/** 持久驱动初始化（App 启动调用一次；失败降级内存——连接不崩，仅不持久）。 */
+export async function preloadBridgeStorage(): Promise<void> {
+  try {
+    const [token, host] = await Promise.all([
+      SecureStore.getItemAsync(TOKEN_KEY),
+      AsyncStorage.getItem(HOST_KEY),
+    ]);
+    if (token !== null) cache.setItem(TOKEN_KEY, token);
+    if (host !== null) cache.setItem(HOST_KEY, host);
+  } catch {
+    // 存储不可用：内存态照常工作（本会话内有效）
+  }
+}
+
 class MemoryDriver implements BridgeStorageDriver {
   private readonly map = new Map<string, string>();
   getItem(key: string): string | null {
@@ -35,21 +49,44 @@ export function setBridgeStorageDriver(next: BridgeStorageDriver): void {
   driver = next;
 }
 
+/** 异步落盘面（save* 先写缓存再后台持久——读路径永不等待）。 */
+const persist = (key: string, value: string | null): void => {
+  if (key === TOKEN_KEY) {
+    void (value === null ? SecureStore.deleteItemAsync(TOKEN_KEY) : SecureStore.setItemAsync(TOKEN_KEY, value)).catch(() => undefined);
+  } else {
+    void (value === null ? AsyncStorage.removeItem(HOST_KEY) : AsyncStorage.setItem(HOST_KEY, value)).catch(() => undefined);
+  }
+};
+
+const cache = {
+  getItem(key: string): string | null {
+    return driver.getItem(key);
+  },
+  setItem(key: string, value: string): void {
+    driver.setItem(key, value);
+    persist(key, value);
+  },
+  removeItem(key: string): void {
+    driver.removeItem(key);
+    persist(key, null);
+  },
+};
+
 export const bridgeStorage = {
   loadToken(): string | null {
-    return driver.getItem(TOKEN_KEY);
+    return cache.getItem(TOKEN_KEY);
   },
   saveToken(token: string): void {
-    driver.setItem(TOKEN_KEY, token);
+    cache.setItem(TOKEN_KEY, token);
   },
   loadHost(): string {
-    return driver.getItem(HOST_KEY) ?? '';
+    return cache.getItem(HOST_KEY) ?? '';
   },
   saveHost(host: string): void {
-    driver.setItem(HOST_KEY, host);
+    cache.setItem(HOST_KEY, host);
   },
   clear(): void {
-    driver.removeItem(TOKEN_KEY);
-    driver.removeItem(HOST_KEY);
+    cache.removeItem(TOKEN_KEY);
+    cache.removeItem(HOST_KEY);
   },
 };

@@ -1,7 +1,12 @@
 /**
  * 历史同步（T57 §5）：bootstrap/listSaved 拉取 + sessionUpdated/Removed 事件维护 →
  * ConversationSession[]（history-store 消费模型）。
- * 置顶/归档是 app 偏好（preferences.pinnedSessions/archivedSessions——桌面端同源真相）。
+ *
+ * 键语义（对抗审查 H4 修复）：preferences.pinnedSessions/archivedSessions 的键是
+ * **sessionPath**（PC 端真相——sidebar/build-pinned-list 同源），非 cwd。
+ * 部分更新（对抗审查 H3 修复）：残缺视图（sessionDied 等）不覆盖既有 title/cwd/
+ * lastActivityAt——逐字段缺席保留。
+ * 状态映射（M9）：live+streaming=working、live=idle、parked=paused、dead=idle。
  */
 import type { ConversationSession } from '@/types/domain';
 
@@ -16,6 +21,7 @@ interface SessionLike {
   state?: string;
   streaming?: boolean;
   model?: string | null;
+  sessionPath?: string | null;
   lastActivityAt?: number;
 }
 
@@ -27,10 +33,10 @@ interface SavedLike {
   lastActivityAt?: number;
 }
 
-const stateOf = (raw: string | undefined): ConversationSession['state'] => {
-  if (raw === 'live') return 'working';
-  if (raw === 'parked') return 'paused';
-  return 'idle';
+const stateOf = (raw: SessionLike): ConversationSession['state'] => {
+  if (raw.state === 'live') return raw.streaming === true ? 'working' : 'idle';
+  if (raw.state === 'parked') return 'paused';
+  return 'idle'; // dead：折叠为 idle（与 PC 不显示运行态一致）
 };
 
 const timeLabelOf = (lastActivityAt: number): string => {
@@ -48,7 +54,7 @@ export function toConversationSession(raw: SessionLike, pinned: boolean, archive
     preview: '',
     project: raw.cwd ?? '',
     timeLabel: timeLabelOf(raw.lastActivityAt ?? 0),
-    state: stateOf(raw.state),
+    state: stateOf(raw),
     pinned,
     archived,
     unread: false,
@@ -63,31 +69,71 @@ export function toConversationSession(raw: SessionLike, pinned: boolean, archive
 
 export function createHistorySync(callbacks: HistorySyncCallbacks) {
   const sessions = new Map<string, ConversationSession>();
+  /** sessionPath → threadId（偏好键反查：pinned/archived 键域是 sessionPath）。 */
+  const pathIndex = new Map<string, string>();
 
   const emit = (): void => {
     callbacks.onSessions([...sessions.values()].sort((a, b) => (b.startedAtMs ?? 0) - (a.startedAtMs ?? 0)));
   };
 
+  const applyPreference = (raw: SessionLike, pinnedPaths: ReadonlySet<string>, archivedPaths: ReadonlySet<string>): { pinned: boolean; archived: boolean } => {
+    const path = raw.sessionPath ?? null;
+    const pinned = path !== null && pinnedPaths.has(path);
+    const archived = path !== null && archivedPaths.has(path);
+    return { pinned, archived };
+  };
+
   return {
-    /** app/bootstrap.sessions + preferences（置顶/归档折叠）。 */
-    seedBootstrap(list: SessionLike[], preferences: { pinnedSessions?: string[]; archivedSessions?: string[] }): void {
+    /** app/bootstrap.sessions + saved + preferences（置顶/归档按 sessionPath 折叠）。 */
+    seedBootstrap(list: SessionLike[], saved: SavedLike[], preferences: { pinnedSessions?: string[]; archivedSessions?: string[] }): void {
       sessions.clear();
+      pathIndex.clear();
       const pinnedPaths = new Set(preferences.pinnedSessions ?? []);
       const archivedPaths = new Set(preferences.archivedSessions ?? []);
       for (const raw of list) {
         const id = raw.threadId ?? '';
         if (id.length === 0) continue;
-        sessions.set(id, toConversationSession(raw, pinnedPaths.has(raw.cwd ?? ''), archivedPaths.has(raw.cwd ?? '')));
+        if (typeof raw.sessionPath === 'string') pathIndex.set(raw.sessionPath, id);
+        const { pinned, archived } = applyPreference(raw, pinnedPaths, archivedPaths);
+        sessions.set(id, toConversationSession(raw, pinned, archived));
+      }
+      // saved（已落盘不在册会话）并入去重（live 优先）
+      const liveIds = new Set([...sessions.keys()].values());
+      for (const item of saved) {
+        const sid = item.sessionId ?? '';
+        if (sid.length === 0 || liveIds.has(sid)) continue;
+        const archived = item.sessionPath !== undefined && archivedPaths.has(item.sessionPath);
+        const row: SessionLike = { threadId: sid, state: 'parked' };
+        if (item.title !== undefined) row.title = item.title;
+        if (item.cwd !== undefined) row.cwd = item.cwd;
+        if (item.lastActivityAt !== undefined) row.lastActivityAt = item.lastActivityAt;
+        sessions.set(sid, toConversationSession(row, false, archived));
       }
       emit();
     },
-    /** 会话更新（sessionUpdated 事件）。 */
+    /** 会话更新（sessionUpdated 事件；部分视图字段缺席时保留既有值）。 */
     updateSession(raw: SessionLike): void {
       const id = raw.threadId ?? '';
       if (id.length === 0) return;
       const existing = sessions.get(id);
-      const next = toConversationSession(raw, existing?.pinned ?? false, existing?.archived ?? false);
-      sessions.set(id, existing === undefined ? next : { ...next, pinned: existing.pinned, archived: existing.archived, messages: existing.messages, preview: existing.preview });
+      if (existing === undefined) {
+        sessions.set(id, toConversationSession(raw, false, false));
+        emit();
+        return;
+      }
+      // 逐字段合并：残缺视图（sessionDied 只有 state）不清 title/cwd/时间
+      const merged: ConversationSession = {
+        ...existing,
+        ...(raw.title !== undefined ? { title: raw.title } : {}),
+        ...(raw.cwd !== undefined ? { project: raw.cwd } : {}),
+        state: stateOf({ ...(raw.state !== undefined ? { state: raw.state } : {}), ...(raw.streaming !== undefined || raw.state === 'live' ? { streaming: raw.streaming ?? false } : {}) }),
+      };
+      if (raw.lastActivityAt !== undefined) {
+        merged.startedAtMs = raw.lastActivityAt;
+        merged.endedAtMs = raw.lastActivityAt;
+        merged.timeLabel = timeLabelOf(raw.lastActivityAt);
+      }
+      sessions.set(id, merged);
       emit();
     },
     /** 会话移除（sessionRemoved 事件 / session/stop remove）。 */
@@ -95,7 +141,7 @@ export function createHistorySync(callbacks: HistorySyncCallbacks) {
       sessions.delete(threadId);
       emit();
     },
-    /** 本地偏好变更（置顶/归档切换）。 */
+    /** 本地偏好变更（置顶/归档切换——调用方负责同步 app/setPreference）。 */
     setLocalPreference(threadId: string, patch: { pinned?: boolean; archived?: boolean }): void {
       const existing = sessions.get(threadId);
       if (existing === undefined) return;
@@ -129,10 +175,6 @@ export function mergeSaved(current: ConversationSession[], saved: SavedLike[]): 
       unread: false,
       messages: [],
     };
-    if (raw.lastActivityAt !== undefined) {
-      derived.startedAtMs = raw.lastActivityAt;
-      derived.endedAtMs = raw.lastActivityAt;
-    }
     if (derived.id.length > 0 && !live.has(derived.id)) extra.push(derived);
   }
   return [...current, ...extra];

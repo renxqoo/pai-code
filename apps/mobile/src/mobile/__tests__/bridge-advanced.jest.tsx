@@ -50,12 +50,12 @@ describe('bridge-runtime 高级面', () => {
     bridge.disconnect();
   });
 
-  it('activeThreadId null 时事件仍进归并（默认会话观察窗）', () => {
+  it('activeThreadId null 时会话流事件不进归并（null 通配收窄）', () => {
     attachThread(null);
     const bridge = initializeBridge();
     const client = bridge.client as unknown as { dispatch(rawEvent: unknown): void };
     client.dispatch({ type: 'userMessage', threadId: 't-any', message: { id: 'u9', text: 'observed', origin: 'user' } });
-    expect(useConversationStore.getState().session.messages.some((message) => message.text === 'observed')).toBe(true);
+    expect(useConversationStore.getState().session.messages.some((message) => message.text === 'observed')).toBe(false);
     bridge.disconnect();
   });
 });

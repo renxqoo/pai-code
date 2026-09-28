@@ -3,7 +3,7 @@ import * as React from 'react';
 import { render } from '@testing-library/react-native';
 import { TestWrapper } from '@/test/test-wrapper';
 
-import { initializeBridge, attachThread, entriesToMessages } from '../bridge-runtime';
+import { initializeBridge, attachThread, entriesToMessages, preferenceToggle } from '../bridge-runtime';
 import { setBridgeStorageDriver } from '../transport/bridge-storage';
 import { bridgeUrl, DEVICE_NAME } from '../transport/ws-client';
 import { BridgeGate } from '../bridge-gate';
@@ -86,5 +86,41 @@ describe('entriesToMessages 工具附件面', () => {
     const tool = messages.find((message) => message.kind === 'tool');
     expect(tool?.editHunks).toEqual([{ oldText: 'a', newText: 'b', path: 'f.ts' }]);
     expect(tool?.subagents).toEqual([{ agent: 'explore', task: 'look' }]);
+  });
+});
+
+describe('entriesToMessages 审查修复回归', () => {
+  it('M2/M4：块序 thinking→text→tools；失败轮落 status 行', () => {
+    const messages = entriesToMessages([
+      { kind: 'assistant', id: 'a', text: 'hi', thinking: 'th', at: 0, toolCalls: [], stopReason: 'error', errorMessage: 'boom' },
+    ]);
+    const kinds = messages.map((m) => m.kind);
+    expect(kinds).toEqual(['thinking', 'assistant', 'status']);
+    expect(messages[2]).toMatchObject({ status: 'failed', text: 'boom' });
+  });
+
+  it('M3：bash 三态（非零退出 failed + exitCode 透出；cancelled stopped）', () => {
+    const messages = entriesToMessages([
+      { kind: 'bash', id: 'b1', at: 0, command: 'ls', output: 'nope', exitCode: 2, cancelled: false, truncated: false },
+      { kind: 'bash', id: 'b2', at: 0, command: 'x', output: '', exitCode: 0, cancelled: true, truncated: false },
+    ]);
+    expect(messages[0]).toMatchObject({ status: 'failed', exitCode: 2 });
+    expect(messages[1]).toMatchObject({ status: 'stopped' });
+  });
+
+  it('H6：用户条目 images → attachments（data URL）；compaction-summary 跳过', () => {
+    const messages = entriesToMessages([
+      { kind: 'user', id: 'u1', text: 'look', at: 0, origin: 'user', images: [{ type: 'image', data: 'AAAA', mediaType: 'image/png' }] },
+      { kind: 'user', id: 'u2', text: 'ctx', at: 0, origin: 'user', images: [], meta: 'compaction-summary' },
+    ]);
+    expect(messages.length).toBe(1);
+    expect(messages[0]?.attachments?.[0]?.uri).toBe('data:image/png;base64,AAAA');
+  });
+});
+
+describe('preferenceToggle（H5：偏好与 PC 同源写回）', () => {
+  it('断连（runtime 非 ready）拒绝且不崩', async () => {
+    const result = await preferenceToggle('t-none', 'pinned');
+    expect(result).toBe(false);
   });
 });

@@ -11,7 +11,7 @@ import { useConversationStore } from '@/store/conversation-store';
 import { useHistoryStore } from '@/store/history-store';
 import { useNavigationStore } from '@/store/navigation-store';
 import { useDemoModeStore } from '@/store/demo-mode-store';
-import { attachThread, getBridge } from '@/mobile/bridge-runtime';
+import { attachThread, getBridge, preferenceToggle } from '@/mobile/bridge-runtime';
 
 /**
  * 会话操作：本地 store 即时反馈 + 连接模式同步 hub（改名 session/setName、
@@ -36,6 +36,22 @@ export function SessionSheet() {
     if (useDemoModeStore.getState().enabled) return false;
     const bridge = getBridge();
     return bridge?.status === 'ready';
+  };
+
+  /** 偏好写回（置顶/归档）：app/setPreference 与 PC 同源（pinnedSessions/archivedSessions
+   *  键域 sessionPath）——本地乐观更新 + 服务端真相回填。 */
+  const togglePreference = (kind: 'pinned' | 'archived'): void => {
+    if (session === undefined) return;
+    if (!bridgeReady() || id === null) {
+      // 演示/断连：仅本地
+      if (kind === 'pinned') togglePin(session.id);
+      else archive(session.id);
+      return;
+    }
+    void preferenceToggle(id, kind).then(() => {
+      if (kind === 'pinned') togglePin(session.id);
+      else archive(session.id);
+    });
   };
 
   const renameRemote = (): void => {
@@ -64,8 +80,8 @@ export function SessionSheet() {
         {session === undefined ? <Text style={{ color: colors.textMuted, fontSize: 13, paddingVertical: spacing.sm }}>新对话还没有需要管理的历史记录。</Text> : null}
         {session === undefined ? null : <TextField defaultValue={session.title} key={session.id} label="对话名称" onChangeText={setTitle} onSubmitEditing={renameRemote} returnKeyType="done" />}
         <View style={{ height: 10 }} />
-        <PinAction onPress={() => { if (session !== undefined) togglePin(session.id); close(); }} />
-        <ArchiveAction onPress={() => { if (session !== undefined) archive(session.id); close(); }} />
+        <PinAction onPress={() => { togglePreference('pinned'); close(); }} />
+        <ArchiveAction onPress={() => { togglePreference('archived'); close(); }} />
         <DeleteAction onPress={deleteRemote} />
       </View>
     </Sheet>

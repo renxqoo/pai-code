@@ -23,8 +23,8 @@ export interface SessionSyncState {
 }
 
 export interface SessionSyncCallbacks {
-  /** 权限弹窗（dialogRequest → 显示；dialogSettled → 清除）。 */
-  onDialogRequest(request: { requestId: string; title: string; command: string } | null): void;
+  /** 权限弹窗（dialogRequest → 显示；dialogSettled → 按 requestId 清除对应卡）。 */
+  onDialogRequest(request: { requestId: string; title: string; command: string } | null, settledId?: string | null): void;
   /** 会话级事件外置（sessionUpdated/sessionRemoved/host/queueChanged…）。 */
   onSessionEvent(event: Record<string, unknown>): void;
 }
@@ -184,7 +184,7 @@ export function createSessionSync(callbacks: SessionSyncCallbacks) {
       return;
     }
     if (type === 'dialogSettled') {
-      callbacks.onDialogRequest(null);
+      callbacks.onDialogRequest(null, textOf(event['requestId']) || null);
       return;
     }
     // 会话级/其余事件外置

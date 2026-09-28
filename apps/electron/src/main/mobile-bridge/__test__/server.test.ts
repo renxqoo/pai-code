@@ -172,3 +172,57 @@ describe('bridge 会话状态机', () => {
     await socket.waitFor((f) => f.type === 'pong');
   });
 });
+
+describe('审查修复回归（水位续传/重复 auth/帧计数）', () => {
+  test('auth 携带 lastSeq：只重放缺口（不再全环）', async () => {
+    const { bridge, memory } = makeDeps();
+    const socket = memory.connect();
+    const code = bridge.pairCode();
+    socket.clientSend({ type: 'pair', code: code.code, deviceName: 'd' });
+    const paired = await socket.waitFor((f) => f.type === 'paired');
+    if (paired.type !== 'paired') throw new Error('unreachable');
+    socket.clientSend({ type: 'auth', token: paired.token, lastSeq: 0 });
+    await socket.waitFor((f) => f.type === 'ready');
+    bridge.publishEvent({ type: 'turnStarted', threadId: 't1', at: 1 });
+    bridge.publishEvent({ type: 'turnStarted', threadId: 't2', at: 2 });
+    await socket.waitFor((f) => f.type === 'event' && f.seq === 2);
+    socket.clientSend({ type: 'ack', seq: 2 });
+    // 重连带 lastSeq=2：只收 seq>2（不重放 1/2）
+    const socket2 = memory.connect();
+    socket2.clientSend({ type: 'auth', token: paired.token, lastSeq: 2 });
+    await socket2.waitFor((f) => f.type === 'ready');
+    const replayed = socket2.frames().filter((f) => f.type === 'event');
+    expect(replayed.length).toBe(0);
+    bridge.publishEvent({ type: 'turnStarted', threadId: 't3', at: 3 });
+    const only3 = await socket2.waitFor((f) => f.type === 'event');
+    expect(only3.seq).toBe(3);
+    socket.close();
+    socket2.close();
+  });
+
+  test('重复 auth：旧 sink 摘除（同连接只收一份事件）', async () => {
+    const { bridge, memory } = makeDeps();
+    const socket = memory.connect();
+    const code = bridge.pairCode();
+    socket.clientSend({ type: 'pair', code: code.code, deviceName: 'd' });
+    const paired = await socket.waitFor((f) => f.type === 'paired');
+    if (paired.type !== 'paired') throw new Error('unreachable');
+    socket.clientSend({ type: 'auth', token: paired.token, lastSeq: 0 });
+    await socket.waitFor((f) => f.type === 'ready');
+    socket.clientSend({ type: 'auth', token: paired.token, lastSeq: 0 });
+    await socket.waitFor((f, ) => f.type === 'ready');
+    bridge.publishEvent({ type: 'turnStarted', threadId: 't1', at: 1 });
+    await new Promise((r) => { setTimeout(r, 100); });
+    const events = socket.frames().filter((f) => f.type === 'event');
+    expect(events.length).toBe(1);
+    socket.close();
+  });
+
+  test('pairFailed 泛化（不泄漏锁定/过期差异）', async () => {
+    const { memory } = makeDeps();
+    const socket = memory.connect();
+    socket.clientSend({ type: 'pair', code: '999999', deviceName: 'x' });
+    const failed = await socket.waitFor((f) => f.type === 'pairFailed');
+    expect((failed as { reason: string }).reason).toBe('pair_rejected');
+  });
+});

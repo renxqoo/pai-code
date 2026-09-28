@@ -7,6 +7,7 @@ type ConversationState = {
   activeSessionId: string | null;
   session: ConversationSession;
   workspaceId: string | null;
+  /** 活跃权限卡（多会话并发时按 requestId 区分；单卡视图取首项）。 */
   permissionRequest: PermissionDecision | null;
   startNewSession: () => void;
   openSession: (session: ConversationSession) => void;
@@ -17,6 +18,8 @@ type ConversationState = {
   requestPermission: (request: PermissionDecision) => void;
   resolvePermission: (approved: boolean) => void;
   clearPermission: () => void;
+  /** 按 requestId 结算（dialogSettled 对账——只清对应卡）。 */
+  settlePermission: (requestId: string) => void;
 };
 
 function blankSession(): ConversationSession {
@@ -33,4 +36,5 @@ export const useConversationStore = create<ConversationState>((set) => ({
   requestPermission: (permissionRequest) => set({ permissionRequest }),
   resolvePermission: (approved) => set((state) => state.permissionRequest === null ? state : { permissionRequest: { ...state.permissionRequest, approved } }),
   clearPermission: () => set({ permissionRequest: null }),
+  settlePermission: (requestId) => set((state) => (state.permissionRequest?.id === requestId ? { permissionRequest: null } : state)),
 }));

@@ -125,7 +125,7 @@ describe('ws-transport 边界与错误分支', () => {
       transport.connect('ws://x:1', null);
       socket.serverOpen();
       const promise = transport.pair('123456', 'iPhone');
-      jest.advanceTimersByTime(11_000);
+      jest.advanceTimersByTime(16_000);
       const result = await promise;
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.reason).toBe('timeout');
@@ -212,5 +212,128 @@ describe('client 适配层（dispatch/订阅隔离）', () => {
     expect(outcome.ok).toBe(true);
     expect(capturedMethod).toBe('model/list');
     expect(capturedParams).toEqual({ x: 1 });
+  });
+});
+
+describe('ws-transport 修复回归（对抗审查 H1/H2/H4）', () => {
+  let socket: MemorySocket;
+  const statuses: string[] = [];
+  const events: unknown[] = [];
+
+  const make = () =>
+    createWsTransport(
+      () => {
+        socket = new MemorySocket();
+        return socket;
+      },
+      {
+        onStatus: (status) => statuses.push(status),
+        onEvent: (event) => events.push(event),
+        onAuthFailed: () => undefined,
+      },
+    );
+
+  beforeEach(() => {
+    socket = undefined as unknown as MemorySocket;
+    statuses.length = 0;
+    events.length = 0;
+  });
+
+  it('H1 回归：重复 connect 关闭旧 socket；旧 socket 迟到 close 不动现行状态', () => {
+    const transport = make();
+    transport.connect('ws://x:1', 'tok');
+    const first = socket;
+    first.serverOpen();
+    first.serverSend({ type: 'ready', serverInfo: { appVersion: '1', hostPhase: 'ready' } });
+    expect(transport.status()).toBe('ready');
+    // 二次 connect：旧 socket 应被关
+    transport.connect('ws://x:2', 'tok');
+    const second = socket;
+    expect(second).not.toBe(first);
+    second.serverOpen();
+    second.serverSend({ type: 'ready', serverInfo: { appVersion: '1', hostPhase: 'ready' } });
+    expect(transport.status()).toBe('ready');
+    // 旧 socket 迟到 close：现行状态不被打回（身份守卫）
+    const statusesBefore = statuses.length;
+    const transport2 = make();
+    transport2.connect('ws://y:1', 'tok');
+    const a = socket;
+    a.serverOpen();
+    transport2.connect('ws://y:2', 'tok');
+    const b = socket;
+    b.serverOpen();
+    b.serverSend({ type: 'ready', serverInfo: { appVersion: '1', hostPhase: 'ready' } });
+    // a 的迟到 close 不应触发 disconnected（身份守卫）
+    a.close(); // a 的 onClose 监听器触发
+    expect(transport2.status()).toBe('ready');
+    void statusesBefore;
+    transport.disconnect();
+    transport2.disconnect();
+  });
+
+  it('H2 回归：ready 复位 seq 窗口（服务端重启 seq 回卷不再黑洞）', () => {
+    const transport = make();
+    transport.connect('ws://x:1', 'tok');
+    socket.serverOpen();
+    socket.serverSend({ type: 'ready', serverInfo: { appVersion: '1', hostPhase: 'ready' } });
+    socket.serverSend({ type: 'event', seq: 500, event: { type: 'turnStarted' } });
+    expect(events.length).toBe(1);
+    // 断线重连：ready 后 seq 从 1 重来——应被接受（旧实现会丢弃）
+    socket.close(); // 服务端断开（MemorySocket.close 触发 onClose 链）
+    // 重连由退避 timer 驱动——手动再 connect
+    transport.connect('ws://x:1', 'tok');
+    socket.serverOpen();
+    socket.serverSend({ type: 'ready', serverInfo: { appVersion: '1', hostPhase: 'ready' } });
+    socket.serverSend({ type: 'event', seq: 1, event: { type: 'turnSettled' } });
+    expect(events.length).toBe(2);
+    transport.disconnect();
+  });
+
+  it('续传：auth 帧携带 lastSeq（服务端按水位重放缺口）', () => {
+    const transport = make();
+    transport.connect('ws://x:1', 'tok');
+    socket.serverOpen();
+    socket.serverSend({ type: 'ready', serverInfo: { appVersion: '1', hostPhase: 'ready' } });
+    socket.serverSend({ type: 'event', seq: 42, event: { type: 'turnStarted' } });
+    // 重连：auth 帧应带 lastSeq=42
+    transport.connect('ws://x:1', 'tok');
+    socket.serverOpen();
+    const authFrame = socket.sent.map((raw) => JSON.parse(raw) as { type?: string; lastSeq?: number }).find((frame) => frame.type === 'auth');
+    expect(authFrame?.lastSeq).toBe(42);
+    transport.disconnect();
+  });
+
+  it('M5 回归：非法 URL 不抛（收敛为断线重连）', () => {
+    const transport = createWsTransport(
+      () => {
+        throw new Error('bad url');
+      },
+      { onStatus: () => undefined, onEvent: () => undefined, onAuthFailed: () => undefined },
+    );
+    expect(() => transport.connect('http://bad url', 'tok')).not.toThrow();
+    expect(transport.status()).toBe('disconnected');
+    transport.disconnect(); // 清重连 timer（否则 jest 开放句柄不退）
+  });
+
+  it('M1 回归：并发 pair 旧等待者立即 busy（不悬挂）', async () => {
+    jest.useFakeTimers();
+    try {
+      const transport = make();
+      transport.connect('ws://x:1', null);
+      socket.serverOpen();
+      const first = transport.pair('111111', 'A');
+      const second = transport.pair('222222', 'B');
+      const firstResult = await first;
+      expect(firstResult).toEqual({ ok: false, reason: 'busy' });
+      // second 的 poll 在 100ms 节拍上——推进后发送，再应答
+      jest.advanceTimersByTime(300);
+      socket.serverSend({ type: 'paired', token: 'tok-second', serverInfo: { appVersion: '1', hostPhase: 'ready' } });
+      const secondResult = await second;
+      if (!secondResult.ok) throw new Error(`second failed: ${secondResult.reason}`);
+      expect(secondResult.token).toBe('tok-second');
+      transport.disconnect();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

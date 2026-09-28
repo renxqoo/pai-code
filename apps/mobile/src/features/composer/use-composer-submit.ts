@@ -30,17 +30,28 @@ export function useComposerSubmit(): () => void {
     const store = useConversationStore.getState();
     const threadId = store.activeSessionId;
     const workspace = store.session.project;
+    const failNote = (reason: string): void => {
+      // 发送失败可见化（M6）：状态行入流——不再静默吞错
+      useConversationStore.getState().appendMessage({ id: `send-fail-${Date.now()}`, kind: 'status', text: `发送失败：${reason}`, createdAt: new Date().toISOString(), status: 'failed', summary: '未送达' });
+      useComposerStore.getState().setGenerating(false);
+    };
     void (async () => {
       if (threadId === null) {
         const outcome = (await bridge.client.invoke('session/start', { cwd: workspace, trusted: true })) as { ok: boolean; data?: { threadId?: string } };
-        if (!outcome.ok || typeof outcome.data?.threadId !== 'string') return;
+        if (!outcome.ok || typeof outcome.data?.threadId !== 'string') {
+          failNote(outcome.ok ? '会话创建失败' : '主机不可用');
+          return;
+        }
         const newThreadId = outcome.data.threadId;
+        if (useConversationStore.getState().activeSessionId !== null && useConversationStore.getState().activeSessionId !== newThreadId) return; // 用户已切换
         useConversationStore.getState().openSession({ ...store.session, id: newThreadId });
         attachThread(newThreadId);
-        await bridge.client.invoke('session/prompt', { threadId: newThreadId, message: text });
+        const prompted = (await bridge.client.invoke('session/prompt', { threadId: newThreadId, message: text })) as { ok: boolean; error?: { kind?: string } };
+        if (!prompted.ok) failNote(prompted.error?.kind ?? '未知错误');
         return;
       }
-      await bridge.client.invoke('session/prompt', { threadId, message: text });
+      const prompted = (await bridge.client.invoke('session/prompt', { threadId, message: text })) as { ok: boolean; error?: { kind?: string } };
+      if (!prompted.ok) failNote(prompted.error?.kind ?? '未知错误');
     })();
     appendMessage({ id: `user-${Date.now()}`, kind: 'user', text, createdAt: new Date().toISOString(), ...(attachments.length > 0 ? { attachments } : {}) } as ChatMessage);
     clearAttachments();

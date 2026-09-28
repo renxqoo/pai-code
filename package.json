@@ -25,6 +25,8 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "expo-secure-store": "^57.0.4",
     "ws": "^8.22.0"
   }
 }
