@@ -22,8 +22,9 @@ import { QueuedMessageCard } from '@/composer/queued-message-card';
 import { ConfirmRequestBar } from '@/composer/confirm-request-bar';
 import { dialogsOfThread } from '@/dialogs/dialogs-of-thread';
 import { BranchPanel } from '@/composer/branch-panel';
+import { ConflictFilesDialog } from '@/composer/conflict-files-dialog';
 import { branchSegmentOf } from '@/composer/branch-segment';
-import { branchSwitchLocked } from '@/composer/branch-switch-lock';
+import { branchSwitchLockState } from '@/composer/branch-switch-lock';
 import { CreateBranchDialog } from '@/composer/create-branch-dialog';
 import { useGitBranches } from '@/hooks/use-git-branches';
 import { useGitGraph } from '@/hooks/use-git-graph';
@@ -90,12 +91,19 @@ function ComposerRegion(): React.JSX.Element {
     () => branchSegmentOf(gitBranches.view, gitBranches.loading, gitBranches.failed),
     [gitBranches.view, gitBranches.loading, gitBranches.failed],
   );
-  /** 分支切换锁（T36 引用 T23 裁决）：工作目录上任一线程在跑即只读，防切基线拆台运行中 agent。 */
-  const branchLocked = useStore(liveStore, (s) => branchSwitchLocked(s.sessions, s.threads, activeCwd));
+  /** 分支切换锁（T36 引用 T23 裁决）：工作目录上任一线程在跑即锁定切换，防切基线拆台
+   *  运行中 agent。计数化（D6）：锁因传入面板（「N 个会话运行中」+ 出路提示）；面板
+   *  锁时仍可开——静默摘除入口是人机交互反模式；「创建新分支」不受锁（不改工作树）。 */
+  // 选择器必须返回稳定值（对象字面量每次新建 → zustand 相等判定恒不等 → 无限渲染）；
+  // 拆两个原始值选择器
+  const branchLocked = useStore(liveStore, (s) => branchSwitchLockState(s.sessions, s.threads, activeCwd).locked);
+  const branchRunningCount = useStore(liveStore, (s) => branchSwitchLockState(s.sessions, s.threads, activeCwd).runningCount);
 
   const [dialog, setDialog] = React.useState<ComposerDialog>(null);
   const [checkingOut, setCheckingOut] = React.useState(false);
   const [branchError, setBranchError] = React.useState<string | null>(null);
+  /** 冲突确认弹窗文件清单（D2'：conflict_files 错误的 message tab 清单） */
+  const [conflictFiles, setConflictFiles] = React.useState<string[] | null>(null);
   /** 同步闸：连按 Enter/双击时 state 闭包仍为旧值，异步在途必须用 ref 拦 */
   const busyRef = React.useRef(false);
   /** 发送在途按线程键控（Set，同步闸）：同线程连按 Enter 去重防双投，跨线程互不误拦
@@ -106,9 +114,9 @@ function ComposerRegion(): React.JSX.Element {
   /** 图谱只在弹窗打开时拉取（无轮询）；branchRevision 让 checkout 成功后重开即新谱 */
   const graph = useGitGraph(activeCwd, workspaceActions.listGitGraph, branchRevision, dialog === 'graph');
 
-  /** 锁定期间已开的分支面板/创建弹窗就地收口（触发器会消失，但已开的模态弹窗不会自灭） */
+  /** 锁定期间已开的「创建」弹窗就地收口（分支面板不再收——锁因行内嵌可见，创建放行） */
   React.useEffect(() => {
-    if (branchLocked && (dialog === 'branch' || dialog === 'create-branch')) setDialog(null);
+    if (branchLocked && dialog === 'create-branch') setDialog(null);
   }, [branchLocked, dialog]);
 
   /** 面板打开即重拉：脏计数随工作区实时变化，缓存快照会过期（cwd 不变不会自动重拉） */
@@ -118,7 +126,7 @@ function ComposerRegion(): React.JSX.Element {
 
   /** 切分支：失败走通知条；成功 bump 失效代次（本区域分支段与图谱随之重拉） */
   const switchBranch = (branchName: string): void => {
-    if (busyRef.current || branchLocked) return;
+    if (busyRef.current || branchLocked) return; // 行级禁用 + 此闸双保险（锁=只读）
     busyRef.current = true;
     setCheckingOut(true);
     setDialog(null);
@@ -127,7 +135,13 @@ function ComposerRegion(): React.JSX.Element {
         busyRef.current = false;
         setCheckingOut(false);
         if (!outcome.ok) {
-          liveStore.getState().pushNotice(copyOfError(outcome.error));
+          // conflict_files（D2' 试探式真冲突）：弹窗列文件清单（知情裁决）；
+          // 其余失败走通知条
+          if (outcome.error.kind === 'conflict_files') {
+            setConflictFiles((outcome.error.message ?? '').split('\t').filter((f) => f.length > 0));
+          } else {
+            liveStore.getState().pushNotice(copyOfError(outcome.error));
+          }
           return;
         }
         uiStore.getState().bumpBranchRevision();
@@ -139,9 +153,10 @@ function ComposerRegion(): React.JSX.Element {
     );
   };
 
-  /** 创建并检出：失败在弹窗内联呈现（不关弹窗，便于改名重试）；与切换同一把锁（checkout -b 同样改写 HEAD 归属） */
+  /** 创建并检出：失败在弹窗内联呈现（不关弹窗，便于改名重试）。不受切换锁
+   *  （D6 三出路：checkout -b 基于当前 HEAD 建分支并切换——工作树内容不动，不拆台）。 */
   const createBranch = (branchName: string): void => {
-    if (busyRef.current || branchLocked) return;
+    if (busyRef.current) return;
     busyRef.current = true;
     setCheckingOut(true);
     setBranchError(null);
@@ -163,7 +178,10 @@ function ComposerRegion(): React.JSX.Element {
     );
   };
 
-  const branchPanelAvailable = gitBranches.view?.isRepo === true && !branchLocked;
+  const branchPanelAvailable = gitBranches.view?.isRepo === true;
+  const conflictDialog = conflictFiles === null ? null : (
+    <ConflictFilesDialog files={conflictFiles} onClose={() => setConflictFiles(null)} />
+  );
 
   const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   React.useEffect(() => {
@@ -194,6 +212,7 @@ function ComposerRegion(): React.JSX.Element {
 
   return (
     <div className={`${CONVERSATION_COLUMN_CLASS} pointer-events-auto`}>
+      {conflictDialog}
       <PromptContextBar
         project={activeCwd.length === 0 ? null : { label: baseNameOf(activeCwd) || activeCwd, title: activeCwd, ariaLabel: copy.composer.projectSegment }}
         branch={{
@@ -211,6 +230,7 @@ function ComposerRegion(): React.JSX.Element {
                       loading={gitBranches.loading}
                       failed={gitBranches.failed}
                       busy={checkingOut}
+                      lock={branchLocked ? { runningCount: branchRunningCount } : null}
                       onSelect={switchBranch}
                       onCreate={() => {
                         setBranchError(null);

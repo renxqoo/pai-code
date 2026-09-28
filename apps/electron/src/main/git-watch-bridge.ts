@@ -90,7 +90,8 @@ export function createGitWatchBridge(emit: (event: UiEvent) => void, gitDirOf: (
       if (!stillUsed) close(gitDir); // 引用归零收锚（无泄漏红线）
     },
     dispose(): void {
-      for (const gitDir of [...anchors.keys()]) close(gitDir);
+      const keys = [...anchors.keys()];
+      for (const gitDir of keys) close(gitDir);
       cwds.clear();
     },
   };

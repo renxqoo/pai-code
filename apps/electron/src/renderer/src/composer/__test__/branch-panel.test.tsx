@@ -21,6 +21,7 @@ function panel(overrides: Partial<Parameters<typeof BranchPanel>[0]>): React.Rea
       loading={false}
       failed={false}
       busy={false}
+      lock={null}
       onSelect={() => undefined}
       onCreate={() => undefined}
       onOpenGraph={() => undefined}
@@ -112,5 +113,50 @@ describe('BranchPanel', () => {
     });
     expect(events).toEqual(['create', 'graph']);
     page.unmount();
+  });
+});
+
+
+describe('BranchPanel 锁因与占用（GIT-INTERACTION-REDESIGN D6/A5）', () => {
+  test('锁因行：N 个会话运行中文案 + 出路提示可见（静默禁用反模式修复）', () => {
+    const page = render(panel({ lock: { runningCount: 2 } }));
+    const text = page.container.textContent ?? '';
+    expect(text).toContain(copy.branch.lockReason(2));
+    expect(text).toContain(copy.branch.lockHintCreate);
+  });
+
+  test('锁时：切换行禁用但当前行仍可视为展示态；创建动作不受锁', () => {
+    const page = render(panel({ lock: { runningCount: 1 } }));
+    const buttons = page.container.querySelectorAll('button');
+    const createBtn = [...buttons].find((b) => (b.textContent ?? '').includes(copy.branch.createBranch));
+    expect(createBtn?.disabled).toBeFalsy(); // create 放行（三出路之一）
+  });
+
+  test('占用分支：行禁用 + 占用者路径标注（A5）', () => {
+    const view: GitBranchesView = {
+      ...VIEW,
+      worktrees: [{ branch: 'dev', path: '/w/x-harness-worktrees/agent-01' }],
+    };
+    const page = render(panel({ view }));
+    const text = page.container.textContent ?? '';
+    expect(text).toContain(copy.branch.occupiedBy('/w/x-harness-worktrees/agent-01'));
+    const devBtn = [...page.container.querySelectorAll('button')].find((b) => (b.textContent ?? '').includes('dev'));
+    expect(devBtn?.disabled).toBe(true);
+  });
+});
+
+describe('ConflictFilesDialog（D2\' 冲突确认弹窗）', () => {
+  test('文件清单渲染 + 提示文案 + 关闭回调', async () => {
+    const { ConflictFilesDialog } = await import('../conflict-files-dialog');
+    let closed = false;
+    const page = render(<ConflictFilesDialog files={['src/a.ts', 'lib/b.ts']} onClose={() => { closed = true; }} />);
+    const text = page.container.textContent ?? '';
+    expect(text).toContain(copy.branch.conflictTitle);
+    expect(text).toContain('src/a.ts');
+    expect(text).toContain('lib/b.ts');
+    expect(text).toContain(copy.branch.conflictHint);
+    const closeBtn = [...page.container.querySelectorAll('button')].find((b) => (b.textContent ?? '').includes(copy.gitGraph.close));
+    closeBtn?.click();
+    expect(closed).toBe(true);
   });
 });
