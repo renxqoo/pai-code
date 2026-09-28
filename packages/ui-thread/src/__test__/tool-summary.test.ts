@@ -53,6 +53,15 @@ describe('toolSummary 命令忠实展示', () => {
     expect(toolSummary('; 说明\nbun test')).toBe('bun test');
   });
 
+  test('症状回归：「已运行」后面没有命令——预览只剩注释行时摘要为空串不得发生（预算侧修复的下游护栏）', () => {
+    // 完整管线症状：previewArgs(160 截断) 曾被注释吃光预算 → toolSummary 剥完为空。
+    // 预算侧已修（注释不占额度）；本断言锁展示层行为：正常预览剥注释后必非空。
+    // 若上游又送来只剩注释的预览，摘要为空串是数据面事实——组件层需容忍空串不悬挂。
+    expect(toolSummary('# a\n# b')).toBe('');
+    expect(toolSummary('cd /x && bun run ci')).toBe('cd /x && bun run ci');
+    expect(toolSummary('# a\ncd /x\n# b\nbun test')).toBe('cd /x bun test');
+  });
+
   test('引号内的 # 不是注释，完整保留（不能误伤实参）', () => {
     expect(toolSummary('grep -n "#" src')).toBe('grep -n "#" src');
     expect(toolSummary('sed -i "/#/d" a.txt')).toBe('sed -i "/#/d" a.txt');

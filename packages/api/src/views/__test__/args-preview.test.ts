@@ -71,4 +71,38 @@ describe('clip · 保留换行（口径 B：对齐 pi 的 formatShellCall）', (
     expect(out.endsWith('…')).toBe(true);
     expect(out.length).toBe(160);
   });
+
+  test('症状回归：「已运行」后面没有命令——注释吃光截断预算后 toolSummary 剥完为空', () => {
+    // 用户实拍形态：模型在命令前写长段 # 说明，previewArgs 的 160 截断被注释占满，
+    // 渲染层 toolSummary 把整行注释剥掉后行内什么都不剩。
+    // 修复：注释行不占预算——命令本体必须进入预览。
+    const raw =
+      '# 18/18 过。但第二个失败还揭示一件事：全界内 allow 用例里「batch in-root」归因路径在 V4 下 posture 插件先接手（in-root allow 由 postureDecide 出）——现在过了说明聚合链正确接上了。\n# 全仓四门（合并结果验证）\ncd /Users/wrr/work/x-harness && bun run lint && bun run typecheck && bun run build';
+    const preview = previewArgs({ command: raw });
+    // 剥掉注释后的可展示内容必须非空（命令本体在场）
+    const displayable = preview
+      .split('\n')
+      .filter((line) => !line.startsWith('#'))
+      .join(' ')
+      .trim();
+    expect(displayable).toContain('cd /Users/wrr/work/x-harness');
+    // 注释行仍在预览里（title 悬停能读到原意）
+    expect(preview).toContain('# 全仓四门');
+  });
+
+  test('注释行零预算：非注释行在剩余预算内按行截断，行序不变', () => {
+    const raw = '# 短注释\n' + `${'a'.repeat(80)}\n` + `${'b'.repeat(80)}`;
+    const out = clip(raw);
+    // 总长 160+ 会截断，但注释行不占预算：两行命令共 161 位放不下第二行——切在行边界
+    expect(out).toContain('# 短注释');
+    expect(out).toContain('a'.repeat(80));
+    expect(out.endsWith('…')).toBe(true);
+  });
+
+  test('整段都是注释：退回无差别截断（原文本就没有命令可保）', () => {
+    const raw = `${'# 只注释'.repeat(60)}`;
+    const out = clip(raw);
+    expect(out.length).toBeLessThanOrEqual(160);
+    expect(out.endsWith('…')).toBe(true);
+  });
 });

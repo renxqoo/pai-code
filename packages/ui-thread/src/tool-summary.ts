@@ -20,14 +20,17 @@
  * 「一行放不下」）。
  */
 
-/** 整行 shell 注释（`#` / `;` 起头）。只匹配整行——行内注释（`ls # x`）折平后
- * 无法与「参数里带 #」区分，故一律保留（保守：宁可多显示，不可吃掉命令片段）。 */
-const COMMENT_LINE = /^\s*[#;]/;
+import { isCommentLine } from '@paiapp/contracts';
+
+/** 整行 shell 注释（`#` / `;` 起头）——判定与数据层截断预算同源（contracts
+ * isCommentLine）：预算侧不占额度、展示侧整行剥掉，两处必须同一谓词。只匹配整行
+ * ——行内注释（`ls # x`）折平后无法与「参数里带 #」区分，故一律保留（保守：宁可
+ * 多显示，不可吃掉命令片段）。 */
 
 export function toolSummary(argsPreview: string): string {
   const withoutComments = argsPreview
     .split('\n')
-    .filter((line) => !COMMENT_LINE.test(line))
+    .filter((line) => !isCommentLine(line))
     .join(' ');
   return withoutComments.replace(/\s+/g, ' ').trim();
 }
