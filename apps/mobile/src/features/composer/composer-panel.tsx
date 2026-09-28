@@ -9,7 +9,7 @@ import { CompactComposer } from '@/features/composer/compact-composer';
 import { FocusedComposer } from '@/features/composer/focused-composer';
 import { useComposerSubmit } from '@/features/composer/use-composer-submit';
 import { useDemoModeStore } from '@/store/demo-mode-store';
-import { getBridge } from '@/mobile/bridge-runtime';
+import { getBridge } from '@/mobile/relay/runtime';
 import { useConversationStore } from '@/store/conversation-store';
 
 type ComposerPanelProps = { embedded?: boolean | undefined };

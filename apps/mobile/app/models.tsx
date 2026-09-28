@@ -9,7 +9,7 @@ import { useAppTheme } from '@/theme/theme-context';
 import { models as demoModels } from '@/strings/zh';
 import { spacing } from '@/theme/tokens';
 import { useDemoModeStore } from '@/store/demo-mode-store';
-import { getBridge, useBridgeStatus } from '@/mobile/bridge-runtime';
+import { getBridge, useBridgeStatus } from '@/mobile/relay/runtime';
 
 interface ModelEntry {
   id: string;

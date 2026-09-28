@@ -35,7 +35,9 @@ describe("QR 路径", () => {
     });
     expect(ch).not.toBeNull();
     // 手机侧独立派生同一 DH（x25519 双向一致）
-    expect(Buffer.from(x25519(devEph.secret, gwEph.pub)!).toString("hex")).not.toBe("");
+    const devSideShared = x25519(devEph.secret, gwEph.pub);
+    expect(devSideShared).not.toBeNull();
+    expect(Buffer.from(devSideShared as string, "hex").length).toBe(32);
     const sig = signPairingTranscript(gwLong, ch!.transcript);
     expect(verifyPairingTranscript(gwLong.signingPub, ch!.transcript, sig)).toBe(true);
     expect(verifyPairingTranscript(generateSigningKeyPair().pub, ch!.transcript, sig)).toBe(false);

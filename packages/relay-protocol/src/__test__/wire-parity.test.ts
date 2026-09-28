@@ -21,7 +21,7 @@ import {
   x25519,
   x25519PublicFromSecret,
 } from '../index';
-import { createHmac, createCipheriv, createDecipheriv, hkdfSync } from 'node:crypto';
+import { createHmac, createCipheriv, hkdfSync } from 'node:crypto';
 
 const hexOf = (bytes: Uint8Array): string => Buffer.from(bytes).toString('hex');
 
@@ -133,7 +133,7 @@ describe('全旅程对拍（与 x-harness 原实现同构行为）', () => {
     if (parsed === null) return;
     const opened = await gw.open({ ciphertext, nonce: sealed.nonce, aad: buildAad('dev_d', 'gw_g', sealed.epoch), index: sealed.index, epoch: sealed.epoch });
     expect(opened.ok).toBe(true);
-    if (opened.ok) { console.log('pt type:', typeof opened.plaintext, opened.plaintext?.constructor?.name); expect(new TextDecoder().decode(opened.plaintext)).toBe('hello from device'); }
+    if (opened.ok) expect(new TextDecoder().decode(opened.plaintext)).toBe('hello from device');
     // 反向 gw → dev（双端互发）
     const sealedBack = await gw.seal({ plaintext: new TextEncoder().encode('ack'), aadFrom: 'gw_g', aadTo: 'dev_d' });
     expect(sealedBack.ok).toBe(true);

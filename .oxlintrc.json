@@ -59,6 +59,17 @@
       }
     },
     {
+      // relay-protocol：x-harness remote-protocol 的逐字 fork（线格式真相在
+      // x-harness——仓内改动会造成对拍漂移），lint 归属源仓流水线；本仓只豁免
+      // 风格类断言规则，正确性由 wire-parity/ratchet/pairing 测试背书
+      "files": ["packages/relay-protocol/src/**"],
+      "rules": {
+        "typescript/no-non-null-assertion": "off",
+        "typescript/consistent-type-imports": "off",
+        "typescript/require-await": "off"
+      }
+    },
+    {
       // shadcn 注册表生成组件：上游即单文件多导出结构，保持原样便于随注册表更新；
       // 本豁免只点名 ui/no-multi-component、只限六个生成文件（原住 renderer components/ui，
       // 下沉 packages/ui/src 根后豁免随迁），同包自研组件仍一文件一组件纪律不变

@@ -2,7 +2,7 @@ import { useComposerStore } from '@/store/composer-store';
 import { useConversationStore } from '@/store/conversation-store';
 import { useAttachmentStore } from '@/store/attachment-store';
 import { useDemoModeStore } from '@/store/demo-mode-store';
-import { attachThread, getBridge } from '@/mobile/bridge-runtime';
+import { attachThread, getBridge } from '@/mobile/relay/runtime';
 import type { ChatMessage } from '@/types/domain';
 
 /**

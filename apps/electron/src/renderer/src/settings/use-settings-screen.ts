@@ -38,7 +38,6 @@ export function pinnedSetOf(pinnedSessions: readonly string[]): ReadonlySet<stri
 }
 
 import type { RuntimeContentProps } from '@/screens/runtime-content';
-import { useMobileBridgePanel, type DevicesSectionPropsLike } from './use-mobile-bridge-panel';
 
 export type SettingsScreenProps = {
   open: boolean;
@@ -47,8 +46,7 @@ export type SettingsScreenProps = {
   onSelectSection: (id: SettingsSectionId) => void;
   /** 运行状态分区（T30）：轮询随分区激活启停。 */
   runtime: RuntimeContentProps;
-  /** 设备与连接分区（T57）：mobile-bridge 状态面。 */
-  devices: DevicesSectionPropsLike;
+
   /** 导航红点：宿主非就绪或存在异常会话。 */
   runtimeAttention: boolean;
   general: {
@@ -200,7 +198,6 @@ export function useSettingsScreen({ open, onClose, initialSection }: UseSettings
     setSection(id);
   }, [actions]);
 
-  const devicesPanel = useMobileBridgePanel(open && section === 'devices');
   const pinned = React.useMemo(() => pinnedSetOf(preferences.pinnedSessions), [preferences.pinnedSessions]);
   const projects = React.useMemo(() => savedProjectsOf(saved), [saved]);
 
@@ -211,7 +208,6 @@ export function useSettingsScreen({ open, onClose, initialSection }: UseSettings
     onClose,
     section,
     onSelectSection,
-    devices: devicesPanel,
     general: {
       localeSetting,
       onLocaleSettingChange: (next) => {

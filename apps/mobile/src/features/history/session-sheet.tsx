@@ -11,7 +11,7 @@ import { useConversationStore } from '@/store/conversation-store';
 import { useHistoryStore } from '@/store/history-store';
 import { useNavigationStore } from '@/store/navigation-store';
 import { useDemoModeStore } from '@/store/demo-mode-store';
-import { attachThread, getBridge, preferenceToggle } from '@/mobile/bridge-runtime';
+import { attachThread, getBridge, preferenceToggle } from '@/mobile/relay/runtime';
 
 /**
  * 会话操作：本地 store 即时反馈 + 连接模式同步 hub（改名 session/setName、

@@ -9,7 +9,7 @@ import { useNavigationStore } from '@/store/navigation-store';
 import { useConversationStore } from '@/store/conversation-store';
 import { useDemoModeStore } from '@/store/demo-mode-store';
 import { workspaces } from '@/fixtures/demo-data';
-import { getBridge } from '@/mobile/bridge-runtime';
+import { getBridge } from '@/mobile/relay/runtime';
 
 interface ProjectHit {
   path: string;

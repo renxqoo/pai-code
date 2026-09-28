@@ -14,7 +14,7 @@ import { useConversationStore } from '@/store/conversation-store';
 import { useHistoryStore } from '@/store/history-store';
 import { useNavigationStore } from '@/store/navigation-store';
 import { useDemoModeStore } from '@/store/demo-mode-store';
-import { attachThread, hydrateThread } from '@/mobile/bridge-runtime';
+import { attachThread, hydrateThread } from '@/mobile/relay/runtime';
 
 export function HistoryDrawer() {
   const router = useRouter();

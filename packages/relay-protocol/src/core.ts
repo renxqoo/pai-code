@@ -6,7 +6,6 @@
  * 不含 node:net/ws-frame 读写（RN 平台原生分帧）与 ratchet-store（App 装配层注入）。
  */
 export * from "./hex.ts";
-export * from "./crypto.ts";
 export * from "./frames.ts";
 export * from "./envelope.ts";
 export * from "./vocab.ts";

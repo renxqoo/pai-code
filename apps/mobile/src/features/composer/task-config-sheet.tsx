@@ -10,7 +10,7 @@ import { radius, spacing } from '@/theme/tokens';
 import { models, permissionModes, thinkingLevels } from '@/strings/zh';
 import { useDemoModeStore } from '@/store/demo-mode-store';
 import { useConversationStore } from '@/store/conversation-store';
-import { getBridge } from '@/mobile/bridge-runtime';
+import { getBridge } from '@/mobile/relay/runtime';
 
 export function TaskConfigSheet() {
   const { colors } = useAppTheme();

@@ -3,7 +3,7 @@ import { Text, View } from 'react-native';
 import { useAppTheme } from '@/theme/theme-context';
 import { radius, spacing } from '@/theme/tokens';
 import { useDemoModeStore } from '@/store/demo-mode-store';
-import { getBridge, useBridgeStatus } from '@/mobile/bridge-runtime';
+import { getBridge, useBridgeStatus } from '@/mobile/relay/runtime';
 import { useConversationStore } from '@/store/conversation-store';
 
 const demoUsage = [

@@ -1,7 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, Notification, shell } from 'electron';
 
 import { registerIpcWindowActions } from './window-actions-ipc';
-import { createMobileBridge } from './mobile-bridge/server';
 import { join } from 'node:path';
 import { existsSync, statSync } from 'node:fs';
 import { seedBundledRg } from './rg-seed';
@@ -91,25 +90,12 @@ void app.whenReady().then(async () => {
    *  同管道先发事件帧后发 response，直发下事件恒先于 invoke 结果到达渲染层。 */
   const emitToRenderer = (event: UiEvent): void => {
     notifyIfBlurred(event);
-    emitToMobile(event);
     const target = mainWindow;
     if (target === null || target.isDestroyed()) return;
     target.webContents.send('pai:event', event);
   };
 
-  // T57 mobile bridge：手机 App 经 WS 接入（同 LAN）。invoke 与渲染层 IPC 同门（routes.invoke）；
-  // 事件是 emit 泵的第二扇（与 pai:event 全序一致）。装配失败不阻断桌面（bridge 不可用）。
-  let mobileBridge: ReturnType<typeof createMobileBridge> | null = null;
-  let mobileBridgeEnabled = true;
-  const emitToMobile = (event: UiEvent): void => {
-    try {
-      mobileBridge?.publishEvent(event);
-    } catch {
-      // bridge 半开（stop 中途）不抛给事件泵
-    }
-  };
-
-  /** K1 系统通知：窗口失焦时的权限弹窗（confirm）与 host 失败。
+    /** K1 系统通知：窗口失焦时的权限弹窗（confirm）与 host 失败。
    *  逐事件判定，类型预筛先行——高频 delta 期零原生调用，仅触发类事件才查焦点；
    *  每个触发事件一条通知（多会话同窗 settle 各自一条，对应独立会话）。 */
   const notifyIfBlurred = (event: UiEvent): boolean => {
@@ -150,7 +136,6 @@ void app.whenReady().then(async () => {
     if (quitting) return;
     quitting = true;
     monitor?.stop();
-    void mobileBridge?.stop();
     const stopHost = runtime !== null ? runtime.stop().catch(() => undefined) : Promise.resolve();
     void stopHost.finally(() => {
       app.quit();
@@ -170,6 +155,84 @@ void app.whenReady().then(async () => {
   process.on('SIGINT', () => {
     shutdownThenQuit();
   });
+
+  const createMainWindow = (): BrowserWindow => {
+    const isDarwin = process.platform === 'darwin';
+    const win = new BrowserWindow({
+      width: 1200,
+      height: 800,
+      // 会话主列随窗口自适应收缩，最小窗口宽保证列内容（含 Composer）不被压垮
+      minWidth: 900,
+      minHeight: 560,
+      show: false,
+      // macOS 红绿灯内嵌；Windows 隐藏标题栏（保留系统边框可 resize），caption 由渲染层自绘
+      titleBarStyle: isDarwin ? 'hiddenInset' : 'hidden',
+      ...(isDarwin ? { trafficLightPosition: { x: 14, y: 17 } } : {}),
+      webPreferences: {
+        // 沙箱渲染进程只接受 CJS preload（构建配置同步输出 .cjs）
+        preload: join(__dirname, '../preload/index.cjs'),
+        contextIsolation: true,
+        sandbox: true,
+        nodeIntegration: false,
+      },
+    });
+    win.on('closed', () => {
+      if (mainWindow === win) mainWindow = null;
+    });
+    win.on('ready-to-show', () => win.show());
+    win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    win.webContents.on('will-navigate', (e) => e.preventDefault());
+
+    // 壳层窗口控制：渲染层经 preload 桥触发，与业务通道 pai:invoke 分离
+    const windowActions: Record<string, () => void> = {
+      minimize: () => win.minimize(),
+      'toggle-maximize': () => {
+        if (win.isMaximized()) {
+          win.unmaximize();
+        } else {
+          win.maximize();
+        }
+      },
+      close: () => win.close(),
+    };
+    registerIpcWindowActions(ipcMain, windowActions);
+    // 外链出口：仅放行 http(s)，其余协议一律拒绝（渲染层解析已过滤，这里纵深防御）
+    ipcMain.removeHandler('pai:window-open-external');
+    ipcMain.handle('pai:window-open-external', (_event, url) => {
+      if (typeof url !== 'string' || !/^https?:\/\//.test(url)) return;
+      void shell.openExternal(url);
+    });
+
+    // 壳层状态初值：渲染层挂载时拉取一次（全屏恢复启动等无状态变更事件的场景也能对齐）
+    ipcMain.removeHandler('pai:window-get-state');
+    ipcMain.handle('pai:window-get-state', () => ({
+      maximized: win.isMaximized(),
+      fullscreen: win.isFullScreen(),
+    }));
+
+    // 壳层状态推送（最大化/全屏）：caption 图标切换与 macOS 全屏态标题块收窄共用；
+    // 经既有 pai:event 通道即时单发
+    const publishWindowState = () => {
+      if (win.isDestroyed()) return;
+      win.webContents.send('pai:event', {
+        kind: 'window-state',
+        maximized: win.isMaximized(),
+        fullscreen: win.isFullScreen(),
+      });
+    };
+    win.on('maximize', publishWindowState);
+    win.on('unmaximize', publishWindowState);
+    win.on('enter-full-screen', publishWindowState);
+    win.on('leave-full-screen', publishWindowState);
+
+    const devUrl = process.env['ELECTRON_RENDERER_URL'];
+    if (devUrl?.startsWith('http://localhost:')) {
+      void win.loadURL(devUrl);
+    } else {
+      void win.loadFile(join(__dirname, '../renderer/index.html'));
+    }
+    return win;
+  };
 
   try {
     const keyStore = createProviderKeyStore(paths.providerKeysFile);
@@ -307,121 +370,6 @@ void app.whenReady().then(async () => {
         }
       },
     });
-    // T57 mobile bridge 启动：settings.mobileTokens 持久化（patch 面）；routes.invoke 同门
-    if (mobileBridgeEnabled) {
-      mobileBridge = createMobileBridge({
-        now: () => Date.now(),
-        persistToken: (token, deviceName) => {
-          const current = settings.get().mobileTokens;
-          void settings.patch({ mobileTokens: { ...current, [token]: deviceName } });
-        },
-        knownTokens: () => new Map(Object.entries(settings.get().mobileTokens)),
-        invoke: async (method, params) =>
-          routes === null ? { ok: false, error: { kind: 'transient', face: 'host_unavailable' } } : await routes.invoke(method, params),
-        serverInfo: () => ({ appVersion: app.getVersion(), hostPhase: runtime?.hostPhase() ?? null }),
-        log: (message) => loggingToMonitor.log(message),
-      });
-    }
-
-  // T57 bridge 运行期重建（开关重开/撤销后重装）：装配参数与 try 块首装同源
-  const rebuildMobileBridge = (): void => {
-    try {
-      mobileBridge = createMobileBridge({
-        now: () => Date.now(),
-        persistToken: (token, deviceName) => {
-          const current = settings.get().mobileTokens;
-          void settings.patch({ mobileTokens: { ...current, [token]: deviceName } });
-        },
-        knownTokens: () => new Map(Object.entries(settings.get().mobileTokens)),
-        invoke: async (method, params) =>
-          routes === null ? { ok: false, error: { kind: 'transient', face: 'host_unavailable' } } : await routes.invoke(method, params),
-        serverInfo: () => ({ appVersion: app.getVersion(), hostPhase: runtime?.hostPhase() ?? null }),
-        log: (message) => logger.log(message),
-      });
-    } catch {
-      mobileBridge = null;
-    }
-  };
-
-  // T57 桌面 UI 钩子：设备页展示配对码与已连接设备；开关即时启停 bridge；
-  // 撤销 = settings.mobileTokens 删行 + 断开当前已连接会话（下次连接需重新配对）
-  ipcMain.handle('pai:mobile-state', () => ({
-    enabled: mobileBridgeEnabled,
-    pairCode: mobileBridge === null ? null : (() => {
-      const current = mobileBridge.pairing.currentCode();
-      return current === null ? null : { code: current.code, expiresAt: current.expiresAt };
-    })(),
-    lockedUntil: mobileBridge === null ? 0 : mobileBridge.pairing.lockedUntil(),
-    devices: mobileBridge === null ? [] : mobileBridge.connectedDevices(),
-    pairedCount: Object.keys(settings.get().mobileTokens).length,
-  }));
-  ipcMain.handle('pai:mobile-set-enabled', (_event, enabled: unknown) => {
-    if (typeof enabled !== 'boolean') return { ok: false as const };
-    if (enabled === mobileBridgeEnabled) return { ok: true as const };
-    mobileBridgeEnabled = enabled;
-    if (!enabled) {
-      void mobileBridge?.stop().then(() => {
-        mobileBridge = null;
-      });
-    } else {
-      rebuildMobileBridge();
-    }
-    return { ok: true as const };
-  });
-  ipcMain.handle('pai:mobile-pair-code', () => {
-    if (!mobileBridgeEnabled || mobileBridge === null) return { ok: false as const, reason: 'bridge_off' };
-    const issued = mobileBridge.pairCode();
-    return { ok: true as const, code: issued.code, expiresAt: issued.expiresAt };
-  });
-  ipcMain.handle('pai:mobile-revoke', (_event, deviceName: unknown) => {
-    if (typeof deviceName !== 'string') return { ok: false as const };
-    const tokens = settings.get().mobileTokens;
-    const kept: Record<string, string> = {};
-    let removed = false;
-    for (const [token, name] of Object.entries(tokens)) {
-      if (name === deviceName) {
-        removed = true;
-        continue;
-      }
-      kept[token] = name;
-    }
-    if (!removed) return { ok: false as const };
-    // 写回剔除后的 kept（此前误写回原 tokens——撤销形同虚设；写失败如实回报）
-    const written = settings.patch({ mobileTokens: kept });
-    if (!written.ok) {
-      logger.log('mobile_revoke_write_failed');
-      return { ok: false as const };
-    }
-    // 撤销后断开全部已连接会话（令牌已无效——立即生效，不等自然断开）
-    void mobileBridge?.stop().then(() => {
-      mobileBridge = null;
-      if (mobileBridgeEnabled) rebuildMobileBridge();
-    });
-    return { ok: true as const };
-  });
-
-    await runtime.start();
-  } catch (error) {
-    logger.log(`runtime_start_failed:${error instanceof Error ? error.message : String(error)}`);
-    // host 未就绪也继续开窗：渲染层展示设置引导（配置 provider/宿主路径）
-  }
-
-  // 监控器订阅宿主观测流：心跳资源折叠 + worker 收编/死亡进时间线；相位事件
-  // 走同一条线。订阅只要求宿主已构建（含 start 超时/失败的降级形态），随宿主
-  // 进程生命周期存续（单宿主常驻，无需退订句柄）
-  if (monitor !== null && runtime !== null && runtime.hostPhase() !== null) {
-    const host = runtime.host;
-    host.onFrame((frame) => {
-      if (frame.type === 'heartbeat') monitor.noteHeartbeat(frame);
-      else if (frame.type === 'thread_parked') monitor.noteWorkerRecycled(frame.threadId, frame.reason);
-      else if (frame.type === 'thread_died') monitor.noteWorkerDied(frame.threadId, frame.reason);
-    });
-    monitor.noteHostPhase(host.phase);
-    host.onPhase((phase) => monitor.noteHostPhase(phase));
-  }
-
-  // T57 桌面 UI 钩子：设备页展示配对码与已连接设备；开关即时启停 bridge
-
   ipcMain.handle('pai:invoke', (_event, payload: unknown) => {
     if (typeof payload !== 'object' || payload === null) {
       return { ok: false, error: appError('invalid_payload') };
@@ -434,83 +382,15 @@ void app.whenReady().then(async () => {
     return routes.invoke(method, params ?? {});
   });
 
-  const createMainWindow = (): BrowserWindow => {
-    const isDarwin = process.platform === 'darwin';
-    const win = new BrowserWindow({
-      width: 1200,
-      height: 800,
-      // 会话主列随窗口自适应收缩，最小窗口宽保证列内容（含 Composer）不被压垮
-      minWidth: 900,
-      minHeight: 560,
-      show: false,
-      // macOS 红绿灯内嵌；Windows 隐藏标题栏（保留系统边框可 resize），caption 由渲染层自绘
-      titleBarStyle: isDarwin ? 'hiddenInset' : 'hidden',
-      ...(isDarwin ? { trafficLightPosition: { x: 14, y: 17 } } : {}),
-      webPreferences: {
-        // 沙箱渲染进程只接受 CJS preload（构建配置同步输出 .cjs）
-        preload: join(__dirname, '../preload/index.cjs'),
-        contextIsolation: true,
-        sandbox: true,
-        nodeIntegration: false,
-      },
-    });
-    win.on('closed', () => {
-      if (mainWindow === win) mainWindow = null;
-    });
-    win.on('ready-to-show', () => win.show());
-    win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-    win.webContents.on('will-navigate', (e) => e.preventDefault());
 
-    // 壳层窗口控制：渲染层经 preload 桥触发，与业务通道 pai:invoke 分离
-    const windowActions: Record<string, () => void> = {
-      minimize: () => win.minimize(),
-      'toggle-maximize': () => {
-        if (win.isMaximized()) {
-          win.unmaximize();
-        } else {
-          win.maximize();
-        }
-      },
-      close: () => win.close(),
-    };
-    registerIpcWindowActions(ipcMain, windowActions);
-    // 外链出口：仅放行 http(s)，其余协议一律拒绝（渲染层解析已过滤，这里纵深防御）
-    ipcMain.removeHandler('pai:window-open-external');
-    ipcMain.handle('pai:window-open-external', (_event, url) => {
-      if (typeof url !== 'string' || !/^https?:\/\//.test(url)) return;
-      void shell.openExternal(url);
-    });
 
-    // 壳层状态初值：渲染层挂载时拉取一次（全屏恢复启动等无状态变更事件的场景也能对齐）
-    ipcMain.removeHandler('pai:window-get-state');
-    ipcMain.handle('pai:window-get-state', () => ({
-      maximized: win.isMaximized(),
-      fullscreen: win.isFullScreen(),
-    }));
-
-    // 壳层状态推送（最大化/全屏）：caption 图标切换与 macOS 全屏态标题块收窄共用；
-    // 经既有 pai:event 通道即时单发
-    const publishWindowState = () => {
-      if (win.isDestroyed()) return;
-      win.webContents.send('pai:event', {
-        kind: 'window-state',
-        maximized: win.isMaximized(),
-        fullscreen: win.isFullScreen(),
-      });
-    };
-    win.on('maximize', publishWindowState);
-    win.on('unmaximize', publishWindowState);
-    win.on('enter-full-screen', publishWindowState);
-    win.on('leave-full-screen', publishWindowState);
-
-    const devUrl = process.env['ELECTRON_RENDERER_URL'];
-    if (devUrl?.startsWith('http://localhost:')) {
-      void win.loadURL(devUrl);
-    } else {
-      void win.loadFile(join(__dirname, '../renderer/index.html'));
+    if (runtime !== null) {
+      await runtime.start();
     }
-    return win;
-  };
+  } catch (error) {
+    logger.log(`runtime_start_failed:${error instanceof Error ? error.message : String(error)}`);
+    // host 未就绪也继续开窗：渲染层展示设置引导（配置 provider/宿主路径）
+  }
 
   mainWindow = createMainWindow();
   if (!app.isPackaged) {

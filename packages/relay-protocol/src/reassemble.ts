@@ -28,7 +28,7 @@ export class FrameReassembler {
     if (this.totalBytes + decoded.length > REASSEMBLY_MAX_BYTES) return { ok: false, reason: "too-large" };
     this.segments.set(spec.segmentId, spec.data);
     if (this.segments.size === this.segmentCount) {
-      const parts: Buffer[] = [];
+      const parts: ReturnType<typeof Buffer.from>[] = [];
       for (let i = 0; i < this.segmentCount; i++) {
         parts.push(Buffer.from(this.segments.get(i)!, "base64"));
       }

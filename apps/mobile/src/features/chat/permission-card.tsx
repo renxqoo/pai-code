@@ -6,7 +6,7 @@ import { radius, spacing, type } from '@/theme/tokens';
 import { Button } from '@/components/ui/button';
 import { monospaceFont } from '@/components/monospace-font';
 import { useConversationStore } from '@/store/conversation-store';
-import { getBridge } from '@/mobile/bridge-runtime';
+import { getBridge } from '@/mobile/relay/runtime';
 
 export function PermissionCard() {
   const { colors } = useAppTheme();

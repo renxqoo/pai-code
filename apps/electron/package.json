@@ -26,6 +26,7 @@
     "@tailwindcss/vite": "^4.3.3",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^5.0.2",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.2.6",
@@ -46,6 +47,7 @@
     "zustand": "^5.0.15"
   },
   "dependencies": {
-    "cmdk": "^1.1.1"
+    "cmdk": "^1.1.1",
+    "ws": "^8.22.0"
   }
 }

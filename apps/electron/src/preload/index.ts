@@ -28,21 +28,6 @@ const bridge = {
       return ipcRenderer.invoke('pai:window-get-state');
     },
   },
-  /** 移动端连接面（T57 桌面设备页）：状态快照 / 开关 / 配对码 / 撤销。 */
-  mobile: {
-    state(): Promise<unknown> {
-      return ipcRenderer.invoke('pai:mobile-state');
-    },
-    setEnabled(enabled: boolean): Promise<{ ok: boolean } | { ok: false }> {
-      return ipcRenderer.invoke('pai:mobile-set-enabled', enabled);
-    },
-    generatePairCode(): Promise<{ ok: true; code: string; expiresAt: number } | { ok: false; reason: string }> {
-      return ipcRenderer.invoke('pai:mobile-pair-code');
-    },
-    revoke(deviceName: string): Promise<{ ok: boolean }> {
-      return ipcRenderer.invoke('pai:mobile-revoke', deviceName);
-    },
-  },
 };
 
 contextBridge.exposeInMainWorld('pai', bridge);
