@@ -95,7 +95,7 @@ describe('NewTaskScreen', () => {
   });
 });
 
-describe('NewTaskScreen 分支切换锁（T36：与线程页同一把，目录上线程在跑即只读）', () => {
+describe('NewTaskScreen 分支切换锁（与线程页同一把：目录上线程在跑锁切换，入口保留锁因入面板）', () => {
   const REPO_VIEW: GitBranchesView = { isRepo: true, current: 'main', branches: ['dev', 'main'], dirtyFiles: 0 };
 
   /** 客户端渲染装置：页面订阅 live store（锁判定）与分支视图（面板入口）。 */
@@ -143,13 +143,16 @@ describe('NewTaskScreen 分支切换锁（T36：与线程页同一把，目录�
     });
   }
 
-  test('所选目录上线程在跑：分支段退回只读（无面板触发器）；空闲恢复触发器', async () => {
+  test('所选目录上线程在跑：锁时触发器仍在（锁不再是摘除条件——D6 锁因入面板）；空闲照常', async () => {
     seedRunning(true);
     const locked = render(<NewTaskScreen {...screenProps()} />);
     await React.act(async () => {
       for (let i = 0; i < 6; i += 1) await Promise.resolve();
     });
-    expect([...locked.container.querySelectorAll('button')].some((b) => b.getAttribute('aria-label') === copy.composer.branchSegment)).toBe(false);
+    // 触发器保留——锁因行在面板内呈现（BranchPanel 单测钉住锁因行/行禁用/create
+    // 放行），此处与线程页（composer-region）同口径钉接线形态
+    expect([...locked.container.querySelectorAll('button')].some((b) => b.getAttribute('aria-label') === copy.composer.branchSegment)).toBe(true);
+    expect(locked.container.textContent).toContain('main');
     locked.unmount();
 
     seedRunning(false);

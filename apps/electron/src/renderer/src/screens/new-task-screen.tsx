@@ -125,13 +125,15 @@ function NewTaskScreen({
   /** 图谱只在弹窗打开时拉取（无轮询） */
   const graph = useGitGraph(cwd, onListGraph, 0, dialog === 'graph');
   /** 分支切换锁（与线程页同一把，T36 引用 T23 裁决）：所选目录上任一线程在跑即锁定——
-   * 新建任务页可选中运行中会话的目录，不放锁就能从这页拆台运行中的 agent。 */
-  const branchLock = useStore(liveStore, (s) => branchSwitchLockState(s.sessions, s.threads, cwd));
-  const branchLocked = branchLock.locked;
+   * 新建任务页可选中运行中会话的目录，不放锁就能从这页拆台运行中的 agent。
+   *  selector 只订阅原始值（同 composer-region/pulse-panel）：锁态对象每次派生新引用，
+   *  对象直出会让 getSnapshot 永不相等（无限更新）。 */
+  const branchLocked = useStore(liveStore, (s) => branchSwitchLockState(s.sessions, s.threads, cwd).locked);
+  const branchRunningCount = useStore(liveStore, (s) => branchSwitchLockState(s.sessions, s.threads, cwd).runningCount);
 
-  /** 锁定期间已开的分支面板/创建弹窗就地收口（触发器会消失，但已开的模态弹窗不会自灭） */
+  /** 锁定期间已开的「创建」弹窗就地收口（分支面板不再收——锁因行内嵌可见，创建放行） */
   React.useEffect(() => {
-    if (branchLocked && dialog === 'create-branch') setDialog(null); // 面板锁因可见不收；创建收
+    if (branchLocked && dialog === 'create-branch') setDialog(null);
   }, [branchLocked, dialog]);
 
   /** 面板打开即重拉：脏计数随工作区实时变化，缓存快照会过期（cwd 不变不会自动重拉） */
@@ -195,9 +197,10 @@ function NewTaskScreen({
     );
   };
 
-  /** 创建并检出：失败在弹窗内联呈现（不关弹窗，便于改名重试）；与切换同一把锁（checkout -b 同样改写 HEAD 归属） */
+  /** 创建并检出：失败在弹窗内联呈现（不关弹窗，便于改名重试）。不受切换锁
+   *  （D6 三出路：checkout -b 基于当前 HEAD 建分支并切换——工作树内容不动，不拆台）。 */
   const createBranch = (branch: string): void => {
-    if (busyRef.current || branchLocked) return;
+    if (busyRef.current) return;
     busyRef.current = true;
     setCheckingOut(true);
     setBranchError(null);
@@ -275,7 +278,7 @@ function NewTaskScreen({
                 : {
                     ...segment,
                     ariaLabel: copy.composer.branchSegment,
-                    // 非仓库/加载中/目录上有线程在跑不给面板入口（列表为空或切基线拆台运行中 agent）
+                    // 非仓库/加载中不给面板入口；锁定时面板仍开（锁因行内可见，切行禁用防拆台）
                     ...(branches.view?.isRepo === true
                       ? {
                           panel: {
@@ -287,7 +290,7 @@ function NewTaskScreen({
                                 loading={branches.loading}
                                 failed={branches.failed}
                                 busy={checkingOut}
-                                lock={branchLocked ? { runningCount: branchLock.runningCount } : null}
+                                lock={branchLocked ? { runningCount: branchRunningCount } : null}
                                 onSelect={switchBranch}
                                 onCreate={() => {
                                   setBranchError(null);
