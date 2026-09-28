@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { classifyGitExecError, createGitBranches, isValidBranchName, mapGitFailure, parseBranchList, parseDirtyCount, type GitExec, type GitExecResult } from '../git-branches';
+import { classifyGitExecError, createGitBranches, isValidBranchName, mapGitFailure, parseBranchList, parseConflictFiles, parseDirtyCount, parseWorktreeOccupant, parseWorktreeRefs, type GitExec, type GitExecResult } from '../git-branches';
 
 /**
  * 本地 git 分支能力（T23）：纯函数分类 + fake 执行器驱动的行为
@@ -209,14 +209,41 @@ describe('checkout', () => {
     expect(calls.some((call) => call.includes('checkout '))).toBe(false);
   });
 
-  test('脏工作区（已跟踪文件改动）拒绝切换', async () => {
+  test('脏工作区随行切换（D2\' 试探式——不预检脏，git 自身放行即成功）', async () => {
+    const { exec, calls } = makeExec([
+      { match: 'rev-parse --git-dir', result: ok('.git') },
+      { match: 'for-each-ref', result: ok('main\ndev\n') },
+      { match: 'symbolic-ref', result: ok('main\n') },
+      { match: 'checkout dev', result: ok('Switched to branch dev') },
+    ]);
+    expect(await createGitBranches(exec).checkout('/w/repo', 'dev', false)).toEqual({ ok: true, data: { branch: 'dev' } });
+    expect(calls.some((call) => call.includes('status --porcelain'))).toBe(false); // 预检已删
+  });
+
+  test('真冲突（git 自身拒绝覆盖）→ conflict_files 带文件清单（tab 分隔）', async () => {
     const { exec } = makeExec([
       { match: 'rev-parse --git-dir', result: ok('.git') },
       { match: 'for-each-ref', result: ok('main\ndev\n') },
       { match: 'symbolic-ref', result: ok('main\n') },
-      { match: 'status --porcelain', result: ok(' M src/a.ts\n') },
+      { match: 'checkout dev', result: fail('error: Your local changes to the following files would be overwritten by checkout:\n\tsrc/a.ts\n\tlib/b.ts\nPlease commit your changes or stash them before you merge. Aborting.', 1) },
     ]);
-    expect(await createGitBranches(exec).checkout('/w/repo', 'dev', false)).toEqual({ ok: false, error: { kind: 'dirty_worktree' } });
+    expect(await createGitBranches(exec).checkout('/w/repo', 'dev', false)).toEqual({
+      ok: false,
+      error: { kind: 'conflict_files', message: 'src/a.ts\tlib/b.ts' },
+    });
+  });
+
+  test('占用分支（already used by worktree）→ branch_in_other_worktree 带占用者路径', async () => {
+    const { exec } = makeExec([
+      { match: 'rev-parse --git-dir', result: ok('.git') },
+      { match: 'for-each-ref', result: ok('main\ndev\n') },
+      { match: 'symbolic-ref', result: ok('main\n') },
+      { match: 'checkout dev', result: fail('fatal: \'dev\' is already used by worktree at /w/x-harness-worktrees/agent-01', 128) },
+    ]);
+    expect(await createGitBranches(exec).checkout('/w/repo', 'dev', false)).toEqual({
+      ok: false,
+      error: { kind: 'branch_in_other_worktree', message: '/w/x-harness-worktrees/agent-01' },
+    });
   });
 
   test('未知分支拒绝，不执行 checkout', async () => {
@@ -341,4 +368,56 @@ describe('checkout', () => {
     expect((await second).ok).toBe(true);
     expect(order).toEqual(['/w/repo|checkout dev', '/w/repo/sub|checkout feat']);
   });
+
+
+describe('parseConflictFiles / parseWorktreeOccupant / parseWorktreeRefs（D2\'/A5 纯函数）', () => {
+  test('would-be-overwritten 块 → 缩进文件清单；块外忽略', () => {
+    const stderr = 'error: Your local changes to the following files would be overwritten by checkout:\n\tsrc/a.ts\n\tlib/b.ts\nPlease commit your changes or stash them before you merge.\nAborting';
+    expect(parseConflictFiles(stderr)).toEqual(['src/a.ts', 'lib/b.ts']);
+    expect(parseConflictFiles('unrelated output')).toEqual([]);
+  });
+
+  test('占用者路径解析；非占用报错 → null', () => {
+    expect(parseWorktreeOccupant("fatal: 'dev' is already used by worktree at /w/wt-01")).toBe('/w/wt-01');
+    expect(parseWorktreeOccupant('fatal: something else')).toBe(null);
+  });
+
+  test('worktree list porcelain → 占用表（branch 在场才收；refs/heads 前缀剥）', () => {
+    const out = 'worktree /w/main\nHEAD abc\nbranch refs/heads/main\n\nworktree /w/wt-01\nHEAD def\nbranch refs/heads/x-harness/agent-01\n\nworktree /w/detached\nHEAD fedcba\n';
+    expect(parseWorktreeRefs(out)).toEqual([
+      { branch: 'main', path: '/w/main' },
+      { branch: 'x-harness/agent-01', path: '/w/wt-01' },
+    ]);
+  });
+});
+
+describe('list 的 gitDir/worktrees 装配（F1 相对串坑 + 占用表）', () => {
+  test('仓库根相对串 .git → env.resolve 归一；占用表并行读取', async () => {
+    const { exec } = makeExec([
+      { match: 'rev-parse --git-dir', result: ok('.git') },
+      { match: 'for-each-ref', result: ok('main\n') },
+      { match: 'symbolic-ref', result: ok('main\n') },
+      { match: 'status --porcelain', result: ok('') },
+      { match: 'worktree list', result: ok('worktree /w/main\nbranch refs/heads/main\n') },
+    ]);
+    const env = { isAbsolute: (path: string) => path.startsWith('/'), resolve: (...segments: string[]) => segments.join('/') };
+    const outcome = await createGitBranches(exec, env).list('/w/repo');
+    expect(outcome).toEqual({
+      ok: true,
+      data: { isRepo: true, current: 'main', branches: ['main'], dirtyFiles: 0, gitDir: '/w/repo/.git', worktrees: [{ branch: 'main', path: '/w/main' }] },
+    });
+  });
+
+  test('env 缺席（纯测试装置）相对串 → gitDir 键省略不产半生数据', async () => {
+    const { exec } = makeExec([
+      { match: 'rev-parse --git-dir', result: ok('.git') },
+      { match: 'for-each-ref', result: ok('main\n') },
+      { match: 'symbolic-ref', result: ok('main\n') },
+      { match: 'status --porcelain', result: ok('') },
+      { match: 'worktree list', result: ok('') },
+    ]);
+    const outcome = await createGitBranches(exec).list('/w/repo');
+    expect((outcome as { ok: true; data: Record<string, unknown> }).data['gitDir']).toBeUndefined();
+  });
+});
 });

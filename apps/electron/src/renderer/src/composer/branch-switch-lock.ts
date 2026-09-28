@@ -15,16 +15,32 @@ function threadBusy(thread: LiveThreadState): boolean {
   );
 }
 
+/** 锁态判定结果：locked + 运行中会话数（锁因文案数据源——「N 个会话运行中」）。 */
+export interface BranchSwitchLockState {
+  readonly locked: boolean
+  /** 锁定时在跑的会话数（未锁恒 0） */
+  readonly runningCount: number
+}
+
+const UNLOCKED: BranchSwitchLockState = { locked: false, runningCount: 0 };
+
 /**
  * 分支切换锁（T36 引用 T23 裁决）：目标工作目录上任一线程在跑即锁定——
  * 切分支会改写该目录的工作树基线，运行中的 agent 读写会被拆台。
- * 锁定由装配层消费（线程页分支段退回只读），无目录同样不给切换入口。
+ * 无目录同样不给切换入口。计数化（D6）：锁因可见——静默禁用是人机交互反模式。
+ * 「于当前 HEAD 建新分支」（create）不在此锁域——不改工作树不拆台，装配层放行。
  */
-export function branchSwitchLocked(sessions: BranchSwitchSessions, threads: BranchSwitchThreads, cwd: string): boolean {
-  if (cwd.length === 0) return true;
+export function branchSwitchLockState(sessions: BranchSwitchSessions, threads: BranchSwitchThreads, cwd: string): BranchSwitchLockState {
+  if (cwd.length === 0) return { locked: true, runningCount: 0 };
+  let runningCount = 0;
   for (const [threadId, thread] of Object.entries(threads)) {
     if (!threadBusy(thread)) continue;
-    if (sessions[threadId]?.cwd === cwd) return true;
+    if (sessions[threadId]?.cwd === cwd) runningCount += 1;
   }
-  return false;
+  return runningCount > 0 ? { locked: true, runningCount } : UNLOCKED;
+}
+
+/** 布尔兼容面（既有消费方）：切换是否被锁。 */
+export function branchSwitchLocked(sessions: BranchSwitchSessions, threads: BranchSwitchThreads, cwd: string): boolean {
+  return branchSwitchLockState(sessions, threads, cwd).locked;
 }

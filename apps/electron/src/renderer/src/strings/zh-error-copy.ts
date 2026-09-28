@@ -98,6 +98,8 @@ export const zhErrorCopy = {
   branch_exists: '同名分支已存在，换一个名称。',
   invalid_branch: '分支名不合法，请换个名称。',
   dirty_worktree: '工作区有未提交改动，先提交或暂存后再切换分支。',
+  branch_in_other_worktree: '该分支已被另一个 worktree 检出（详见错误信息中的路径）。',
+  conflict_files: '切换会覆盖以下未提交文件：详见错误信息中的清单。',
   unknown_branch: '目标分支不存在，请刷新后重试。',
   not_a_repo: '该目录不是 git 仓库。',
   git_unavailable: '系统未找到 git 命令，无法操作分支。',

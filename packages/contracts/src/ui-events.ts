@@ -188,6 +188,10 @@ const uiEventDefs = {
   /** 子 agent 忙闲迁移（agent/status running|idle；面板状态徽标的数据源）。 */
   subagentState: z.object({ type: z.literal('subagentState'), threadId, agentId: z.string(), busy: z.boolean() }),
 
+  /** git 分支/refs 变更（hub git/changed——外部 checkout 等的失效信号；branch 键
+   *  缺席 = detached 已分离。渲染层按 cwd 匹配会话刷新分支视图——docs/GIT-INTERACTION-REDESIGN §2.1）。 */
+  gitChanged: z.object({ type: z.literal('gitChanged'), threadId, cwd: z.string(), branch: z.string().optional() }),
+
   /** todo 清单全量快照（last-wins：速览面板进程区整体替换）。 */
   todoSnapshot: z.object({ type: z.literal('todoSnapshot'), threadId, snapshot: TodoSnapshotEventDataSchema }),
 

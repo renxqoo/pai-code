@@ -1,4 +1,4 @@
-import type { GitBranchesView } from '@paiapp/contracts';
+import type { GitBranchesView, GitWorktreeRef } from '@paiapp/contracts';
 import { appError, type ApiError } from '../errors';
 
 /**
@@ -71,6 +71,53 @@ export function parseBranchList(stdout: string): string[] {
   return [...names].sort((a, b) => a.localeCompare(b));
 }
 
+/** `would be overwritten` 报错块 → 被覆盖文件清单（缩进行逐条）。 */
+export function parseConflictFiles(stderr: string): string[] {
+  const files: string[] = [];
+  let inBlock = false;
+  for (const line of stderr.split('\n')) {
+    if (line.includes('would be overwritten')) {
+      inBlock = true;
+      continue;
+    }
+    if (!inBlock) continue;
+    if (line.startsWith('\t')) {
+      files.push(line.slice(1).trim());
+      continue;
+    }
+    break;
+  }
+  return files;
+}
+
+/** `already used by worktree at <path>` → 占用者路径（A5 占用文案数据源）。 */
+export function parseWorktreeOccupant(stderr: string): string | null {
+  const m = /already used by worktree at (.+)/.exec(stderr);
+  return m?.[1]?.trim() ?? null;
+}
+
+/** `worktree list --porcelain` → 分支占用表（branch 在场才收——detached worktree 不占分支）。 */
+export function parseWorktreeRefs(stdout: string): GitWorktreeRef[] {
+  const refs: GitWorktreeRef[] = [];
+  let path: string | null = null;
+  let branch: string | null = null;
+  const flush = (): void => {
+    if (path !== null && branch !== null && branch.length > 0) refs.push({ branch, path });
+    path = null;
+    branch = null;
+  };
+  for (const line of stdout.split('\n')) {
+    if (line.startsWith('worktree ')) {
+      flush();
+      path = line.slice('worktree '.length).trim();
+    } else if (line.startsWith('branch ')) {
+      branch = line.slice('branch '.length).trim().replace(/^refs\/heads\//, '');
+    }
+  }
+  flush();
+  return refs;
+}
+
 /** `status --porcelain --untracked-files=no` 输出 → 未提交更改文件数（口径与切换守卫一致：展示的数字就是会阻止切换的数字）。 */
 export function parseDirtyCount(stdout: string): number {
   return stdout.split('\n').filter((line) => line.trim().length > 0).length;
@@ -85,8 +132,15 @@ export function mapGitFailure(stderr: string): ApiError {
   if (text.includes('did not match any file') || text.includes('unknown revision') || text.includes('did not match any known')) {
     return appError('unknown_branch');
   }
+  if (text.includes('already used by worktree')) {
+    const occupant = parseWorktreeOccupant(stderr);
+    return appError('branch_in_other_worktree', occupant ?? undefined);
+  }
   if (text.includes('local changes') || text.includes('would be overwritten') || text.includes('please commit your changes')) {
-    return appError('dirty_worktree');
+    const files = parseConflictFiles(stderr);
+    // D2' 试探式：真冲突 = git 自身拒绝的覆盖清单（conflict_files 带文件 tab 清单）；
+    // 清单空退 dirty_worktree（非覆盖型脏的兜底码）
+    return files.length > 0 ? appError('conflict_files', files.join('\t')) : appError('dirty_worktree');
   }
   const summary = firstLine(stderr);
   return appError('internal_error', summary.length > 0 ? `git_failed:${summary}` : 'git_failed:unknown');
@@ -106,7 +160,14 @@ export interface GitBranches {
   checkout: (cwd: string, branch: string, create: boolean) => Promise<GitCheckoutOutcome>
 }
 
-export function createGitBranches(run: GitExec): GitBranches {
+/** 宿主路径能力注入（api 包无 node 域——isAbsolute/resolve 由 electron 主进程供给）。
+ *  用途：rev-parse --git-dir 在仓库根返回相对串 '.git'，须 resolve(cwd) 归一。 */
+export interface GitPathEnv {
+  readonly isAbsolute: (path: string) => boolean
+  readonly resolve: (...segments: string[]) => string
+}
+
+export function createGitBranches(run: GitExec, env?: GitPathEnv): GitBranches {
   const listInFlight = new Map<string, Promise<GitBranchesOutcome>>();
   /** 全局 checkout 串行尾节点（跨 cwd 也串行：不同 cwd 可能指向同一仓库）。 */
   let checkoutTail: Promise<unknown> = Promise.resolve();
@@ -143,11 +204,20 @@ export function createGitBranches(run: GitExec): GitBranches {
     const status = await run(['status', '--porcelain', '--untracked-files=no'], cwd);
     if (status.error !== null) return { ok: false, error: failureError(status) };
     if (status.code !== 0) return { ok: false, error: mapGitFailure(status.stderr) };
+    // gitDir：rev-parse --git-dir 在仓库根返回相对串 '.git'——resolve(cwd) 归一（F1 坑）。
+    // env 缺席（纯测试装置）时若为相对串则键省略——不产半生数据
+    const rawGitDir = probe.stdout.trim();
+    const gitDir = env === undefined ? undefined : env.isAbsolute(rawGitDir) ? rawGitDir : env.resolve(cwd, rawGitDir);
+    // linked worktree 占用表（列表禁用标注与占用文案数据源）；读失败不阻塞列表
+    const wtList = await run(['worktree', 'list', '--porcelain'], cwd);
+    const worktrees = wtList.error === null && wtList.code === 0 ? parseWorktreeRefs(wtList.stdout) : [];
     return okBranches({
       isRepo: true,
       current: current.length > 0 ? current : null,
       branches: parseBranchList(refs.stdout),
       dirtyFiles: parseDirtyCount(status.stdout),
+      ...(gitDir !== undefined ? { gitDir } : {}),
+      ...(worktrees.length > 0 ? { worktrees } : {}),
     });
   };
 
@@ -171,15 +241,9 @@ export function createGitBranches(run: GitExec): GitBranches {
     const current = head.code === 0 ? head.stdout.trim() : '';
     if (!create && current === branch) return { ok: true, data: { branch } };
 
-    // 切到既有分支：已跟踪文件的改动会阻止切换或丢改动，先拒绝
-    // （新建分支不改工作树，脏树允许——未跟踪文件的覆盖冲突由 git 自身报错）
-    if (!create) {
-      const status = await run(['status', '--porcelain', '--untracked-files=no'], cwd);
-      if (status.error !== null) return { ok: false, error: failureError(status) };
-      if (status.code !== 0) return { ok: false, error: mapGitFailure(status.stderr) };
-      if (status.stdout.trim().length > 0) return { ok: false, error: appError('dirty_worktree') };
-    }
-
+    // 试探式切换（D2'，docs/GIT-INTERACTION-REDESIGN）：不预检脏——直接 checkout，
+    // git 自身只在「真会被覆盖」时拒绝（would be overwritten 块 → conflict_files
+    // 带文件清单）；不冲突的改动随行（对齐 git 原生语义，删一刀切恒拒）。
     const checkout = await run(create ? ['checkout', '-b', branch] : ['checkout', branch], cwd);
     if (checkout.error !== null) return { ok: false, error: failureError(checkout) };
     if (checkout.code !== 0) return { ok: false, error: mapGitFailure(checkout.stderr) };
