@@ -56,18 +56,22 @@ describe('TurnAnchorRail 刻痕窗口化（T55）', () => {
     expect(html).not.toContain('查看 30点 结束的轮次');
   });
 
-  test('总锚点 ≤21 全量展示（不足全部展示）', () => {
+  test('总锚点 ≤21 全量展示（不足按具体数量全展示）', () => {
     const short = many.slice(0, 21);
     const html = renderToStaticMarkup(<TurnAnchorRail anchors={short} currentIndex={7} onJump={() => undefined} />);
     const ticks = html.match(/结束的轮次/g) ?? [];
     expect(ticks).toHaveLength(21);
   });
 
-  test('两端钳制：开头轮次只补后侧邻域，不平移凑满 21', () => {
-    const html = renderToStaticMarkup(<TurnAnchorRail anchors={many} currentIndex={0} onJump={() => undefined} />);
-    const ticks = html.match(/结束的轮次/g) ?? [];
-    expect(ticks).toHaveLength(11);
-    expect(html).not.toContain('查看 11点 结束的轮次');
+  test('症状回归「滚动到底部刻痕数缩水」：贴顶/贴尾平移补满恒 21 个（用户裁决 2026-09-28）', () => {
+    const atTop = renderToStaticMarkup(<TurnAnchorRail anchors={many} currentIndex={0} onJump={() => undefined} />);
+    expect(atTop.match(/结束的轮次/g) ?? []).toHaveLength(21);
+    expect(atTop).toContain('查看 20点 结束的轮次');
+    expect(atTop).not.toContain('查看 21点 结束的轮次');
+    const atBottom = renderToStaticMarkup(<TurnAnchorRail anchors={many} currentIndex={49} onJump={() => undefined} />);
+    expect(atBottom.match(/结束的轮次/g) ?? []).toHaveLength(21);
+    expect(atBottom).toContain('查看 29点 结束的轮次');
+    expect(atBottom).not.toContain('查看 28点 结束的轮次');
   });
 });
 
@@ -80,16 +84,16 @@ describe('TurnAnchorRail 焦点连续性（T55 窗口滑动不得断键盘位）
 
   test('症状回归「窗口滑动后键盘焦点掉落 body」：焦点刻痕被滑出即迁到最接近刻痕', () => {
     installDom();
-    const view = render(<TurnAnchorRail anchors={anchors} currentIndex={10} onJump={() => undefined} />);
+    const view = render(<TurnAnchorRail anchors={anchors} currentIndex={0} onJump={() => undefined} />);
     const nav = view.container.querySelector('nav');
     if (nav === null) throw new Error('rail not rendered');
     const buttons = nav.querySelectorAll('button');
-    // 窗口 t0..t20（i=10），聚焦窗口中段 t10（下标 10）
-    (buttons[10] as HTMLElement).focus();
+    // 窗口 t0..t20（i=0），聚焦 t5
+    (buttons[5] as HTMLElement).focus();
     React.act(() => {
-      view.rerender(<TurnAnchorRail anchors={anchors} currentIndex={25} onJump={() => undefined} />);
+      view.rerender(<TurnAnchorRail anchors={anchors} currentIndex={29} onJump={() => undefined} />);
     });
-    // 窗口滑到 t15..t29：t10 已卸载，焦点应迁到最接近的 t15（新窗口首格）
+    // 窗口平移到 t9..t29：t5 已卸载，焦点应迁到最接近的 t9（新窗口首格）
     const active = document.activeElement;
     expect(active).not.toBe(document.body);
     expect(nav.contains(active)).toBe(true);

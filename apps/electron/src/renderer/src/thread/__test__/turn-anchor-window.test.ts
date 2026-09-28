@@ -3,7 +3,8 @@ import { describe, expect, test } from 'bun:test';
 import { ANCHOR_WINDOW_RADIUS, turnAnchorWindow } from '../turn-anchor-window';
 import type { TurnAnchorDatum } from '../turn-anchor-data';
 
-/** 锚点带窗口（T55 用户裁决）：同屏最多 21 个刻痕 = 当前轮 ±10；两端钳制；短会话全量。 */
+/** 锚点带窗口（T55 用户裁决 2026-09-28）：总锚点 >21 时同屏恒 21 个刻痕 = 当前轮 ±10；
+ *  两端不足侧平移补满（贴顶/贴尾同样 21）；≤21 按具体数量全量展示。 */
 function anchorsOf(count: number): TurnAnchorDatum[] {
   return Array.from({ length: count }, (_, i) => ({
     id: `t${i}`,
@@ -27,32 +28,32 @@ describe('turnAnchorWindow（锚点带刻痕窗口）', () => {
     expect(turnAnchorWindow(anchors, 0)).toBe(anchors);
   });
 
-  test('首端钳制（用户裁决：不平移补足 21）：i=0 展示 t0..t10 共 11 个', () => {
+  test('贴顶平移补满：i=0 展示 t0..t20 共 21 个（恒 21 不缩水）', () => {
     const visible = turnAnchorWindow(anchorsOf(50), 0);
-    expect(visible).toHaveLength(11);
+    expect(visible).toHaveLength(21);
     expect(visible[0]?.id).toBe('t0');
-    expect(visible[10]?.id).toBe('t10');
+    expect(visible[20]?.id).toBe('t20');
   });
 
-  test('尾端钳制：i=49 展示 t39..t49 共 11 个', () => {
+  test('贴尾平移补满：i=49 展示 t29..t49 共 21 个', () => {
     const visible = turnAnchorWindow(anchorsOf(50), 49);
-    expect(visible).toHaveLength(11);
-    expect(visible[0]?.id).toBe('t39');
-    expect(visible[10]?.id).toBe('t49');
+    expect(visible).toHaveLength(21);
+    expect(visible[0]?.id).toBe('t29');
+    expect(visible[20]?.id).toBe('t49');
   });
 
-  test('前侧不足 10 条全部展示：i=3 展示 t0..t13 共 14 个', () => {
+  test('前侧不足 10 条时向后平移补满：i=3 展示 t0..t20 共 21 个', () => {
     const visible = turnAnchorWindow(anchorsOf(50), 3);
     expect(visible.map((anchor) => anchor.id)).toEqual(
-      Array.from({ length: 14 }, (_, i) => `t${i}`),
+      Array.from({ length: 21 }, (_, i) => `t${i}`),
     );
   });
 
-  test('不变量：任意下标窗口恒 ≤ 2R+1 且恒含当前条', () => {
+  test('不变量：n>21 时任意下标窗口恒 21 个且恒含当前条', () => {
     const anchors = anchorsOf(100);
     for (let i = 0; i < anchors.length; i += 1) {
       const visible = turnAnchorWindow(anchors, i);
-      expect(visible.length).toBeLessThanOrEqual(ANCHOR_WINDOW_RADIUS * 2 + 1);
+      expect(visible).toHaveLength(ANCHOR_WINDOW_RADIUS * 2 + 1);
       expect(visible.map((anchor) => anchor.id)).toContain(`t${i}`);
     }
   });
@@ -69,8 +70,9 @@ describe('turnAnchorWindow（锚点带刻痕窗口）', () => {
     expect(visible.map((anchor) => anchor.id)).toEqual(expected.map((anchor) => anchor.id));
   });
 
-  test('超大 currentIndex 钳到末条：窗口贴尾', () => {
+  test('超大 currentIndex 钳到末条：窗口贴尾且仍 21 个', () => {
     const visible = turnAnchorWindow(anchorsOf(50), 999);
+    expect(visible).toHaveLength(21);
     expect(visible[visible.length - 1]?.id).toBe('t49');
   });
 
