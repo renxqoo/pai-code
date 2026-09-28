@@ -483,6 +483,7 @@ function samplePerUiEvent(): UiEvent[] {
     { type: 'dialogRequest', threadId: t, requestId: 'r1', method: 'confirm', tool: 'bash', summary: 'npm test', reason: 'direct execution requested by client', agentName: 'explore' },
     { type: 'dialogSettled', requestId: 'r1' },
     { type: 'bashOutput', threadId: t, id: 'b1', delta: 'out', truncated: false },
+    { type: 'gitChanged', threadId: t, cwd: '/w', branch: 'main' },
   ];
 }
 
