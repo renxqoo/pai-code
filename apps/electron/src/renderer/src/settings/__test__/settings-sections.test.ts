@@ -10,6 +10,7 @@ import {
 const ALL_SECTIONS: readonly SettingsSectionId[] = [
   'general',
   'providers',
+  'devices',
   'permissions',
   'agents',
   'skills',
@@ -36,6 +37,6 @@ describe('设置分区模型', () => {
   });
 
   test('按开即读分区与无推送目录一致', () => {
-    expect([...FETCH_ON_ENTER_SECTIONS].sort()).toEqual(['agents', 'permissions', 'plugins', 'skills']);
+    expect([...FETCH_ON_ENTER_SECTIONS].sort()).toEqual(['agents', 'devices', 'permissions', 'plugins', 'skills']);
   });
 });

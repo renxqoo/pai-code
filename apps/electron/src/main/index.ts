@@ -323,6 +323,77 @@ void app.whenReady().then(async () => {
       });
     }
 
+  // T57 bridge 运行期重建（开关重开/撤销后重装）：装配参数与 try 块首装同源
+  const rebuildMobileBridge = (): void => {
+    try {
+      mobileBridge = createMobileBridge({
+        now: () => Date.now(),
+        persistToken: (token, deviceName) => {
+          const current = settings.get().mobileTokens;
+          void settings.patch({ mobileTokens: { ...current, [token]: deviceName } });
+        },
+        knownTokens: () => new Map(Object.entries(settings.get().mobileTokens)),
+        invoke: async (method, params) =>
+          routes === null ? { ok: false, error: { kind: 'transient', face: 'host_unavailable' } } : await routes.invoke(method, params),
+        serverInfo: () => ({ appVersion: app.getVersion(), hostPhase: runtime?.hostPhase() ?? null }),
+        log: (message) => logger.log(message),
+      });
+    } catch {
+      mobileBridge = null;
+    }
+  };
+
+  // T57 桌面 UI 钩子：设备页展示配对码与已连接设备；开关即时启停 bridge；
+  // 撤销 = settings.mobileTokens 删行 + 断开当前已连接会话（下次连接需重新配对）
+  ipcMain.handle('pai:mobile-state', () => ({
+    enabled: mobileBridgeEnabled,
+    pairCode: mobileBridge === null ? null : (() => {
+      const current = mobileBridge.pairing.currentCode();
+      return current === null ? null : { code: current.code, expiresAt: current.expiresAt };
+    })(),
+    lockedUntil: mobileBridge === null ? 0 : mobileBridge.pairing.lockedUntil(),
+    devices: mobileBridge === null ? [] : mobileBridge.connectedDevices(),
+    pairedCount: Object.keys(settings.get().mobileTokens).length,
+  }));
+  ipcMain.handle('pai:mobile-set-enabled', (_event, enabled: unknown) => {
+    if (typeof enabled !== 'boolean') return { ok: false as const };
+    if (enabled === mobileBridgeEnabled) return { ok: true as const };
+    mobileBridgeEnabled = enabled;
+    if (!enabled) {
+      void mobileBridge?.stop().then(() => {
+        mobileBridge = null;
+      });
+    } else {
+      rebuildMobileBridge();
+    }
+    return { ok: true as const };
+  });
+  ipcMain.handle('pai:mobile-pair-code', () => {
+    if (!mobileBridgeEnabled || mobileBridge === null) return { ok: false as const, reason: 'bridge_off' };
+    const issued = mobileBridge.pairCode();
+    return { ok: true as const, code: issued.code, expiresAt: issued.expiresAt };
+  });
+  ipcMain.handle('pai:mobile-revoke', (_event, deviceName: unknown) => {
+    if (typeof deviceName !== 'string') return { ok: false as const };
+    const tokens = settings.get().mobileTokens;
+    const kept: Record<string, string> = {};
+    let removed = false;
+    for (const [token, name] of Object.entries(tokens)) {
+      if (name === deviceName) {
+        removed = true;
+        continue;
+      }
+      kept[token] = name;
+    }
+    if (removed) void settings.patch({ mobileTokens: tokens });
+    // 撤销后断开全部已连接会话（令牌已无效——立即生效，不等自然断开）
+    void mobileBridge?.stop().then(() => {
+      mobileBridge = null;
+      if (mobileBridgeEnabled) rebuildMobileBridge();
+    });
+    return { ok: removed as boolean };
+  });
+
     await runtime.start();
   } catch (error) {
     logger.log(`runtime_start_failed:${error instanceof Error ? error.message : String(error)}`);
@@ -344,26 +415,6 @@ void app.whenReady().then(async () => {
   }
 
   // T57 桌面 UI 钩子：设备页展示配对码与已连接设备；开关即时启停 bridge
-  ipcMain.handle('pai:mobile-state', () => ({
-    enabled: mobileBridgeEnabled,
-    pairCode: mobileBridge === null ? null : (() => {
-      const current = mobileBridge.pairing.currentCode();
-      return current === null ? null : { code: current.code, expiresAt: current.expiresAt };
-    })(),
-    lockedUntil: mobileBridge === null ? 0 : mobileBridge.pairing.lockedUntil(),
-    devices: mobileBridge === null ? [] : mobileBridge.connectedDevices(),
-  }));
-  ipcMain.handle('pai:mobile-set-enabled', (_event, enabled: unknown) => {
-    if (typeof enabled !== 'boolean') return { ok: false as const };
-    if (enabled === mobileBridgeEnabled) return { ok: true as const };
-    mobileBridgeEnabled = enabled;
-    if (!enabled) {
-      void mobileBridge?.stop().then(() => {
-        mobileBridge = null;
-      });
-    }
-    return { ok: true as const };
-  });
 
   ipcMain.handle('pai:invoke', (_event, payload: unknown) => {
     if (typeof payload !== 'object' || payload === null) {
