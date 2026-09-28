@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'electron-vite';
 
+import { failOnUnresolvedImportsPlugin } from './vite-plugin-fail-on-unresolved';
 import { slimFontsPlugin } from './vite-plugin-slim-fonts';
 
 /**
@@ -16,6 +17,16 @@ const minifiedBuild = { minify: 'esbuild' } as const;
 
 export default defineConfig({
   main: {
+    plugins: [failOnUnresolvedImportsPlugin()],
+    // ws 的可选原生加速包（bufferutil/utf-8-validate）未安装且不应安装（Electron ABI
+    // 需原生重编）。rollup 若把 ws 在 try/catch 内的这两个 require 转成静态导入，
+    // 构建器会生成「导入即 throw」的桩模块，主进程一加载就崩；用 ws 官方开关做
+    // 常量替换让 require 构建期死代码消除（不依赖互操作路径选择），运行时走纯 JS
+    // mask/unmask 与 node:buffer 的 isUtf8。
+    define: {
+      'process.env.WS_NO_BUFFER_UTIL': '"1"',
+      'process.env.WS_NO_UTF_8_VALIDATE': '"1"',
+    },
     // v5 默认外部化全部 dependencies（含 workspace 包）→ node 直载 .ts 失败；这里显式打包。
     // 显式 input 走普通构建（不设 input 时 electron-vite 走 lib 模式，而 vite 对
     // ES lib 构建跳过空白压缩，产物体积是全量压缩的两倍）
@@ -31,6 +42,7 @@ export default defineConfig({
   // 沙箱渲染进程的 preload 必须是 CJS（ESM preload 在 sandbox 下加载失败）；
   // cjs lib 构建不受 vite 空白压缩豁免影响
   preload: {
+    plugins: [failOnUnresolvedImportsPlugin()],
     build: {
       externalizeDeps: false,
       ...minifiedBuild,
@@ -44,7 +56,7 @@ export default defineConfig({
     },
   },
   renderer: {
-    plugins: [react(), tailwindcss(), slimFontsPlugin()],
+    plugins: [react(), tailwindcss(), slimFontsPlugin(), failOnUnresolvedImportsPlugin()],
     resolve: {
       alias: {
         '@': resolve(__dirname, 'src/renderer/src'),
