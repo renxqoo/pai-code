@@ -6,6 +6,30 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import type { RatchetBoundaryStore } from './ratchet-codec';
 
+/** 安全存储面：原生走 SecureStore；web 形态降级 AsyncStorage（浏览器本地隔离——
+ *  relay 凭证非明文密码形态，web 降级为一期可接受面，真机仍 SecureStore）。 */
+const secureGet = async (key: string): Promise<string | null> => {
+  try {
+    return await SecureStore.getItemAsync(key);
+  } catch {
+    return AsyncStorage.getItem(key);
+  }
+};
+const secureSet = async (key: string, value: string): Promise<void> => {
+  try {
+    await SecureStore.setItemAsync(key, value);
+  } catch {
+    await AsyncStorage.setItem(key, value);
+  }
+};
+const secureDelete = async (key: string): Promise<void> => {
+  try {
+    await SecureStore.deleteItemAsync(key);
+  } catch {
+    await AsyncStorage.removeItem(key);
+  }
+};
+
 const KEY_DEVICE = 'pai.relay.device';
 const KEY_SHARED = 'pai.relay.shared';
 const KEY_ENDPOINT = 'pai.relay.endpoint';
@@ -18,6 +42,8 @@ export interface RelayCredentials {
   sharedSecretHex: string;
   installationId: string;
   relayUrl: string;
+  /** relay WS 连接 token（kind:device——ack 帧下发；过期后需重新配对/刷新）。 */
+  relayToken: string;
 }
 
 /** KV 注入（MMKV 形态：同步 get/set；测试内存实现）。 */
@@ -46,12 +72,12 @@ export function setRatchetKv(next: SyncKv): void {
 export async function preloadRelayCredentials(): Promise<RelayCredentials | null> {
   try {
     const [device, shared, endpoint] = await Promise.all([
-      SecureStore.getItemAsync(KEY_DEVICE),
-      SecureStore.getItemAsync(KEY_SHARED),
+      secureGet(KEY_DEVICE),
+      secureGet(KEY_SHARED),
       AsyncStorage.getItem(KEY_ENDPOINT),
     ]);
     if (device === null || shared === null) return null;
-    const identity = JSON.parse(device) as { deviceId: string; signingSecret: string; signingPub: string; installationId: string };
+    const identity = JSON.parse(device) as { deviceId: string; signingSecret: string; signingPub: string; installationId: string; relayToken?: string };
     const endpointParsed = endpoint === null ? null : (JSON.parse(endpoint) as { relayUrl: string });
     const credentials: RelayCredentials = {
       deviceId: identity.deviceId,
@@ -60,6 +86,7 @@ export async function preloadRelayCredentials(): Promise<RelayCredentials | null
       sharedSecretHex: shared,
       installationId: identity.installationId,
       relayUrl: endpointParsed?.relayUrl ?? '',
+      relayToken: identity.relayToken ?? '',
     };
     cached = credentials;
     return credentials;
@@ -78,8 +105,8 @@ export const relayCredentialsStore = {
     cached = next;
     try {
       await Promise.all([
-        SecureStore.setItemAsync(KEY_DEVICE, JSON.stringify({ deviceId: next.deviceId, signingSecret: next.signingSecret, signingPub: next.signingPub, installationId: next.installationId })),
-        SecureStore.setItemAsync(KEY_SHARED, next.sharedSecretHex),
+        secureSet(KEY_DEVICE, JSON.stringify({ deviceId: next.deviceId, signingSecret: next.signingSecret, signingPub: next.signingPub, installationId: next.installationId, relayToken: next.relayToken })),
+        secureSet(KEY_SHARED, next.sharedSecretHex),
         AsyncStorage.setItem(KEY_ENDPOINT, JSON.stringify({ relayUrl: next.relayUrl })),
       ]);
       return true;
@@ -91,7 +118,7 @@ export const relayCredentialsStore = {
   async clear(): Promise<void> {
     cached = null;
     try {
-      await Promise.all([SecureStore.deleteItemAsync(KEY_DEVICE), SecureStore.deleteItemAsync(KEY_SHARED), AsyncStorage.removeItem(KEY_ENDPOINT)]);
+      await Promise.all([secureDelete(KEY_DEVICE), secureDelete(KEY_SHARED), AsyncStorage.removeItem(KEY_ENDPOINT)]);
     } catch {
       // 清理失败：缓存已空（下次预载拿不到凭证）
     }

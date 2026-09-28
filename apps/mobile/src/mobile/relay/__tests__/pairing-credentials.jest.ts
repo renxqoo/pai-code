@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from '@jest/globals';
 
 import { createPairingSession, generateDeviceIdentity, type PairingWire } from '../pairing';
+import { pakeRespond } from '@paiapp/relay-protocol';
 import { relayCredentialsStore, setRatchetKv, createKvRatchetStore } from '../credentials';
 
 /** 内存配对线（gateway pairing-server 模拟）。 */
@@ -8,6 +9,7 @@ function makeWire() {
   const listeners = new Set<(message: Record<string, unknown>) => void>();
   const sent: Array<Record<string, unknown>> = [];
   const wire: PairingWire & { serverReply(message: Record<string, unknown>): void; sentOf(): Array<Record<string, unknown>> } = {
+    opened: () => Promise.resolve(true),
     send: (line) => {
       const env = JSON.parse(line) as { payload?: string; from?: string; to?: string };
       sent.push(JSON.parse(Buffer.from(env.payload as string, 'base64').toString('utf8')) as Record<string, unknown>);
@@ -143,5 +145,133 @@ describe('credentials（T58）', () => {
     const loaded = await store.loadSend('dev_1');
     expect(loaded).toMatchObject({ nextIndex: 64 });
     expect(await store.loadRecv('dev_1')).toBeNull();
+  });
+});
+
+describe('pairing ack token 旅程（WIRE 设备注册收尾回归）', () => {
+  it('裸 ack → 重呈轮询；带 relayToken ack → registered resolve', async () => {
+    const wire = makeWire();
+    const session = createPairingSession({
+      wire,
+      endpoints: { relayUrl: 'wss://r', installationId: 'gw1' },
+      pairingId: 'pr_ack1',
+      deviceInfo: { name: 'x', deviceType: 'phone', platform: 'ios', appVersion: '1' },
+    });
+    // 手输码路径建立 shared
+    await session.startManual('abcd1234', 'x');
+    // gateway 侧 pake 应答（pake-b 帧 → 手机 shared 建立）
+    const pakeAFrame = wire.sentOf().find((f) => f['p'] === 'pake-a');
+    const resp = pakeRespond('abcd1234', typeof pakeAFrame?.['pakeA'] === 'string' ? (pakeAFrame['pakeA'] as string) : '');
+    wire.serverReply({ p: 'pake-b', pakeB: resp.message, confirm: 'any' });
+    await new Promise((r) => {
+      setTimeout(r, 30);
+    });
+    const keys = generateDeviceIdentity();
+    const registeredPromise = session.waitRegistered(1500);
+    await session.submitDeviceKeys(keys);
+    // 裸 ack（confirm 未落账）
+    wire.serverReply({ p: 'ack' });
+    await new Promise((r) => {
+      setTimeout(r, 50);
+    });
+    // 重呈发生（至少再发一次 device-keys）
+    const frames = wire.sentOf();
+    const deviceKeysCount = frames.filter((f) => f['p'] === 'device-keys').length;
+    expect(deviceKeysCount).toBeGreaterThanOrEqual(1);
+    // confirm 后的 ack 携 token → registered
+    wire.serverReply({ p: 'ack', relayToken: 'devtok_x', deviceId: 'd_ack1' });
+    const registered = await registeredPromise;
+    expect(registered.ok).toBe(true);
+    expect(session.relayToken).toBe('devtok_x');
+    expect(session.registeredDeviceId).toBe('d_ack1');
+    session.close();
+  });
+
+  it('waitRegistered 在 ack 早到时立即返回（时序解耦）', async () => {
+    const wire = makeWire();
+    const session = createPairingSession({
+      wire,
+      endpoints: { relayUrl: 'wss://r', installationId: 'gw1' },
+      pairingId: 'pr_ack2',
+      deviceInfo: { name: 'x', deviceType: 'phone', platform: 'ios', appVersion: '1' },
+    });
+    await session.startManual('abcd1234', 'x');
+    const pakeAFrame = wire.sentOf().find((f) => f['p'] === 'pake-a');
+    const resp = pakeRespond('abcd1234', typeof pakeAFrame?.['pakeA'] === 'string' ? (pakeAFrame['pakeA'] as string) : '');
+    wire.serverReply({ p: 'pake-b', pakeB: resp.message, confirm: 'any' });
+    await new Promise((r) => {
+      setTimeout(r, 30);
+    });
+    const keys = generateDeviceIdentity();
+    await session.submitDeviceKeys(keys);
+    wire.serverReply({ p: 'ack', relayToken: 'tok_early', deviceId: 'd2' });
+    await new Promise((r) => {
+      setTimeout(r, 30);
+    });
+    const registered = await session.waitRegistered(300);
+    expect(registered.ok).toBe(true);
+    session.close();
+  });
+});
+
+describe('pairing ack token 旅程（WIRE 设备注册收尾回归）', () => {
+  it('裸 ack → 重呈轮询；带 relayToken ack → registered resolve', async () => {
+    const wire = makeWire();
+    const session = createPairingSession({
+      wire,
+      endpoints: { relayUrl: 'wss://r', installationId: 'gw1' },
+      pairingId: 'pr_ack1',
+      deviceInfo: { name: 'x', deviceType: 'phone', platform: 'ios', appVersion: '1' },
+    });
+    await session.startManual('abcd1234', 'x');
+    // gateway 侧 pake 应答（pake-b 帧 → 手机 shared 建立）
+    const pakeAFrame = wire.sentOf().find((f) => f['p'] === 'pake-a');
+    const resp = pakeRespond('abcd1234', typeof pakeAFrame?.['pakeA'] === 'string' ? (pakeAFrame['pakeA'] as string) : '');
+    wire.serverReply({ p: 'pake-b', pakeB: resp.message, confirm: 'any' });
+    await new Promise((r) => {
+      setTimeout(r, 30);
+    });
+    const keys = generateDeviceIdentity();
+    const registeredPromise = session.waitRegistered(1500);
+    await session.submitDeviceKeys(keys);
+    wire.serverReply({ p: 'ack' });
+    await new Promise((r) => {
+      setTimeout(r, 50);
+    });
+    const frames = wire.sentOf();
+    const deviceKeysCount = frames.filter((f) => f['p'] === 'device-keys').length;
+    expect(deviceKeysCount).toBeGreaterThanOrEqual(1);
+    wire.serverReply({ p: 'ack', relayToken: 'devtok_x', deviceId: 'd_ack1' });
+    const registered = await registeredPromise;
+    expect(registered.ok).toBe(true);
+    expect(session.relayToken).toBe('devtok_x');
+    expect(session.registeredDeviceId).toBe('d_ack1');
+    session.close();
+  });
+
+  it('waitRegistered 在 ack 早到时立即返回（时序解耦）', async () => {
+    const wire = makeWire();
+    const session = createPairingSession({
+      wire,
+      endpoints: { relayUrl: 'wss://r', installationId: 'gw1' },
+      pairingId: 'pr_ack2',
+      deviceInfo: { name: 'x', deviceType: 'phone', platform: 'ios', appVersion: '1' },
+    });
+    await session.startManual('abcd1234', 'x');
+    const pakeAFrame = wire.sentOf().find((f) => f['p'] === 'pake-a');
+    const resp = pakeRespond('abcd1234', typeof pakeAFrame?.['pakeA'] === 'string' ? (pakeAFrame['pakeA'] as string) : '');
+    wire.serverReply({ p: 'pake-b', pakeB: resp.message, confirm: 'any' });
+    await new Promise((r) => {
+      setTimeout(r, 30);
+    });
+    const keys = generateDeviceIdentity();
+    await session.submitDeviceKeys(keys);
+    wire.serverReply({ p: 'ack', relayToken: 'tok_early', deviceId: 'd2' });
+    await new Promise((r) => {
+      setTimeout(r, 30);
+    });
+    const registered = await session.waitRegistered(300);
+    expect(registered.ok).toBe(true);
+    session.close();
   });
 });

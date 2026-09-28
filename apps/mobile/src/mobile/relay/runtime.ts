@@ -366,7 +366,7 @@ export async function bootstrapRelayRuntime(): Promise<void> {
   void initializeRelayRuntime();
   if (credentials === null) return;
   // relay token：配对产物（gateway enroll token 换发——一期由 pairing 写入凭证同存）
-  runtime?.connectWithCredentials(credentials.sharedSecretHex);
+  runtime?.connectWithCredentials(credentials.relayToken);
 }
 
 /** RN socket 工厂（token query——relay 鉴权面）。 */

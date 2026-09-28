@@ -43,6 +43,9 @@ export type PairingStep =
 
 export interface PairingSessionLike {
   readonly pairingId: string;
+  /** ack 下发的 relay 连接 token / 注册 deviceId（未到 ack 时 null）。 */
+  readonly relayToken: string | null;
+  readonly registeredDeviceId: string | null;
   /** SAS 6 位（目视比对——桌面 owner 端输入确认）。 */
   readonly sas: string | null;
   /** 步进回调（UI 驱动面）；返回退订。 */
@@ -57,7 +60,13 @@ export interface PairingSessionLike {
 }
 
 /** pairing 面帧收发（relay /pairing——明文 L3 信封）。 */
+interface DeviceIdentityLike {
+  signingPub: string;
+}
+
 export interface PairingWire {
+  /** socket open 等待面（CONNECTING 态 send 在浏览器抛 InvalidStateError——必须先等）。 */
+  opened(): Promise<boolean>;
   send(payload: unknown): void;
   /** 下行消息（p 帧已解出）。 */
   onMessage: (listener: (message: Record<string, unknown>) => void) => () => void;
@@ -69,6 +78,7 @@ export function createPairingSession(spec: {
   wire: PairingWire;
   endpoints: PairingEndpoints;
   pairingId: string;
+  /** 网关安装 id（gw_<id> 路由地址域——载荷缺失时配对不可达，构造即拒）。 */
   /** QR 路径：gateway 临时公钥（qrPayload.gatewayEphemeralPub）。 */
   gatewayEphemeralPub?: string;
   deviceInfo: { name: string; deviceType: string; platform: string; appVersion: string };
@@ -78,6 +88,22 @@ export function createPairingSession(spec: {
   let sharedSecret: string | null = null;
   let pakeState: { state: { secret: string; code: string }; message: string } | null = null;
   const listeners = new Set<(step: PairingStep) => void>();
+  /** ack 帧下发的连接凭据（WIRE 设备注册收尾）。 */
+  let ackRelayToken: string | null = null;
+  let ackDeviceIdValue: string | null = null;
+  let lastDeviceKeys: DeviceIdentityLike | null = null;
+  let resendTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** owner confirm 等待窗：裸 ack 后每秒重呈 device-keys（confirm 落账的探测轮询）。 */
+  function scheduleDeviceKeysResend(): void {
+    if (resendTimer !== null || lastDeviceKeys === null) return;
+    resendTimer = setTimeout(() => {
+      resendTimer = null;
+      if (ackRelayToken !== null || lastDeviceKeys === null) return;
+      sendNow({ p: 'device-keys', longTermPub: lastDeviceKeys.signingPub });
+      scheduleDeviceKeysResend();
+    }, 1000);
+  }
   let registeredResolve: ((value: { ok: true; sharedSecret: string } | { ok: false; reason: string }) => void) | null = null;
 
   const emit = (step: PairingStep): void => {
@@ -85,6 +111,16 @@ export function createPairingSession(spec: {
   };
 
   const sendFrame = (payload: unknown): void => {
+    void spec.wire.opened().then((open) => {
+      if (!open) {
+        emit({ phase: 'failed', reason: 'not_open' });
+        return;
+      }
+      sendNow(payload);
+    });
+  };
+
+  const sendNow = (payload: unknown): void => {
     const env = encodeEnvelope({
       v: 1,
       from: `pairing_${spec.pairingId}`,
@@ -109,22 +145,38 @@ export function createPairingSession(spec: {
         const shared = pakeFinalize(pakeState.state, message['pakeB']);
         sharedSecret = shared;
         if (typeof message['confirm'] === 'string') {
-          const ok = pakeConfirmVerify(shared, 'gateway-confirm', message['confirm']);
+          // 网关 confirm 转录 = pairingId（WIRE 手输码路径契约）
+          const ok = pakeConfirmVerify(shared, spec.pairingId, message['confirm'] as string);
           if (!ok) {
             emit({ phase: 'failed', reason: 'confirm_mismatch' });
             return;
           }
         }
-        const confirmBack = pakeConfirm(shared, 'device-confirm');
-        sendFrame({ p: 'device-confirm', confirm: confirmBack, deviceInfo: spec.deviceInfo });
-        sas = sasOf(shared, spec.pairingId);
+        // gateway 下发的 sas 是目视比对唯一真相（本地推导仅兜底）
+        const gatewaySas = typeof message['sas'] === 'string' ? (message['sas'] as string) : '';
+        sas = gatewaySas.length > 0 ? gatewaySas : sasOf(shared, spec.pairingId);
         emit({ phase: 'sas-shown', sas: sas ?? '' });
         emit({ phase: 'awaiting-owner' });
       }
     } else if (p === 'ack') {
-      // device-keys 受理（owner confirm 后 gateway 落账 → ready 见 waitRegistered）
+      // ack 带 relayToken = owner 已 confirm 且注册落账（WIRE 设备注册收尾）
+      const relayToken = typeof message['relayToken'] === 'string' ? (message['relayToken'] as string) : null;
+      const ackDeviceId = typeof message['deviceId'] === 'string' ? (message['deviceId'] as string) : null;
+      if (relayToken === null || relayToken.length === 0) {
+        // 裸 ack：owner 尚未 confirm——等待窗口内重呈 device-keys（confirm 后 ack 携 token）
+        scheduleDeviceKeysResend();
+        return;
+      }
+      if (resendTimer !== null) {
+        clearTimeout(resendTimer);
+        resendTimer = null;
+      }
+      ackRelayToken = relayToken;
+      if (ackDeviceId !== null) ackDeviceIdValue = ackDeviceId;
       emit({ phase: 'registered' });
-      registeredResolve?.(sharedSecret === null ? { ok: false, reason: 'no_shared' } : { ok: true, sharedSecret });
+      const waiter = registeredResolve;
+      registeredResolve = null;
+      waiter?.(sharedSecret === null ? { ok: false, reason: 'no_shared' } : { ok: true, sharedSecret });
     } else if (p === 'rejected') {
       emit({ phase: 'failed', reason: typeof message['reason'] === 'string' ? (message['reason'] as string) : 'rejected' });
     }
@@ -142,6 +194,12 @@ export function createPairingSession(spec: {
 
   return {
     pairingId: spec.pairingId,
+    get relayToken() {
+      return ackRelayToken;
+    },
+    get registeredDeviceId() {
+      return ackDeviceIdValue;
+    },
     get sas() {
       return sas;
     },
@@ -165,20 +223,23 @@ export function createPairingSession(spec: {
     },
     async submitDeviceKeys(keys) {
       await Promise.resolve();
+      lastDeviceKeys = keys;
       sendFrame({ p: 'device-keys', longTermPub: keys.signingPub });
     },
     waitRegistered(timeoutMs = 60_000) {
+      // ack 已到（注册完成）→ 立即返回（submitDeviceKeys 与 waitRegistered 间的时序解耦）
+      if (ackRelayToken !== null) {
+        return Promise.resolve(sharedSecret === null ? { ok: false, reason: 'no_shared' } : { ok: true, sharedSecret });
+      }
       return new Promise((resolve) => {
         const timer = setTimeout(() => {
           registeredResolve = null;
           resolve({ ok: false, reason: 'timeout' });
         }, timeoutMs);
-        const previous = registeredResolve;
         registeredResolve = (value) => {
           clearTimeout(timer);
           resolve(value);
         };
-        void previous;
       });
     },
     close() {

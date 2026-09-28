@@ -22,7 +22,21 @@ const STATUS_LABEL: Record<string, string> = {
 function makePairingWire(relayUrl: string, pairingTicket: string) {
   const ws = new WebSocket(`${relayUrl}/pairing?token=${encodeURIComponent(pairingTicket)}`);
   const listeners = new Set<(message: Record<string, unknown>) => void>();
+  let openedResolve: ((open: boolean) => void) | null = null;
+  const openedPromise = new Promise<boolean>((resolve) => {
+    openedResolve = resolve;
+  });
+  ws.onopen = () => {
+    openedResolve?.(true);
+  };
+  ws.onerror = () => {
+    openedResolve?.(false);
+  };
+  ws.onclose = () => {
+    openedResolve?.(false);
+  };
   return {
+    opened: () => openedPromise,
     send(line: string): void {
       ws.send(line);
     },
@@ -58,6 +72,7 @@ export default function DevicesRoute() {
   const { status, runtime } = useRelayStatus();
   const [relayHost, setRelayHost] = React.useState('');
   const [pairCode, setPairCode] = React.useState('');
+  const [pairPayload, setPairPayload] = React.useState('');
   const [pairing, setPairing] = React.useState(false);
   const [pairError, setPairError] = React.useState<string | null>(null);
   const [sas, setSas] = React.useState<string | null>(null);
@@ -65,7 +80,7 @@ export default function DevicesRoute() {
 
   const connected = status === 'connected' || status === 'ready';
 
-  const pairWithTicket = async (relayUrl: string, pairingId: string, ticket: string, gatewayEphemeralPub?: string, manualCode?: string): Promise<void> => {
+  const pairWithTicket = async (relayUrl: string, pairingId: string, installationId: string, ticket: string, gatewayEphemeralPub?: string, manualCode?: string): Promise<void> => {
     setPairing(true);
     setPairError(null);
     setSas(null);
@@ -75,7 +90,7 @@ export default function DevicesRoute() {
       const identity = generateDeviceIdentity();
       const session = createPairingSession({
         wire: wire as never,
-        endpoints: { relayUrl, installationId: '' },
+        endpoints: { relayUrl, installationId },
         pairingId,
         ...(gatewayEphemeralPub !== undefined ? { gatewayEphemeralPub } : {}),
         deviceInfo: { name: identity.deviceId, deviceType: 'phone', platform: 'ios', appVersion: '1' },
@@ -96,17 +111,18 @@ export default function DevicesRoute() {
         return;
       }
       const saved = await relayCredentialsStore.save({
-        deviceId: identity.deviceId,
+        deviceId: session.registeredDeviceId ?? identity.deviceId,
         signingSecret: identity.signingSecret,
         signingPub: identity.signingPub,
         sharedSecretHex: registered.sharedSecret,
-        installationId: '',
+        installationId,
         relayUrl,
+        relayToken: session.relayToken ?? '',
       });
       if (!saved) setPairError('凭证保存失败（本会话可用，重启后需重新配对）');
       setHasCredentials(true);
       session.close();
-      initializeRelayRuntime().connectWithCredentials(registered.sharedSecret);
+      initializeRelayRuntime().connectWithCredentials(session.relayToken ?? '');
     } catch (error) {
       setPairError(error instanceof Error ? error.message : '配对失败');
     } finally {
@@ -157,7 +173,21 @@ export default function DevicesRoute() {
           <Text style={{ color: colors.textMuted, fontSize: 12, paddingHorizontal: 3, paddingBottom: spacing.sm }}>尚未配对——在桌面端「设置 → 设备与连接」发起配对，然后扫码或输入配对码。</Text>
         )}
 
-        <SectionHeader title="配对（输入 8 位码）" />
+        <SectionHeader title="配对（扫码载荷或 8 位码）" />
+        <View style={{ backgroundColor: colors.surface, borderRadius: radius.lg, marginBottom: spacing.xs2, paddingHorizontal: 12 }}>
+          <TextInput
+            accessibilityLabel="配对载荷"
+            autoCapitalize="none"
+            autoCorrect={false}
+            onChangeText={(value) => setPairPayload(value.trim())}
+            placeholder="粘贴桌面端配对码（{relayUrl,pairingId,…}）
+或手输 8 位码 + relay 地址"
+            placeholderTextColor={colors.textFaint}
+            multiline
+            style={{ color: colors.text, fontSize: 13, minHeight: 60, padding: 10, textAlignVertical: 'top' }}
+            value={pairPayload}
+          />
+        </View>
         <View style={{ backgroundColor: colors.surface, borderRadius: radius.lg, marginBottom: spacing.xs2, paddingHorizontal: 12 }}>
           <TextInput
             accessibilityLabel="配对码"
@@ -177,7 +207,7 @@ export default function DevicesRoute() {
             autoCapitalize="none"
             autoCorrect={false}
             onChangeText={(value) => setRelayHost(value.trim())}
-            placeholder="relay 地址（如 relay.example.com）"
+            placeholder="relay 地址（如 relay.example.com 或 ws://ip:端口）"
             placeholderTextColor={colors.textFaint}
             style={{ color: colors.text, fontSize: 14, minHeight: 46 }}
             value={relayHost}
@@ -185,12 +215,29 @@ export default function DevicesRoute() {
         </View>
         <Button
           containerStyle={{ flex: 1 }}
-          disabled={pairing || pairCode.replace('-', '').length !== 8 || relayHost.length === 0}
+          disabled={pairing || pairPayload.length === 0}
           label={pairing ? '配对中…' : '配对'}
           onPress={() => {
-            const normalized = pairCode.replace('-', '');
             // 手输码路径：gateway 经 relay 转发配对面（pairingTicket 由桌面端发起时生成）
-            void pairWithTicket(`wss://${relayHost}`, `pr_manual_${Date.now()}`, '', undefined, normalized);
+            if (pairPayload.length > 0) {
+              try {
+                const payload = JSON.parse(pairPayload) as { relayUrl?: string; pairingId?: string; installationId?: string; gatewayEphemeralPub?: string; pairingTicket?: string; code?: string };
+                if (typeof payload.relayUrl === 'string' && typeof payload.pairingId === 'string' && typeof payload.installationId === 'string' && payload.installationId.length > 0) {
+                  void pairWithTicket(payload.relayUrl, payload.pairingId, payload.installationId, payload.pairingTicket ?? '', typeof payload.gatewayEphemeralPub === 'string' ? payload.gatewayEphemeralPub : undefined, typeof payload.code === 'string' ? payload.code : undefined);
+                  return;
+                }
+                setPairError('配对载荷缺少 relayUrl/pairingId/installationId');
+                return;
+              } catch {
+                setPairError('配对载荷不是合法 JSON');
+                return;
+              }
+            }
+            if (relayHost.length === 0) {
+              setPairError('手输码模式需同时填 relay 地址');
+              return;
+            }
+            setPairError('手输码模式需配对载荷（含 installationId）——从桌面端复制完整配对码');
           }}
           size="small"
         />
