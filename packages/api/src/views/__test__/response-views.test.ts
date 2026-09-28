@@ -428,4 +428,17 @@ describe('threadListRows（thread/list 顶层数组）', () => {
     expect(threadListRows({ threads: [{ threadId: 't', state: 'live' }] })).toEqual([]);
     expect(threadListRows(null)).toEqual([]);
   });
+
+  test('gitBranch 透传（string 在场）与非 string/空串降级键省略（hub 旧版无键天然兼容）', () => {
+    const rows = threadListRows([
+      { threadId: 'wt', cwd: '/wt/x', sessionPath: null, state: 'live', isStreaming: false, idleMs: 0, rssBytes: null, keepalive: false, gitBranch: 'feat/worktree-context' },
+      { threadId: 'num', cwd: '/w', sessionPath: null, state: 'live', isStreaming: false, idleMs: 0, rssBytes: null, keepalive: false, gitBranch: 42 },
+      { threadId: 'empty', cwd: '/w', sessionPath: null, state: 'live', isStreaming: false, idleMs: 0, rssBytes: null, keepalive: false, gitBranch: '' },
+      { threadId: 'absent', cwd: '/w', sessionPath: null, state: 'live', isStreaming: false, idleMs: 0, rssBytes: null, keepalive: false },
+    ]);
+    expect(rows[0]).toMatchObject({ threadId: 'wt', gitBranch: 'feat/worktree-context' });
+    expect('gitBranch' in rows[1]).toBe(false);
+    expect('gitBranch' in rows[2]).toBe(false);
+    expect('gitBranch' in rows[3]).toBe(false);
+  });
 });

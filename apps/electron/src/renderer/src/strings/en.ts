@@ -299,6 +299,8 @@ export const en = {
     filterParked: 'Parked',
     filterDead: 'Faulted',
     columnSession: 'Conversation',
+    /** 会话副行：项目名 + git 分支（分支在场才拼接——worktree/分支如实呈现） */
+    sessionSubline: (project: string, branch: string | null): string => (branch === null ? project : `${project} @ ${branch}`),
     columnState: 'State',
     columnIdle: 'Idle',
     columnModel: 'Model',

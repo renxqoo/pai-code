@@ -1,6 +1,10 @@
 export default {
   preset: 'jest-expo',
   setupFiles: ['<rootDir>/src/test/jest-setup.ts'],
+  // workspace TS 源（packages/contracts 等）经 babel transform 后 require 的
+  // @babel/runtime helper 从源文件目录向上 resolve 不到（根 node_modules 未装、
+  // mobile 局部安装够不着）——显式纳入本包 node_modules 搜索路径
+  moduleDirectories: ['node_modules', '<rootDir>/node_modules'],
   moduleNameMapper: {
     '^lucide-react-native$': '<rootDir>/../../node_modules/.bun/lucide-react-native@1.48.0+9223a27d1052a3bf/node_modules/lucide-react-native/dist/cjs/lucide-react-native.js',
     // marked 只发 ESM（type: module，Jest 29 CJS require 拒载）：走原生 require(ESM) 垫片（见 marked-shim.cjs）
