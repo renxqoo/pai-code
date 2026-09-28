@@ -30,9 +30,10 @@ function RuntimeWorkerRow({ row, onStop, onRetire, onForceRetire, onToggleKeepal
       <td className={cn(cellClass, 'min-w-[160px]')}>
         <div className="flex min-w-0 flex-col gap-[3px]">
           <span className="truncate text-[12px] leading-none font-medium text-foreground">{row.title}</span>
-          {/* 副行 = 项目名 @ git 分支（分支现算随轮询跟随——worktree 工作如实呈现） */}
+          {/* 副行 = [wt] 项目名 @ 分支 — 主仓名（worktree 会话归属可辨——cwd 含
+              worktrees 目录段即徽标；分支现算随轮询/git/changed 跟随） */}
           <span className="truncate text-[10.5px] leading-none text-muted-foreground" title={row.cwd}>
-            {copy.runtime.sessionSubline(projectNameOf(row), row.gitBranch ?? null)}
+            {copy.runtime.sessionSubline(projectNameOf(row), row.gitBranch ?? null, worktreeNameOf(row.cwd))}
           </span>
         </div>
       </td>
@@ -108,6 +109,12 @@ function menuItems(row: RuntimeWorkerRow): readonly MenuItemDef[] {
     { kind: 'separator' },
     { kind: 'item', id: 'force', label: copy.runtime.actionForceRecycle },
   ];
+}
+
+/** worktree 归属名（cwd 的 .x-harness-worktrees/<name> 段；非 worktree → null） */
+function worktreeNameOf(cwd: string): string | null {
+  const m = /\/([^/]+)\/\.x-harness-worktrees\/([^/]+)/.exec(cwd);
+  return m?.[2] ?? null;
 }
 
 function projectNameOf(row: RuntimeWorkerRow): string {

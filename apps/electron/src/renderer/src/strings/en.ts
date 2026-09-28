@@ -306,7 +306,7 @@ export const en = {
     filterDead: 'Faulted',
     columnSession: 'Conversation',
     /** 会话副行：项目名 + git 分支（分支在场才拼接——worktree/分支如实呈现） */
-    sessionSubline: (project: string, branch: string | null): string => (branch === null ? project : `${project} @ ${branch}`),
+    sessionSubline: (project: string, branch: string | null, worktree?: string | null): string => (worktree !== null && worktree !== undefined ? `[wt] ${project}${branch === null ? '' : ` @ ${branch}`} — ${worktree}` : branch === null ? project : `${project} @ ${branch}`),
     columnState: 'State',
     columnIdle: 'Idle',
     columnModel: 'Model',
