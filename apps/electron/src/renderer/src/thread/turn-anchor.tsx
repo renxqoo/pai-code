@@ -1,3 +1,5 @@
+import * as React from 'react';
+
 import { copy } from '@/strings';
 
 type TurnAnchorProps = {
@@ -5,22 +7,36 @@ type TurnAnchorProps = {
   time: string
   /** 轮次内容摘要（空串时 tooltip 只展示时刻） */
   summary: string
-  /** 点击锚点：把该轮滚入消息流视口 */
+  /** 锚点跳转：把该轮滚入消息流视口 */
   onJump: () => void
 }
 
 /**
  * 锚点带行内条目：常显轻量刻痕（14px 短条），悬停/聚焦时动画变长（22px）变实，
- * 同时浮出「时刻 + 摘要」气泡，点击把该轮滚入视口。定位（栏沟/垂直排列）由
+ * 同时浮出「时刻 + 摘要」气泡，按下把该轮滚入视口。定位（栏沟/垂直排列）由
  * TurnAnchorRail 负责，本组件只管一行刻痕自身；窄视口（<1280px）无栏沟，
  * 由 Rail 整体隐藏而不是留下半个被裁切的标记。
+ *
+ * 跳转在 pointerdown（按下）而非 click（抬起）触发：按下瞬间刻痕身份即定标，
+ * 避免按下后到抬起前窗口位移把同一位重的刻痕换成另一轮（跳错消息）。
+ * 键盘/辅助技术无指针事件，走合成 click（detail 0）兜底；指针链路的 click
+ * （detail ≥ 1）已在按下时跳过，不重发。
  */
 function TurnAnchor({ time, summary, onJump }: TurnAnchorProps) {
+  const handlePointerDown = (event: React.PointerEvent): void => {
+    if (event.button !== 0) return;
+    onJump();
+  };
+  const handleClick = (event: React.MouseEvent): void => {
+    if (event.detail > 0) return;
+    onJump();
+  };
   return (
     <button
       type="button"
       aria-label={copy.flow.turnAnchorAria(time)}
-      onClick={onJump}
+      onPointerDown={handlePointerDown}
+      onClick={handleClick}
       className="group relative flex h-[10px] w-[22px] cursor-pointer items-center justify-start rounded-md outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/50"
     >
       <span
@@ -28,7 +44,6 @@ function TurnAnchor({ time, summary, onJump }: TurnAnchorProps) {
         className="h-[3px] w-[14px] rounded-full bg-border transition-[width,background-color] duration-150 group-hover:w-[22px] group-hover:bg-foreground group-focus-visible:w-[22px] group-focus-visible:bg-foreground motion-reduce:transition-none"
       />
       <span
-        aria-hidden="true"
         className="pointer-events-none absolute top-1/2 left-full z-10 ml-[10px] -translate-y-1/2 w-max rounded-[8px] bg-foreground px-[10px] py-[6px] text-left opacity-0 shadow-[0_6px_16px_-6px_rgba(24,24,28,0.35)] transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100 motion-reduce:transition-none"
       >
         {/* clamp 层不带 padding：overflow 裁剪在 padding 盒边缘，带 padding 会漏出下一行字形的上沿 */}

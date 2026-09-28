@@ -113,16 +113,19 @@ type HostProps = {
   anchorIds: readonly string[]
   /** 实际渲染 section 的子集（默认全量）：造「锚点有 id 但 section 缺失」形态 */
   renderIds?: readonly string[]
+  /** pin 按钮钉住的目标锚点 id（默认第三个） */
+  pinTarget?: string
   onRender?: () => void
 };
 
-function Host({ anchorIds, renderIds, onRender }: HostProps): React.JSX.Element {
+function Host({ anchorIds, renderIds, pinTarget, onRender }: HostProps): React.JSX.Element {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
-  const index = useCurrentAnchorIndex(containerRef, anchorIds);
+  const { index, pinTurn } = useCurrentAnchorIndex(containerRef, anchorIds);
   onRender?.();
   return (
     <div ref={containerRef} data-testid="scroller">
       <span data-testid="index">{index}</span>
+      <button type="button" data-testid="pin" onClick={() => pinTurn(pinTarget ?? anchorIds[2] ?? '')}>pin</button>
       {(renderIds ?? anchorIds).map((id) => (
         <section key={id} data-turn-id={id} />
       ))}
@@ -165,6 +168,20 @@ function scrollerOf(container: HTMLElement): HTMLDivElement {
 function scrollTo(container: HTMLElement): void {
   React.act(() => {
     scrollerOf(container).dispatchEvent(new Event('scroll'));
+  });
+}
+
+function dispatchScroller(container: HTMLElement, type: string): void {
+  React.act(() => {
+    scrollerOf(container).dispatchEvent(new Event(type));
+  });
+}
+
+function pin(container: HTMLElement): void {
+  React.act(() => {
+    const button = container.querySelector('[data-testid="pin"]');
+    if (!(button instanceof HTMLElement)) throw new Error('pin button not found');
+    button.click();
   });
 }
 
@@ -334,6 +351,73 @@ describe('useCurrentAnchorIndex（滚动驱动当前轮）', () => {
       view.unmount();
     } finally {
       spy.restore();
+      restoreObserver();
+    }
+  });
+
+  test('症状回归「点击跳转中刻痕逐帧换位闪抖、瞄准后跳错消息」：钉住后飞行中间帧窗口冻结', () => {
+    const restoreObserver = stubResizeObserver();
+    try {
+      const view = render(<Host anchorIds={IDS} />);
+      stubTops(view.container, { a: -500, b: -200, c: 10, d: 400, e: 800 });
+      scrollTo(view.container);
+      expect(indexOf(view.container)).toBe(2);
+      pin(view.container); // 钉到 'c'（下标 2）
+      // 飞行中间帧：几何随滚动推进但未收敛到目标 → 显示不动
+      stubTops(view.container, { a: -100, b: 300, c: 700, d: 1100, e: 1500 });
+      scrollTo(view.container);
+      expect(indexOf(view.container)).toBe(2);
+      stubTops(view.container, { a: -700, b: -300, c: 100, d: 500, e: 900 });
+      scrollTo(view.container);
+      expect(indexOf(view.container)).toBe(2);
+      // 落定：几何收敛到目标 → 解除钉住，后续滚动恢复跟随
+      stubTops(view.container, { a: -800, b: -400, c: -10, d: 390, e: 790 });
+      scrollTo(view.container);
+      expect(indexOf(view.container)).toBe(2);
+      stubTops(view.container, { a: -1200, b: -800, c: -400, d: -10, e: 390 });
+      scrollTo(view.container);
+      expect(indexOf(view.container)).toBe(3);
+      view.unmount();
+    } finally {
+      restoreObserver();
+    }
+  });
+
+  test('落定（scrollend）/ 用户接管（wheel、keydown）解除钉住，按当下几何恢复跟随', () => {
+    const restoreObserver = stubResizeObserver();
+    try {
+      for (const releaseType of ['scrollend', 'wheel', 'keydown']) {
+        const view = render(<Host anchorIds={IDS} />);
+        stubTops(view.container, { a: -500, b: -200, c: 10, d: 400, e: 800 });
+        scrollTo(view.container);
+        pin(view.container);
+        // 飞行中几何推进到非目标（d 已越线）→ 冻结不推进
+        stubTops(view.container, { a: -900, b: -500, c: -200, d: -100, e: 300 });
+        scrollTo(view.container);
+        expect(indexOf(view.container)).toBe(2);
+        dispatchScroller(view.container, releaseType);
+        // 解除后按当下几何走（最后越线是 d）→ 3
+        expect(indexOf(view.container)).toBe(3);
+        view.unmount();
+      }
+    } finally {
+      restoreObserver();
+    }
+  });
+
+  test('钉到未知锚点 id 不生效（垃圾输入降级）：滚动正常跟随不冻结', () => {
+    const restoreObserver = stubResizeObserver();
+    try {
+      const view = render(<Host anchorIds={IDS} pinTarget="nope" />);
+      pin(view.container);
+      stubTops(view.container, { a: -100, b: -50, c: 300, d: 700, e: 1100 });
+      scrollTo(view.container);
+      expect(indexOf(view.container)).toBe(1);
+      stubTops(view.container, { a: -500, b: -450, c: -100, d: 300, e: 700 });
+      scrollTo(view.container);
+      expect(indexOf(view.container)).toBe(2);
+      view.unmount();
+    } finally {
       restoreObserver();
     }
   });

@@ -26,6 +26,18 @@ export function anchorIndexAtTops(tops: readonly number[], judgeLine: number): n
 /** 锚点 id 序列身份：流式期 items 逐事件换引用，内容不变不得换身份（否则测量面逐事件重建）。 */
 type AnchorIds = { key: string; ids: readonly string[] };
 
+export type CurrentAnchorIndex = {
+  /** 当前阅读轮锚点下标（0 基，T55 窗口中心） */
+  index: number
+  /**
+   * 跳转钉住（T55）：从点击刻痕到滚动落定期间冻结窗口中心——平滑滚动是多帧飞行，
+   * 逐帧推进窗口会让刻痕逐个换位（闪/抖），瞄准与点击之间刻痕换身份更会跳错消息。
+   * 只冻结显示不动当下下标（点击瞬间刻痕列不位移，连点同刻痕不跑偏）。落定
+   * （scrollend / 测量收敛到目标）或用户接管滚动（wheel/keydown）即恢复跟随。
+   */
+  pinTurn: (turnId: string) => void
+};
+
 /**
  * 当前阅读轮锚点下标（T55 窗口中心）：挂在消息流滚动容器上，滚动 + 挂载 + 锚点集
  * 变化 + 内容几何变化（ResizeObserver：折叠开合/图片加载）时按轮次 section 几何判定
@@ -37,7 +49,7 @@ type AnchorIds = { key: string; ids: readonly string[] };
 export function useCurrentAnchorIndex(
   containerRef: React.RefObject<HTMLElement | null>,
   anchorIds: readonly string[],
-): number {
+): CurrentAnchorIndex {
   const [index, setIndex] = React.useState(0);
   const indexRef = React.useRef(0);
   const idsKey = anchorIds.join('\u0000');
@@ -47,11 +59,14 @@ export function useCurrentAnchorIndex(
   }
   const stableIds = idsRef.current.ids;
   const sectionsRef = React.useRef<Map<string, Element>>(new Map());
+  /** 钉住目标下标（null = 未钉住）：跳转飞行期测量值不推进显示，收敛到目标即自动解除。 */
+  const pinnedRef = React.useRef<number | null>(null);
 
   React.useLayoutEffect(() => {
     const container = containerRef.current;
     if (container === null || stableIds.length === 0) {
       // 空锚点集显式归零：换会话空档不得把旧下标带给下个非空集首帧
+      pinnedRef.current = null;
       if (indexRef.current !== 0) {
         indexRef.current = 0;
         setIndex(0);
@@ -89,23 +104,47 @@ export function useCurrentAnchorIndex(
       if (clientHeight > 0 && scrollHeight > 0 && scrollHeight - scrollTop - clientHeight <= AT_BOTTOM_EPS_PX) {
         next = stableIds.length - 1;
       }
+      const pinned = pinnedRef.current;
+      // 跳转飞行中（钉住未收敛）：冻结窗口中心——中间帧不推进，刻痕列不逐帧换位
+      if (pinned !== null && next !== pinned) return;
+      pinnedRef.current = null;
       // 同值不 setState：updater 形态同值也会调度渲染，流式期滚动会击穿舞台重渲半径
       if (next === indexRef.current) return;
       indexRef.current = next;
       setIndex(next);
     };
+    /** 滚动落定 / 用户接管（滚轮、键盘）：解除钉住，按当下几何恢复跟随。 */
+    const release = (): void => {
+      if (pinnedRef.current === null) return;
+      pinnedRef.current = null;
+      measure();
+    };
     rebuildSections();
     measure();
     container.addEventListener('scroll', measure, { passive: true });
+    container.addEventListener('scrollend', release);
+    container.addEventListener('wheel', release, { passive: true });
+    container.addEventListener('keydown', release);
     const observer = new ResizeObserver(measure);
     observer.observe(container);
     const content = container.firstElementChild;
     if (content instanceof HTMLElement) observer.observe(content);
     return () => {
       container.removeEventListener('scroll', measure);
+      container.removeEventListener('scrollend', release);
+      container.removeEventListener('wheel', release);
+      container.removeEventListener('keydown', release);
       observer.disconnect();
     };
   }, [containerRef, stableIds]);
 
-  return index;
+  const pinTurn = React.useCallback((turnId: string): void => {
+    const ids = idsRef.current?.ids;
+    if (ids === undefined) return;
+    const target = ids.indexOf(turnId);
+    if (target < 0) return;
+    pinnedRef.current = target;
+  }, []);
+
+  return { index, pinTurn };
 }

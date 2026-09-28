@@ -58,16 +58,19 @@ function ThreadStage(): React.JSX.Element {
   const turnAnchorList = React.useMemo(() => turnAnchors(activeThread.items), [activeThread.items]);
   const anchorIds = React.useMemo(() => turnAnchorList.map((anchor) => anchor.id), [turnAnchorList]);
   /** 当前阅读轮（T55 窗口中心）：随滚动在锚点集上滑动，锚点带只展示 ±10 邻域 */
-  const currentAnchorIndex = useCurrentAnchorIndex(scrollRef, anchorIds);
+  const { index: currentAnchorIndex, pinTurn } = useCurrentAnchorIndex(scrollRef, anchorIds);
   const jumpToTurn = React.useCallback((turnId: string) => {
     const container = scrollRef.current;
     if (container === null) return;
     const section = container.querySelector(`[data-turn-id="${CSS.escape(turnId)}"]`);
     if (section === null) return;
+    // 先钉住窗口再起滚：平滑滚动是多帧飞行，逐帧推进窗口会让刻痕逐个换位（闪/抖），
+    // 瞄准与点击之间刻痕换身份更会跳错消息；落定后自动恢复跟随
+    pinTurn(turnId);
     // 尊重系统减弱动态偏好：平滑滚动降级为直接定位
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     section.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start', inline: 'nearest' });
-  }, []);
+  }, [pinTurn]);
   /** ui 动作直调包装：引用恒定——MessageList/HostDownBanner 是 memo 边界，内联箭头
    * 会随舞台每次重渲击穿（流式增量期逐事件重渲）。 */
   const onOpenSettings = React.useCallback(() => uiStore.getState().openSettings(), []);

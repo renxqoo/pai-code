@@ -1,7 +1,10 @@
 import { describe, expect, test } from 'bun:test';
+import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { TurnAnchor } from '../turn-anchor';
+import { installDom } from '@/testing/dom';
+import { render } from '@/testing/render';
 
 /** 渲染冒烟：锚点按钮带无障碍名（含时刻），气泡承载时刻 + 摘要；空摘要不落分隔点。 */
 describe('TurnAnchor 渲染', () => {
@@ -42,5 +45,51 @@ describe('TurnAnchor 渲染', () => {
     // 气泡外观层不承担裁剪：禁 max-height 硬截与 overflow 裁剪
     expect(html).not.toContain('max-h-');
     expect(html).not.toContain('overflow-hidden');
+  });
+});
+
+describe('TurnAnchor 跳转触发（T55 按下即跳，防瞄准后跳错）', () => {
+  test('症状回归「按下后抬起前刻痕换位导致跳错消息」：指针按下即跳，抬落 click 不重发', () => {
+    installDom();
+    let jumps = 0;
+    const view = render(<TurnAnchor time="10:46 AM" summary="" onJump={() => (jumps += 1)} />);
+    const button = view.container.querySelector('button');
+    if (!(button instanceof HTMLElement)) throw new Error('button not found');
+    React.act(() => {
+      button.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0 }));
+    });
+    expect(jumps).toBe(1);
+    React.act(() => {
+      // 指针链路随后的 click（detail ≥ 1）不得重发
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    });
+    expect(jumps).toBe(1);
+    view.unmount();
+  });
+
+  test('键盘/辅助技术合成 click（detail 0）兜底触发跳转', () => {
+    installDom();
+    let jumps = 0;
+    const view = render(<TurnAnchor time="10:46 AM" summary="" onJump={() => (jumps += 1)} />);
+    const button = view.container.querySelector('button');
+    if (!(button instanceof HTMLElement)) throw new Error('button not found');
+    React.act(() => {
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 0 }));
+    });
+    expect(jumps).toBe(1);
+    view.unmount();
+  });
+
+  test('非左键按下不跳转', () => {
+    installDom();
+    let jumps = 0;
+    const view = render(<TurnAnchor time="10:46 AM" summary="" onJump={() => (jumps += 1)} />);
+    const button = view.container.querySelector('button');
+    if (!(button instanceof HTMLElement)) throw new Error('button not found');
+    React.act(() => {
+      button.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 2 }));
+    });
+    expect(jumps).toBe(0);
+    view.unmount();
   });
 });
