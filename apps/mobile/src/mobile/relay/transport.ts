@@ -75,6 +75,8 @@ export interface RelayTransport {
 
 const HEARTBEAT_INTERVAL_MS = 20_000;
 const RESPONSE_DEFAULT_TIMEOUT_MS = 30_000;
+/** 连续拨号失败上限（鉴权拒绝的可靠代理信号——RN 无握手状态码透传）。 */
+const CONNECT_EXHAUSTION_LIMIT = 5;
 
 export function createRelayTransport(options: RelayTransportOptions): RelayTransport {
   const { codec, callbacks, socketFactory } = options;
@@ -83,6 +85,7 @@ export function createRelayTransport(options: RelayTransportOptions): RelayTrans
   let status: RelayStatus = 'disconnected';
   let stopped = false;
   let backoffMs = 1000;
+  let connectFailures = 0;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   let silentBeats = 0;
@@ -165,6 +168,14 @@ export function createRelayTransport(options: RelayTransportOptions): RelayTrans
 
   const scheduleReconnect = (): void => {
     if (stopped) return;
+    // 连接耗尽终态（R3 M8：401 时 RN 拿不到握手码——连续 N 次连败是可靠信号；
+    // 装配层据此做一次 token 续期重连，不在退避环打转）
+    connectFailures += 1;
+    if (connectFailures >= CONNECT_EXHAUSTION_LIMIT) {
+      connectFailures = 0;
+      setStatus('disconnected', 'connect-exhausted');
+      return;
+    }
     if (reconnectTimer !== null) return;
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null;
@@ -252,6 +263,7 @@ export function createRelayTransport(options: RelayTransportOptions): RelayTrans
     ws.onOpen(() => {
       if (socket !== ws) return;
       backoffMs = 1000;
+      connectFailures = 0;
       setStatus('ready', 'open');
       startHeartbeat();
       // 重连后重发未结算命令（App 装配层也可显式调用）

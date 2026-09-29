@@ -85,7 +85,7 @@ export function initializeRelayRuntime(): RelayRuntime {
   // M8：鉴权拒绝（token 过期）→ 签名挑战续期一次 → 重连（不在退避环里 401 打转）
   let authRetryArmed = true;
   const onStatusWrapper = (status: RelayStatus, detail: string): void => {
-    if (status === 'disconnected' && detail === 'auth-rejected' && authRetryArmed && runtime !== null) {
+    if (status === 'disconnected' && (detail === 'auth-rejected' || detail === 'connect-exhausted') && authRetryArmed && runtime !== null) {
       authRetryArmed = false;
       const credentials = relayCredentialsStore.load();
       if (credentials !== null) {
