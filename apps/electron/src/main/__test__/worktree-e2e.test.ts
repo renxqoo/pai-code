@@ -5,11 +5,6 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 
-import { createApiRoutes } from '../api-routes';
-import { createAgentDefinitionsStore } from '../agent-definitions-store';
-import { createFileSettings, type ProviderKeyStore } from '../file-settings';
-import { createPaiRuntime } from '../pai-runtime';
-import { createRuntimeMonitor } from '@paiapp/infra';
 import { createGitWorktree } from '@paiapp/api';
 import type { GitWorktree } from '@paiapp/api';
 import { withRepoLock } from '../repo-lock';
@@ -22,13 +17,6 @@ const exec = promisify(execFile);
  * 建树 → 树内工作（非零提交——零提交树测不出收编链）→ 清理被拒（未合并）
  * → 合并回主仓 → 清理放行 → 双清终态；含树内发起拒/回滚旅程。
  */
-
-const keyStore: ProviderKeyStore = {
-  encryptionAvailable: false,
-  getKey: () => null,
-  setKey: () => undefined,
-  keyNames: [],
-};
 
 let work: string;
 let project: string;
