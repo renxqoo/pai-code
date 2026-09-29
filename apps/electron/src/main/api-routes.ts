@@ -90,6 +90,7 @@ export interface ApiRouteDeps {
   gitStatus?: GitStatus;
   gitWorktree?: GitWorktree;
   onTreeRemoved?: (path: string) => void;
+  worktreeRegistry?: () => { dirs: string[]; treeToRepoTop: Record<string, string>; sessionTrees: Record<string, string> };
   /** 运行状态监控器（T29 app/runtime 快照源）。 */
   monitor: RuntimeMonitor;
   /** 档位 hub 同步失败落档钩子（监督日志 → 监控时间线）。 */
@@ -264,6 +265,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     git,
     gitWorktree,
     onTreeRemoved: (path) => deps.onTreeRemoved?.(path),
+    worktreeRegistry: deps.worktreeRegistry ?? (() => ({ dirs: [], treeToRepoTop: {}, sessionTrees: {} })),
     graph,
     gitStatus,
     openLocation,

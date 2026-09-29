@@ -115,6 +115,7 @@ export function useNewTaskScreen(enterCwd: string): NewTaskScreenProps {
     permissionModes,
     onSearchFiles: workspaceActions.searchFilesIn,
     onListBranches: workspaceActions.listGitBranches,
+    onCreateWorktree: workspaceActions.createWorktree,
     onListGraph: workspaceActions.listGitGraph,
     onCheckoutBranch: checkoutBranch,
     onPickDirectory: workspaceActions.pickDirectory,

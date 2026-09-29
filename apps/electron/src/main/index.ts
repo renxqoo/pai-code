@@ -357,6 +357,10 @@ void app.whenReady().then(async () => {
       }),
       extraCwds: () => [...pickedDirectories, ...worktreeRegistry.read().dirs],
       onTreeRemoved: (path) => worktreeRegistry.removeTree(path),
+      worktreeRegistry: () => {
+        const data = worktreeRegistry.read();
+        return { dirs: [...data.dirs], treeToRepoTop: { ...data.treeToRepoTop }, sessionTrees: { ...data.sessionTrees } };
+      },
       // 对话框单飞：在途时再调用直接按取消返回（防被攻陷渲染层并发叠弹多个模态面板）
       pickDirectory: async (defaultPath) => {
         if (directoryPickerInFlight) return null;

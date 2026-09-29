@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Check, GitBranch, GitGraph, Lock, Plus, Search } from 'lucide-react';
 
-import type { GitBranchesView } from '@paiapp/contracts';
+import type { GitBranchesView, WorktreeEntryView } from '@paiapp/contracts';
 
 import { cn } from '@/lib/utils';
 import { copy } from '@/strings';
@@ -21,6 +21,10 @@ type BranchPanelProps = {
   onCreate: () => void
   /** 打开「Git 图谱」弹窗 */
   onOpenGraph: () => void
+  /** worktree 条目表（占用行三动作与 detached 行数据源；缺省 = 调用方未接 list——不渲染动作区）。 */
+  worktrees?: readonly WorktreeEntryView[]
+  /** worktree 动作（前往/合并/清理）——缺省不渲染 */
+  onWorktreeAction?: (action: 'visit' | 'merge' | 'clean', entry: WorktreeEntryView) => void
 };
 
 /** 搜索过滤（大小写不敏感、按序保留；空词全量）——纯函数供表驱动测试。 */
@@ -43,7 +47,7 @@ const ACTION_CLASS_NAME =
  * 不含定位/开合逻辑——由通用锚定底座承载；一切数据与回调走 props，不发 IPC。
  * 空态优先级：loading → failed → 过滤无结果。
  */
-function BranchPanel({ view, loading, failed, busy, lock, onSelect, onCreate, onOpenGraph }: BranchPanelProps) {
+function BranchPanel({ view, loading, failed, busy, lock, onSelect, onCreate, onOpenGraph, worktrees, onWorktreeAction }: BranchPanelProps) {
   const [query, setQuery] = React.useState('');
   const branches = view?.branches ?? [];
   const current = view?.current ?? null;
@@ -51,7 +55,10 @@ function BranchPanel({ view, loading, failed, busy, lock, onSelect, onCreate, on
   const filtered = filterBranches(branches, query);
   const emptyLabel = loading ? copy.branch.loading : failed ? copy.branch.unavailable : copy.branch.empty;
   /** 分支 → 占用 worktree 路径（A5：行禁用 + 标注） */
-  const occupantOf = new Map((view?.worktrees ?? []).map((ref) => [ref.branch, ref.path]));
+  const occupantOf = new Map((view?.worktrees ?? []).map((ref) => [ref.branch ?? '', ref.path]));
+  const wtByPath = new Map((worktrees ?? []).map((entry) => [entry.path, entry]));
+  const wtEntryOf = worktrees === undefined ? undefined : (branch: string): WorktreeEntryView | null => wtByPath.get(occupantOf.get(branch) ?? '') ?? null;
+  const detachedEntries = (worktrees ?? []).filter((entry) => entry.branch === null);
   const switchDisabled = busy || lock !== null;
   return (
     <>
@@ -88,8 +95,8 @@ function BranchPanel({ view, loading, failed, busy, lock, onSelect, onCreate, on
             const occupant = occupantOf.get(name) ?? null;
             const rowDisabled = busy || occupant !== null || (switchDisabled && !isCurrent);
             return (
+              <React.Fragment key={name}>
               <button
-                key={name}
                 type="button"
                 disabled={rowDisabled}
                 aria-current={isCurrent ? 'true' : undefined}
@@ -110,11 +117,114 @@ function BranchPanel({ view, loading, failed, busy, lock, onSelect, onCreate, on
                       {copy.branch.occupiedBy(occupant)}
                     </span>
                   ) : null}
+                  {occupant !== null && onWorktreeAction !== undefined && wtEntryOf !== undefined ? (
+                    <span className="mt-1 flex flex-wrap gap-1" onClick={(event) => event.stopPropagation()}>
+                      {(() => {
+                        const entry = wtEntryOf(name);
+                        if (entry === null) return null;
+                        return (
+                          <>
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              className="cursor-pointer rounded border border-border px-1.5 py-0.5 text-[11px] leading-none text-foreground outline-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50"
+                              title={copy.branch.wtVisitHint}
+                              onClick={() => onWorktreeAction('visit', entry)}
+                              onKeyDown={(event2) => { if (event2.key === 'Enter') onWorktreeAction('visit', entry); }}
+                            >
+                              {copy.branch.wtVisit}
+                            </span>
+                            {entry.branch !== null ? (
+                              <span
+                                role="button"
+                                tabIndex={0}
+                                className="cursor-pointer rounded border border-border px-1.5 py-0.5 text-[11px] leading-none text-foreground outline-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50"
+                                onClick={() => onWorktreeAction('merge', entry)}
+                                onKeyDown={(event2) => { if (event2.key === 'Enter') onWorktreeAction('merge', entry); }}
+                              >
+                                {copy.branch.wtMergeBack}
+                              </span>
+                            ) : null}
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              className={cn('rounded border border-border px-1.5 py-0.5 text-[11px] leading-none outline-none focus-visible:ring-3 focus-visible:ring-ring/50', busy ? 'cursor-not-allowed text-muted-foreground' : 'cursor-pointer text-destructive hover:bg-destructive/10')}
+                              onClick={() => { if (!busy) onWorktreeAction('clean', entry); }}
+                              onKeyDown={(event2) => { if (event2.key === 'Enter' && !busy) onWorktreeAction('clean', entry); }}
+                            >
+                              {copy.branch.wtClean}
+                            </span>
+                          </>
+                        );
+                      })()}
+                    </span>
+                  ) : null}
                 </span>
                 {isCurrent ? <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" /> : null}
               </button>
-            );
-          })}
+              {occupant !== null && onWorktreeAction !== undefined && wtEntryOf !== undefined ? (
+                <div className="ml-6 flex flex-wrap gap-1 pb-1">
+                  {(() => {
+                    const entry = wtEntryOf(name);
+                    if (entry === null) return null;
+                    return (
+                      <>
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          className="cursor-pointer rounded border border-border px-1.5 py-0.5 text-[11px] leading-none text-foreground outline-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50"
+                          title={copy.branch.wtVisitHint}
+                          onClick={() => onWorktreeAction('visit', entry)}
+                          onKeyDown={(event2) => { if (event2.key === 'Enter') onWorktreeAction('visit', entry); }}
+                        >
+                          {copy.branch.wtVisit}
+                        </span>
+                        {entry.branch !== null ? (
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            className="cursor-pointer rounded border border-border px-1.5 py-0.5 text-[11px] leading-none text-foreground outline-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50"
+                            onClick={() => onWorktreeAction('merge', entry)}
+                            onKeyDown={(event2) => { if (event2.key === 'Enter') onWorktreeAction('merge', entry); }}
+                          >
+                            {copy.branch.wtMergeBack}
+                          </span>
+                        ) : null}
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          className={cn('rounded border border-border px-1.5 py-0.5 text-[11px] leading-none outline-none focus-visible:ring-3 focus-visible:ring-ring/50', busy ? 'cursor-not-allowed text-muted-foreground' : 'cursor-pointer text-destructive hover:bg-destructive/10')}
+                          onClick={() => { if (!busy) onWorktreeAction('clean', entry); }}
+                          onKeyDown={(event2) => { if (event2.key === 'Enter' && !busy) onWorktreeAction('clean', entry); }}
+                        >
+                          {copy.branch.wtClean}
+                        </span>
+                      </>
+                    );
+                  })()}
+                </div>
+              ) : null}
+            </React.Fragment>
+          )})}
+          {detachedEntries.map((entry) => (
+            <button
+              key={entry.path}
+              type="button"
+              disabled={busy}
+              onClick={() => onWorktreeAction?.('clean', entry)}
+              className={ROW_CLASS_NAME}
+              title={entry.path}
+            >
+              <GitBranch aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold text-foreground">{copy.branch.wtDetachedLabel}</span>
+                <span className="mt-1 block truncate text-xs leading-4 text-muted-foreground">{entry.path}</span>
+              </span>
+              <span className={cn('text-[11px] leading-none', busy ? 'cursor-not-allowed text-muted-foreground' : 'cursor-pointer text-destructive hover:bg-destructive/10 rounded border border-border px-1.5 py-0.5')}>
+                {copy.branch.wtClean}
+              </span>
+            </button>
+          ))}
           {filtered.length === 0 ? (
             <div className="px-2.5 py-6 text-center text-xs text-muted-foreground">{emptyLabel}</div>
           ) : null}

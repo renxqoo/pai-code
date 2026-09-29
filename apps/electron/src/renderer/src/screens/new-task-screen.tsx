@@ -32,6 +32,8 @@ type NewTaskDialog = 'workspace' | 'branch' | 'create-branch' | 'graph' | null;
 export type NewTaskStart = {
   cwd: string
   trusted: boolean
+  /** 在独立 worktree 中开始：分支名（宿主建树后以树路径为 cwd 建会话）。 */
+  worktreeBranch?: string
   /** `provider/modelId` */
   model: string
   /** null = 不干预（hub 按 settings 缺省） */
@@ -65,6 +67,8 @@ type NewTaskScreenProps = {
   onListBranches: (cwd: string) => Promise<ApiOutcome<'git/branches'>>
   onListGraph: (cwd: string) => Promise<ApiOutcome<'git/graph'>>
   onCheckoutBranch: (cwd: string, branch: string, create: boolean) => Promise<ApiOutcome<'git/checkout'>>
+  /** worktree 建树（开关开启时提交前调用；成功返回树路径）。 */
+  onCreateWorktree: (cwd: string, branch: string) => Promise<ApiOutcome<'git/worktree/create'>>
   onPickDirectory: (defaultPath: string | null) => Promise<string | null>
   /** 创建会话并投递首条消息；resolve true = 已建会话（本页关闭） */
   onCreate: (input: NewTaskStart) => Promise<boolean>
@@ -94,6 +98,7 @@ function NewTaskScreen({
   permissionModes,
   onSearchFiles,
   onListBranches,
+  onCreateWorktree,
   onListGraph,
   onCheckoutBranch,
   onPickDirectory,
@@ -116,12 +121,16 @@ function NewTaskScreen({
   const [checkingOut, setCheckingOut] = React.useState(false);
   const [branchError, setBranchError] = React.useState<string | null>(null);
   const [creating, setCreating] = React.useState(false);
+  const [worktreeOn, setWorktreeOn] = React.useState(false);
+  const [worktreeBranch, setWorktreeBranch] = React.useState('');
   /** 同步闸：连按 Enter/双击时 state 闭包仍为旧值，异步在途必须用 ref 拦 */
   const busyRef = React.useRef(false);
   /** 问候语按打开时刻定段（小时级，不挂 tick） */
   const [greetingKey] = React.useState(() => greetingKeyOf(new Date().getHours()));
   const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const branches = useGitBranches(cwd, onListBranches);
+  /** cwd 在 linked worktree 内（gitDir 含 /.git/worktrees/ 段）——开关正向指引态。 */
+  const nestedWorktreeCwd = branches.view?.gitDir?.includes('/.git/worktrees/') === true;
   /** 图谱只在弹窗打开时拉取（无轮询） */
   const graph = useGitGraph(cwd, onListGraph, 0, dialog === 'graph');
   /** 分支切换锁（与线程页同一把，T36 引用 T23 裁决）：所选目录上任一线程在跑即锁定——
@@ -145,7 +154,19 @@ function NewTaskScreen({
   const effectiveModel = model ?? defaultModelFor(cwd);
   const searchFiles = React.useCallback((query: string) => onSearchFiles(cwd, query), [cwd, onSearchFiles]);
   /** 可提交：有草稿 + 已选工作目录（无目录时主进程会拒绝，不给死路）+ 无在途动作 */
-  const canSubmit = draft.trim().length > 0 && cwd.length > 0 && !creating;
+  const canSubmit = draft.trim().length > 0 && cwd.length > 0 && !creating && (!worktreeOn || worktreeBranch.trim().length > 0);
+  /** 开关状态机：空 cwd / 加载 / 失败 / 非仓 / 树内 各态禁用（文案各异）；锁态放行（建树不动主仓工作树）。 */
+  const worktreeToggleState: { disabled: boolean; reason: string | null } = cwd.length === 0
+    ? { disabled: true, reason: copy.branch.wtToggleEmptyCwd }
+    : branches.loading
+      ? { disabled: true, reason: copy.branch.wtToggleLoading }
+      : branches.failed
+        ? { disabled: true, reason: copy.branch.wtToggleFailed }
+        : branches.view?.isRepo !== true
+          ? { disabled: true, reason: copy.branch.wtToggleOffRepo }
+          : nestedWorktreeCwd
+            ? { disabled: true, reason: copy.branch.wtToggleNested }
+            : { disabled: false, reason: null };
 
   // 浮层打开时把计数交给全局 Esc 链：浮层自行消费 Esc，不穿透关闭整页
   React.useEffect(() => {
@@ -160,6 +181,8 @@ function NewTaskScreen({
     setThinkingLevel(null);
     setBranchError(null);
     setDialog(null);
+    setWorktreeOn(false);
+    setWorktreeBranch('');
   };
 
   const openFolder = (): void => {
@@ -224,9 +247,19 @@ function NewTaskScreen({
 
   const submit = (text: string, attachments: readonly ComposerAttachment[]): Promise<boolean> => {
     if (busyRef.current || cwd.length === 0) return Promise.resolve(false);
+    if (worktreeOn && worktreeBranch.trim().length === 0) return Promise.resolve(false);
     busyRef.current = true;
     setCreating(true);
-    return onCreate({ cwd, trusted, model: effectiveModel, permissionMode, thinkingLevel, text, attachments }).then(
+    const start = async (): Promise<boolean> => {
+      let sessionCwd = cwd;
+      if (worktreeOn) {
+        const made = await onCreateWorktree(cwd, worktreeBranch.trim());
+        if (!made.ok) return false;
+        sessionCwd = made.data.path;
+      }
+      return onCreate({ cwd: sessionCwd, trusted, model: effectiveModel, permissionMode, thinkingLevel, text, attachments });
+    };
+    return start().then(
       (ok) => {
         busyRef.current = false;
         setCreating(false);
@@ -305,6 +338,50 @@ function NewTaskScreen({
                   }
             }
           />
+          {worktreeToggleState.disabled || worktreeOn ? (
+            <div className="mt-2 flex items-center gap-2 rounded-lg border border-border bg-surface/60 px-3 py-2">
+              <label className="flex cursor-pointer select-none items-center gap-2" title={worktreeToggleState.reason ?? undefined}>
+                <input
+                  type="checkbox"
+                  checked={worktreeOn}
+                  disabled={worktreeToggleState.disabled}
+                  onChange={(event) => { setWorktreeOn(event.target.checked); }}
+                  className="size-3.5 cursor-pointer accent-foreground outline-none disabled:cursor-not-allowed"
+                />
+                <span className={worktreeToggleState.disabled ? 'text-xs text-muted-foreground' : 'text-xs text-foreground'}>
+                  {copy.branch.wtToggle}
+                </span>
+              </label>
+              {worktreeToggleState.reason !== null ? (
+                <span className="text-[11px] leading-4 text-muted-foreground">{worktreeToggleState.reason}</span>
+              ) : null}
+              {worktreeOn ? (
+                <input
+                  type="text"
+                  value={worktreeBranch}
+                  onChange={(event) => { setWorktreeBranch(event.target.value); }}
+                  placeholder={copy.branch.wtBranchPlaceholder}
+                  aria-label={copy.branch.wtBranchLabel}
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="h-7 min-w-0 flex-1 rounded-md border border-border bg-transparent px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+                />
+              ) : null}
+            </div>
+          ) : (
+            <div className="mt-2 flex items-center">
+              <label className="flex cursor-pointer select-none items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={worktreeOn}
+                  disabled={worktreeToggleState.disabled}
+                  onChange={(event) => { setWorktreeOn(event.target.checked); }}
+                  className="size-3.5 cursor-pointer accent-foreground outline-none"
+                />
+                <span className="text-xs text-foreground">{copy.branch.wtToggle}</span>
+              </label>
+            </div>
+          )}
           <PromptCard
             className="relative z-[1] -mt-[10px]"
             value={draft}

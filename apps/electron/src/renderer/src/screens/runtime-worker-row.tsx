@@ -112,8 +112,8 @@ function menuItems(row: RuntimeWorkerRow): readonly MenuItemDef[] {
 }
 
 /** worktree 归属名（cwd 的 .x-harness-worktrees/<name> 段；非 worktree → null） */
-function worktreeNameOf(cwd: string): string | null {
-  const m = /\/([^/]+)\/\.x-harness-worktrees\/([^/]+)/.exec(cwd);
+export function worktreeNameOf(cwd: string): string | null {
+  const m = /\/[^/]+\/(\.x-harness-worktrees|\.x-harness-user-worktrees)\/([^/]+)/.exec(cwd);
   return m?.[2] ?? null;
 }
 

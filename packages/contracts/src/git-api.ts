@@ -37,4 +37,15 @@ export const GitApiSchemas = {
     params: z.object({ cwd: z.string().min(1) }).strict(),
     result: GitStatusViewSchema,
   },
+  /** 登记面三张表读口（侧栏归并/派生树 chip/徽标悬停数据源）。 */
+  'git/worktree/registry': {
+    params: z.object({}).strict(),
+    result: z
+      .object({
+        dirs: z.array(z.string().min(1)),
+        treeToRepoTop: z.record(z.string().min(1), z.string().min(1)),
+        sessionTrees: z.record(z.string().min(1), z.string().min(1)),
+      })
+      .strict(),
+  },
 } as const;

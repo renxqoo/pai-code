@@ -118,6 +118,11 @@ export type WorkspaceActions = {
   readonly listGitStatus: (cwd: string) => Promise<ApiOutcome<'git/status'>>;
   /** 切换/创建并检出分支（失败原因交调用方转文案：切换走通知条，创建走弹窗内联）。 */
   readonly checkoutGitBranch: (cwd: string, branch: string, create: boolean) => Promise<ApiOutcome<'git/checkout'>>;
+  readonly listWorktrees: (cwd: string) => Promise<ApiOutcome<'git/worktree/list'>>;
+  readonly createWorktree: (cwd: string, branch: string) => Promise<ApiOutcome<'git/worktree/create'>>;
+  readonly removeWorktree: (cwd: string, path: string) => Promise<ApiOutcome<'git/worktree/remove'>>;
+  readonly mergeWorktree: (cwd: string, branch: string) => Promise<ApiOutcome<'git/worktree/merge'>>;
+  readonly worktreeRegistry: () => Promise<ApiOutcome<'git/worktree/registry'>>;
   readonly runBash: (command: string) => Promise<string | null>;
   readonly abortBash: () => void;
   readonly revealSession: (sessionPath: string) => void;
@@ -450,6 +455,11 @@ export function createWorkspaceActions(): WorkspaceActions {
     listGitGraph: (cwd) => controller.listGitGraph(cwd),
     listGitStatus: (cwd) => controller.listGitStatus(cwd),
     checkoutGitBranch: (cwd, branch, create) => controller.checkoutGitBranch(cwd, branch, create),
+    listWorktrees: (cwd) => controller.listWorktrees(cwd),
+    createWorktree: (cwd, branch) => controller.createWorktree(cwd, branch),
+    removeWorktree: (cwd, path) => controller.removeWorktree(cwd, path),
+    mergeWorktree: (cwd, branch) => controller.mergeWorktree(cwd, branch),
+    worktreeRegistry: () => controller.worktreeRegistry(),
     runBash: async (command) => {
       const reason = await controller.runBash(activeThreadOf(), command);
       // 空舞台（无活跃会话）直执行：给可行动去向，不透传 schema 密文

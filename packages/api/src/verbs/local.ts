@@ -26,6 +26,8 @@ export type LocalRoutesDeps = {
   gitWorktree: GitWorktree;
   /** worktree 树被移除后的宿主回调（登记面 GC——api 包不持状态）。 */
   onTreeRemoved: (path: string) => void;
+  /** 登记面三张表读口（主进程 worktree-registry 注入）。 */
+  worktreeRegistry: () => { dirs: string[]; treeToRepoTop: Record<string, string>; sessionTrees: Record<string, string> };
   graph: GitGraph;
   gitStatus: GitStatus;
   openLocation: OpenLocationPort;
@@ -44,6 +46,7 @@ export function createLocalRoutes(deps: LocalRoutesDeps) {
     'git/graph': Handler<'git/graph'>;
     'git/status': Handler<'git/status'>;
     'git/worktree/list': Handler<'git/worktree/list'>;
+    'git/worktree/registry': Handler<'git/worktree/registry'>;
     'git/worktree/create': Handler<'git/worktree/create'>;
     'git/worktree/remove': Handler<'git/worktree/remove'>;
     'git/worktree/merge': Handler<'git/worktree/merge'>;
@@ -90,6 +93,7 @@ export function createLocalRoutes(deps: LocalRoutesDeps) {
       if (!deps.isKnownCwd(params.cwd)) return fail(appError('cwd_not_allowed'));
       return deps.gitWorktree.list(params.cwd);
     },
+    'git/worktree/registry': () => Promise.resolve({ ok: true as const, data: deps.worktreeRegistry() }),
     'git/worktree/create': async (params) => {
       if (!deps.isKnownCwd(params.cwd)) return fail(appError('cwd_not_allowed'));
       deps.audit(`git_worktree_create:${params.cwd}:${params.branch}`);

@@ -13,7 +13,9 @@ type ToolGroupProps = {
 /**
  * 并行执行组（一条 assistant 消息内 LLM 一次返回的多个工具调用）：
  * 标题行聚合本批执行（可点开合），展开后是各调用行 + 文件级 diff 区。
- * 批次内有失败调用时标题行自动展开——错误必须看得见；手动意图优先于自动（与轮级同一裁决）。
+ * 自动开合与调用级同一裁决：只有失败自动展开（错误必须看得见）；
+ * 运行中/正常完成都收起为标题摘要——自动开合只认终态，开合对即闪现源；
+ * 手动意图优先于自动并跨终态保持。
  */
 function ToolGroup({ calls }: ToolGroupProps) {
   const [pref, setPref] = React.useState<boolean | null>(null);
