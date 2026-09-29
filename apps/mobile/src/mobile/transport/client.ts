@@ -3,6 +3,7 @@
  * （UI/共享包零改动消费）；实现走 RelayTransport（relay 链路）。
  */
 import { UiEventSchema, type ApiMethod, type Client, type ClientCapabilities, type UiEvent, type Unsubscribe } from '@paiapp/contracts';
+import { mapResponseData, translateCommand } from '../relay/command-map';
 
 type Subscriber = (event: UiEvent) => void;
 
@@ -30,10 +31,12 @@ export function createBridgeClient(deps: BridgeClientDeps): BridgeClient {
     capabilities: deps.capabilities ?? { fileDialog: false, systemNotification: true },
     async invoke(method: ApiMethod, params: unknown): Promise<unknown> {
       const id = `c${invokeCounter++}`;
-      const sent = await deps.transport.sendCommand({ command: method, id, args: (params ?? {}) as Record<string, unknown> });
-      if (!sent) return { ok: false, error: { kind: 'transient', face: 'host_unavailable' } };
+      // 词表翻译（H2）：ApiMethod → gateway host 命令 + 参数名
+      const { command, args } = translateCommand(method, (params ?? {}) as Record<string, unknown>);
+      const sent = await deps.transport.sendCommand({ command, id, args });
+      if (!sent) return { ok: false, error: { kind: 'transient', message: 'host_unavailable' } };
       const response = await deps.transport.waitResponse(id);
-      return response.success ? { ok: true, data: response.data } : { ok: false, error: { kind: 'transient', message: response.error } };
+      return response.success ? { ok: true, data: mapResponseData(command, response.data) } : { ok: false, error: { kind: 'transient', message: response.error } };
     },
     subscribe(onEvent: (event: UiEvent) => void): Unsubscribe {
       subscribers.add(onEvent);

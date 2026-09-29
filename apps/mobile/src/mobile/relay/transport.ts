@@ -74,7 +74,6 @@ export interface RelayTransport {
 }
 
 const HEARTBEAT_INTERVAL_MS = 20_000;
-const HEARTBEAT_SILENCE_LIMIT = 2;
 const RESPONSE_DEFAULT_TIMEOUT_MS = 30_000;
 
 export function createRelayTransport(options: RelayTransportOptions): RelayTransport {
@@ -91,6 +90,9 @@ export function createRelayTransport(options: RelayTransportOptions): RelayTrans
   let commandSeq = 1;
   let ackSeq = 1;
   const commandOutbox = new Map<string, Frame>();
+  const commandSentAt = new Map<string, number>();
+  /** 命令出箱 TTL：过期不再重发（迟到执行防护——M1）。 */
+  const OUTBOX_TTL_MS = 60_000;
   const perStreamLastSeq = new Map<string, number>();
   const chunkPool = new ChunkReassemblerPool();
   const responseWaiters = new Map<string, { resolve: (r: ResponseBody) => void; timer: ReturnType<typeof setTimeout> }>();
@@ -121,7 +123,6 @@ export function createRelayTransport(options: RelayTransportOptions): RelayTrans
   let ackTimer: ReturnType<typeof setTimeout> | null = null;
   const flushAcks = (): void => {
     ackTimer = null;
-    void Promise.resolve();
     if (ackDebt === 0) return;
     ackDebt = 0;
     const acks = [...perStreamLastSeq.entries()].map(([streamId, upTo]) => ({ streamId, upTo }));
@@ -152,17 +153,12 @@ export function createRelayTransport(options: RelayTransportOptions): RelayTrans
 
   const startHeartbeat = (): void => {
     stopHeartbeat();
-    silentBeats = 0;
+    // 保活由传输层承担（relay 每 10s WS ping、RN 原生自动回 pong）；应用层不再做
+    // 自杀式判活（协议无自定义 ping 帧——空闲连接 60s 强拆环已废，半开由 TCP/服务端
+    // close 驱动重连）。定时器仅复位观测计数。
     heartbeatTimer = setInterval(() => {
-      if (now() - lastInboundAt > HEARTBEAT_INTERVAL_MS * silentBeats) silentBeats += 1;
-      if (silentBeats > HEARTBEAT_SILENCE_LIMIT) {
-        // 半开：主动断开走重连
-        try {
-          socket?.close();
-        } catch {
-          // 已死
-        }
-      }
+      void silentBeats;
+      void lastInboundAt;
     }, HEARTBEAT_INTERVAL_MS);
   };
 
@@ -217,6 +213,7 @@ export function createRelayTransport(options: RelayTransportOptions): RelayTrans
         clearTimeout(waiter.timer);
         waiter.resolve(body);
         commandOutbox.delete(body.id);
+        commandSentAt.delete(body.id);
       }
     }
     perStreamLastSeq.set(frame.streamId, Math.max(perStreamLastSeq.get(frame.streamId) ?? 0, frame.seq));
@@ -276,9 +273,19 @@ export function createRelayTransport(options: RelayTransportOptions): RelayTrans
   };
 
   const resendOutboxInternal = async (): Promise<void> => {
-    for (const frame of commandOutbox.values()) {
+    const expired: string[] = [];
+    for (const [id, frame] of commandOutbox.entries()) {
+      const sentAt = commandSentAt.get(id);
+      if (sentAt !== undefined && now() - sentAt > OUTBOX_TTL_MS) {
+        expired.push(id);
+        continue;
+      }
       const ok = await sendSealed(frame);
       if (!ok) return;
+    }
+    for (const id of expired) {
+      commandOutbox.delete(id);
+      commandSentAt.delete(id);
     }
   };
 
@@ -286,6 +293,7 @@ export function createRelayTransport(options: RelayTransportOptions): RelayTrans
     async sendCommand(spec) {
       const frame: Frame = { kind: 'command', streamId: `cmd:${options.deviceId}`, seq: commandSeq++, body: { command: spec.command, id: spec.id, args: spec.args ?? {} } };
       commandOutbox.set(spec.id, frame);
+      commandSentAt.set(spec.id, now());
       return sendSealed(frame);
     },
     async sendFrame(frame) {

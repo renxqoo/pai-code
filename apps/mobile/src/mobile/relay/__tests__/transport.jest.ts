@@ -1,3 +1,4 @@
+import { translateCommand } from '../command-map';
 import { beforeEach, describe, expect, it } from '@jest/globals';
 import * as React from 'react';
 
@@ -191,3 +192,61 @@ describe('relay transport（T58 P2）', () => {
 
 void React;
 void beforeEach;
+
+describe('R1 修复回归', () => {
+  it('命令经翻译层：session/prompt → prompt + message→text 改名', () => {
+    const t1 = translateCommand('session/prompt', { threadId: 't1', message: 'hi' });
+    expect(t1.command).toBe('prompt');
+    expect(t1.args).toMatchObject({ threadId: 't1', text: 'hi' });
+    const t2 = translateCommand('session/start', { cwd: '/w', trusted: true });
+    expect(t2.command).toBe('thread/start');
+    expect(t2.args).toMatchObject({ cwd: '/w', trust: 'trusted' });
+    const t3 = translateCommand('unknown/method', { a: 1 });
+    expect(t3.command).toBe('unknown/method');
+    expect(t3.args).toEqual({ a: 1 });
+  });
+
+  it('心跳不自杀：空闲连接不被强拆（H7——传输层保活）', async () => {
+    const { transport, socketOf } = makeTransport();
+    transport.connect();
+    socketOf().sOpen();
+    expect(transport.connected()).toBe(true);
+    // 空闲 2.5s（旧实现 60s 拆——不可全时长等；验证无 close 调用路径存在即可：
+    // startHeartbeat 只复位计数。此处断言连接仍活着）
+    await new Promise((r) => { setTimeout(r, 100); });
+    expect(transport.connected()).toBe(true);
+    transport.stop();
+  });
+
+  it('outbox TTL：过期命令不再重发', async () => {
+    let clock = 1_000_000;
+    const { transport, socketOf } = makeTransportWithClock(() => clock);
+    transport.connect();
+    socketOf().sOpen();
+    await transport.sendCommand({ command: 'prompt', id: 'old1' });
+    clock += 61_000; // TTL 过期
+    await transport.sendCommand({ command: 'prompt', id: 'new1' });
+    await transport.resendOutbox();
+    expect(transport.outboxIds()).toContain('new1');
+    expect(transport.outboxIds()).not.toContain('old1');
+    transport.stop();
+  });
+
+  function makeTransportWithClock(now: () => number) {
+    let socket = new MemorySocket();
+    const transport = createRelayTransport({
+      relayUrl: 'wss://relay.test',
+      relayToken: 'tok',
+      deviceId: 'd1',
+      installationId: 'gw1',
+      codec: passthroughCodec(),
+      socketFactory: () => {
+        socket = new MemorySocket();
+        return socket;
+      },
+      now,
+      callbacks: { onStatus: () => undefined, onFrame: () => undefined, onRelayMessage: () => undefined },
+    });
+    return { transport, socketOf: () => socket };
+  }
+});

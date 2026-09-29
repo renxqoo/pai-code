@@ -14,7 +14,7 @@ export function BridgeGate(): null {
   }, []);
 
   React.useEffect(() => {
-    if (status === 'connected' && runtime !== null) void loadBootstrap(runtime.client);
+    if ((status === 'connected' || status === 'ready') && runtime !== null) void loadBootstrap(runtime.client);
   }, [status, runtime]);
 
   return null;

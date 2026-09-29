@@ -17,8 +17,9 @@ export function PermissionCard() {
   const respond = (approved: boolean) => {
     resolve(approved);
     const bridge = getBridge();
-    if (bridge?.status === 'ready') {
-      void bridge.client.invoke('dialog/respond', { requestId: request?.id ?? '', payload: { confirmed: approved } });
+    if (bridge?.status === 'ready' || bridge?.status === 'connected') {
+      // 权限应答走 L2 ui_response 帧（gateway inbound 专用面——非 host 命令）
+      void bridge.transport.sendFrame({ kind: 'ui_response', streamId: `ui:${request?.id ?? ''}`, seq: 1, body: { requestId: request?.id ?? '', threadId: useConversationStore.getState().activeSessionId ?? '', method: 'confirm', payload: { confirmed: approved } } });
     }
     clearPermission();
   };

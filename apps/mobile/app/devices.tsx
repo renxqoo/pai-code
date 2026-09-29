@@ -9,6 +9,7 @@ import { useAppTheme } from '@/theme/theme-context';
 import { radius, spacing } from '@/theme/tokens';
 import { Button } from '@/components/ui/button';
 import { initializeRelayRuntime, useRelayStatus } from '@/mobile/relay/runtime';
+import { Platform } from 'react-native';
 import { createPairingSession, generateDeviceIdentity, type PairingStep } from '@/mobile/relay/pairing';
 import { relayCredentialsStore } from '@/mobile/relay/credentials';
 
@@ -77,15 +78,24 @@ export default function DevicesRoute() {
   const [pairError, setPairError] = React.useState<string | null>(null);
   const [sas, setSas] = React.useState<string | null>(null);
   const [hasCredentials, setHasCredentials] = React.useState(relayCredentialsStore.load() !== null);
+  React.useEffect(() => {
+    // preload 完成后（未配对态无 status 事件）随 status 变化刷新（M4）
+    setHasCredentials(relayCredentialsStore.load() !== null);
+  }, [status]);
 
   const connected = status === 'connected' || status === 'ready';
 
+  const pairingInFlightRef = React.useRef(false);
+
   const pairWithTicket = async (relayUrl: string, pairingId: string, installationId: string, ticket: string, gatewayEphemeralPub?: string, manualCode?: string): Promise<void> => {
+    if (pairingInFlightRef.current) return; // 同帧双击防抖（M3）
+    pairingInFlightRef.current = true;
     setPairing(true);
     setPairError(null);
     setSas(null);
+    let wire: ReturnType<typeof makePairingWire> | null = null;
     try {
-      const wire = makePairingWire(relayUrl, ticket);
+      wire = makePairingWire(relayUrl, ticket);
       wire.wire();
       const identity = generateDeviceIdentity();
       const session = createPairingSession({
@@ -93,7 +103,7 @@ export default function DevicesRoute() {
         endpoints: { relayUrl, installationId },
         pairingId,
         ...(gatewayEphemeralPub !== undefined ? { gatewayEphemeralPub } : {}),
-        deviceInfo: { name: identity.deviceId, deviceType: 'phone', platform: 'ios', appVersion: '1' },
+        deviceInfo: { name: identity.deviceId, deviceType: 'phone', platform: Platform.OS, appVersion: '1' },
       });
       session.onStep((step: PairingStep) => {
         if (step.phase === 'sas-shown') setSas(step.sas);
@@ -122,11 +132,13 @@ export default function DevicesRoute() {
       if (!saved) setPairError('凭证保存失败（本会话可用，重启后需重新配对）');
       setHasCredentials(true);
       session.close();
-      initializeRelayRuntime().connectWithCredentials(session.relayToken ?? '');
+      void initializeRelayRuntime().connectWithCredentials(session.relayToken ?? '');
     } catch (error) {
+      wire?.close();
       setPairError(error instanceof Error ? error.message : '配对失败');
     } finally {
       setPairing(false);
+      pairingInFlightRef.current = false;
     }
   };
 
@@ -162,7 +174,7 @@ export default function DevicesRoute() {
                 label: connected ? '已连接' : '重新连接',
                 onPress: () => {
                   const credentials = relayCredentialsStore.load();
-                  if (credentials !== null) initializeRelayRuntime().connectWithCredentials(credentials.sharedSecretHex);
+                  if (credentials !== null) void initializeRelayRuntime().connectWithCredentials(credentials.relayToken);
                 },
                 selected: connected,
               },
@@ -237,7 +249,9 @@ export default function DevicesRoute() {
               setPairError('手输码模式需同时填 relay 地址');
               return;
             }
-            setPairError('手输码模式需配对载荷（含 installationId）——从桌面端复制完整配对码');
+            // 手输码路径（M6 接线）：需 installationId（gw_ 地址域）——载荷缺省时经
+            // gateway 节点发现不可行（ pairing 面无该面），要求载荷或扫码承载
+            setPairError('手输码需配对载荷（含 installationId）——从桌面端复制完整配对码后粘贴');
           }}
           size="small"
         />

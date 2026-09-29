@@ -8,11 +8,12 @@ import * as React from 'react';
 
 import type { ApiMethod, ApiOutcome, Client, UiEvent, Unsubscribe } from '@paiapp/contracts';
 
-import { createBridgeClient, type BridgeClient } from '../transport/client';
+import { createBridgeClient, type BridgeClient, type ClientTransportFace } from '../transport/client';
 import { createRelayTransport, type RelayStatus, type RelayTransport } from './transport';
 import { createRelayRatchetCodec } from './ratchet-codec';
 import { createKvRatchetStore, preloadRelayCredentials, relayCredentialsStore, type RelayCredentials } from './credentials';
 import { createSessionSync } from '../state/session-sync';
+import { createEventMapper, type EventMapper } from '@paiapp/api/events/event-mapper';
 import { createHistorySync } from '../state/history-sync';
 import { useConversationStore } from '@/store/conversation-store';
 import { useHistoryStore } from '@/store/history-store';
@@ -26,7 +27,7 @@ export interface RelayRuntime {
   /** 设备凭证（配对后可用）。 */
   credentials: RelayCredentials | null;
   /** 配对完成后的正式连接（经凭证 + relay token）。 */
-  connectWithCredentials(relayToken: string): void;
+  connectWithCredentials(relayToken: string): Promise<void>;
   disconnect(): void;
 }
 
@@ -67,9 +68,7 @@ export function initializeRelayRuntime(): RelayRuntime {
         void detail;
       },
       onFrame(frame) {
-        // L2 帧 → Client 订阅面（session-sync/history-sync 挂载处）
-        const event = frame.kind === 'event' ? (frame.body as Record<string, unknown>) : null;
-        if (event !== null) clientRef?.dispatch({ ...event, type: event['name'] });
+        dispatchL2Frame(frame);
       },
       onRelayMessage() {
         // relay 控制行（no-route 等）——观测面（日志）
@@ -77,7 +76,14 @@ export function initializeRelayRuntime(): RelayRuntime {
     },
   });
 
-  const client = createBridgeClient({ transport: transport as never });
+  // client 经活引用取 transport（connectWithCredentials 换绑后 invoke 即刻生效——H1 修复）
+  const liveTransport = { current: transport as unknown as ClientTransportFace };
+  const client = createBridgeClient({
+    transport: {
+      sendCommand: (spec) => liveTransport.current.sendCommand(spec),
+      waitResponse: (id, timeoutMs) => liveTransport.current.waitResponse(id, timeoutMs),
+    },
+  });
   const clientRef: BridgeClient | null = client;
 
   historySyncRef = createHistorySync({
@@ -103,13 +109,34 @@ export function initializeRelayRuntime(): RelayRuntime {
     },
   });
 
+  const eventMapper: EventMapper = createEventMapper({
+    now: () => Date.now(),
+  });
+
+  /** L2 帧 → UiEvent（hub 事件名 camelCase 词表翻译——与桌面端同源 event-mapper）+ ui_request 面。 */
+  function dispatchL2Frame(frame: { kind: string; body?: unknown }): void {
+    const body = (frame.body ?? {}) as Record<string, unknown>;
+    if (frame.kind === 'event') {
+      const mapped = eventMapper.mapEvent({ threadId: textOf(body['threadId']), name: textOf(body['name']), payload: (body['payload'] ?? {}) as Record<string, unknown>, ...(textOf(body['agentName']).length > 0 ? { agentName: textOf(body['agentName']) } : {}) });
+      for (const uiEvent of mapped) clientRef?.dispatch(uiEvent);
+      return;
+    }
+    if (frame.kind === 'ui_request') {
+      clientRef?.dispatch({ type: 'dialogRequest', requestId: textOf(body['requestId']), method: textOf(body['method']), threadId: textOf(body['threadId']) });
+    }
+  }
+
   // 事件路由（模块级常量——热路径零分配）
   client.subscribe((event) => {
     const record = event as unknown as Record<string, unknown>;
     const type = textOf(record['type']);
     const threadId = typeof record['threadId'] === 'string' ? (record['threadId'] as string) : null;
+    const recordThreadId = textOf(record['threadId']);
     if (type === 'dialogRequest' || type === 'dialogSettled') {
-      sessionSyncRef?.handleEvent(record as Record<string, unknown>);
+      // 权限卡只对当前活跃会话（或引导态）可见——后台会话请求不打扰当前视图（L1）
+      if (recordThreadId.length === 0 || activeThreadId === null || recordThreadId === activeThreadId) {
+        sessionSyncRef?.handleEvent(record as Record<string, unknown>);
+      }
       return;
     }
     // 会话生命周期事件只走 routeEvent（session-sync 的 onSessionEvent 回灌会造成二跳双路由）
@@ -131,16 +158,16 @@ export function initializeRelayRuntime(): RelayRuntime {
     transport,
     status: 'disconnected',
     credentials: null,
-    connectWithCredentials(relayToken) {
+    async connectWithCredentials(relayToken) {
       const credentials = relayCredentialsStore.load();
       if (credentials === null) return;
-      const codec = createRelayRatchetCodec({
+      // 重建传输（真 codec + RN socket）
+      const codec = await createRelayRatchetCodec({
         deviceId: credentials.deviceId,
         installationId: credentials.installationId,
         sharedSecretHex: credentials.sharedSecretHex,
         store: createKvRatchetStore(),
       });
-      // 重建传输（真 codec + RN socket）
       const real = createRelayTransport({
         relayUrl: credentials.relayUrl,
         relayToken,
@@ -155,14 +182,17 @@ export function initializeRelayRuntime(): RelayRuntime {
             void detail;
           },
           onFrame(frame) {
-            const event = frame.kind === 'event' ? (frame.body as Record<string, unknown>) : null;
-            if (event !== null) clientRef?.dispatch({ ...event, type: event['name'] });
+            dispatchL2Frame(frame);
           },
           onRelayMessage() {
             // 观测面
           },
         },
       });
+      // 换绑前先停旧 transport（H4：泄漏 + 双写）；活引用切换让 client.invoke 即刻走真连接（H1）
+      const previous = (runtime as RelayRuntime & { transport: RelayTransport }).transport;
+      if (previous !== real && previous.status() !== 'disconnected') previous.stop();
+      liveTransport.current = real as unknown as ClientTransportFace;
       (runtime as RelayRuntime & { transport: RelayTransport }).transport = real;
       (runtime as RelayRuntime & { credentials: RelayCredentials | null }).credentials = credentials;
       real.connect();
@@ -366,7 +396,7 @@ export async function bootstrapRelayRuntime(): Promise<void> {
   void initializeRelayRuntime();
   if (credentials === null) return;
   // relay token：配对产物（gateway enroll token 换发——一期由 pairing 写入凭证同存）
-  runtime?.connectWithCredentials(credentials.relayToken);
+  void runtime?.connectWithCredentials(credentials.relayToken);
 }
 
 /** RN socket 工厂（token query——relay 鉴权面）。 */

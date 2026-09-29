@@ -58,6 +58,8 @@ const memoryKv: SyncKv = (() => {
     get: (key) => map.get(key) ?? null,
     set: (key, value) => {
       map.set(key, value);
+      // 写穿持久（web/native 通吃——ratchet 边界的崩溃恢复依据，H5）
+      void AsyncStorage.setItem(`kv:${key}`, value).catch(() => undefined);
     },
   };
 })();
@@ -67,6 +69,7 @@ let kv: SyncKv = memoryKv;
 export function setRatchetKv(next: SyncKv): void {
   kv = next;
 }
+
 
 /** App 启动预载（SecureStore 异步 → 同步缓存；失败降级内存）。 */
 export async function preloadRelayCredentials(): Promise<RelayCredentials | null> {
@@ -125,7 +128,7 @@ export const relayCredentialsStore = {
   },
 };
 
-/** ratchet 边界存储（同步 KV——「批首落盘成功才放行发送」要求同步写）。 */
+/** ratchet 边界存储：同步 KV 写穿（内存 Map + AsyncStorage 持久）；load 先内存后持久。 */
 export function createKvRatchetStore(): RatchetBoundaryStore {
   return {
     async saveSend(deviceId, boundary) {
@@ -138,13 +141,23 @@ export function createKvRatchetStore(): RatchetBoundaryStore {
     },
     async loadSend(deviceId) {
       await Promise.resolve();
-      const raw = kv.get(`${RATCHET_PREFIX}${deviceId}.send`);
-      return raw === null ? null : (JSON.parse(raw) as unknown);
+      const key = `${RATCHET_PREFIX}${deviceId}.send`;
+      const mem = kv.get(key);
+      if (mem !== null) return JSON.parse(mem) as unknown;
+      const persisted = await AsyncStorage.getItem(`kv:${key}`).catch(() => null);
+      if (persisted === null) return null;
+      kv.set(key, persisted);
+      return JSON.parse(persisted) as unknown;
     },
     async loadRecv(deviceId) {
       await Promise.resolve();
-      const raw = kv.get(`${RATCHET_PREFIX}${deviceId}.recv`);
-      return raw === null ? null : (JSON.parse(raw) as unknown);
+      const key = `${RATCHET_PREFIX}${deviceId}.recv`;
+      const mem = kv.get(key);
+      if (mem !== null) return JSON.parse(mem) as unknown;
+      const persisted = await AsyncStorage.getItem(`kv:${key}`).catch(() => null);
+      if (persisted === null) return null;
+      kv.set(key, persisted);
+      return JSON.parse(persisted) as unknown;
     },
   };
 }

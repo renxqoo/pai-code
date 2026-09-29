@@ -43,7 +43,7 @@ describe('relay ratchet codec（T58）', () => {
 
   it('seal/open 往返：同一 codec 自加密自解密（真互操作由 bun wire-parity 背书）', async () => {
     const { shared } = pairedEnds();
-    const codec = createRelayRatchetCodec({ deviceId: 'd1', installationId: 'gw1', sharedSecretHex: shared, store });
+    const codec = await createRelayRatchetCodec({ deviceId: 'd1', installationId: 'gw1', sharedSecretHex: shared, store });
     const frameJson = JSON.stringify({ kind: 'command', body: { id: 'c1', command: 'session/list' } });
     const sealed = await codec.seal(frameJson);
     expect(sealed).not.toBeNull();
@@ -56,7 +56,7 @@ describe('relay ratchet codec（T58）', () => {
 
   it('垃圾 nonce/载荷 → open 拒 null（防御）', async () => {
     const { shared } = pairedEnds();
-    const codec = createRelayRatchetCodec({ deviceId: 'd1', installationId: 'gw1', sharedSecretHex: shared, store });
+    const codec = await createRelayRatchetCodec({ deviceId: 'd1', installationId: 'gw1', sharedSecretHex: shared, store });
     const opened = await codec.open('not-base64!!!', 'short');
     expect(opened).toBeNull();
     // 伪造的合法 base64 nonce（乱序 epoch）——拒
@@ -67,7 +67,7 @@ describe('relay ratchet codec（T58）', () => {
 
   it('批次边界触发持久化（64 帧批量落盘语义）', async () => {
     const { shared } = pairedEnds();
-    const codec = createRelayRatchetCodec({ deviceId: 'd1', installationId: 'gw1', sharedSecretHex: shared, store });
+    const codec = await createRelayRatchetCodec({ deviceId: 'd1', installationId: 'gw1', sharedSecretHex: shared, store });
     for (let i = 0; i < 70; i += 1) {
       const sealed = await codec.seal(JSON.stringify({ i }));
       expect(sealed).not.toBeNull();

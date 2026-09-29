@@ -32,19 +32,34 @@ export interface RelayCodecFace {
   open(payloadBase64: string, nonceBase64: string): Promise<string | null>;
 }
 
-export function createRelayRatchetCodec(deps: RelayRatchetCodecDeps): RelayCodecFace {
-  const ratchet = new RatchetSession(
-    {
-      now: Date.now,
-      deviceId: deps.deviceId,
-      direction: 1,
-      persist: {
-        persistSendBoundary: (deviceId: string, boundary: unknown) => deps.store.saveSend(deviceId, boundary),
-        persistRecvBoundary: (deviceId: string, boundary: unknown) => deps.store.saveRecv(deviceId, boundary),
-      },
-    },
-    deriveInitialChains(deps.sharedSecretHex, false),
-  );
+export async function createRelayRatchetCodec(deps: RelayRatchetCodecDeps): Promise<RelayCodecFace> {
+  const persist = {
+    persistSendBoundary: (deviceId: string, boundary: unknown) => deps.store.saveSend(deviceId, boundary),
+    persistRecvBoundary: (deviceId: string, boundary: unknown) => deps.store.saveRecv(deviceId, boundary),
+  };
+  const sessionDeps = { now: Date.now, deviceId: deps.deviceId, direction: 1 as const, persist };
+  // 恢复优先（H5：重启/重连后 nonce 永不复现——同种子重铸链 = GCM nonce/key 复用）；
+  // 持久化组撕裂（epoch 不一致）时弃档重建并推进（fail-open 到重配对语义）
+  let ratchet: RatchetSession;
+  const [savedSend, savedRecv] = await Promise.all([deps.store.loadSend(deps.deviceId), deps.store.loadRecv(deps.deviceId)]);
+  const sendBoundary = savedSend as { rootKey?: string; sendChainKey?: string; nextIndex?: number; epoch?: number; baseIndex?: number } | null;
+  const recvBoundary = savedRecv as { recvChainKey?: string; nextIndex?: number; lastRecvIndex?: number; epoch?: number } | null;
+  if (
+    sendBoundary !== null && recvBoundary !== null &&
+    typeof sendBoundary.rootKey === 'string' && typeof sendBoundary.sendChainKey === 'string' &&
+    typeof sendBoundary.nextIndex === 'number' && typeof sendBoundary.epoch === 'number' &&
+    typeof recvBoundary.recvChainKey === 'string' && typeof recvBoundary.nextIndex === 'number' &&
+    typeof recvBoundary.lastRecvIndex === 'number' && typeof recvBoundary.epoch === 'number' &&
+    sendBoundary.epoch === recvBoundary.epoch
+  ) {
+    ratchet = RatchetSession.restore(
+      sessionDeps,
+      { rootKey: sendBoundary.rootKey, sendChainKey: sendBoundary.sendChainKey, nextIndex: sendBoundary.nextIndex, epoch: sendBoundary.epoch, ...(typeof sendBoundary.baseIndex === 'number' ? { baseIndex: sendBoundary.baseIndex } : {}) },
+      { recvChainKey: recvBoundary.recvChainKey, nextIndex: recvBoundary.nextIndex, lastRecvIndex: recvBoundary.lastRecvIndex, epoch: recvBoundary.epoch },
+    );
+  } else {
+    ratchet = new RatchetSession(sessionDeps, deriveInitialChains(deps.sharedSecretHex, false));
+  }
   let openChain: Promise<void> = Promise.resolve();
 
   return {
