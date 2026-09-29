@@ -16,19 +16,22 @@ import { pendingEchoes } from './pending-echoes';
 
 /** 投递结算（成功/失败/异常统一入口）：失败撤 pending 气泡并把文本回填草稿
  *  （重发不变措辞）；成功发回底跟随信号。 */
-function settleSubmit(threadId: string, message: string, reason: string | null): void {
+function settleSubmit(threadId: string, localId: string, message: string, reason: string | null): void {
   notifySubmitFailure(reason);
-  const pending = pendingEchoes.get(threadId);
   if (reason === null) {
     // 发送成功 = 用户主动看最新：回底一次性信号（threadId 寻址，舞台消费即贴底跟随）
     uiStore.getState().requestFollowLatest(threadId);
     return;
   }
-  if (pending !== undefined) {
-    store.getState().dropPendingMessage(threadId, pending.localId);
-    pendingEchoes.delete(threadId);
-    uiStore.getState().setDraft(threadId, message);
-  }
+  // 失败：按 localId 精确出队回滚（不与后续提交的回显混淆；即使彼时队列里已有新条目）
+  const queue = pendingEchoes.get(threadId);
+  const index = queue === undefined ? -1 : queue.findIndex((entry) => entry.localId === localId);
+  if (queue === undefined || index === -1) return;
+  const [entry] = queue.splice(index, 1);
+  if (queue.length === 0) pendingEchoes.delete(threadId);
+  if (entry === undefined) return;
+  store.getState().dropPendingMessage(threadId, entry.localId);
+  uiStore.getState().setDraft(threadId, message);
 }
 
 /**
@@ -257,21 +260,22 @@ export function createWorkspaceActions(): WorkspaceActions {
       // 调用时读 store 真相：fork/重开等异步链路后的旧闭包不得打到旧线程；
       // 空舞台守卫/parked 懒唤醒/unknown_thread 自愈在主进程 session/prompt 管线内
       const threadId = activeThreadOf();
+      // 回显标识先铸（无论是否回显都要传结结算——失败回滚按它精确对账）
+      const localId = `local-${threadId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       if (message.trim().length > 0 && mode !== 'steer') {
         // 乐观回显：同 tick 上屏 pending 气泡（直执行 `! ` 不回显——结果条目由 bash 事件
         // 呈现；steer 不回显——注入消息非用户气泡；纯图无文本消息不回显——
         // 失败回填草稿仅携文本，回显会造出失败后无法复原的气泡）。回显身份
         // `msg-<localId>`；权威气泡到达时由 onEvent 侧按 WAL seq 收敛到 `msg-seq-<seq>`。
-        const localId = `local-${threadId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         store.getState().echoPendingMessage(
           threadId,
           localId,
           message,
           (images ?? []).map(({ data, mediaType }) => ({ data, mimeType: mediaType })),
         );
-        pendingEchoes.set(threadId, { localId, text: message });
+        pendingEchoes.set(threadId, [...(pendingEchoes.get(threadId) ?? []), { localId, text: message }]);
       }
-      void controller.submitDraft(threadId, message, images, mode).then((reason) => settleSubmit(threadId, message, reason), () => settleSubmit(threadId, message, 'rejected'));
+      void controller.submitDraft(threadId, message, images, mode).then((reason) => settleSubmit(threadId, localId, message, reason), () => settleSubmit(threadId, localId, message, 'rejected'));
       return null;
     },
     stopActiveTurn: () => void controller.stopActiveTurn(activeThreadOf()),

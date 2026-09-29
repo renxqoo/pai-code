@@ -4,6 +4,20 @@ import { createSessionSync } from '../session-sync';
 import type { ChatMessage } from '@/types/domain';
 
 describe('session-sync 事件归并', () => {
+  it('症状回归「历史先到后同条消息再上屏」：seed 后同 seq 的 userMessage 事件不重插', () => {
+    const s = sync();
+    s.seed([{ id: 'u-5', kind: 'user', text: '修复', createdAt: '2026-09-30T00:00:00Z' }] as ChatMessage[]);
+    s.handleEvent({ type: 'userMessage', threadId: 't', message: { seq: 5, text: '修复', origin: 'user', images: [] } });
+    expect(s.snapshot().messages).toHaveLength(1);
+  });
+
+  it('不同 seq 的同文本消息各自成条（身份按 seq 分域，不按文本合并）', () => {
+    const s = sync();
+    s.handleEvent({ type: 'userMessage', threadId: 't', message: { seq: 5, text: '继续', origin: 'user', images: [] } });
+    s.handleEvent({ type: 'userMessage', threadId: 't', message: { seq: 9, text: '继续', origin: 'user', images: [] } });
+    expect(s.snapshot().messages.map((m) => m.text)).toEqual(['继续', '继续']);
+  });
+
   let dialogRequests: Array<{ requestId: string; title: string; command: string } | null>;
   let sessionEvents: Array<Record<string, unknown>>;
 
@@ -21,7 +35,7 @@ describe('session-sync 事件归并', () => {
   it('一轮完整旅程：userMessage → thinking/text delta → messageFinal → turnSettled', () => {
     const s = sync();
     s.handleEvent({ type: 'turnStarted', threadId: 't1', at: 1 });
-    s.handleEvent({ type: 'userMessage', threadId: 't1', message: { id: 'u1', text: 'hi', origin: 'user' } });
+    s.handleEvent({ type: 'userMessage', threadId: 't1', message: { seq: 5, text: 'hi', origin: 'user', images: [] } });
     s.handleEvent({ type: 'thinkingDelta', threadId: 't1', messageId: 'm1', delta: 'think ' });
     s.handleEvent({ type: 'thinkingDelta', threadId: 't1', messageId: 'm1', delta: 'more' });
     s.handleEvent({ type: 'textDelta', threadId: 't1', messageId: 'm1', delta: 'Hello' });
@@ -79,7 +93,7 @@ describe('session-sync 事件归并', () => {
 
   it('系统注入 userMessage 不进列表；streamRestarted 清流式缓冲', () => {
     const s = sync();
-    s.handleEvent({ type: 'userMessage', threadId: 't', message: { id: 's1', text: 'notify', origin: 'system' } });
+    s.handleEvent({ type: 'userMessage', threadId: 't', message: { seq: 6, text: 'notify', origin: 'system', images: [] } });
     s.handleEvent({ type: 'textDelta', threadId: 't', messageId: 'm', delta: 'attempt-1' });
     s.handleEvent({ type: 'streamRestarted', threadId: 't', messageId: 'm' });
     s.handleEvent({ type: 'textDelta', threadId: 't', messageId: 'm', delta: 'attempt-2' });
@@ -156,7 +170,7 @@ describe('session-sync 边界分支', () => {
   it('userMessage origin=system 不进列表（即使无 message 字段）', () => {
     const { dialogs, outer } = sink();
     const s = createSessionSync({ onDialogRequest: (r) => dialogs.push(r), onSessionEvent: (e) => outer.push(e) });
-    s.handleEvent({ type: 'userMessage', threadId: 't', message: { id: 's', text: 'n', origin: 'system' } });
+    s.handleEvent({ type: 'userMessage', threadId: 't', message: { seq: 7, text: 'n', origin: 'system', images: [] } });
     s.handleEvent({ type: 'userMessage', threadId: 't' });
     expect(s.snapshot().messages.length).toBe(0);
   });

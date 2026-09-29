@@ -140,10 +140,15 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       // 权威用户气泡到达（WAL 帧直通）：它带的 WAL seq 即本会话落账身份。在途回显
       // （乐观回显）同步换到同一身份域——否则同文本异 id 两条并存。若宿主回执
       // 已先对账（reconcileEcho 已消费登记），这里无可收敛。
-      const pending = pendingEchoes.get(event.threadId);
+      const pending = pendingEchoes.get(event.threadId)?.[0];
       if (pending !== undefined) {
         store.getState().reconcileEcho(event.threadId, pending.localId, event.message.seq);
-        pendingEchoes.delete(event.threadId);
+        // FIFO 出队：WAL seq 单调 ⇒ 权威帧到达序 = 提交序（队首即最近未认领的回显）
+        const queue = pendingEchoes.get(event.threadId);
+        if (queue !== undefined) {
+          queue.shift();
+          if (queue.length === 0) pendingEchoes.delete(event.threadId);
+        }
       }
     }
     if (event.type === 'gitChanged') {

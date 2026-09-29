@@ -4,7 +4,8 @@
  *
  * 事件字段形状以 @paiapp/contracts/ui-events 为单一真相：
  * - turnStarted → streaming=true；turnSettled{ok,reason} → streaming=false（失败落 status 行）
- * - userMessage{message:{id,text,origin}} → 用户行（origin=system 不进列表——过程噪音）
+ * - userMessage{message:{seq,text,origin,images}} → 用户行（origin=system 不进列表——过程噪音；
+ *   id = `u-<seq>` 与历史水化同域，seed 后同条不重复上屏）
  * - textDelta/thinkingDelta{messageId,delta} → 流式累积（thinking 行 status=running）
  * - messageFinal{message:{id,text,thinking,toolCalls}} → 权威终局（整体替换流式缓冲；
  *   message.toolCalls 展开工具行——toolCallAdded 事件期间已建的行按 callId 复用位置）
@@ -84,9 +85,14 @@ export function createSessionSync(callbacks: SessionSyncCallbacks) {
       return;
     }
     if (type === 'userMessage') {
-      const message = event['message'] as { text?: string; origin?: string } | undefined;
+      const message = event['message'] as { seq?: number; text?: string; origin?: string } | undefined;
       if (message?.origin !== 'user') return; // 系统注入不进列表
-      append({ id: `user-${messages.length}`, kind: 'user', text: message.text ?? '', createdAt: new Date().toISOString() });
+      // 身份与历史水化同域（`u-<seq>`，response-map.walToMessages 同一拼法）：
+      // 历史先到（seed）时同条事件不再重插（否则同句话两条气泡——与 PC 端同症状）。
+      const seq = message.seq;
+      const id = typeof seq === 'number' && Number.isFinite(seq) ? `u-${seq}` : `user-${messages.length}`;
+      if (messages.some((existing) => existing.id === id)) return;
+      append({ id, kind: 'user', text: message.text ?? '', createdAt: new Date().toISOString() });
       return;
     }
     if (type === 'streamRestarted') {

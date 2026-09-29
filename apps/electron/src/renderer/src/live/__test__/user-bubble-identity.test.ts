@@ -133,6 +133,20 @@ describe('乐观回显收敛（reconcileEcho——提交即上屏，权威到达
     const items = threadOf(store).items.filter((item) => item.kind === 'message');
     expect(items[0]?.kind === 'message' ? items[0].message.images : []).toHaveLength(1);
   });
+
+  test('两条在途回显：各自认领自己的权威气泡（FIFO，不互相覆盖）', () => {
+    const store = createLiveStore();
+    store.getState().bootstrap(bootstrapOf([session('t')]) as never);
+    // 连投两条（同文本也会连投——身份靠 seq 分域）
+    store.getState().echoPendingMessage('t', 'local-1', TEXT);
+    store.getState().echoPendingMessage('t', 'local-2', TEXT);
+    expect(threadOf(store).items.filter((item) => item.kind === 'message')).toHaveLength(2);
+    // 权威按提交序到达：先 647 后 660
+    store.getState().reconcileEcho('t', 'local-1', 647);
+    store.getState().reconcileEcho('t', 'local-2', 660);
+    const items = threadOf(store).items.filter((item) => item.kind === 'message');
+    expect(items.map((item) => (item.kind === 'message' ? item.message.id : ''))).toEqual(['msg-seq-647', 'msg-seq-660']);
+  });
 });
 
 /** 直执行 bash（`! ` 命令）：信封同走两通道，渲染形态不同——必须只出一条（工具块）。 */
