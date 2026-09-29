@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { devHubEntryCandidates, packagedHubCandidates, resolveHubPaths } from '../hub-paths';
+import { devGatewayEntryCandidates, devHubEntryCandidates, packagedGatewayEntry, packagedHubCandidates, resolveGatewayEntry, resolveHubPaths } from '../hub-paths';
 
 /**
  * 宿主路径解析链回归：dev shell 丢失 PAI_HUB_ENTRY 时曾直接判 hub_paths_unconfigured
@@ -78,6 +78,49 @@ describe('hub-paths 解析链（设置 > env > dev 同级探测 > 打包产物�
     expect(
       resolveHubPaths({ fromSettings: null, fromEnv: null, fromPackaged: null, devRepoRoot: '/work/agent-app', packaged: false, exists: () => false }),
     ).toBeNull();
+  });
+});
+
+describe('gateway 入口解析链（症状回归：PAI_X_HARNESS_ROOT 是唯一来源，未设即 stub）', () => {
+  test('dev 旁级探测：src 优先于 dist（与宿主同链同序）', () => {
+    const [src, dist] = devGatewayEntryCandidates('/work/agent-app');
+    expect(src).toBe('/work/x-harness/apps/hub-gateway/src/cli.ts');
+    expect(dist).toBe('/work/x-harness/apps/hub-gateway/dist/cli.js');
+    expect(
+      resolveGatewayEntry({ fromSettings: null, fromEnv: null, packagedEntry: null, devRepoRoot: '/work/agent-app', packaged: false, exists: withFiles(src, dist) }),
+    ).toBe(src);
+    expect(
+      resolveGatewayEntry({ fromSettings: null, fromEnv: null, packagedEntry: null, devRepoRoot: '/work/agent-app', packaged: false, exists: withFiles(dist) }),
+    ).toBe(dist);
+  });
+
+  test('设置覆盖 > env > dev 探测 > 打包资源', () => {
+    const [src] = devGatewayEntryCandidates('/work/agent-app');
+    const base = { fromEnv: '/env/gw.ts' as string | null, packagedEntry: '/res/hub-gateway/dist/cli.js' as string | null, devRepoRoot: '/work/agent-app' as string | null, packaged: false, exists: withFiles(src) };
+    expect(resolveGatewayEntry({ ...base, fromSettings: '/settings/gw.ts' })).toBe('/settings/gw.ts');
+    expect(resolveGatewayEntry({ ...base, fromSettings: null })).toBe('/env/gw.ts');
+    expect(resolveGatewayEntry({ ...base, fromSettings: null, fromEnv: null })).toBe(src);
+    expect(
+      resolveGatewayEntry({ ...base, fromSettings: null, fromEnv: null, packaged: true }),
+    ).toBeNull(); // 打包态且资源缺席：不静默退化成 dev 探测
+  });
+
+  test('打包态跳过探测；全缺 → null（面板显引导，命令回 gateway not configured）', () => {
+    const [src] = devGatewayEntryCandidates('/work/agent-app');
+    const packagedEntry = '/res/hub-gateway/dist/cli.js';
+    expect(
+      resolveGatewayEntry({ fromSettings: null, fromEnv: null, packagedEntry, devRepoRoot: '/work/agent-app', packaged: true, exists: withFiles(src, packagedEntry) }),
+    ).toBe(packagedEntry);
+    expect(
+      resolveGatewayEntry({ fromSettings: null, fromEnv: null, packagedEntry: null, devRepoRoot: '/work/agent-app', packaged: true, exists: withFiles(src) }),
+    ).toBeNull();
+    expect(
+      resolveGatewayEntry({ fromSettings: null, fromEnv: null, packagedEntry: null, devRepoRoot: null, packaged: false, exists: () => false }),
+    ).toBeNull();
+  });
+
+  test('packagedGatewayEntry：resources/hub-gateway/dist/cli.js', () => {
+    expect(packagedGatewayEntry('/res')).toBe('/res/hub-gateway/dist/cli.js');
   });
 });
 

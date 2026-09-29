@@ -6,6 +6,7 @@ import {
   isApiFormat,
   normalizeLegacyApiFormat,
   parseSettings,
+  serializeGatewayConfig,
 } from "../settings";
 
 /** API 格式词表：顺序/封闭性与持久化宽松读的回归。 */
@@ -45,6 +46,54 @@ describe("API 格式词表", () => {
     });
     expect(settings.providers).toHaveLength(1);
     expect(settings.providers[0]?.api).toBe("pi-messages");
+  });
+});
+
+/** relay 配置（全局统一：settings.json 是唯一真相，gateway.json 是派生落盘产物）。 */
+describe("relay 全局配置", () => {
+  test("无 relay 键的旧档解析出空缺省（不整档降级丢 provider）", () => {
+    const settings = parseSettings({
+      providers: [{ name: "glm", baseUrl: "https://x.example.com", api: "openai", models: [{ id: "m", reasoning: false, vision: false }] }],
+    });
+    expect(settings.relay).toEqual({ relayUrl: "", relayKeyFingerprint: "" });
+    expect(settings.providers).toHaveLength(1);
+  });
+
+  test("relay 键读回原值", () => {
+    const settings = parseSettings({ relay: { relayUrl: "wss://relay.example.com", relayKeyFingerprint: "fp-1" } });
+    expect(settings.relay).toEqual({ relayUrl: "wss://relay.example.com", relayKeyFingerprint: "fp-1" });
+  });
+
+  test("垃圾形状（字符串/数组）不崩，落回缺省", () => {
+    for (const bad of ["wss://x", ["wss://x"], 42, null]) {
+      const settings = parseSettings({ relay: bad });
+      expect(settings.relay).toEqual({ relayUrl: "", relayKeyFingerprint: "" });
+    }
+  });
+});
+
+describe("serializeGatewayConfig（gateway.json 派生产物）", () => {
+  test("空 relayUrl = 本地形态（remoteEnabled:false，不启用远程）", () => {
+    expect(JSON.parse(serializeGatewayConfig({ relayUrl: "", relayKeyFingerprint: "" }))).toEqual({
+      remoteEnabled: false,
+      relayUrl: "",
+      relayKeyFingerprint: "",
+    });
+  });
+
+  test("非空 relayUrl = 远程形态（remoteEnabled:true，三键齐全）", () => {
+    expect(JSON.parse(serializeGatewayConfig({ relayUrl: "wss://relay.example.com", relayKeyFingerprint: "fp-1" }))).toEqual({
+      remoteEnabled: true,
+      relayUrl: "wss://relay.example.com",
+      relayKeyFingerprint: "fp-1",
+    });
+  });
+
+  test("同输入同输出且带末尾换行（重生成不产生伪 diff）", () => {
+    const relay = { relayUrl: "wss://relay.example.com", relayKeyFingerprint: "fp-1" };
+    const once = serializeGatewayConfig(relay);
+    expect(serializeGatewayConfig(relay)).toBe(once);
+    expect(once.endsWith("\n")).toBe(true);
   });
 });
 

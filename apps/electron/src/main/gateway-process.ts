@@ -22,16 +22,13 @@ export interface OwnerFrame {
 export interface GatewayProcessDeps {
   /** bun 可执行（spawn hub-gateway CLI 的运行时——桌面既有 bunPath 解析链产物）。 */
   bunPath: string;
-  /** x-harness 仓库根（dev 检出）；null = 未配置（面板显示引导）。 */
-  xHarnessRoot: string | null;
+  /** gateway CLI 入口（hub-paths resolveGatewayEntry 解析链产物）；null = 未配置（面板显示引导）。 */
+  gatewayEntry: string | null;
   /** 共享 agentDir（host-hub 与 gateway 同一数据根）。 */
   agentDir: string;
-  /** gateway.json 内容（relayUrl/relayKeyFingerprint/hostBin 等）；null = remoteEnabled:false 本地形态。 */
-  gatewayConfig: Record<string, unknown> | null;
   /** host 启动命令（Electron 既有 hub 解析链的产物——gateway hostOverride 用）。 */
   hostExec: { command: string; args: string[] } | null;
   log(message: string): void;
-  now?(): number;
 }
 
 export interface PendingOwnerCommand {
@@ -55,6 +52,14 @@ const COMMAND_DEFAULT_TIMEOUT_MS = 10_000;
 
 export function startGatewayProcess(deps: GatewayProcessDeps): GatewayProcess {
   const log = (message: string): void => deps.log(message);
+  /** 拒挂起命令：响应永不到达（子进程退出/连接断开），立即结案而非空等超时。 */
+  const failPending = (reason: string): void => {
+    for (const waiter of pending.values()) {
+      clearTimeout(waiter.timer);
+      waiter.resolve({ id: '', command: '', success: false, error: reason });
+    }
+    pending.clear();
+  };
   let child: ChildProcess | null = null;
   let socket: Socket | null = null;
   let state: 'stopped' | 'starting' | 'running' = 'stopped';
@@ -64,7 +69,7 @@ export function startGatewayProcess(deps: GatewayProcessDeps): GatewayProcess {
   const listeners = new Set<(frame: OwnerFrame) => void>();
 
   const socketPath = join(deps.agentDir, 'gateway.sock');
-  const gatewayEntry = deps.xHarnessRoot !== null ? join(deps.xHarnessRoot, 'apps/hub-gateway/src/cli.ts') : null;
+  const gatewayEntry = deps.gatewayEntry;
   if (gatewayEntry === null || !existsSync(gatewayEntry)) {
     log('gateway_entry_missing');
     state = 'stopped';
@@ -99,6 +104,7 @@ export function startGatewayProcess(deps: GatewayProcessDeps): GatewayProcess {
     state = 'stopped';
     socket?.destroy();
     socket = null;
+    failPending('gateway exited');
   });
 
   const dispatchFrame = (frame: OwnerFrame): void => {
@@ -147,6 +153,7 @@ export function startGatewayProcess(deps: GatewayProcessDeps): GatewayProcess {
       if (socket === s) {
         socket = null;
         state = child?.exitCode === null ? 'starting' : 'stopped';
+        failPending('gateway not connected');
         setTimeout(connectOwner, 1_500);
       }
     });
@@ -187,6 +194,7 @@ export function startGatewayProcess(deps: GatewayProcessDeps): GatewayProcess {
       state = 'stopped';
       socket?.destroy();
       socket = null;
+      failPending('gateway stopped');
       if (child?.exitCode === null) {
         const dying = child;
         await new Promise<void>((resolve) => {

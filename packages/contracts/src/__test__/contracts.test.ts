@@ -9,6 +9,7 @@ import {
   SessionViewSchema,
   SettingsSchema,
   ApiSchemas,
+  PreferencesViewSchema,
   API_METHODS,
   ProviderConfigViewSchema,
   HistoryItemSchema,
@@ -119,14 +120,15 @@ describe('Settings zod：round-trip 与拒绝表', () => {
     const s = SettingsSchema.parse({});
     expect(s.providers).toEqual([]);
     expect(s.trustedDefault).toBe(false);
-    expect(s.hubDev).toEqual({ bunPath: null, hubEntry: null });
+    expect(s.hubDev).toEqual({ bunPath: null, hubEntry: null, gatewayEntry: null });
     expect(s.defaultModel).toBeNull();
     expect(s.onboarded).toBe(false);
+    expect(s.relay).toEqual({ relayUrl: '', relayKeyFingerprint: '' });
   });
 
   test('全量字段 round-trip', () => {
     const input = {
-      hubDev: { bunPath: '/usr/local/bin/bun', hubEntry: '/Users/x/my-agent/packages/host-hub/src/host/cli.ts' },
+      hubDev: { bunPath: '/usr/local/bin/bun', hubEntry: '/Users/x/my-agent/packages/host-hub/src/host/cli.ts', gatewayEntry: null },
       providers: [{ name: 'glm', baseUrl: 'https://api.example.com', api: 'openai', models: [{ id: 'glm-5.3', reasoning: true, vision: true }]}],
       trustedDefault: true,
       defaultModel: 'glm/glm-5.3',
@@ -136,6 +138,7 @@ describe('Settings zod：round-trip 与拒绝表', () => {
       hiddenProjects: ['/w/gone'],
       idleRecycleMinutes: 15,
       archivedSessions: ['/b.jsonl'],
+      relay: { relayUrl: 'wss://relay.example.com', relayKeyFingerprint: 'fp-1' },
     };
     expect(SettingsSchema.parse(input)).toEqual(input);
   });
@@ -206,6 +209,33 @@ describe('API schema：每方法合法/非法样本', () => {
   test('app/setPreference 部分写合法：单字段与清空默认模型', () => {
     expect(ApiSchemas['app/setPreference'].params.parse({ onboarded: true })).toEqual({ onboarded: true });
     expect(ApiSchemas['app/setPreference'].params.parse({ defaultModel: null })).toEqual({ defaultModel: null });
+  });
+
+  /** T59：relay 是全局统一配置（settings.json 唯一真相），偏好面可读可写。 */
+  test('app/setPreference 接受 relay 配置；空 patch 拒绝', () => {
+    expect(ApiSchemas['app/setPreference'].params.parse({ relay: { relayUrl: 'wss://relay.example.com', relayKeyFingerprint: 'fp-1' } })).toEqual({
+      relay: { relayUrl: 'wss://relay.example.com', relayKeyFingerprint: 'fp-1' },
+    });
+    expect(ApiSchemas['app/setPreference'].params.parse({ relay: {} })).toEqual({ relay: { relayUrl: '', relayKeyFingerprint: '' } });
+    expect(() => ApiSchemas['app/setPreference'].params.parse({})).toThrow();
+    expect(() => ApiSchemas['app/setPreference'].params.parse({ relay: { relayUrl: 42 } })).toThrow();
+  });
+
+  test('PreferencesView 带 relay（面板读口）', () => {
+    const view = {
+      defaultModel: null,
+      onboarded: true,
+      projectModels: {},
+      pinnedSessions: [],
+      trustedDefault: false,
+      hiddenProjects: [],
+      idleRecycleMinutes: 5,
+      archivedSessions: [],
+      relay: { relayUrl: 'wss://relay.example.com', relayKeyFingerprint: 'fp-1' },
+    };
+    expect(PreferencesViewSchema.parse(view)).toEqual(view);
+    const { relay: _omit, ...withoutRelay } = view;
+    expect(() => PreferencesViewSchema.parse(withoutRelay)).toThrow();
   });
 
   test('provider/test 合法样本通过', () => {

@@ -1,5 +1,5 @@
 import { createApiClient } from '@paiapp/api/client';
-import type { CommandView, ImagePayload, PreferencesView, ProviderModel, UiEvent } from '@paiapp/contracts';
+import type { CommandView, ImagePayload, PreferencesView, ProviderModel, RelayConfig, UiEvent } from '@paiapp/contracts';
 import { isSettableThinkingLevel } from '@paiapp/contracts';
 
 import { copy } from '@/strings';
@@ -138,6 +138,18 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     if (event.type === 'gitChanged') {
       // hub git/changed（外部 checkout 失效信号）：bump 分支代次——use-git-branches 按
       // cwd 匹配的会话分支视图重拉（ui-store 全局单值——多余重拉为已知可接受项）
+      uiStore.getState().bumpBranchRevision();
+      return;
+    }
+      // 建树通告投递结果（SESSION-WORKTREE-WORKFLOW §1.3 反馈分句）：busy 判定在主进程
+      // create 完成时刻，这里只查表成句；bump 代次让派生树 chip 随登记重读
+      state.pushNotice(
+        event.kind === 'busy'
+          ? copy.branch.wtCreatedBusy(event.path)
+          : event.kind === 'idle'
+            ? copy.branch.wtCreatedIdle(event.path)
+            : copy.branch.wtCreatedDeferred(event.path),
+      );
       uiStore.getState().bumpBranchRevision();
       return;
     }
@@ -533,7 +545,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       if (models.ok) store.setState({ models: models.data });
       return null;
     },
-    async updatePreferences(patch: { defaultModel?: string | null; onboarded?: boolean; projectModels?: Record<string, string>; pinnedSessions?: string[]; trustedDefault?: boolean; hiddenProjects?: string[]; archivedSessions?: string[]; hubDev?: { bunPath: string | null; hubEntry: string | null } }): Promise<PreferencesView | null> {
+    async updatePreferences(patch: { defaultModel?: string | null; onboarded?: boolean; projectModels?: Record<string, string>; pinnedSessions?: string[]; trustedDefault?: boolean; hiddenProjects?: string[]; archivedSessions?: string[]; relay?: RelayConfig; hubDev?: { bunPath: string | null; hubEntry: string | null } }): Promise<PreferencesView | null> {
       const outcome = await api.app.setPreference(patch);
       if (!outcome.ok) return null;
       store.setState({ preferences: outcome.data });

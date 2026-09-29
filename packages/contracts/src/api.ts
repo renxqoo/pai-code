@@ -7,7 +7,7 @@ import { PermModeSchema } from './permissions';
 import { RuntimeSnapshotViewSchema } from './runtime';
 import { InflightViewSchema, PendingDialogViewSchema, SubagentSnapshotViewSchema } from './inflight-views';
 import { DiffFileViewSchema, EditHunkViewSchema, SessionViewSchema, SubagentSpawnViewSchema } from './ui-events';
-import { IdleRecycleMinutesSchema, ProviderModelSchema } from './settings';
+import { IdleRecycleMinutesSchema, ProviderModelSchema, RelayConfigSchema } from './settings';
 import { TodoSnapshotEventDataSchema } from './todo-views';
 import { THINKING_LEVEL_ORDER } from './thinking-levels';
 import {
@@ -173,6 +173,8 @@ export const PreferencesViewSchema = z.object({
   /** worker 闲置自动回收档位（分钟）。 */
   idleRecycleMinutes: IdleRecycleMinutesSchema,
   archivedSessions: z.array(z.string()),
+  /** relay 接入配置（全局统一：settings.json 唯一真相，gateway.json 由其派生）。 */
+  relay: RelayConfigSchema,
 });
 export type PreferencesView = z.infer<typeof PreferencesViewSchema>;
 
@@ -562,6 +564,8 @@ export const ApiSchemas = {
         trustedDefault: z.boolean().optional(),
         hiddenProjects: z.array(z.string()).optional(),
         archivedSessions: z.array(z.string()).optional(),
+        /** relay 接入配置（全局统一；改写后网关需重启重载）。 */
+        relay: RelayConfigSchema.optional(),
       })
       .strict()
       .refine(
@@ -572,7 +576,8 @@ export const ApiSchemas = {
           value.pinnedSessions !== undefined ||
           value.trustedDefault !== undefined ||
           value.hiddenProjects !== undefined ||
-          value.archivedSessions !== undefined,
+          value.archivedSessions !== undefined ||
+          value.relay !== undefined,
         { message: 'empty_preference' },
       ),
     result: PreferencesViewSchema,

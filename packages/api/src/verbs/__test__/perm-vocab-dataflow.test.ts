@@ -74,6 +74,7 @@ function settingsRoutesWith(options: {
     } as never,
     keyStore: { getKey: () => null } as never,
     restartHost: () => Promise.resolve(undefined),
+    restartGateway: () => Promise.resolve(undefined),
     settingsCommands: () =>
       ({
         get: () => Promise.resolve({ ok: true as const, data: { values: { 'permission.defaultMode': options.storedMode } } }),

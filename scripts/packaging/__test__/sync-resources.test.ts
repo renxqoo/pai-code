@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
 
-import { collectHarnessDeps, collectThirdPartyDirs, resolveResourceSources, rgResourcePaths, workspaceMembers } from '../sync-resources';
+import { collectHarnessDeps, collectThirdPartyDirs, gatewayBuildArgs, resolveResourceSources, rgResourcePaths, workspaceMembers } from '../sync-resources';
 
 /** 资源来源解析回归：env 覆盖优先、缺省走旁级 x-harness host-hub 源码入口（编译输入）。 */
 
@@ -14,16 +14,29 @@ test('env 覆盖优先于缺省来源', () => {
     '/repo',
     '/exec/bun',
   );
-  expect(sources).toEqual({ bunPath: '/custom/bun', hubSource: '/custom/host/cli.ts', harnessRoot: '/x-harness' });
+  expect(sources).toEqual({ bunPath: '/custom/bun', hubSource: '/custom/host/cli.ts', gatewaySource: '/x-harness/apps/hub-gateway/src/cli.ts', harnessRoot: '/x-harness' });
 });
 
-test('缺省：本机 bun 与旁级 x-harness host-hub 源码入口', () => {
+test('缺省：本机 bun 与旁级 x-harness host-hub / hub-gateway 源码入口', () => {
   const sources = resolveResourceSources({}, '/repo', '/exec/bun');
   expect(sources).toEqual({
     bunPath: '/exec/bun',
     hubSource: '/x-harness/apps/host-hub/src/host/cli.ts',
+    gatewaySource: '/x-harness/apps/hub-gateway/src/cli.ts',
     harnessRoot: '/x-harness',
   });
+});
+
+test('gateway 打包构建参数：源码入口 + bundled 单文件（不带 --external，依赖整体入产物）', () => {
+  expect(gatewayBuildArgs('/x-harness', '/repo/resources/hub-gateway/dist')).toEqual([
+    '/x-harness/apps/hub-gateway/src/cli.ts',
+    '--outdir',
+    '/repo/resources/hub-gateway/dist',
+    '--target',
+    'bun',
+    '--format',
+    'esm',
+  ]);
 });
 
 /** harnessRoot 解析 + 依赖闭包收集（plugin-runtime M2：node_modules 子集面）。 */

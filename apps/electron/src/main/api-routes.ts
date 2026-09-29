@@ -94,6 +94,8 @@ export interface ApiRouteDeps {
   worktreeRegistry?: () => { dirs: string[]; treeToRepoTop: Record<string, string>; sessionTrees: Record<string, string> };
   /** 运行状态监控器（T29 app/runtime 快照源）。 */
   monitor: RuntimeMonitor;
+  /** relay 配置变更后重启网关（gateway.json 只在网关启动期读入——不重启即拿旧形态配对）。 */
+  restartGateway: () => Promise<void>;
   /** 档位 hub 同步失败落档钩子（监督日志 → 监控时间线）。 */
   onPolicySyncFailed?: (minutes: number, reason: string) => void;
   /** 路由拒绝/失败落诊断日志（api-routes 装配层接主进程 log；设置域本地
@@ -277,6 +279,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     settings: deps.settings,
     keyStore: deps.keyStore,
     restartHost: restartHostForProviders,
+    restartGateway: deps.restartGateway,
     settingsCommands: () => hub().settings,
     permissionCommands: () => hub().permissions,
     ...(deps.onRouteRejected !== undefined ? { onReject: deps.onRouteRejected } : {}),

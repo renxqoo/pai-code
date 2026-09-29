@@ -1,5 +1,6 @@
 import { createStore } from 'zustand/vanilla';
 
+import { EMPTY_RELAY_CONFIG } from '@paiapp/contracts';
 import type {
   AgentDefinition,
   PendingDialogView,
@@ -406,7 +407,7 @@ function initialStoreState(): LiveStoreState {
     plugins: [],
     commands: [],
     thinkingLevel: null,
-    preferences: { defaultModel: null, onboarded: false, projectModels: {}, pinnedSessions: [], trustedDefault: false, hiddenProjects: [], idleRecycleMinutes: 5, archivedSessions: [] },
+    preferences: { defaultModel: null, onboarded: false, projectModels: {}, pinnedSessions: [], trustedDefault: false, hiddenProjects: [], idleRecycleMinutes: 5, archivedSessions: [], relay: { ...EMPTY_RELAY_CONFIG } },
     hubSettings: null,
     sessionPermissionMode: null,
     threads: {},

@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import type { AgentDefinition, IdleRecycleMinutes, PluginCandidateView, PluginProposalRow, PluginView, ProviderConfigView, ProviderModel, SkillCandidateView, SkillView, ThinkingLevel } from '@paiapp/contracts';
+import type { AgentDefinition, IdleRecycleMinutes, PluginCandidateView, PluginProposalRow, PluginView, ProviderConfigView, ProviderModel, RelayConfig, SkillCandidateView, SkillView, ThinkingLevel } from '@paiapp/contracts';
 import type { HubSettingsView } from '@/live/store';
 import type { PluginImportRequest, PluginImportSummary, SkillImportRequest, SkillImportSummary } from '@/live/live-controller-types';
 import { AGENT_TOOL_IDS } from '@paiapp/contracts';
@@ -60,6 +60,11 @@ export type SettingsScreenProps = {
     idleRecycleMinutes: IdleRecycleMinutes;
     onIdleRecycleChange: (minutes: IdleRecycleMinutes) => void;
     onRestartOnboarding: () => void;
+  };
+  devices: {
+    /** relay 配置（全局统一：settings.json 唯一真相）与保存出口。 */
+    relay: RelayConfig;
+    onRelaySave: (relay: RelayConfig) => Promise<boolean>;
   };
   providers: {
     list: readonly ProviderConfigView[];
@@ -227,6 +232,10 @@ export function useSettingsScreen({ open, onClose, initialSection }: UseSettings
           if (ok) onClose();
         });
       },
+    },
+    devices: {
+      relay: preferences.relay,
+      onRelaySave: actions.saveRelay,
     },
     providers: {
       list: providers,

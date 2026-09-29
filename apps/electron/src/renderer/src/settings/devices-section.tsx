@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import type { RelayConfig } from '@paiapp/contracts';
 import { ActionButton } from '@paiapp/ui';
 import { KeyRound, QrCode, RefreshCw, ShieldOff, Smartphone } from 'lucide-react';
 
@@ -8,8 +9,26 @@ import { SettingsCard } from './settings-card';
 import { SettingsPageHeader } from './settings-page-header';
 import { SettingsRow } from './settings-row';
 
-/** gateway owner 命令应答形状（gateway-command IPC）。 */
+/** gateway owner 命令应答形状（gateway-command IPC）：IPC 层恒 ok:true，真实成败在 body。 */
 type GatewayResult = { ok: false; reason: string } | { ok: true; body: Record<string, unknown> };
+
+/**
+ * 网关应答判读（单一真相：owner-dispatch 的 response 包裹 `{success, data|error}`）。
+ * 失败原因原样透出——曾被形状检查替换成无信息的硬编码兜底文案，排障无从下手。
+ */
+function gatewayError(result: GatewayResult): string | null {
+  if (!result.ok) return result.reason;
+  const body = result.body as { success?: unknown; error?: unknown };
+  if (body.success === true) return null;
+  return typeof body.error === 'string' && body.error.length > 0 ? body.error : copy.settings.pairFailed;
+}
+
+/** 成功应答的数据面（`{success:true,data}`）；失败/形状异常 → null。 */
+function gatewayData(result: GatewayResult): unknown {
+  if (!result.ok) return null;
+  const body = result.body as { success?: unknown; data?: unknown };
+  return body.success === true ? (body.data ?? null) : null;
+}
 
 /** gw/status 数据。 */
 interface GatewayStatus {
@@ -42,6 +61,13 @@ interface GatewayFace {
   command(payload: { command: string; args?: Record<string, unknown> }): Promise<GatewayResult>;
 }
 
+export interface DevicesSectionProps {
+  /** relay 配置（全局统一：settings.json 唯一真相，读 preferences）。 */
+  relay: RelayConfig;
+  /** 保存 relay（落 settings.json + 重启网关重载）。返回 true = 已保存。 */
+  onRelaySave: (relay: RelayConfig) => Promise<boolean>;
+}
+
 const SCOPE_LABEL: Record<string, string> = { read: '只读', interact: '可交互', full: '全权' };
 
 const now = (): number => Date.now();
@@ -50,7 +76,7 @@ const now = (): number => Date.now();
  * 设备与连接（remote-access owner 面板）：网关状态、发起配对（QR 载荷展示 + SAS 确认）、
  * 已配对设备管理（改档/撤销）。数据全部经 gateway owner socket（桌面 = 全权 owner）。
  */
-export function DevicesSection(): React.ReactElement {
+export function DevicesSection({ relay, onRelaySave }: DevicesSectionProps): React.ReactElement {
   const gateway = (typeof window !== 'undefined' ? window.pai.gateway : undefined) as GatewayFace | undefined;
   const [status, setStatus] = React.useState<GatewayStatus | null>(null);
   const [connected, setConnected] = React.useState(false);
@@ -60,6 +86,16 @@ export function DevicesSection(): React.ReactElement {
   const [sasInput, setSasInput] = React.useState('');
   const [pairingError, setPairingError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
+  const [relayUrl, setRelayUrl] = React.useState(relay.relayUrl);
+  const [relayFingerprint, setRelayFingerprint] = React.useState(relay.relayKeyFingerprint);
+  const [relayNotice, setRelayNotice] = React.useState<string | null>(null);
+  const [relayBusy, setRelayBusy] = React.useState(false);
+
+  // props（偏好面）变化即回写草稿：外部保存（其他面板/另一端）不被本地草稿盖住
+  React.useEffect(() => {
+    setRelayUrl(relay.relayUrl);
+    setRelayFingerprint(relay.relayKeyFingerprint);
+  }, [relay.relayUrl, relay.relayKeyFingerprint]);
 
   const refresh = React.useCallback((): void => {
     if (gateway === undefined) return;
@@ -67,10 +103,13 @@ export function DevicesSection(): React.ReactElement {
       setConnected(state.connected);
     });
     void gateway.command({ command: 'gw/status' }).then((result) => {
-      if (result.ok) setStatus(result.body as unknown as GatewayStatus);
+      const data = gatewayData(result);
+      if (data !== null && typeof data === 'object') setStatus(data as GatewayStatus);
     });
     void gateway.command({ command: 'gw/devices/list' }).then((result) => {
-      if (result.ok && Array.isArray(result.body['devices'])) setDevices((result.body['devices'] as DeviceRow[]).filter((row) => typeof row?.deviceId === 'string'));
+      // 数据面是行数组（gw-dispatch 直接回 devices 列表），不是 {devices:[…]} 包裹
+      const data = gatewayData(result);
+      if (Array.isArray(data)) setDevices((data as DeviceRow[]).filter((row) => typeof row?.deviceId === 'string'));
     });
   }, [gateway]);
 
@@ -97,16 +136,19 @@ export function DevicesSection(): React.ReactElement {
     void gateway
       .command({ command: 'gw/pairing/start', args: { scope: pairingScope, mode: 'qr' } })
       .then((result) => {
-        if (!result.ok) {
-          setPairingError(result.reason);
+        const failure = gatewayError(result);
+        if (failure !== null) {
+          setPairingError(failure);
           return;
         }
-        const body = result.body as { pairingId?: string; qrPayload?: string };
-        if (typeof body.pairingId !== 'string' || typeof body.qrPayload !== 'string') {
-          setPairingError('bad pairing response');
+        const data = gatewayData(result);
+        const pairingId = (data as { pairingId?: unknown } | null)?.pairingId;
+        const qrPayload = (data as { qrPayload?: unknown } | null)?.qrPayload;
+        if (typeof pairingId !== 'string' || typeof qrPayload !== 'string') {
+          setPairingError(copy.settings.pairBadResponse);
           return;
         }
-        setPairing({ pairingId: body.pairingId, qrPayload: body.qrPayload, expiresAt: now() + 120_000 });
+        setPairing({ pairingId, qrPayload, expiresAt: now() + 120_000 });
       })
       .finally(() => {
         setBusy(false);
@@ -119,13 +161,9 @@ export function DevicesSection(): React.ReactElement {
     void gateway
       .command({ command: 'gw/pairing/confirm', args: { pairingId: pairing.pairingId, ownerTypedSas: sasInput.trim() } })
       .then((result) => {
-        if (!result.ok) {
-          setPairingError(result.reason);
-          return;
-        }
-        const body = result.body as { success?: boolean; reason?: string };
-        if (body.success !== true) {
-          setPairingError(body.reason ?? 'sas mismatch');
+        const failure = gatewayError(result);
+        if (failure !== null) {
+          setPairingError(failure);
           return;
         }
         setPairing(null);
@@ -157,6 +195,17 @@ export function DevicesSection(): React.ReactElement {
     void gateway.command({ command: 'gw/pairing/cancel', args: { pairingId: pairing.pairingId } });
     setPairing(null);
     setPairingError(null);
+  };
+
+  const saveRelay = (): void => {
+    if (relayBusy) return;
+    setRelayBusy(true);
+    setRelayNotice(null);
+    void onRelaySave({ relayUrl: relayUrl.trim(), relayKeyFingerprint: relayFingerprint.trim() }).then((saved) => {
+      setRelayNotice(saved ? copy.settings.relaySaved : copy.settings.relaySaveFailed);
+    }).finally(() => {
+      setRelayBusy(false);
+    });
   };
 
   const copyPayload = (): void => {
@@ -191,6 +240,34 @@ export function DevicesSection(): React.ReactElement {
               </span>
             </SettingsRow>
           ) : null}
+        </SettingsCard>
+
+        <SettingsCard className="px-[20px] py-[16px]">
+          <div className="flex items-center justify-between">
+            <div className="min-w-0">
+              <p className="text-[13px] font-medium text-foreground">{copy.settings.relayCardTitle}</p>
+              <p className="mt-[2px] text-[12px] leading-[17px] text-muted-foreground">{copy.settings.relayCardHint}</p>
+            </div>
+            <ActionButton size="sm" onClick={saveRelay} disabled={relayBusy}>
+              {copy.settings.relaySave}
+            </ActionButton>
+          </div>
+          <div className="mt-[10px] flex flex-col gap-[8px]">
+            <input
+              aria-label={copy.settings.relayUrlLabel}
+              className="w-full rounded-lg border border-border bg-transparent px-[10px] py-[8px] text-[13px] text-foreground"
+              onChange={(event) => { setRelayUrl(event.target.value); }}
+              placeholder="wss://relay.example.com"
+              value={relayUrl}
+            />
+            <input
+              aria-label={copy.settings.relayFingerprintLabel}
+              className="w-full rounded-lg border border-border bg-transparent px-[10px] py-[8px] text-[13px] text-foreground"
+              onChange={(event) => { setRelayFingerprint(event.target.value); }}
+              value={relayFingerprint}
+            />
+          </div>
+          {relayNotice !== null ? <p className="mt-[8px] text-[12px] text-muted-foreground">{relayNotice}</p> : null}
         </SettingsCard>
 
         <SettingsCard className="px-[20px] py-[16px]">
@@ -243,6 +320,7 @@ export function DevicesSection(): React.ReactElement {
               <p className="text-[12px] text-muted-foreground">{copy.settings.sasWaitHint}</p>
             </div>
           ) : null}
+          {relay.relayUrl === '' ? <p className="mt-[8px] text-[12px] text-amber-600">{copy.settings.relayNotConfigured}</p> : null}
           {pairingError !== null ? <p className="mt-[10px] text-[12px] text-destructive">{pairingError}</p> : null}
         </SettingsCard>
 

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { existsSync, statSync } from 'node:fs';
 import { seedBundledRg } from './rg-seed';
 
-import { ApiSchemas, type UiEvent } from '@paiapp/contracts';
+import { EMPTY_RELAY_CONFIG, ApiSchemas, type UiEvent } from '@paiapp/contracts';
 import { appError } from '@paiapp/api';
 
 import { createApiRoutes } from './api-routes';
@@ -13,7 +13,8 @@ import { createSkillImporter } from './skill-import';
 import { createPluginImporter } from './plugin-import';
 import { createAgentDefinitionsStore } from './agent-definitions-store';
 import { createFileLogger, createFileSettings } from './file-settings';
-import { packagedHubCandidates, resolveHubPaths } from './hub-paths';
+import { packagedGatewayEntry, packagedHubCandidates, resolveGatewayEntry, resolveHubPaths } from './hub-paths';
+import { writeGatewayConfig } from './gateway-config';
 import { resolveAppPaths, resolveUserDataDir } from './paths';
 import { createWorktreeRegistry } from './worktree-registry';
 import { createPaiRuntime } from './pai-runtime';
@@ -314,11 +315,60 @@ void app.whenReady().then(async () => {
       emit: emitToRenderer,
     });
     const diagnosticsRoot = join(paths.userDataDir, 'diagnostics');
+    // ── remote-access 网关（桌面 App = gateway 生命周期 owner + owner 全权客户端）──
+    let gatewayProcess: GatewayProcess | null = null;
+    /** gateway 入口解析（与宿主同链同序：设置覆盖 > env > dev 旁级探测 > 打包资源）。 */
+    const resolveGatewayEntryForRuntime = (): string | null =>
+      resolveGatewayEntry({
+        fromSettings: (() => {
+          try {
+            return settingsRef?.get().hubDev.gatewayEntry ?? null;
+          } catch {
+            return null;
+          }
+        })(),
+        fromEnv: process.env['PAI_GATEWAY_ENTRY'] ?? null,
+        packagedEntry: app.isPackaged ? packagedGatewayEntry(process.resourcesPath ?? paths.userDataDir) : null,
+        devRepoRoot: app.isPackaged ? null : join(__dirname, '..', '..', '..', '..'),
+        packaged: app.isPackaged,
+        exists: existsSync,
+      });
+
+    const getGateway = (): GatewayProcess => {
+      if (gatewayProcess !== null) return gatewayProcess;
+      // relay 唯一真相在 settings.json；gateway.json 每次 spawn 前重生成（网关只在启动期读入）
+      try {
+        writeGatewayConfig(paths.agentDir, settingsRef?.get().relay ?? EMPTY_RELAY_CONFIG);
+      } catch (error) {
+        logger.log(`gateway_config_write_failed:${error instanceof Error ? error.message : String(error)}`);
+      }
+      const hubPaths = resolveHubPathsForRuntime();
+      // 网关必须持有宿主（host-attach 只认 hostBin/--host-command）——宿主路径未解析即网关未配置
+      const gatewayEntry = hubPaths !== null ? resolveGatewayEntryForRuntime() : null;
+      gatewayProcess = startGatewayProcess({
+        bunPath: hubPaths?.bunPath ?? process.execPath,
+        gatewayEntry,
+        agentDir: paths.agentDir,
+        hostExec: hubPaths !== null ? { command: hubPaths.bunPath, args: hubPaths.hubEntry !== null ? [hubPaths.hubEntry] : [] } : null,
+        log: (message) => logger.log(message),
+      });
+      return gatewayProcess;
+    };
+
+    /** relay 配置变更 → 重启网关重载（gateway.json 只在网关启动期读入，不重启即拿旧形态配对）。 */
+    const restartGateway = async (): Promise<void> => {
+      if (gatewayProcess === null) return; // 未起过网关：配置已落盘，下次启动自然读入
+      await gatewayProcess.stop();
+      gatewayProcess = null;
+      getGateway();
+    };
+
     routes = createApiRoutes({
       runtime,
       settings,
       keyStore,
       monitor: monitorRef,
+      restartGateway,
       onPolicySyncFailed: (minutes, reason) => {
         loggingToMonitor.log(`set_idle_retire_failed:${minutes}:${reason}`);
       },
@@ -361,31 +411,16 @@ void app.whenReady().then(async () => {
         worktreeRegistry.addTree({ path: tree.path, repoTop: tree.repoTop });
         // 来源会话判定（create 完成时刻重估 live/busy——打开新建页时定格的 originThreadHint；parked/retiring/dead 或 cwd 不符视为无来源）
         const sourceThreadId = tree.originThreadHint;
-        if (sourceThreadId === null || runtime === null) return;
-        void runtime.hub.thread
-          .list()
-          .then((listed) => {
-            if (!listed.ok) return;
-            const rows = (listed.data as { threads?: readonly { threadId: string; cwd: string; state: string; streaming?: boolean }[] }).threads ?? [];
-            const row = rows.find((entry) => entry.threadId === sourceThreadId);
-            if (row?.state !== 'live' || row.cwd !== tree.cwd) return;
-            const busy = row.streaming === true;
-            void runtime?.hub.thread
-              .notify({
-                threadId: sourceThreadId,
-                source: 'git-worktree',
-                kind: 'content',
-                text: `[git-worktree] branch ${tree.branch} is now checked out at ${tree.path} for this task.\nSubsequent file operations for this task should use that directory as the working root; do not modify the main worktree at ${tree.cwd}.`,
-              })
-              .then(
-                () => {
-                  worktreeRegistry.addTree({ path: tree.path, repoTop: tree.repoTop, sessionThreadId: sourceThreadId });
-                  mainWindow?.webContents.send('worktree-notice', { kind: busy ? 'busy' : 'idle', path: tree.path });
-                },
-                () => undefined,
-              );
-          })
-          .catch(() => undefined);
+        if (sourceThreadId === null) return;
+          { branch: tree.branch, path: tree.path, cwd: tree.cwd },
+          sourceThreadId,
+          {
+            listThreads: async () => (runtime === null ? null : runtime.hub.thread.list()),
+            notify: async (input) => (runtime === null ? null : runtime.hub.thread.notify(input)),
+            registerSessionTree: (threadId) =>
+              worktreeRegistry.addTree({ path: tree.path, repoTop: tree.repoTop, sessionThreadId: threadId }),
+          },
+        );
       },
       worktreeRegistry: () => {
         const data = worktreeRegistry.read();
@@ -410,32 +445,7 @@ void app.whenReady().then(async () => {
         }
       },
     });
-  // ── remote-access 网关（桌面 App = gateway 生命周期 owner + owner 全权客户端）──
-  let gatewayProcess: GatewayProcess | null = null;
-  const getGateway = (): GatewayProcess => {
-    if (gatewayProcess !== null) return gatewayProcess;
-    const hubPaths = resolveHubPathsForRuntime();
-    if (hubPaths === null) {
-      gatewayProcess = startGatewayProcess({
-        bunPath: process.execPath,
-        xHarnessRoot: null,
-        agentDir: paths.agentDir,
-        gatewayConfig: null,
-        hostExec: null,
-        log: (message) => logger.log(message),
-      });
-      return gatewayProcess;
-    }
-    gatewayProcess = startGatewayProcess({
-      bunPath: hubPaths.bunPath,
-      xHarnessRoot: process.env.PAI_X_HARNESS_ROOT ?? null,
-      agentDir: paths.agentDir,
-      gatewayConfig: null,
-      hostExec: { command: hubPaths.bunPath, args: hubPaths.hubEntry !== null ? [hubPaths.hubEntry] : [] },
-      log: (message) => logger.log(message),
-    });
-    return gatewayProcess;
-  };
+  // ── 网关 IPC 面（进程定义在 routes 装配前：restartGateway 由设置路由回调）──
   ipcMain.handle('pai:gateway-command', (_event, payload: unknown) => {
     if (typeof payload !== 'object' || payload === null) return { ok: false as const, reason: 'bad_payload' };
     const record = payload as { command?: unknown; args?: unknown };

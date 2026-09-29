@@ -1,4 +1,4 @@
-import type { AgentDefinition, ApiOutcome, CommandView, IdleRecycleMinutes, ImagePayload, PluginCandidateView, PluginProposalRow, ProviderModel, RuntimeSnapshotView, SkillCandidateView } from '@paiapp/contracts';
+import type { AgentDefinition, ApiOutcome, CommandView, IdleRecycleMinutes, ImagePayload, PluginCandidateView, PluginProposalRow, ProviderModel, RelayConfig, RuntimeSnapshotView, SkillCandidateView } from '@paiapp/contracts';
 import { thinkingLevelOfLabel } from '@paiapp/contracts';
 
 import { writeClipboard } from '@/lib/write-clipboard';
@@ -162,6 +162,8 @@ export type WorkspaceActions = {
   readonly showNotice: (text: string) => void;
   /** J2 通用偏好保存（trustedDefault / 宿主路径）。 */
   readonly saveGeneralPreferences: (patch: { trustedDefault?: boolean }) => Promise<boolean>;
+  /** 保存 relay 配置（写 settings.json 唯一真相 + 网关重启重载）。 */
+  readonly saveRelay: (relay: RelayConfig) => Promise<boolean>;
   readonly testProvider: (name: string, modelId: string | undefined) => Promise<{ ok: true; latencyMs: number } | { ok: false; reason: string }>;
   readonly upsertProvider: (input: { name: string; baseUrl: string; api: string; models: ProviderModel[]; apiKey?: string }) => Promise<string | null>;
   readonly removeProvider: (name: string) => Promise<string | null>;
@@ -402,6 +404,14 @@ export function createWorkspaceActions(): WorkspaceActions {
       const next = await controller.updatePreferences(patch);
       if (next === null) {
         pushNotice(copy.settings.generalSaveFailed);
+        return false;
+      }
+      return true;
+    },
+    saveRelay: async (relay) => {
+      const next = await controller.updatePreferences({ relay });
+      if (next === null) {
+        pushNotice(copy.settings.relaySaveFailed);
         return false;
       }
       return true;

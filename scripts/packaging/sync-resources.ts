@@ -17,6 +17,8 @@ export interface ResourceSources {
   bunPath: string;
   /** host-hub 源码入口（编译输入），非最终产物路径。 */
   hubSource: string;
+  /** hub-gateway 源码入口（打包态网关入口的构建输入）。 */
+  gatewaySource: string;
   /** x-harness 检出根（node_modules 子集收集范围）。 */
   harnessRoot: string;
 }
@@ -32,8 +34,25 @@ export function resolveResourceSources(
     bunPath: env['PAI_BUN_PATH'] ?? execPath,
     hubSource:
       env['PAI_HUB_ENTRY'] ?? join(harnessRoot, 'apps', 'host-hub', 'src', 'host', 'cli.ts'),
+    gatewaySource:
+      env['PAI_GATEWAY_ENTRY'] ?? join(harnessRoot, 'apps', 'hub-gateway', 'src', 'cli.ts'),
     harnessRoot,
   };
+}
+
+/** gateway 打包构建参数（bundled 单文件 → resources/hub-gateway/dist/cli.js）：
+ *  网关不装载插件，依赖整体打进产物——不引第二份 node_modules 闭包，
+ *  缺包风险与拷贝成本同时归零（host-hub 形态不同，那边必须留 dist + 闭包）。 */
+export function gatewayBuildArgs(harnessRoot: string, outDir: string): string[] {
+  return [
+    join(harnessRoot, 'apps', 'hub-gateway', 'src', 'cli.ts'),
+    '--outdir',
+    outDir,
+    '--target',
+    'bun',
+    '--format',
+    'esm',
+  ];
 }
 
 function copyExecutable(from: string, to: string): void {
@@ -196,7 +215,7 @@ export function rgResourcePaths(harnessRoot: string): { readonly from: string; r
 function main(): void {
   const repoRoot = resolve(import.meta.dir, '..', '..');
   const sources = resolveResourceSources(process.env, repoRoot, process.execPath);
-  for (const source of [sources.bunPath, sources.hubSource]) {
+  for (const source of [sources.bunPath, sources.hubSource, sources.gatewaySource]) {
     const size = statSync(source, { throwIfNoEntry: false })?.size;
     if (size === undefined) {
       console.error(`[sync-resources] source missing: ${source}`);
@@ -240,6 +259,17 @@ function main(): void {
     process.exit(1);
   }
   console.log(`[sync-resources] host-hub dist -> ${hubDist}`);
+
+  // ②′ gateway dist（打包态网关入口：bundled 单文件，链在 hub-paths.resolveGatewayEntry）
+  const gatewayDist = join(repoRoot, 'resources', 'hub-gateway', 'dist');
+  const gatewayOut = spawnSync(sources.bunPath, gatewayBuildArgs(sources.harnessRoot, gatewayDist), {
+    stdio: 'inherit',
+  });
+  if (gatewayOut.status !== 0) {
+    console.error(`[sync-resources] hub-gateway dist build failed (exit ${gatewayOut.status})`);
+    process.exit(1);
+  }
+  console.log(`[sync-resources] hub-gateway dist -> ${gatewayDist}`);
 
   // ③ node_modules 子集（dist 形态运行时闭包）
   const { packages, missing } = collectHarnessDeps(sources.harnessRoot);

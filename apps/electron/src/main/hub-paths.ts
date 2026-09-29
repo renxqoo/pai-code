@@ -59,6 +59,44 @@ export function packagedHubCandidates(resourcesPath: string): PackagedHubCandida
   };
 }
 
+/** dev 同级 hub-gateway 检出候选（源码形态优先——bun 原生跑 TS）。 */
+export function devGatewayEntryCandidates(devRepoRoot: string): string[] {
+  const gatewayRoot = resolve(devRepoRoot, '..', 'x-harness', 'apps', 'hub-gateway');
+  return [join(gatewayRoot, 'src', 'cli.ts'), join(gatewayRoot, 'dist', 'cli.js')];
+}
+
+/** 打包资源 gateway 入口（dist 多文件产物 + node_modules 子集）。 */
+export function packagedGatewayEntry(resourcesPath: string): string {
+  return join(resourcesPath, 'hub-gateway', 'dist', 'cli.js');
+}
+
+export interface ResolveGatewayEntryDeps {
+  /** settings.json hubDev.gatewayEntry（用户显式覆盖）。 */
+  fromSettings: string | null;
+  /** 环境变量 PAI_GATEWAY_ENTRY（开发 shell）。 */
+  fromEnv: string | null;
+  /** 打包产物内嵌 gateway 入口（存在才由调用方传入）。 */
+  packagedEntry: string | null;
+  /** monorepo 仓库根；null 或打包态不做 dev 探测。 */
+  devRepoRoot: string | null;
+  packaged: boolean;
+  /** 探测用（显式覆盖不校验存在：与宿主链同约定，坏路径交由 spawn 报错）。 */
+  exists: (path: string) => boolean;
+}
+
+/** gateway 入口解析链（与宿主同链同序）：设置覆盖 > env > dev 同级探测 > 打包产物；
+ *  全缺 → null（面板显引导，命令回 gateway not configured，不静默退化成无网关）。 */
+export function resolveGatewayEntry(deps: ResolveGatewayEntryDeps): string | null {
+  if (deps.fromSettings !== null) return deps.fromSettings;
+  if (deps.fromEnv !== null) return deps.fromEnv;
+  if (!deps.packaged && deps.devRepoRoot !== null) {
+    const entry = devGatewayEntryCandidates(deps.devRepoRoot).find((candidate) => deps.exists(candidate));
+    if (entry !== undefined) return entry;
+  }
+  if (deps.packagedEntry !== null && deps.exists(deps.packagedEntry)) return deps.packagedEntry;
+  return null;
+}
+
 export function resolveHubPaths(deps: ResolveHubPathsDeps): HubPaths | null {
   if (deps.fromSettings !== null) return deps.fromSettings;
   if (deps.fromEnv !== null) return deps.fromEnv;

@@ -18,7 +18,7 @@ import { PluginsSection } from './plugins-section';
  * 分区状态/派发与数据装配都在 use-settings-screen，本组件只做展示分派。
  * Esc 关闭由父层全局监听，本组件不挂键盘事件。
  */
-function SettingsScreen({ open, onClose, section, onSelectSection, general, providers, permissions, agents, skills, plugins, history, runtime, runtimeAttention }: SettingsScreenProps) {
+function SettingsScreen({ open, onClose, section, onSelectSection, general, devices, providers, permissions, agents, skills, plugins, history, runtime, runtimeAttention }: SettingsScreenProps) {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-40 flex bg-background">
@@ -32,7 +32,7 @@ function SettingsScreen({ open, onClose, section, onSelectSection, general, prov
           ) : section === 'providers' ? (
             <ProvidersSection {...providers} />
           ) : section === 'devices' ? (
-            <DevicesSection />
+            <DevicesSection {...devices} />
           ) : section === 'permissions' ? (
             <PermissionsSection {...permissions} />
           ) : section === 'agents' ? (

@@ -34,6 +34,8 @@ export type SettingsRoutesDeps = {
   keyStore: KeyStorePort;
   /** provider 配置变更后重启 host（providers.json 只在启动期读入）。 */
   restartHost: () => Promise<void>;
+  /** relay 配置变更后重启网关（gateway.json 只在启动期读入）。 */
+  restartGateway: () => Promise<void>;
   /** hub settings 域 accessor（惰性：路由构造早于 runtime.start；host 未启动时各路由显式降级）。 */
   settingsCommands: () => SettingsCommands;
   /** permissions 域 accessor（hubSettings 词表读口：无 threadId 的权限双域全局档）。 */
@@ -69,6 +71,7 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
       hiddenProjects: [...settings.hiddenProjects],
       archivedSessions: [...settings.archivedSessions],
       idleRecycleMinutes: settings.idleRecycleMinutes,
+      relay: { ...settings.relay },
     };
   };
 
@@ -179,8 +182,13 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
       if (params.trustedDefault !== undefined) patch.trustedDefault = params.trustedDefault;
       if (params.hiddenProjects !== undefined) patch.hiddenProjects = [...params.hiddenProjects];
       if (params.archivedSessions !== undefined) patch.archivedSessions = [...params.archivedSessions];
+      // relay 变更须重启网关：gateway.json 只在网关启动期读入，不重启即拿旧 relay 形态配对
+      const relay = params.relay;
+      const relayChanged = relay !== undefined && (relay.relayUrl !== deps.settings.get().relay.relayUrl || relay.relayKeyFingerprint !== deps.settings.get().relay.relayKeyFingerprint);
+      if (relay !== undefined) patch.relay = { ...relay };
       const outcome = deps.settings.patch(patch);
       if (!outcome.ok) return failLogged(appError('settings_unavailable'));
+      if (relayChanged) await deps.restartGateway();
       return { ok: true as const, data: preferencesView() };
     },
   };

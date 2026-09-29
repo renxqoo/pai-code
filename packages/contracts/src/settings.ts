@@ -61,12 +61,52 @@ export const IDLE_RECYCLE_MINUTE_OPTIONS = [3, 5, 10, 15] as const;
 export type IdleRecycleMinutes = (typeof IDLE_RECYCLE_MINUTE_OPTIONS)[number];
 export const IdleRecycleMinutesSchema = z.union([z.literal(3), z.literal(5), z.literal(10), z.literal(15)]);
 
+/**
+ * relay 接入配置（全局统一）：settings.json 是唯一真相，agentDir/gateway.json 是
+ * spawn 期由 serializeGatewayConfig 派生的落盘产物（与 providers.json 同形）。
+ * relayUrl 非空即远程形态——不另设开关，避免「开关开了但地址为空」的二义态。
+ */
+export const RelayConfigSchema = z
+  .object({
+    /** relay WSS 基址；空串 = 未配置（网关停留本地形态，配对不可用）。 */
+    relayUrl: z.string().default(""),
+    /** relay 长期身份签名指纹（wss 形态校验用；空串交由 x-harness 拒启并回原因）。 */
+    relayKeyFingerprint: z.string().default(""),
+  })
+  .strict();
+export type RelayConfig = z.infer<typeof RelayConfigSchema>;
+
+/** 未配置 relay 的空形态（单一真相：schema 缺省与降级共用一份）。 */
+export const EMPTY_RELAY_CONFIG: RelayConfig = { relayUrl: "", relayKeyFingerprint: "" };
+
+/**
+ * gateway.json 序列化（x-harness gateway 读口形状；本仓零自创键）。
+ * 键序固定 + 末尾换行：同输入同输出，重生成不产生伪 diff（避免无谓重启）。
+ */
+export function serializeGatewayConfig(relay: RelayConfig): string {
+  return `${JSON.stringify(
+    {
+      remoteEnabled: relay.relayUrl.length > 0,
+      relayUrl: relay.relayUrl,
+      relayKeyFingerprint: relay.relayKeyFingerprint,
+    },
+    null,
+    2,
+  )}\n`;
+}
+
 export const SettingsSchema = z
   .object({
     /** 宿主注入点：bun 与 hub 入口脚本；null = 装配层缺省（打包产物路径）。 */
     hubDev: z
-      .object({ bunPath: z.string().nullable(), hubEntry: z.string().nullable() })
-      .default({ bunPath: null, hubEntry: null }),
+      .object({
+        bunPath: z.string().nullable(),
+        hubEntry: z.string().nullable(),
+        /** gateway 入口脚本覆盖（开发形态）；null = 装配层缺省（dev 旁级探测 / 打包资源）。
+         *  缺席键落 null（旧盘 hubDev 无此键不得因此整档降级）。 */
+        gatewayEntry: z.string().nullable().default(null),
+      })
+      .default({ bunPath: null, hubEntry: null, gatewayEntry: null }),
     providers: z.array(ProviderConfigSchema).default([]),
     /** thread/start 的 trusted 缺省（项目扩展加载策略的全局默认）。 */
     trustedDefault: z.boolean().default(false),
@@ -84,6 +124,8 @@ export const SettingsSchema = z
     hiddenProjects: z.array(z.string()).default([]),
     /** worker 闲置自动回收时长（分钟；spawn env HUB_IDLE_RETIRE_MS 注入 + 运行期 set_idle_retire_ms 同步）。 */
     idleRecycleMinutes: IdleRecycleMinutesSchema.default(5),
+    /** relay 接入配置（全局统一；gateway.json 由 serializeGatewayConfig 派生）。 */
+    relay: RelayConfigSchema.default(EMPTY_RELAY_CONFIG),
   })
   .strict();
 

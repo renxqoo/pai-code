@@ -42,6 +42,7 @@ function makeRoutes() {
       settings: settings as never,
       keyStore: keyStore as never,
       restartHost: () => Promise.resolve(undefined),
+      restartGateway: () => Promise.resolve(undefined),
       settingsCommands: () => {
         throw new Error('not needed for provider routes');
       },

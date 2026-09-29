@@ -514,6 +514,7 @@ describe("渠道数据迁移端到端（T38 症状：渠道无法保存——旧
       settings,
       keyStore,
       restartHost: () => Promise.resolve(undefined),
+      restartGateway: () => Promise.resolve(undefined),
       settingsCommands: () => ({
         get: () => Promise.resolve({ ok: true as const, data: {} }),
         set: () => Promise.resolve({ ok: true as const, data: {} }),

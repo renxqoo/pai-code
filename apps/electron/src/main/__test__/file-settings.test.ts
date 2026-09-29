@@ -37,7 +37,7 @@ test('patch 部分写：只动目标字段，其余保留；落盘可再读', ()
   settings.patch({ hiddenProjects: ['/w/gone'] });
 
   expect(settings.get()).toEqual({
-    hubDev: { bunPath: null, hubEntry: null },
+    hubDev: { bunPath: null, hubEntry: null, gatewayEntry: null },
     providers: [],
     trustedDefault: true,
     defaultModel: 'glm/glm-4.7',
@@ -47,6 +47,7 @@ test('patch 部分写：只动目标字段，其余保留；落盘可再读', ()
     hiddenProjects: ['/w/gone'],
     idleRecycleMinutes: 5,
     archivedSessions: [],
+    relay: { relayUrl: '', relayKeyFingerprint: '' },
   });
 
   // 新实例从盘读回（缓存不背书）

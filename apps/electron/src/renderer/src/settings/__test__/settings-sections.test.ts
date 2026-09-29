@@ -2,21 +2,13 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   FETCH_ON_ENTER_SECTIONS,
+  SETTINGS_ALL_SECTIONS,
   SETTINGS_FIRST_SECTION,
   SETTINGS_NAV_GROUPS,
   type SettingsSectionId,
 } from '../settings-sections';
 
-const ALL_SECTIONS: readonly SettingsSectionId[] = [
-  'general',
-  'providers',
-  'permissions',
-  'agents',
-  'skills',
-  'plugins',
-  'history',
-  'runtime',
-];
+const ALL_SECTIONS: readonly SettingsSectionId[] = SETTINGS_ALL_SECTIONS;
 
 describe('设置分区模型', () => {
   test('分组导航恰好覆盖全部分区且无重复', () => {
