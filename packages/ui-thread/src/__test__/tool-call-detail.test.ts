@@ -25,16 +25,29 @@ describe('autoOpenForCall（症状回归：bash 短命令闪现输出面板）',
   });
 });
 
-describe('autoOpenForGroup（与轮级同一口径）', () => {
-  test('运行中常开（收起态只剩组头短语，恰是信息量最低的时刻）', () => {
-    expect(autoOpenForGroup([{ status: 'ok' }, { status: 'running' }])).toBe(true);
+describe('autoOpenForGroup（症状回归：并行组合并时先开后关闪一下）', () => {
+  test('运行中不自动展开——「开始即展开、完成即收起」的开合对即闪现源（合并后几帧即收）', () => {
+    expect(autoOpenForGroup([{ status: 'running' }, { status: 'running' }])).toBe(false);
+    expect(autoOpenForGroup([{ status: 'ok' }, { status: 'running' }])).toBe(false);
+    expect(autoOpenForGroup([{ status: 'running' }, { status: 'ok' }])).toBe(false);
   });
 
-  test('失败常开（错误必须在组级看得见）；全成功收起', () => {
+  test('失败常开（错误必须在组级看得见）；成功/停止收起', () => {
     expect(autoOpenForGroup([{ status: 'ok' }, { status: 'failed' }])).toBe(true);
+    expect(autoOpenForGroup([{ status: 'stopped' }, { status: 'failed' }])).toBe(true);
     expect(autoOpenForGroup([{ status: 'ok' }, { status: 'stopped' }])).toBe(false);
     expect(autoOpenForGroup([{ status: 'ok' }])).toBe(false);
     expect(autoOpenForGroup([])).toBe(false);
+  });
+
+  test('与调用级同一裁决（单一口径）：组自动展开 ⟺ 任一调用自动展开', () => {
+    const statuses = ['ok', 'running', 'failed', 'stopped'] as const;
+    for (const first of statuses) {
+      for (const second of statuses) {
+        const calls = [{ status: first }, { status: second }];
+        expect(autoOpenForGroup(calls)).toBe(calls.some((call) => autoOpenForCall(call)));
+      }
+    }
   });
 });
 

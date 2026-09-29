@@ -105,7 +105,7 @@ describe('ToolBatch 批次装配', () => {
     expect(view.getByLabelText(/展开工具组/).props.accessibilityState).toEqual({ expanded: false });
   });
 
-  it('自动开合与 PC 端同口径：运行中/失败常开，正常完成收起', async () => {
+  it('自动开合与 PC 端同口径（症状回归：并行组合并时先开后关闪一下）：只有失败自动展开，运行中收起', async () => {
     const running = await render(
       <ToolGroup
         messages={[editTool('e1', 'src/a.ts'), message({ id: 't1', kind: 'tool', toolName: 'bash', argsPreview: 'x', status: 'running' })]}
@@ -113,7 +113,7 @@ describe('ToolBatch 批次装配', () => {
         onOpenDiff={jest.fn()}
       />,
     );
-    expect(running.getByLabelText(/收起工具组/).props.accessibilityState).toEqual({ expanded: true });
+    expect(running.getByLabelText(/展开工具组/).props.accessibilityState).toEqual({ expanded: false });
 
     const failed = await render(
       <ToolGroup

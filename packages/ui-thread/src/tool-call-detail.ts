@@ -23,16 +23,16 @@ export function autoOpenForCall(call: ToolStatusRef): boolean {
 }
 
 /**
- * 并行组的自动开合，对齐轮级口径（运行中实时展开、异常结束保持展开、
- * 正常完成收起为摘要）：
- * - **运行中常开**：用户最想盯的就是运行期，收起态只剩一条组头短语，
- *   命令内容与「已…」前缀全不渲染——信息量最低的时刻恰恰是眼睛最盯着的时候。
- *   同批次的单调用形态本来就是直出行（内容可见），并行却关着，两种形态不一致。
+ * 并行组的自动开合 = 任一调用按调用级裁决自动展开（与 `autoOpenForCall` 同一套，
+ * 组没有第二套口径）：
  * - **失败常开**：错误必须在组级看得见。失败是终态，只开不关。
+ * - **运行中不自动展开**：「开始即展开、完成即收起」的开合对在快批次下就是
+ *   合并时的先开后关闪现（展开窗口只有几帧）。实时尾部由用户手动展开
+ *   （手动意图覆盖自动值并跨终态保持）。
  * - 正常完成才收起：让用户按需展开具体执行。
  */
 export function autoOpenForGroup(calls: readonly ToolStatusRef[]): boolean {
-  return calls.some((call) => call.status === 'failed' || call.status === 'running');
+  return calls.some((call) => autoOpenForCall(call));
 }
 
 export function detailOutput(call: ToolDetailRef): string {
