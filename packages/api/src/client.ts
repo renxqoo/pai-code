@@ -136,11 +136,6 @@ function createGitDomain(t: ApiClientTransport) {
     checkout: call(t, 'git/checkout'),
     graph: call(t, 'git/graph'),
     status: call(t, 'git/status'),
-    worktreeList: call(t, 'git/worktree/list'),
-    worktreeCreate: call(t, 'git/worktree/create'),
-    worktreeRemove: call(t, 'git/worktree/remove'),
-    worktreeMerge: call(t, 'git/worktree/merge'),
-    worktreeRegistry: call(t, 'git/worktree/registry'),
   });
 }
 

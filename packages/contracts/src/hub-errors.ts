@@ -63,7 +63,6 @@ export type AppErrorCode =
   | 'session_path_forbidden' | 'cwd_not_allowed' | 'cwd_forbidden' | 'cwd_not_found'
   | 'export_failed' | 'dialog_unavailable' | 'editor_not_found' | 'skill_not_found'
   | 'branch_exists' | 'invalid_branch' | 'dirty_worktree' | 'conflict_files' | 'branch_in_other_worktree' | 'unknown_branch' | 'not_a_repo' | 'git_unavailable'
-  | 'worktree_dirty' | 'worktree_path_exists' | 'worktree_detached_head' | 'worktree_nested' | 'worktree_in_use' | 'worktree_locked'
   | 'empty_message' | 'no_active_session' | 'resume_failed' | 'bootstrap_crashed' | 'compact_images_rejected'
   | 'bash_images_rejected'
   | 'skill_source_invalid' | 'skill_invalid' | 'skill_name_invalid' | 'skill_exists'

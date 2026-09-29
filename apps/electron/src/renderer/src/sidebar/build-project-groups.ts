@@ -28,14 +28,12 @@ export function buildProjectGroups(
   pinnedPaths: ReadonlySet<string>,
   expanded: ReadonlySet<string>,
   limit: number = SHOW_MORE_LIMIT,
-  /** 树路径→主仓映射（用户 worktree 会话并入主仓组——D3 编码切分不可逆，映射表是唯一可靠源；缺省不并组）。 */
-  treeToRepoTop: Readonly<Record<string, string>> = {},
 ): readonly ProjectGroup[] {
   const cappedLimit = Math.max(0, limit);
   const byCwd = new Map<string, SessionCardModel[]>();
   for (const session of sessions) {
     if (session.sessionPath !== null && pinnedPaths.has(session.sessionPath)) continue;
-    const groupKey = treeToRepoTop[session.cwd] ?? session.cwd;
+    const groupKey = session.cwd;
     const list = byCwd.get(groupKey) ?? [];
     list.push(session);
     byCwd.set(groupKey, list);

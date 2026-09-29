@@ -8,23 +8,21 @@ import { copy } from '@/strings';
 import { CreateBranchDialog } from '../create-branch-dialog';
 
 /**
- * 「创建并检出新分支」弹窗（worktree 开关分派）：开关关 = 建分支并检出，开关开 = 建分支
- * 并在独立 worktree 中开始；空名禁提交、失败内联不关窗、开关不可用态禁用 + 原因、Esc 关。
+ * 「创建并检出新分支」弹窗：空名禁提交、失败内联不关窗、Esc 关。
  */
 
 type Harness = {
-  submits: Array<{ branch: string; inWorktree: boolean }>
+  submits: string[]
   changes: boolean[]
   root: () => HTMLElement
   input: () => HTMLInputElement
   button: (label: string) => HTMLButtonElement | undefined
-  switchRow: () => HTMLElement | null
   formSubmit: () => void
   unmount: () => void
 };
 
 function mount(over: Partial<Parameters<typeof CreateBranchDialog>[0]> = {}): Harness {
-  const submits: Array<{ branch: string; inWorktree: boolean }> = [];
+  const submits: string[] = [];
   const changes: boolean[] = [];
   const view = render(
     <CreateBranchDialog
@@ -32,8 +30,7 @@ function mount(over: Partial<Parameters<typeof CreateBranchDialog>[0]> = {}): Ha
       onOpenChange={(open) => changes.push(open)}
       busy={false}
       error={null}
-      worktreeReason={null}
-      onSubmit={(branch, inWorktree) => submits.push({ branch, inWorktree })}
+      onSubmit={(branch) => submits.push(branch)}
       {...over}
     />,
   );
@@ -50,7 +47,6 @@ function mount(over: Partial<Parameters<typeof CreateBranchDialog>[0]> = {}): Ha
     input: () => root().querySelector('input') as HTMLInputElement,
     button: (label: string) =>
       [...root().querySelectorAll('button')].find((b) => b.textContent?.trim() === label) as HTMLButtonElement | undefined,
-    switchRow: () => root().querySelector('[role="switch"]') as HTMLElement | null,
     formSubmit: () => {
       root().querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     },
@@ -59,28 +55,14 @@ function mount(over: Partial<Parameters<typeof CreateBranchDialog>[0]> = {}): Ha
 }
 
 describe('CreateBranchDialog', () => {
-  test('开关关：标题/提交按钮走「创建并切换」；提交带 inWorktree=false', () => {
+  test('标题/提交按钮走「创建并切换」；提交带裁剪后的分支名', () => {
     const h = mount();
     expect(h.root().textContent ?? '').toContain(copy.branch.createTitle);
     expect(h.root().textContent ?? '').toContain(copy.branch.createHelper);
     expect(h.button(copy.branch.createSubmit)).toBeDefined();
     fireChange(h.input(), '  feat/new  ');
     h.formSubmit();
-    expect(h.submits).toEqual([{ branch: 'feat/new', inWorktree: false }]);
-    h.unmount();
-  });
-
-  test('开关开：标题/说明/提交按钮切换到 worktree 面；提交带 inWorktree=true', () => {
-    const h = mount();
-    h.switchRow()?.click();
-    const html = h.root().textContent ?? '';
-    expect(html).toContain(copy.branch.wtStartInTreeTitle);
-    expect(html).toContain(copy.branch.wtStartInTreeDesc);
-    expect(h.button(copy.branch.wtStartSubmit)).toBeDefined();
-    expect(h.button(copy.branch.createSubmit)).toBeUndefined();
-    fireChange(h.input(), 'feat/wt');
-    h.formSubmit();
-    expect(h.submits).toEqual([{ branch: 'feat/wt', inWorktree: true }]);
+    expect(h.submits).toEqual(['feat/new']);
     h.unmount();
   });
 
@@ -98,16 +80,6 @@ describe('CreateBranchDialog', () => {
     expect(h.input().getAttribute('aria-invalid')).toBe('true');
     h.formSubmit();
     expect(h.changes).toEqual([]);
-    h.unmount();
-  });
-
-  test('worktree 开关不可用态：点不动开关 + 原因文案（仍可不带 worktree 创建）', () => {
-    const h = mount({ worktreeReason: copy.branch.wtStartNested });
-    expect(h.root().textContent ?? '').toContain(copy.branch.wtStartNested);
-    h.switchRow()?.click();
-    fireChange(h.input(), 'feat/x');
-    h.formSubmit();
-    expect(h.submits).toEqual([{ branch: 'feat/x', inWorktree: false }]);
     h.unmount();
   });
 

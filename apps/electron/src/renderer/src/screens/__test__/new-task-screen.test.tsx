@@ -257,12 +257,3 @@ describe('NewTaskScreen 提交在途（症状：建会话+首条投递卡很久�
     }
   });
 });
-
-describe('NewTaskScreen worktree 入口退役（功能收进「创建 worktree 目录」弹窗）', () => {
-  test('症状回归「内联 worktree 开关行不再压在输入卡上方」：页面零 checkbox 开关、弹窗关态不渲染', () => {
-    const html = renderScreen();
-    expect(html).not.toContain('checkbox');
-    expect(html).not.toContain(copy.branch.wtStartInTreeTitle);
-    expect(html).toContain(copy.newTask.placeholder);
-  });
-});

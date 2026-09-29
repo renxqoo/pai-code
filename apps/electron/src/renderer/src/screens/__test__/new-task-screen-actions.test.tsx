@@ -7,6 +7,7 @@ import { render } from '@/testing/render';
 import { callProp, callPropIn } from '@/testing/react-props';
 import { fireChange } from '@/testing/change';
 import { store as liveStore } from '@/live/workspace-runtime';
+import { initialThreadState } from '@/live/live-thread-state';
 import { copyOfError } from '@/lib/error-text';
 import { copy } from '@/strings';
 
@@ -14,18 +15,14 @@ import { NewTaskScreen } from '../new-task-screen';
 import type { NewTaskStart } from '../start-task';
 
 /**
- * 新建任务页动作面（合并弹窗形态）：创建弹窗开关分派 worktree/检出、已建树 chip（× 删除回滚）、
- * 提交链（会话出生在树里 + start 失败自动回滚）、切分支点击时检查、选模型/目录等。
- * Portal 壳内入口 fiber 直调第一跳，弹窗/chip/表单走真实 DOM。
+ * 新建任务页动作面：创建分支弹窗（建分支并检出）、提交链（onCreate 透传）、
+ * 切分支点击时检查、选模型/目录等。Portal 壳内入口 fiber 直调第一跳，弹窗/表单走真实 DOM。
  */
 
 const REPO_VIEW: GitBranchesView = { isRepo: true, current: 'main', branches: ['dev', 'main'], dirtyFiles: 0 };
-const TREE_PATH = '/w/.x-harness-user-worktrees/app-feat-login';
 
 type Seen = {
-  created: Array<{ cwd: string; branch: string }>
-  removed: Array<{ cwd: string; path: string }>
-  starts: Array<{ cwd: string; worktreePath: string | null }>
+  starts: Array<{ cwd: string }>
   checkouts: Array<{ cwd: string; branch: string; create: boolean }>
   picked: number
   closed: number
@@ -33,7 +30,7 @@ type Seen = {
 };
 
 function mountFlow(over: Partial<Parameters<typeof NewTaskScreen>[0]> = {}): { seen: Seen; view: ReturnType<typeof render> } {
-  const seen: Seen = { created: [], removed: [], starts: [], checkouts: [], picked: 0, closed: 0, notices: [] };
+  const seen: Seen = { starts: [], checkouts: [], picked: 0, closed: 0, notices: [] };
   const view = render(
     <NewTaskScreen
       knownDirs={['/w/app', '/w/cli']}
@@ -52,20 +49,12 @@ function mountFlow(over: Partial<Parameters<typeof NewTaskScreen>[0]> = {}): { s
         seen.checkouts.push({ cwd, branch, create });
         return Promise.resolve({ ok: true, data: { branch } });
       }}
-      onCreateWorktree={(cwd, branch) => {
-        seen.created.push({ cwd, branch });
-        return Promise.resolve({ ok: true, data: { path: TREE_PATH, branch, cwd, repoTop: cwd } });
-      }}
-      onRemoveWorktree={(cwd, path) => {
-        seen.removed.push({ cwd, path });
-        return Promise.resolve({ ok: true, data: null });
-      }}
       onPickDirectory={() => {
         seen.picked += 1;
         return Promise.resolve(null);
       }}
       onCreate={(input: NewTaskStart) => {
-        seen.starts.push({ cwd: input.cwd, worktreePath: input.worktreePath });
+        seen.starts.push({ cwd: input.cwd });
         return Promise.resolve(true);
       }}
       onClose={() => {
@@ -93,16 +82,10 @@ function dialogOf(view: ReturnType<typeof render>): HTMLElement {
   return node as HTMLElement;
 }
 
-async function createViaDialog(view: ReturnType<typeof render>, name: string, inWorktree: boolean): Promise<void> {
+async function createViaDialog(view: ReturnType<typeof render>, name: string): Promise<void> {
   expect(callPropIn(view.container, ['onOpenGraph'], 'onCreate')).toBe(true);
   const dialog = dialogOf(view);
   fireChange(dialog.querySelector('input') as HTMLInputElement, name);
-  if (inWorktree) {
-    const row = dialog.querySelector('[role="switch"]');
-    React.act(() => {
-      (row as HTMLElement | null)?.click();
-    });
-  }
   React.act(() => {
     dialog.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
   });
@@ -118,89 +101,38 @@ function sendFirstMessage(view: ReturnType<typeof render>): void {
   });
 }
 
-describe('创建弹窗开关分派与 worktree 树 chip', () => {
-  test('开关开：确认即建树 → chip 标记（× 删除回滚）', async () => {
+describe('创建弹窗（建分支并检出）', () => {
+  test('提交 → checkout create=true，弹窗关闭', async () => {
     const { seen, view } = mountFlow();
     await flushAsync();
-    await createViaDialog(view, 'feat/login', true);
-    expect(seen.created).toEqual([{ cwd: '/w/app', branch: 'feat/login' }]);
-    expect(view.container.textContent ?? '').toContain(copy.branch.wtPendingChip('feat/login'));
-    expect(view.container.querySelector('[role="dialog"]')).toBeNull();
-
-    const clear = [...view.container.querySelectorAll('button')].find(
-      (b) => b.getAttribute('aria-label') === copy.branch.wtPendingClear,
-    );
-    React.act(() => {
-      clear?.click();
-    });
-    await flushAsync();
-    expect(seen.removed).toEqual([{ cwd: '/w/app', path: TREE_PATH }]);
-    expect(view.container.textContent ?? '').not.toContain(copy.branch.wtPendingChip('feat/login'));
-    view.unmount();
-    liveStore.getState().reset();
-  });
-
-  test('开关关：建分支并检出（create=true，不建树不 chip）', async () => {
-    const { seen, view } = mountFlow();
-    await flushAsync();
-    await createViaDialog(view, 'feat/new', false);
+    await createViaDialog(view, 'feat/new');
     expect(seen.checkouts).toEqual([{ cwd: '/w/app', branch: 'feat/new', create: true }]);
-    expect(seen.created).toEqual([]);
-    expect(view.container.textContent ?? '').not.toContain(copy.branch.wtPendingChip('feat/new'));
+    expect(view.container.querySelector('[role="dialog"]')).toBeNull();
     view.unmount();
     liveStore.getState().reset();
   });
 
-  test('建树失败：原因内联回弹窗（改名重试现场保留），不 chip', async () => {
+  test('创建失败：原因内联回弹窗（改名重试现场保留）', async () => {
     const { seen, view } = mountFlow({
-      onCreateWorktree: () => Promise.resolve({ ok: false, error: { kind: 'worktree_path_exists' } }),
+      onCheckoutBranch: () => Promise.resolve({ ok: false, error: { kind: 'branch_exists' } }),
     });
     await flushAsync();
-    await createViaDialog(view, 'feat/login', true);
-    const reopened = dialogOf(view);
-    expect(reopened.textContent ?? '').toContain(copyOfError({ kind: 'worktree_path_exists' }));
-    expect(view.container.textContent ?? '').not.toContain(copy.branch.wtPendingChip('feat/login'));
+    await createViaDialog(view, 'feat/new');
+    expect(dialogOf(view).textContent ?? '').toContain(copyOfError({ kind: 'branch_exists' }));
     expect(seen.starts).toEqual([]);
-    view.unmount();
-    liveStore.getState().reset();
-  });
-
-  test('症状回归「建树在途拒发不崩」：createWorktree 抛拒 → 报因内联、不建会话', async () => {
-    const { seen, view } = mountFlow({
-      onCreateWorktree: () => Promise.reject(new Error('transport down')),
-    });
-    await flushAsync();
-    await createViaDialog(view, 'feat/x', true);
-    expect(dialogOf(view).textContent ?? '').toContain('transport down');
-    expect(seen.starts).toEqual([]);
-    expect(seen.closed).toBe(0);
     view.unmount();
     liveStore.getState().reset();
   });
 });
 
-describe('提交链（会话出生在树里 + 自动回滚）', () => {
-  test('已建树：会话以树路径开始并关页', async () => {
+describe('提交链', () => {
+  test('提交首条消息 → 会话以所选目录开始并关页', async () => {
     const { seen, view } = mountFlow();
     await flushAsync();
-    await createViaDialog(view, 'feat/login', true);
     sendFirstMessage(view);
     await flushAsync();
-    expect(seen.starts).toEqual([{ cwd: TREE_PATH, worktreePath: TREE_PATH }]);
+    expect(seen.starts).toEqual([{ cwd: '/w/app' }]);
     expect(seen.closed).toBe(1);
-    expect(seen.removed).toEqual([]);
-    view.unmount();
-    liveStore.getState().reset();
-  });
-
-  test('症状回归「start 失败自动回滚」：建会话失败 → remove 回滚已建树、不关页', async () => {
-    const { seen, view } = mountFlow({ onCreate: () => Promise.resolve(false) });
-    await flushAsync();
-    await createViaDialog(view, 'feat/login', true);
-    sendFirstMessage(view);
-    await flushAsync();
-    expect(seen.removed).toEqual([{ cwd: TREE_PATH, path: TREE_PATH }]);
-    expect(seen.closed).toBe(0);
     view.unmount();
     liveStore.getState().reset();
   });
@@ -217,19 +149,29 @@ describe('分支/目录动作', () => {
     liveStore.getState().reset();
   });
 
-  test('点击时检查：被占用 → 反馈原因不切换', async () => {
-    const { seen, view } = mountFlow({
-      onListBranches: () =>
-        Promise.resolve({
-          ok: true,
-          data: { ...REPO_VIEW, branches: [...REPO_VIEW.branches], worktrees: [{ branch: 'dev', path: '/w/wt/dev' }] },
-        }),
+  test('运行中锁定：点击切分支 → 反馈锁因不切换', async () => {
+    const { seen, view } = mountFlow();
+    liveStore.setState({
+      sessions: {
+        't-run': {
+          threadId: 't-run',
+          cwd: '/w/app',
+          sessionPath: '/w/app/s/t-run.jsonl',
+          title: '运行中会话',
+          state: 'live',
+          streaming: false,
+          model: 'glm/glm-4.7',
+          thinkingLevel: null,
+          lastActivityAt: Date.now(),
+        },
+      },
+      threads: { 't-run': { ...initialThreadState, streaming: true } },
     });
     await flushAsync();
     expect(callPropIn(view.container, ['onOpenGraph'], 'onSelect', 'dev')).toBe(true);
     await flushAsync();
     expect(seen.checkouts).toEqual([]);
-    expect(seen.notices).toContain(copy.branch.occupiedBy('/w/wt/dev'));
+    expect(seen.notices.length).toBeGreaterThan(0);
     view.unmount();
     liveStore.getState().reset();
   });
@@ -246,15 +188,13 @@ describe('分支/目录动作', () => {
     liveStore.getState().reset();
   });
 
-  test('选工作区：目录弹窗 onSelect → 项目段换名（换目录清 worktree 树标记）', async () => {
+  test('选工作区：目录弹窗 onSelect → 项目段换名', async () => {
     const { seen, view } = mountFlow();
     await flushAsync();
-    await createViaDialog(view, 'feat/login', true);
     expect(callPropIn(view.container, ['onTrustedChange', 'onOpenFolder'], 'onSelect', '/w/cli')).toBe(true);
     await flushAsync();
     expect(view.container.textContent ?? '').toContain('cli');
-    expect(view.container.textContent ?? '').not.toContain(copy.branch.wtPendingChip('feat/login'));
-    expect(seen.created).toEqual([{ cwd: '/w/app', branch: 'feat/login' }]);
+    expect(seen.starts).toEqual([]);
     view.unmount();
     liveStore.getState().reset();
   });

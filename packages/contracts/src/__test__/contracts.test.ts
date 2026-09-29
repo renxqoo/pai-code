@@ -513,9 +513,6 @@ function samplePerUiEvent(): UiEvent[] {
     { type: 'dialogSettled', requestId: 'r1' },
     { type: 'bashOutput', threadId: t, id: 'b1', delta: 'out', truncated: false },
     { type: 'gitChanged', threadId: t, cwd: '/w', branch: 'main' },
-    { type: 'worktreeNotice', kind: 'busy', path: '/w/.x-harness-user-worktrees/app-feat-x' },
-    { type: 'worktreeNotice', kind: 'idle', path: '/w/.x-harness-user-worktrees/app-feat-y' },
-    { type: 'worktreeNotice', kind: 'deferred', path: '/w/.x-harness-user-worktrees/app-feat-z' },
   ];
 }
 

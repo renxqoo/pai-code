@@ -204,15 +204,6 @@ const uiEventDefs = {
    *  缺席 = detached 已分离。渲染层按 cwd 匹配会话刷新分支视图——docs/GIT-INTERACTION-REDESIGN §2.1）。 */
   gitChanged: z.object({ type: z.literal('gitChanged'), threadId, cwd: z.string(), branch: z.string().optional() }),
 
-  /** 用户 worktree 建树通告投递结果（SESSION-WORKTREE-WORKFLOW §1.3 反馈分句）：busy/idle =
-   *  已投递来源会话（时机差异：busy 空闲后下条消息生效），deferred = 未能投递（来源会话非 live /
-   *  notify 失败）——渲染层据此成句，busy 判定不做二次猜测。 */
-  worktreeNotice: z.object({
-    type: z.literal('worktreeNotice'),
-    kind: z.enum(['busy', 'idle', 'deferred']),
-    path: z.string().min(1),
-  }),
-
   /** todo 清单全量快照（last-wins：速览面板进程区整体替换）。 */
   todoSnapshot: z.object({ type: z.literal('todoSnapshot'), threadId, snapshot: TodoSnapshotEventDataSchema }),
 

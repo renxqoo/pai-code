@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { classifyGitExecError, createGitBranches, isValidBranchName, mapGitFailure, parseBranchList, parseConflictFiles, parseDirtyCount, parseWorktreeOccupant, parseWorktreeRefs, type GitExec, type GitExecResult } from '../git-branches';
+import { classifyGitExecError, createGitBranches, isValidBranchName, mapGitFailure, parseBranchList, parseConflictFiles, parseDirtyCount, parseWorktreeOccupant, type GitExec, type GitExecResult } from '../git-branches';
 
 /**
  * 本地 git 分支能力（T23）：纯函数分类 + fake 执行器驱动的行为
@@ -381,30 +381,21 @@ describe('parseConflictFiles / parseWorktreeOccupant / parseWorktreeRefs（D2\'/
     expect(parseWorktreeOccupant("fatal: 'dev' is already used by worktree at /w/wt-01")).toBe('/w/wt-01');
     expect(parseWorktreeOccupant('fatal: something else')).toBe(null);
   });
-
-  test('worktree list porcelain → 占用表（branch 在场才收；refs/heads 前缀剥）', () => {
-    const out = 'worktree /w/main\nHEAD abc\nbranch refs/heads/main\n\nworktree /w/wt-01\nHEAD def\nbranch refs/heads/x-harness/agent-01\n\nworktree /w/detached\nHEAD fedcba\n';
-    expect(parseWorktreeRefs(out)).toEqual([
-      { branch: 'main', path: '/w/main' },
-      { branch: 'x-harness/agent-01', path: '/w/wt-01' },
-    ]);
-  });
 });
 
-describe('list 的 gitDir/worktrees 装配（F1 相对串坑 + 占用表）', () => {
-  test('仓库根相对串 .git → env.resolve 归一；占用表并行读取', async () => {
+describe('list 的 gitDir 装配（F1 相对串坑）', () => {
+  test('仓库根相对串 .git → env.resolve 归一', async () => {
     const { exec } = makeExec([
       { match: 'rev-parse --git-dir', result: ok('.git') },
       { match: 'for-each-ref', result: ok('main\n') },
       { match: 'symbolic-ref', result: ok('main\n') },
       { match: 'status --porcelain', result: ok('') },
-      { match: 'worktree list', result: ok('worktree /w/main\nbranch refs/heads/main\n') },
     ]);
     const env = { isAbsolute: (path: string) => path.startsWith('/'), resolve: (...segments: string[]) => segments.join('/') };
     const outcome = await createGitBranches(exec, env).list('/w/repo');
     expect(outcome).toEqual({
       ok: true,
-      data: { isRepo: true, current: 'main', branches: ['main'], dirtyFiles: 0, gitDir: '/w/repo/.git', worktrees: [{ branch: 'main', path: '/w/main' }] },
+      data: { isRepo: true, current: 'main', branches: ['main'], dirtyFiles: 0, gitDir: '/w/repo/.git' },
     });
   });
 
@@ -414,7 +405,6 @@ describe('list 的 gitDir/worktrees 装配（F1 相对串坑 + 占用表）', ()
       { match: 'for-each-ref', result: ok('main\n') },
       { match: 'symbolic-ref', result: ok('main\n') },
       { match: 'status --porcelain', result: ok('') },
-      { match: 'worktree list', result: ok('') },
     ]);
     const outcome = await createGitBranches(exec).list('/w/repo');
     expect((outcome as { ok: true; data: Record<string, unknown> }).data['gitDir']).toBeUndefined();

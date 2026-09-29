@@ -13,8 +13,6 @@ import { PromptCard, type ComposerAttachment } from '@/composer/prompt-card';
 import { PromptContextBar } from '@/composer/prompt-context-bar';
 import { PromptInputArea } from '@/composer/prompt-input-area';
 import { QuickTaskChips } from '@/composer/quick-task-chips';
-import { WorktreePendingChip } from '@/composer/worktree-pending-chip';
-import { worktreeStartState } from '@/composer/worktree-start-state';
 import { switchBlockedReason } from '@/composer/branch-switch-guard';
 import { WorkspacePickerDialog } from '@/composer/workspace-picker-dialog';
 import { GitGraphDialog } from '@/git-graph/git-graph-dialog';
@@ -55,10 +53,6 @@ type NewTaskScreenProps = {
   onListBranches: (cwd: string) => Promise<ApiOutcome<'git/branches'>>
   onListGraph: (cwd: string) => Promise<ApiOutcome<'git/graph'>>
   onCheckoutBranch: (cwd: string, branch: string, create: boolean) => Promise<ApiOutcome<'git/checkout'>>
-  /** worktree 建树（提交链前置；成功返回树路径）。 */
-  onCreateWorktree: (cwd: string, branch: string) => Promise<ApiOutcome<'git/worktree/create'>>
-  /** 建树后 session/start 失败的回滚（树必 clean 零提交，remove 门必过）。 */
-  onRemoveWorktree: (cwd: string, path: string) => Promise<ApiOutcome<'git/worktree/remove'>>
   onPickDirectory: (defaultPath: string | null) => Promise<string | null>
   /** 创建会话并投递首条消息；resolve true = 已建会话（本页关闭） */
   onCreate: (input: NewTaskStart) => Promise<boolean>
@@ -88,8 +82,6 @@ function NewTaskScreen({
   permissionModes,
   onSearchFiles,
   onListBranches,
-  onCreateWorktree,
-  onRemoveWorktree,
   onListGraph,
   onCheckoutBranch,
   onPickDirectory,
@@ -114,8 +106,6 @@ function NewTaskScreen({
   const [checkingOut, setCheckingOut] = React.useState(false);
   const [branchError, setBranchError] = React.useState<string | null>(null);
   const [creating, setCreating] = React.useState(false);
-  /** 已创建的 worktree 树（弹窗开关创建；会话以树路径开始，× 删除回滚） */
-  const [worktreeTree, setWorktreeTree] = React.useState<{ path: string; branch: string } | null>(null);
   /** 同步闸：连按 Enter/双击时 state 闭包仍为旧值，异步在途必须用 ref 拦 */
   const busyRef = React.useRef(false);
   /** 问候语按打开时刻定段（小时级，不挂 tick） */
@@ -156,7 +146,6 @@ function NewTaskScreen({
     setBranchError(null);
     setDialog(null);
     setPanelOpen(false);
-    setWorktreeTree(null);
   };
 
   const openFolder = (): void => {
@@ -174,8 +163,8 @@ function NewTaskScreen({
   /** 切分支：失败走通知条，成功后刷新分支视图（当前分支与列表） */
   const switchBranch = (branch: string): void => {
     if (busyRef.current) return;
-    // 点击时检查（行不禁用）：锁定/被 worktree 占用 → 反馈原因；脏区交 verb 恒重评
-    const blocked = switchBlockedReason(branches.view, branchLocked, branchRunningCount, branch);
+    // 点击时检查（行不禁用）：锁定 → 反馈原因；脏区交 verb 恒重评
+    const blocked = switchBlockedReason(branchLocked, branchRunningCount);
     if (blocked !== null) {
       onNotify(blocked);
       return;
@@ -225,47 +214,13 @@ function NewTaskScreen({
     );
   };
 
-  /** 弹窗开关分派：关 = 建分支并检出；开 = 建分支并在独立 worktree 目录中开始（失败内联改名重试）。 */
-  const createBranchOrWorktree = (branch: string, inWorktree: boolean): void => {
-    if (!inWorktree) {
-      createBranch(branch);
-      return;
-    }
-    if (busyRef.current) return;
-    busyRef.current = true;
-    setCheckingOut(true);
-    setBranchError(null);
-    void onCreateWorktree(cwd, branch).then(
-      (outcome) => {
-        busyRef.current = false;
-        setCheckingOut(false);
-        if (!outcome.ok) {
-          setBranchError(copyOfError(outcome.error));
-          return;
-        }
-        setWorktreeTree({ path: outcome.data.path, branch });
-        setDialog(null);
-      },
-      (reason: unknown) => {
-        busyRef.current = false;
-        setCheckingOut(false);
-        setBranchError(String(reason));
-      },
-    );
-  };
-
   const submit = (text: string, attachments: readonly ComposerAttachment[]): boolean => {
     if (busyRef.current || cwd.length === 0) return false;
     busyRef.current = true;
     setCreating(true);
-    const worktreePath = worktreeTree?.path ?? null;
     void startTask(
-      { cwd: worktreePath ?? cwd, worktreePath, trusted, model: effectiveModel, permissionMode, thinkingLevel, text, attachments },
-      {
-        removeWorktree: onRemoveWorktree,
-        onCreate,
-        onRollbackError: onNotify,
-      },
+      { cwd, trusted, model: effectiveModel, permissionMode, thinkingLevel, text, attachments },
+      { onCreate },
     ).then(
       (ok) => {
         busyRef.current = false;
@@ -303,20 +258,6 @@ function NewTaskScreen({
         <h1 className="text-[26px] leading-[34px] font-semibold tracking-tight text-foreground">{texts.title}</h1>
         <p className="pt-[6px] text-[13px] leading-[20px] text-muted-foreground">{texts.subtitle}</p>
         <div className="mt-[26px] w-full">
-          {worktreeTree === null ? null : (
-            <WorktreePendingChip
-              branch={worktreeTree.branch}
-              onClear={() => {
-                void onRemoveWorktree(cwd, worktreeTree.path).then((outcome) => {
-                  if (!outcome.ok) {
-                    onNotify(copyOfError(outcome.error));
-                    return;
-                  }
-                  setWorktreeTree(null);
-                });
-              }}
-            />
-          )}
           <PromptContextBar
             project={{
               // 无预选目录时项目段仍可点（入口不能消失），文案退为「选择工作区」
@@ -439,8 +380,7 @@ function NewTaskScreen({
         onOpenChange={(open) => setDialog(open ? 'create-branch' : null)}
         busy={checkingOut}
         error={branchError}
-        worktreeReason={worktreeStartState(branches.view, branches.loading, branches.failed).reason}
-        onSubmit={createBranchOrWorktree}
+        onSubmit={createBranch}
       />
     </div>
   );

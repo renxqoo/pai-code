@@ -178,11 +178,11 @@ describe('RuntimeContent', () => {
 });
 
 
-describe('运行状态会话副行（git 分支如实呈现——worktree 上下文感知）', () => {
+describe('运行状态会话副行（git 分支如实呈现）', () => {
   test('gitBranch 在场：副行渲染 项目名 @ 分支', () => {
-    const html = renderScreen({ rows: [row({ cwd: '/Users/w/work/.x-harness-worktrees/x-harness-worktree-context', gitBranch: 'feat/worktree-context' })] });
+    const html = renderScreen({ rows: [row({ cwd: '/Users/w/work/x-harness', gitBranch: 'feat/worktree-context' })] });
     expect(html).toContain('@ feat/worktree-context');
-    expect(html).toContain('x-harness-worktree-context @ feat/worktree-context');
+    expect(html).toContain('x-harness @ feat/worktree-context');
   });
 
   test('gitBranch 缺席（非 git 仓/detached/hub 旧版）：副行仅项目名，无 @ 残留', () => {
@@ -195,19 +195,4 @@ describe('运行状态会话副行（git 分支如实呈现——worktree 上下
     expect(copy.runtime.sessionSubline('proj', null)).toBe('proj');
     expect(copy.runtime.sessionSubline('proj', 'b/x')).toBe('proj @ b/x');
   });
-
-
-describe('runtime 副行 worktree 徽标（worktree 会话归属可辨）', () => {
-  test('cwd 含 .x-harness-worktrees → [wt] 前缀 + 归属名呈现', () => {
-    const wt = '/w/work/.x-harness-worktrees/x-harness-agent-0123';
-    const html = renderScreen({ rows: [row({ cwd: wt, gitBranch: 'x-harness/agent-0123' })] });
-    expect(html).toContain('[wt]');
-    expect(html).toContain('x-harness-agent-0123');
-  });
-
-  test('普通仓 cwd → 无 [wt] 前缀（主仓会话不误标）', () => {
-    const html = renderScreen({ rows: [row({ cwd: '/w/x-harness', gitBranch: 'main' })] });
-    expect(html).not.toContain('[wt]');
-  });
-});
 });

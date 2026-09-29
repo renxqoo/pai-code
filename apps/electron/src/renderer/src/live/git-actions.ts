@@ -52,34 +52,3 @@ export async function checkoutGitBranch(
   if (cwd.length === 0) return emptyCwd();
   return api.git.checkout({ cwd, branch, create });
 }
-
-/** 会话级 worktree 四动作（verb 语义见主进程 git-worktree.ts；结果透传由调用方转文案）。 */
-export async function listWorktrees(client: BridgeClient, cwd: string): Promise<ApiOutcome<'git/worktree/list'>> {
-  const api = createApiClient(client);
-  if (cwd.length === 0) return emptyCwd();
-  return api.git.worktreeList({ cwd });
-}
-
-export async function createWorktree(client: BridgeClient, cwd: string, branch: string, originThreadHint?: string | null): Promise<ApiOutcome<'git/worktree/create'>> {
-  const api = createApiClient(client);
-  if (cwd.length === 0) return emptyCwd();
-  return api.git.worktreeCreate({ cwd, branch, ...(originThreadHint !== undefined && originThreadHint !== null && originThreadHint !== '' ? { originThreadHint } : {}) });
-}
-
-export async function removeWorktree(client: BridgeClient, cwd: string, path: string): Promise<ApiOutcome<'git/worktree/remove'>> {
-  const api = createApiClient(client);
-  if (cwd.length === 0) return emptyCwd();
-  return api.git.worktreeRemove({ cwd, path });
-}
-
-export async function mergeWorktree(client: BridgeClient, cwd: string, branch: string): Promise<ApiOutcome<'git/worktree/merge'>> {
-  const api = createApiClient(client);
-  if (cwd.length === 0) return emptyCwd();
-  return api.git.worktreeMerge({ cwd, branch });
-}
-
-/** 登记面三张表读口（侧栏归并/派生树 chip 数据源）。 */
-export async function worktreeRegistry(client: BridgeClient): Promise<ApiOutcome<'git/worktree/registry'>> {
-  const api = createApiClient(client);
-  return api.git.worktreeRegistry({});
-}

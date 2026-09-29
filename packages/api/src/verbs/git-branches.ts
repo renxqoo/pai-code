@@ -1,4 +1,4 @@
-import type { GitBranchesView, GitWorktreeRef } from '@paiapp/contracts';
+import type { GitBranchesView } from '@paiapp/contracts';
 import { appError, type ApiError } from '../errors';
 
 /**
@@ -96,28 +96,6 @@ export function parseWorktreeOccupant(stderr: string): string | null {
   return m?.[1]?.trim() ?? null;
 }
 
-/** `worktree list --porcelain` → 分支占用表（branch 在场才收——detached worktree 不占分支）。 */
-export function parseWorktreeRefs(stdout: string): GitWorktreeRef[] {
-  const refs: GitWorktreeRef[] = [];
-  let path: string | null = null;
-  let branch: string | null = null;
-  const flush = (): void => {
-    if (path !== null && branch !== null && branch.length > 0) refs.push({ branch, path });
-    path = null;
-    branch = null;
-  };
-  for (const line of stdout.split('\n')) {
-    if (line.startsWith('worktree ')) {
-      flush();
-      path = line.slice('worktree '.length).trim();
-    } else if (line.startsWith('branch ')) {
-      branch = line.slice('branch '.length).trim().replace(/^refs\/heads\//, '');
-    }
-  }
-  flush();
-  return refs;
-}
-
 /** `status --porcelain --untracked-files=no` 输出 → 未提交更改文件数（口径与切换守卫一致：展示的数字就是会阻止切换的数字）。 */
 export function parseDirtyCount(stdout: string): number {
   return stdout.split('\n').filter((line) => line.trim().length > 0).length;
@@ -208,16 +186,12 @@ export function createGitBranches(run: GitExec, env?: GitPathEnv): GitBranches {
     // env 缺席（纯测试装置）时若为相对串则键省略——不产半生数据
     const rawGitDir = probe.stdout.trim();
     const gitDir = env === undefined ? undefined : env.isAbsolute(rawGitDir) ? rawGitDir : env.resolve(cwd, rawGitDir);
-    // linked worktree 占用表（列表禁用标注与占用文案数据源）；读失败不阻塞列表
-    const wtList = await run(['worktree', 'list', '--porcelain'], cwd);
-    const worktrees = wtList.error === null && wtList.code === 0 ? parseWorktreeRefs(wtList.stdout) : [];
     return okBranches({
       isRepo: true,
       current: current.length > 0 ? current : null,
       branches: parseBranchList(refs.stdout),
       dirtyFiles: parseDirtyCount(status.stdout),
       ...(gitDir !== undefined ? { gitDir } : {}),
-      ...(worktrees.length > 0 ? { worktrees } : {}),
     });
   };
 

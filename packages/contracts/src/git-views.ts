@@ -5,40 +5,8 @@ import { z } from 'zod';
  * 单文件行数预算内保持内聚）。
  */
 
-/** 分支被 linked worktree 占用的事实（列表禁用标注与占用文案的数据源）。 */
-export const GitWorktreeRefSchema = z
-  .object({
-    /** null = detached HEAD 树（无分支占用，占位行数据面）。 */
-    branch: z.string().min(1).nullable(),
-    /** worktree 绝对路径（占用者——文案/跳转用）。 */
-    path: z.string().min(1),
-  })
-  .strict();
-export type GitWorktreeRef = z.infer<typeof GitWorktreeRefSchema>;
-
-/** 会话级 worktree 条目（git/worktree/list 视图；清理确认框与占用行的数据源）。 */
-export const WorktreeEntryViewSchema = z
-  .object({
-    path: z.string().min(1),
-    /** null = detached HEAD。 */
-    branch: z.string().min(1).nullable(),
-    /** status --porcelain --ignored 空（含 untracked/ignored——口径钉死）；目录缺席 = 键省略。 */
-    clean: z.boolean(),
-    /** 收编门结果（merge-base --is-ancestor tip 被任一其他本地分支包含）；detached = HEAD sha 同判据。 */
-    merged: z.boolean(),
-    /** tip 不可达自其他本地分支的提交数（rev-list --count 含 merge 纯计数——确认框文案；判据是 merged 布尔，本数非判据）。 */
-    unmergedCount: z.number().int().min(0).optional(),
-    /** porcelain locked 透传（UI 前置禁用清理按钮）。 */
-    locked: z.boolean().optional(),
-    /** 目录缺席/登记失真（孤儿态呈现）。 */
-    prunable: z.boolean().optional(),
-  })
-  .strict();
-export type WorktreeEntryView = z.infer<typeof WorktreeEntryViewSchema>;
-
 /** 本地 git 分支视图（两页分支面板共用）：非 git 目录 isRepo=false + 空列表（降级不报错）。
- *  gitDir/worktrees：主进程本地 watch 兜底锚（HEAD 所在——linked worktree 在主仓
- *  .git/worktrees/<n> 下）与占用表（docs/GIT-INTERACTION-REDESIGN §2.2）。 */
+ *  gitDir：主进程本地 watch 兜底锚（HEAD 所在）与分支菜单失效信号（docs/GIT-INTERACTION-REDESIGN §2.2）。 */
 export const GitBranchesViewSchema = z
   .object({
     isRepo: z.boolean(),
@@ -48,8 +16,6 @@ export const GitBranchesViewSchema = z
     dirtyFiles: z.number().int().min(0),
     /** gitdir 绝对路径（非 git 目录键省略——zod optional）；分支菜单失效信号的 watch 锚。 */
     gitDir: z.string().min(1).optional(),
-    /** linked worktree 占用表（无占用/非仓键省略）。 */
-    worktrees: z.array(GitWorktreeRefSchema).optional(),
   })
   .strict();
 export type GitBranchesView = z.infer<typeof GitBranchesViewSchema>;

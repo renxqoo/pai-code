@@ -1,7 +1,6 @@
 import type { ApiError, ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
 import { appError } from '../errors';
 import type { GitBranches } from './git-branches';
-import type { GitWorktree } from './git-worktree';
 import type { GitGraph } from './git-graph';
 import type { GitStatus } from './git-status';
 
@@ -23,13 +22,6 @@ export type LocalRoutesDeps = {
   audit: (message: string) => void;
   fileSearch: FileSearchPort;
   git: GitBranches;
-  gitWorktree: GitWorktree;
-  /** worktree 树被移除后的宿主回调（登记面 GC——api 包不持状态）。 */
-  onTreeRemoved: (path: string) => void;
-  /** 建树成功后的宿主回调（通告投递与登记——busy/idle 分流和来源判定在宿主侧；originThreadHint = 打开新建页时定格的来源会话）。 */
-  onTreeCreated: (tree: { readonly path: string; readonly branch: string; readonly repoTop: string; readonly cwd: string; readonly originThreadHint: string | null }) => void;
-  /** 登记面三张表读口（主进程 worktree-registry 注入）。 */
-  worktreeRegistry: () => { dirs: string[]; treeToRepoTop: Record<string, string>; sessionTrees: Record<string, string> };
   graph: GitGraph;
   gitStatus: GitStatus;
   openLocation: OpenLocationPort;
@@ -47,11 +39,6 @@ export function createLocalRoutes(deps: LocalRoutesDeps) {
     'git/checkout': Handler<'git/checkout'>;
     'git/graph': Handler<'git/graph'>;
     'git/status': Handler<'git/status'>;
-    'git/worktree/list': Handler<'git/worktree/list'>;
-    'git/worktree/registry': Handler<'git/worktree/registry'>;
-    'git/worktree/create': Handler<'git/worktree/create'>;
-    'git/worktree/remove': Handler<'git/worktree/remove'>;
-    'git/worktree/merge': Handler<'git/worktree/merge'>;
   } = {
     'file/search': (params) => {
       // 目录门禁：只允许扫描本应用已知会话目录（活跃会话 + 注册表），缩小枚举面（见 T23 挂账）
@@ -90,49 +77,6 @@ export function createLocalRoutes(deps: LocalRoutesDeps) {
     'git/status': (params) => {
       if (!deps.isKnownCwd(params.cwd)) return fail(appError('cwd_not_allowed'));
       return deps.gitStatus.status(params.cwd);
-    },
-    'git/worktree/list': (params) => {
-      if (!deps.isKnownCwd(params.cwd)) return fail(appError('cwd_not_allowed'));
-      return deps.gitWorktree.list(params.cwd);
-    },
-    'git/worktree/registry': () => Promise.resolve({ ok: true as const, data: deps.worktreeRegistry() }),
-    'git/worktree/create': async (params) => {
-      if (!deps.isKnownCwd(params.cwd)) return fail(appError('cwd_not_allowed'));
-      deps.audit(`git_worktree_create:${params.cwd}:${params.branch}`);
-      const outcome = await deps.gitWorktree.create(params.cwd, params.branch);
-      if (outcome.ok) {
-        deps.graph.invalidate(params.cwd);
-        deps.gitStatus.invalidate(params.cwd);
-        deps.onTreeCreated({
-          path: outcome.data.path,
-          branch: params.branch,
-          repoTop: params.cwd,
-          cwd: params.cwd,
-          originThreadHint: typeof params.originThreadHint === 'string' && params.originThreadHint !== '' ? params.originThreadHint : null,
-        });
-      }
-      return outcome;
-    },
-    'git/worktree/remove': async (params) => {
-      if (!deps.isKnownCwd(params.cwd)) return fail(appError('cwd_not_allowed'));
-      deps.audit(`git_worktree_remove:${params.path}`);
-      const outcome = await deps.gitWorktree.remove(params.cwd, params.path);
-      if (outcome.ok) {
-        deps.graph.invalidate(params.cwd);
-        deps.gitStatus.invalidate(params.cwd);
-        deps.onTreeRemoved(params.path);
-      }
-      return outcome;
-    },
-    'git/worktree/merge': async (params) => {
-      if (!deps.isKnownCwd(params.cwd)) return fail(appError('cwd_not_allowed'));
-      deps.audit(`git_worktree_merge:${params.cwd}:${params.branch}`);
-      const outcome = await deps.gitWorktree.merge(params.cwd, params.branch);
-      if (outcome.ok) {
-        deps.graph.invalidate(params.cwd);
-        deps.gitStatus.invalidate(params.cwd);
-      }
-      return outcome;
     },
   };
 

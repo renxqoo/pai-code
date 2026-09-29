@@ -6,19 +6,16 @@ import {
   createGitBranches,
   createGitGraph,
   createGitStatus,
-  createGitWorktree,
   createHubApi,
   savedSessions,
   type GitBranches,
   type GitGraph,
   type GitStatus,
-  type GitWorktree,
   type HubApi,
 } from '@paiapp/api';
 import { createFileRead, type FileRead } from './file-read';
 import { searchProjectFiles } from './file-search';
 import { runGit } from './git-exec';
-import { withRepoLock } from './repo-lock';
 import { createOpenLocation, type OpenLocation } from './open-location';
 import { writeModelsConfig } from './models-config';
 import { createLocalRoutes } from '@paiapp/api';
@@ -89,10 +86,6 @@ export interface ApiRouteDeps {
   graph?: GitGraph;
   /** 工作区变更速览读口（同上，可注入替身）。 */
   gitStatus?: GitStatus;
-  gitWorktree?: GitWorktree;
-  onTreeRemoved?: (path: string) => void;
-  onTreeCreated?: (tree: { readonly path: string; readonly branch: string; readonly repoTop: string; readonly cwd: string; readonly originThreadHint: string | null }) => void;
-  worktreeRegistry?: () => { dirs: string[]; treeToRepoTop: Record<string, string>; sessionTrees: Record<string, string> };
   /** 运行状态监控器（T29 app/runtime 快照源）。 */
   monitor: RuntimeMonitor;
   /** relay 配置变更后重启网关（gateway.json 只在网关启动期读入——不重启即拿旧形态配对）。 */
@@ -223,18 +216,6 @@ export function createApiRoutes(deps: ApiRouteDeps) {
   const git = deps.git ?? createGitBranches(runGit, { isAbsolute, resolve });
   const graph = deps.graph ?? createGitGraph(runGit);
   const gitStatus = deps.gitStatus ?? createGitStatus(runGit);
-  const gitWorktree =
-    deps.gitWorktree ??
-    createGitWorktree(runGit, {
-      isAbsolute,
-      resolve,
-      dirname: dirnamePath,
-      join: joinPaths,
-      basename: baseName,
-      exists: (path) => statSync(path, { throwIfNoEntry: false }) !== undefined,
-      realpath: (path) => realpathSync(path),
-      withRepoLock: <T,>(repoTop: string, critical: () => Promise<T>) => withRepoLock(repoTop, critical, { onDegraded: deps.audit }),
-    });
   const openLocation = deps.openLocation ?? createOpenLocation();
   const fileRead = deps.fileRead ?? createFileRead();
 
@@ -282,10 +263,6 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     audit: deps.audit,
     fileSearch: { search: searchProjectFiles },
     git,
-    gitWorktree,
-    onTreeRemoved: (path) => deps.onTreeRemoved?.(path),
-    onTreeCreated: (tree) => deps.onTreeCreated?.(tree),
-    worktreeRegistry: deps.worktreeRegistry ?? (() => ({ dirs: [], treeToRepoTop: {}, sessionTrees: {} })),
     graph,
     gitStatus,
     openLocation,

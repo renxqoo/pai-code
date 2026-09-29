@@ -12,9 +12,8 @@ import { sessionCardsOf } from '@/sidebar/session-cards';
 import { store as liveStore, workspaceActions } from '@/live/workspace-runtime';
 import { uiStore } from '@/ui/ui-store';
 
-const sourceThreadId = (): string | null => uiStore.getState().newTaskSourceThreadId;
 import type { NewTaskScreenProps } from './new-task-screen';
-import { worktreeStartFeedback, type NewTaskStart } from './start-task';
+import type { NewTaskStart } from './start-task';
 
 /** 新建任务页已知目录快捷条上限（更多走系统文件夹选择）。 */
 const KNOWN_DIRS_LIMIT = 6;
@@ -118,16 +117,6 @@ export function useNewTaskScreen(enterCwd: string): NewTaskScreenProps {
     permissionModes,
     onSearchFiles: workspaceActions.searchFilesIn,
     onListBranches: workspaceActions.listGitBranches,
-    onCreateWorktree: (cwd, branch) =>
-      workspaceActions.createWorktree(cwd, branch, sourceThreadId()).then((outcome) => {
-        // 建树反馈（§1.3 按入口分句）：无来源报「会话将在 <path> 中开始」；有来源走 worktreeNotice 事件
-        if (outcome.ok) {
-          const feedback = worktreeStartFeedback(outcome.data.path, sourceThreadId() !== null);
-          if (feedback !== null) workspaceActions.showNotice(feedback);
-        }
-        return outcome;
-      }),
-    onRemoveWorktree: (cwd, path) => workspaceActions.removeWorktree(cwd, path),
     onListGraph: workspaceActions.listGitGraph,
     onCheckoutBranch: checkoutBranch,
     onPickDirectory: workspaceActions.pickDirectory,

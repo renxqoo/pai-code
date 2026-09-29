@@ -17,7 +17,7 @@ import { createSettingsPorts } from './settings-ports';
 import { createAgentsActions } from './agents-actions';
 import { createSkillsActions } from './skills-actions';
 import { createPluginsActions } from './plugins-actions';
-import { checkoutGitBranch, createWorktree, listGitBranches, listGitGraph, listGitStatus, listWorktrees, mergeWorktree, removeWorktree, searchFiles, worktreeRegistry as worktreeRegistryOf } from './git-actions';
+import { checkoutGitBranch, listGitBranches, listGitGraph, listGitStatus, searchFiles } from './git-actions';
 import type { CreateSessionInput, CreateSessionOutcome, LiveController, QueueOpOutcome } from './live-controller-types';
 import { isLiveSession, type LiveStore } from './store';
 
@@ -154,19 +154,6 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     if (event.type === 'gitChanged') {
       // hub git/changed（外部 checkout 失效信号）：bump 分支代次——use-git-branches 按
       // cwd 匹配的会话分支视图重拉（ui-store 全局单值——多余重拉为已知可接受项）
-      uiStore.getState().bumpBranchRevision();
-      return;
-    }
-    if (event.type === 'worktreeNotice') {
-      // 建树通告投递结果（SESSION-WORKTREE-WORKFLOW §1.3 反馈分句）：busy 判定在主进程
-      // create 完成时刻，这里只查表成句；bump 代次让派生树 chip 随登记重读
-      state.pushNotice(
-        event.kind === 'busy'
-          ? copy.branch.wtCreatedBusy(event.path)
-          : event.kind === 'idle'
-            ? copy.branch.wtCreatedIdle(event.path)
-            : copy.branch.wtCreatedDeferred(event.path),
-      );
       uiStore.getState().bumpBranchRevision();
       return;
     }
@@ -538,11 +525,6 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     },
     searchFiles: (cwd: string, query: string) => searchFiles(client, cwd, query),
     listGitBranches: (cwd: string) => listGitBranches(client, cwd),
-    listWorktrees: (cwd: string) => listWorktrees(client, cwd),
-    createWorktree: (cwd: string, branch: string, originThreadHint?: string | null) => createWorktree(client, cwd, branch, originThreadHint),
-    removeWorktree: (cwd: string, path: string) => removeWorktree(client, cwd, path),
-    mergeWorktree: (cwd: string, branch: string) => mergeWorktree(client, cwd, branch),
-    worktreeRegistry: () => worktreeRegistryOf(client),
     listGitGraph: (cwd: string) => listGitGraph(client, cwd),
     listGitStatus: (cwd: string) => listGitStatus(client, cwd),
     checkoutGitBranch: (cwd: string, branch: string, create: boolean) => checkoutGitBranch(client, cwd, branch, create),

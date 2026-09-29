@@ -422,6 +422,7 @@ describe('ComposerRegion 分支面板接线（T36）', () => {
     expect(view.container.textContent).toContain(copy.composer.notARepo);
     view.unmount();
   });
+
 });
 
 type RegionProbeHostProps = {

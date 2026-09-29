@@ -6,8 +6,6 @@ import type { GitBranchesView } from '@paiapp/contracts';
 import { AnchoredPanel } from '@paiapp/ui';
 import { BranchPanel } from '@/composer/branch-panel';
 import { CreateBranchDialog } from '@/composer/create-branch-dialog';
-import { startWorktree } from '@/composer/start-worktree';
-import { worktreeStartState } from '@/composer/worktree-start-state';
 import { switchBlockedReason } from '@/composer/branch-switch-guard';
 import { copyOfError } from '@/lib/error-text';
 import { store as liveStore, workspaceActions } from '@/live/workspace-runtime';
@@ -30,7 +28,7 @@ type BranchMenuProps = {
 
 /**
  * 分支行下拉（速览面板）：AnchoredPanel + BranchPanel 复用线程页分支面板交互
- * （切换守卫 / 创建分支弹窗开关分派 worktree / 图谱入口），检出与建树成功 bump 分支失效代次。
+ * （切换守卫 / 创建分支弹窗 / 图谱入口），检出成功 bump 分支失效代次。
  */
 function BranchMenu({ view, current: currentFallback, loading, failed, cwd, lock, onOpenGraph }: BranchMenuProps) {
   const [open, setOpen] = React.useState(false);
@@ -40,33 +38,11 @@ function BranchMenu({ view, current: currentFallback, loading, failed, cwd, lock
   /** 同步闸：双击/连点时 state 闭包仍是旧值，异步在途必须用 ref 拦 */
   const busyRef = React.useRef(false);
   const current = view?.current ?? currentFallback;
-  /** 弹窗开关分派的 worktree 路（SESSION-WORKTREE-WORKFLOW D14：来源 = activeThread，
-   *  通告投递反馈经 worktreeNotice 事件）；失败内联改名重试。 */
-  const startInWorktree = (branchName: string): void => {
-    if (busyRef.current) return;
-    busyRef.current = true;
-    setBusy(true);
-    setError(null);
-    void startWorktree(
-      { cwd, branch: branchName, originThreadId: liveStore.getState().activeThreadId ?? '' },
-      {
-        createWorktree: (target, branch, originThreadId) => workspaceActions.createWorktree(target, branch, originThreadId),
-        onCreated: () => {
-          setCreateOpen(false);
-          uiStore.getState().bumpBranchRevision();
-        },
-      },
-    ).then((failure) => {
-      busyRef.current = false;
-      setBusy(false);
-      if (failure !== null) setError(failure);
-    });
-  };
 
   const switchBranch = (branchName: string): void => {
     if (busyRef.current) return;
-    // 点击时检查（行不禁用）：锁定/被 worktree 占用 → 反馈原因；脏区交 verb 恒重评
-    const blocked = switchBlockedReason(view, lock !== null, lock?.runningCount ?? 0, branchName);
+    // 点击时检查（行不禁用）：锁定 → 反馈原因；脏区交 verb 恒重评
+    const blocked = switchBlockedReason(lock !== null, lock?.runningCount ?? 0);
     if (blocked !== null) {
       liveStore.getState().pushNotice(blocked);
       return;
@@ -158,14 +134,7 @@ function BranchMenu({ view, current: currentFallback, loading, failed, cwd, lock
         onOpenChange={(next) => setCreateOpen(next)}
         busy={busy}
         error={error}
-        worktreeReason={worktreeStartState(view, loading, failed).reason}
-        onSubmit={(branchName, inWorktree) => {
-          if (inWorktree) {
-            startInWorktree(branchName);
-            return;
-          }
-          createBranch(branchName);
-        }}
+        onSubmit={createBranch}
       />
     </>
   );
