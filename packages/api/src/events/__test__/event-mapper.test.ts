@@ -122,6 +122,21 @@ describe('createEventMapper · 主线程事件', () => {
     expect(mapper.mapEvent(chunk(0, 0, 'usage', { usage: { input: 3, output: 4, totalTokens: 7 } }))).toEqual([]);
   });
 
+  test('症状回归：WAL usage 的 cacheRead 不被收窄丢弃（缓存命中率分子曾在 app 侧被掐掉）', () => {
+    const mapper = createEventMapper(deps);
+    // WAL assistant/message 的 usage 是内核实报形态（含 cache 明细）——收窄后必须原样保留，
+    // 旧收窄器只回 {input, output}，把分子掐掉（命中率永远算不出）
+    const [event] = mapper.mapEvent(
+      frame('assistant/message', {
+        turn: 0,
+        step: 0,
+        content: [{ type: 'text', text: 'a' }],
+        usage: { input: 100, output: 7, cacheRead: 90, cacheWrite: 3 },
+      }),
+    );
+    expect(event).toMatchObject({ type: 'messageFinal', message: { usage: { input: 100, output: 7, cacheRead: 90, cacheWrite: 3 } } });
+  });
+
   test('assistant/message → messageFinal（content 块拼接 + usage 视图 + 流缓冲 id 继承）', () => {
     const mapper = createEventMapper(deps);
     mapper.mapEvent(chunk(0, 0, 'thinking-delta', { text: '流式' }));
@@ -133,14 +148,14 @@ describe('createEventMapper · 主线程事件', () => {
           step: 0,
           content: [{ type: 'text', text: 'a' }, { type: 'text', text: 'b' }],
           thinking: 'P',
-          usage: { input: 3, output: 4, total: 7 },
+          usage: { input: 3, output: 4, cacheRead: 2, cacheWrite: 1, totalTokens: 7 },
         }),
       ),
     ).toEqual([
       {
         type: 'messageFinal',
         threadId: 't',
-        message: { id: 'stream-1', text: 'a\nb', thinking: 'P', toolCalls: [], usage: { input: 3, output: 4 } },
+        message: { id: 'stream-1', text: 'a\nb', thinking: 'P', toolCalls: [], usage: { input: 3, output: 4, cacheRead: 2, cacheWrite: 1, totalTokens: 7 } },
       },
     ]);
   });

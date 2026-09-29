@@ -10,13 +10,15 @@
 // Event 帧事件词表与载荷（x-harness session 域 + 实时域 + worker 合成域）
 // ============================================================================
 
+import type { Usage } from './usage';
+
 /** llm/chunk 载荷（仅主会话外发；替代旧 assistant/stream——无 per-message start 帧，
  *  messageStarted 边界 = (turn, step) 对变化）。 */
 export type LlmChunk =
   | { type: 'text-delta'; text: string }
   | { type: 'thinking-delta'; text: string }
   | { type: 'tool-call-delta'; callId?: string; name?: string; argumentsDelta?: string }
-  | { type: 'usage'; usage: { input: number; output: number; totalTokens: number } }
+  | { type: 'usage'; usage: Usage }
   | { type: 'finish'; finish: { kind: 'stop' | 'max-tokens' | 'error'; message?: string; code?: string } };
 
 /** session 域壳（WAL 镜像统一包裹；session = 所属会话 id——主会话谓词判据）。 */

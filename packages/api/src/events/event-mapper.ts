@@ -1,4 +1,4 @@
-import { isTodoTool, type UiEvent, type UsageView } from '@paiapp/contracts';
+import { isTodoTool, usageOf, type UiEvent, type Usage } from '@paiapp/contracts';
 
 import { previewArgs } from '../views/args-preview';
 import { flattenUserText, userImages } from '../views/content';
@@ -45,7 +45,7 @@ interface StreamBuffer {
   step: number;
   text: string;
   thinking: string;
-  usage: UsageView | null;
+  usage: Usage | null;
 }
 
 /** 映射器实例的流式累积域（per-mapper 状态；calls = callId→工具名，tool/result 无名字段——diff 提取靠它回查）。 */
@@ -454,15 +454,6 @@ function mapSubagent(state: StreamState, threadId: string, name: string, payload
     default:
       return [];
   }
-}
-
-/** 内核 usage {input, output, …} → 视图 {input, output}。 */
-function usageOf(usage: unknown): UsageView | null {
-  const u = recordOf(usage);
-  const input = u['input'];
-  const output = u['output'];
-  if (typeof input !== 'number' || typeof output !== 'number') return null;
-  return { input, output };
 }
 
 /** tool/call arguments（JSON 字符串或对象）→ 宽容解析的参数对象。 */

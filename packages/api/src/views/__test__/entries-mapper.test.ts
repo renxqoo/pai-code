@@ -103,7 +103,7 @@ describe('mapEntries（x-harness WAL 转写真相源）', () => {
             { type: 'text', text: '跑起来了' },
             { type: 'tool_use', callId: 'tc1', name: 'bash', input: '{"command":"bun test"}' },
           ],
-          usage: { input: 10, output: 5, totalTokens: 15 },
+          usage: { input: 10, output: 5, cacheRead: 4, cacheWrite: 1, totalTokens: 15 },
         }),
       ],
     });
@@ -116,7 +116,7 @@ describe('mapEntries（x-harness WAL 转写真相源）', () => {
         text: '跑起来了',
         thinking: '先跑',
         toolCalls: [{ id: 'tc1', name: 'bash', argsPreview: 'bun test', output: '', isError: false, diff: null }],
-        usage: { input: 10, output: 5 },
+        usage: { input: 10, output: 5, cacheRead: 4, cacheWrite: 1, totalTokens: 15 },
         stopReason: null,
         errorMessage: null,
       },

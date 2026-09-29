@@ -1,4 +1,4 @@
-import { isTodoTool, type HistoryItem, type TodoSnapshotEventData } from '@paiapp/contracts';
+import { isTodoTool, usageOf, type HistoryItem, type TodoSnapshotEventData } from '@paiapp/contracts';
 
 import { assistantText, assistantThinking, assistantToolCalls, flattenUserText, toolResultText, userImages } from './content';
 import { previewArgs } from './args-preview';
@@ -299,15 +299,6 @@ function writeDiffOf(args: Record<string, unknown>): { path: string; additions: 
 function thinkingOf(field: unknown, content: unknown): string {
   if (typeof field === 'string' && field.length > 0) return field;
   return assistantThinking(content);
-}
-
-/** 内核 usage {input, output, …} → 视图 {input, output}。 */
-function usageOf(usage: unknown): { input: number; output: number } | null {
-  const u = recordOf(usage);
-  const input = u['input'];
-  const output = u['output'];
-  if (typeof input !== 'number' || typeof output !== 'number') return null;
-  return { input, output };
 }
 
 /** tool/call arguments（JSON 字符串）→ 宽容解析的参数对象。 */

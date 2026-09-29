@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { queueEntry } from './queue-views';
 import { TodoSnapshotEventDataSchema } from './todo-views';
+import { UsageSchema } from './usage';
 
 /**
  * 渲染层事件词表：adapter 把 host-hub 帧折叠成这些正规化事件，
@@ -61,12 +62,6 @@ export const DiffFileViewSchema = z.object({
   deletions: z.number().int(),
 });
 export type DiffFileView = z.infer<typeof DiffFileViewSchema>;
-
-export const UsageViewSchema = z.object({
-  input: z.number(),
-  output: z.number(),
-});
-export type UsageView = z.infer<typeof UsageViewSchema>;
 
 /** 会话表行（thread/list、start/resume 响应、状态变化的单一形状）。 */
 export const SessionViewSchema = z.object({
@@ -143,7 +138,7 @@ const uiEventDefs = {
       text: z.string(),
       thinking: z.string(),
       toolCalls: z.array(ToolCallViewSchema),
-      usage: UsageViewSchema.nullable(),
+      usage: UsageSchema.nullable(),
     }),
   }),
   /** 回复彻底完成（settled{sendId, ok}）：每次驱动命令恰好一次；worker 死亡由 host 合成 ok:false（无悬挂）。
@@ -154,7 +149,7 @@ const uiEventDefs = {
     ok: z.boolean(),
     /** ok=false 时的失败原因（hub/worker 错误文案）；ok=true 缺省。 */
     reason: z.string().optional(),
-    usage: UsageViewSchema.nullable(),
+    usage: UsageSchema.nullable(),
   }),
   queueChanged: z.object({
     type: z.literal('queueChanged'),

@@ -7,6 +7,7 @@ import { PermModeSchema } from './permissions';
 import { RuntimeSnapshotViewSchema } from './runtime';
 import { InflightViewSchema, PendingDialogViewSchema, SubagentSnapshotViewSchema } from './inflight-views';
 import { DiffFileViewSchema, EditHunkViewSchema, SessionViewSchema, SubagentSpawnViewSchema, imagePayload } from './ui-events';
+import { UsageSchema } from './usage';
 import { IdleRecycleMinutesSchema, ProviderModelSchema, RelayConfigSchema } from './settings';
 import { TodoSnapshotEventDataSchema } from './todo-views';
 import { THINKING_LEVEL_ORDER } from './thinking-levels';
@@ -71,7 +72,7 @@ export const HistoryItemSchema = z.discriminatedUnion('kind', [
         editHunks: z.array(EditHunkViewSchema).optional(),
       }),
     ),
-    usage: z.object({ input: z.number(), output: z.number() }).nullable(),
+    usage: UsageSchema.nullable(),
     /** 异常终态（done 增量 stopReason 收窄）；null = 正常结束（stop/toolUse）。 */
     stopReason: z.enum(['error', 'aborted', 'max-tokens']).nullable(),
     /** stopReason=error 时的上游原始错误信息；其余 null。 */
