@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { autoOpenForTurn, resolveOpen } from '../collapse-state';
+import { autoOpenForTurn, chevronRevealClass, resolveOpen } from '../collapse-state';
 import type { TurnBlock, TurnStatus } from '../thread-model';
 
 function turn(status: TurnStatus, blocks: readonly TurnBlock[] = []): { status: TurnStatus; blocks: readonly TurnBlock[] } {
@@ -22,6 +22,24 @@ describe('autoOpenForTurn', () => {
     expect(autoOpenForTurn(turn('stopped'))).toBe(true);
     expect(autoOpenForTurn(turn('completed', [failure]))).toBe(true);
     expect(autoOpenForTurn(turn('stopped', [aborted]))).toBe(true);
+  });
+});
+
+describe('chevronRevealClass（症状回归：点击开→关后箭头常显不隐藏）', () => {
+  test('收起态显形只认 hover 与键盘聚焦（focus-visible）——focus-within 会被鼠标点击残留的焦点钉住常显', () => {
+    const closed = chevronRevealClass(false);
+    expect(closed).toContain('opacity-0');
+    expect(closed).toContain('group-hover:opacity-70');
+    expect(closed).toContain('group-has-[:focus-visible]:opacity-70');
+    expect(closed).not.toContain('group-focus-within');
+    expect(closed).not.toContain('focus-within:opacity-70');
+  });
+
+  test('展开态常显（开了就要看得见从哪儿收回去），不带任何显形钩子', () => {
+    const open = chevronRevealClass(true);
+    expect(open).toContain('opacity-70');
+    expect(open).not.toContain('opacity-0');
+    expect(open).not.toContain('group-hover');
   });
 });
 

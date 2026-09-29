@@ -17,11 +17,13 @@ export function resolveOpen(pref: CollapsePref, autoOpen: boolean): boolean {
 /**
  * 行内展开箭头的显形类：收起态靠行 hover / 键盘聚焦浮出（不留静止箭头噪声），
  * 展开态常显（开了就要看得见从哪儿收回去）。调用方行容器需带 `group`。
+ * 键盘聚焦显形走 `:focus-visible`，**不得用 focus-within**：鼠标点击会把焦点
+ * 留在开关按钮上，开→关之后箭头就常显不收（显形被点击残留的焦点钉住）。
  */
 export function chevronRevealClass(open: boolean): string {
   return open
     ? 'shrink-0 opacity-70'
-    : 'shrink-0 opacity-0 transition-opacity duration-150 group-hover:opacity-70 group-focus-within:opacity-70 motion-reduce:transition-none';
+    : 'shrink-0 opacity-0 transition-opacity duration-150 group-hover:opacity-70 group-has-[:focus-visible]:opacity-70 motion-reduce:transition-none';
 }
 
 /**
