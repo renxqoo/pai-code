@@ -6,28 +6,25 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import type { RatchetBoundaryStore } from './ratchet-codec';
 
-/** 安全存储面：原生走 SecureStore；web 形态降级 AsyncStorage（浏览器本地隔离——
- *  relay 凭证非明文密码形态，web 降级为一期可接受面，真机仍 SecureStore）。 */
+/** 安全存储面（R2 M7）：原生只走 SecureStore（异常即失败——不静默降级明文，
+ *  内存态本会话可用且 save 返回 false 由 UI 提示）；web 无硬件背书秘密存储，
+ *  长期钥不落盘（内存单会话，重启重新配对——诚实降级优于 localStorage 假安全）；
+ *  endpoint（relayUrl，非秘密）仍走 AsyncStorage。 */
+import { Platform } from 'react-native';
+
+const secureAvailable = Platform.OS !== 'web';
+
 const secureGet = async (key: string): Promise<string | null> => {
-  try {
-    return await SecureStore.getItemAsync(key);
-  } catch {
-    return AsyncStorage.getItem(key);
-  }
+  if (!secureAvailable) return null;
+  return SecureStore.getItemAsync(key);
 };
 const secureSet = async (key: string, value: string): Promise<void> => {
-  try {
-    await SecureStore.setItemAsync(key, value);
-  } catch {
-    await AsyncStorage.setItem(key, value);
-  }
+  if (!secureAvailable) return;
+  await SecureStore.setItemAsync(key, value);
 };
 const secureDelete = async (key: string): Promise<void> => {
-  try {
-    await SecureStore.deleteItemAsync(key);
-  } catch {
-    await AsyncStorage.removeItem(key);
-  }
+  if (!secureAvailable) return;
+  await SecureStore.deleteItemAsync(key);
 };
 
 const KEY_DEVICE = 'pai.relay.device';
@@ -107,15 +104,15 @@ export const relayCredentialsStore = {
   async save(next: RelayCredentials): Promise<boolean> {
     cached = next;
     try {
+      await AsyncStorage.setItem(KEY_ENDPOINT, JSON.stringify({ relayUrl: next.relayUrl }));
+      if (!secureAvailable) return false; // web：endpoint 持久、密钥材料内存单会话
       await Promise.all([
         secureSet(KEY_DEVICE, JSON.stringify({ deviceId: next.deviceId, signingSecret: next.signingSecret, signingPub: next.signingPub, installationId: next.installationId, relayToken: next.relayToken })),
         secureSet(KEY_SHARED, next.sharedSecretHex),
-        AsyncStorage.setItem(KEY_ENDPOINT, JSON.stringify({ relayUrl: next.relayUrl })),
       ]);
       return true;
     } catch {
-      // 写失败可见化：保留缓存（本会话可用）——上层提示「凭证未持久化」
-      return false;
+      return false; // 原生 SecureStore 失败：内存态本会话可用——UI 提示「凭证未持久化」
     }
   },
   async clear(): Promise<void> {

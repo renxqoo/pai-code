@@ -20,6 +20,7 @@ import {
   generateBoxKeyPair,
   pakeInitiate,
   pakeConfirm,
+  verifyPairingTranscript,
   x25519,
 } from '@paiapp/relay-protocol';
 
@@ -27,6 +28,8 @@ export interface PairingEndpoints {
   /** relay WSS 基址（qrPayload.relayUrl 或手动输入的 host）。 */
   relayUrl: string;
   installationId: string;
+  /** gateway 签名公钥（QR 载荷 gatewayKeyFingerprint——sas 帧验签锚，R2 M8）。 */
+  gatewayKeyFingerprint?: string;
 }
 
 export interface DeviceIdentity {
@@ -89,6 +92,7 @@ export function createPairingSession(spec: {
   let sas: string | null = null;
   let sharedSecret: string | null = null;
   let channelKeyHex: string | null = null;
+  let deviceEphPub: string | null = null;
   let pakeState: { state: { secret: string; code: string }; message: string } | null = null;
   const listeners = new Set<(step: PairingStep) => void>();
   /** ack 帧下发的连接凭据（WIRE 设备注册收尾）。 */
@@ -139,6 +143,15 @@ export function createPairingSession(spec: {
   void spec.wire.onMessage((message) => {
     const p = typeof message['p'] === 'string' ? (message['p'] as string) : '';
     if (p === 'sas') {
+      // 网关转录验签（R2 M8）：QR 载荷公钥为锚——伪造 sas 帧在此拦截
+      const signature = typeof message['gatewaySignature'] === 'string' ? (message['gatewaySignature'] as string) : '';
+      if (spec.endpoints.gatewayKeyFingerprint !== undefined && deviceEphPub !== null) {
+        const verified = verifyPairingTranscript(spec.endpoints.gatewayKeyFingerprint, { pairingId: spec.pairingId, gwEph: spec.gatewayEphemeralPub ?? '', devEph: deviceEphPub, relayUrl: spec.endpoints.relayUrl, scope: 'read' }, signature);
+        if (!verified) {
+          emit({ phase: 'failed', reason: 'gateway_sig' });
+          return;
+        }
+      }
       sas = typeof message['sas'] === 'string' ? (message['sas'] as string) : null;
       emit({ phase: 'sas-shown', sas: sas ?? '' });
       emit({ phase: 'awaiting-owner' });
@@ -200,6 +213,7 @@ export function createPairingSession(spec: {
   if (spec.gatewayEphemeralPub !== undefined) {
     emit({ phase: 'connecting' });
     const eph = generateBoxKeyPair();
+    deviceEphPub = eph.pub;
     const rawShared = x25519(eph.secret, spec.gatewayEphemeralPub);
     if (rawShared === null) {
       emit({ phase: 'failed', reason: 'dh_failed' });

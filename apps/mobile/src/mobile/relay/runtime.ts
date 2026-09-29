@@ -11,6 +11,7 @@ import type { ApiMethod, ApiOutcome, Client, UiEvent, Unsubscribe } from '@paiap
 import { createBridgeClient, type BridgeClient, type ClientTransportFace } from '../transport/client';
 import { createRelayTransport, type RelayStatus, type RelayTransport } from './transport';
 import { createRelayRatchetCodec } from './ratchet-codec';
+import { dialWebSocket } from './ws-dial';
 import { createKvRatchetStore, preloadRelayCredentials, relayCredentialsStore, type RelayCredentials } from './credentials';
 import { createSessionSync } from '../state/session-sync';
 import { createEventMapper, type EventMapper } from '@paiapp/api/events/event-mapper';
@@ -399,9 +400,10 @@ export async function bootstrapRelayRuntime(): Promise<void> {
   void runtime?.connectWithCredentials(credentials.relayToken);
 }
 
-/** RN socket 工厂（token query——relay 鉴权面）。 */
+/** RN socket 工厂（token 走 Authorization 头——R2 M10：URL query 进 LB/反代
+ *  access log 的泄露面消除；relay main.ts 已优先收头）。web 无第三参——退 query（残余面见申报）。 */
 function rnSocketFactoryWithToken(url: string, token: string) {
-  const ws = new WebSocket(`${url}?token=${encodeURIComponent(token)}`);
+  const ws = dialWebSocket(url, token);
   return {
     send: (data: string) => ws.send(data),
     close: () => ws.close(),

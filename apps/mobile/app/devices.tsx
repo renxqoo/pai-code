@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { initializeRelayRuntime, useRelayStatus } from '@/mobile/relay/runtime';
 import { Platform } from 'react-native';
 import { createPairingSession, generateDeviceIdentity, type PairingStep } from '@/mobile/relay/pairing';
+import { dialWebSocket } from '@/mobile/relay/ws-dial';
 import { relayCredentialsStore } from '@/mobile/relay/credentials';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -21,7 +22,8 @@ const STATUS_LABEL: Record<string, string> = {
 
 /** relay 配对面 WS（/pairing——明文信封域；token 是桌面端 QR 码内的 pairingTicket）。 */
 function makePairingWire(relayUrl: string, pairingTicket: string) {
-  const ws = new WebSocket(`${relayUrl}/pairing?token=${encodeURIComponent(pairingTicket)}`);
+  // pairingTicket 走 Authorization 头（R2 M10；web 退 query——ws-dial 分支）
+  const ws = dialWebSocket(`${relayUrl}/pairing`, pairingTicket);
   const listeners = new Set<(message: Record<string, unknown>) => void>();
   let openedResolve: ((open: boolean) => void) | null = null;
   const openedPromise = new Promise<boolean>((resolve) => {
@@ -87,7 +89,7 @@ export default function DevicesRoute() {
 
   const pairingInFlightRef = React.useRef(false);
 
-  const pairWithTicket = async (relayUrl: string, pairingId: string, installationId: string, ticket: string, gatewayEphemeralPub?: string, manualCode?: string): Promise<void> => {
+  const pairWithTicket = async (relayUrl: string, pairingId: string, installationId: string, ticket: string, gatewayEphemeralPub?: string, manualCode?: string, gatewayKeyFingerprint?: string): Promise<void> => {
     if (pairingInFlightRef.current) return; // 同帧双击防抖（M3）
     pairingInFlightRef.current = true;
     setPairing(true);
@@ -103,6 +105,7 @@ export default function DevicesRoute() {
         endpoints: { relayUrl, installationId },
         pairingId,
         ...(gatewayEphemeralPub !== undefined ? { gatewayEphemeralPub } : {}),
+        ...(gatewayKeyFingerprint !== undefined ? { gatewayKeyFingerprint } : {}),
         deviceInfo: { name: identity.deviceId, deviceType: 'phone', platform: Platform.OS, appVersion: '1' },
       });
       session.onStep((step: PairingStep) => {
@@ -233,12 +236,12 @@ export default function DevicesRoute() {
             // 手输码路径：gateway 经 relay 转发配对面（pairingTicket 由桌面端发起时生成）
             if (pairPayload.length > 0) {
               try {
-                const payload = JSON.parse(pairPayload) as { relayUrl?: string; pairingId?: string; installationId?: string; gatewayEphemeralPub?: string; pairingTicket?: string; code?: string };
-                if (typeof payload.relayUrl === 'string' && typeof payload.pairingId === 'string' && typeof payload.installationId === 'string' && payload.installationId.length > 0) {
-                  void pairWithTicket(payload.relayUrl, payload.pairingId, payload.installationId, payload.pairingTicket ?? '', typeof payload.gatewayEphemeralPub === 'string' ? payload.gatewayEphemeralPub : undefined, typeof payload.code === 'string' ? payload.code : undefined);
+                const payload = JSON.parse(pairPayload) as { relayUrl?: string; pairingId?: string; installationId?: string; gatewayEphemeralPub?: string; gatewayKeyFingerprint?: string; pairingTicket?: string; code?: string };
+                if (typeof payload.relayUrl === 'string' && typeof payload.pairingId === 'string' && typeof payload.installationId === 'string' && payload.installationId.length > 0 && typeof payload.gatewayKeyFingerprint === 'string') {
+                  void pairWithTicket(payload.relayUrl, payload.pairingId, payload.installationId, payload.pairingTicket ?? '', typeof payload.gatewayEphemeralPub === 'string' ? payload.gatewayEphemeralPub : undefined, typeof payload.code === 'string' ? payload.code : undefined, payload.gatewayKeyFingerprint);
                   return;
                 }
-                setPairError('配对载荷缺少 relayUrl/pairingId/installationId');
+                setPairError('配对载荷缺少 relayUrl/pairingId/installationId/gatewayKeyFingerprint');
                 return;
               } catch {
                 setPairError('配对载荷不是合法 JSON');
