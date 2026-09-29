@@ -41,14 +41,14 @@ describe('词表封闭（双向）', () => {
     );
   });
 
-  test('hub 命令词表 == 72（x-harness host-hub COMMAND_NAMES 镜像；queue/drop、queue/send_now 为单条队列操作面；skills/inspect|install 为技能安装面；get_token_analytics 为上下文分析面；plugins/* 为插件管理面）', () => {
-    expect(HUB_COMMAND_TYPES.length).toBe(72);
+  test('hub 命令词表 == 73（x-harness host-hub COMMAND_NAMES 镜像；thread/notify 为事实注入面；queue/drop、queue/send_now 为单条队列操作面；skills/inspect|install 为技能安装面；get_token_analytics 为上下文分析面；plugins/* 为插件管理面）', () => {
+    expect(HUB_COMMAND_TYPES.length).toBe(73);
     expect(HUB_COMMAND_TYPES).toContain('thread/delete');
     expect(HUB_COMMAND_TYPES).toContain('queue/drop');
     expect(HUB_COMMAND_TYPES).toContain('queue/send_now');
     expect([...HUB_COMMAND_TYPES].sort(byStr)).toEqual(
       [
-        'thread/start', 'thread/resume', 'thread/register', 'thread/stop', 'thread/retire', 'thread/delete', 'thread/set_keepalive', 'thread/list', 'thread/list_saved',
+        'thread/start', 'thread/resume', 'thread/register', 'thread/stop', 'thread/notify', 'thread/retire', 'thread/delete', 'thread/set_keepalive', 'thread/list', 'thread/list_saved',
         'get_host_info', 'set_idle_retire_ms', 'set_rss_retire_bytes',
         'prompt', 'steer', 'follow_up', 'abort', 'clear_queue', 'queue/drop', 'queue/send_now', 'compact',
         'get_state', 'get_messages', 'get_entries', 'get_tree', 'get_session_stats', 'get_token_analytics', 'set_session_name', 'get_commands', 'get_fork_messages',

@@ -64,6 +64,8 @@ export type UiState = {
   newTaskOpen: boolean;
   /** 进入新建任务页的预填目录；'' = 跟随当前会话目录。 */
   newTaskCwd: string;
+  /** 来源会话定格（建树通告投递目标；打开时写入、关闭清回）。 */
+  newTaskSourceThreadId: string | null;
   /** 每次进入递增：整页重挂载即重置页内状态。 */
   newTaskKey: number;
   /** 页内浮层开合（计入全局 Esc 链：浮层自行消费 Esc，不穿透关闭整页）。 */
@@ -106,8 +108,9 @@ export type UiActions = {
   closeSettings: () => void;
   openUsage: () => void;
   closeUsage: () => void;
-  /** 进入新建任务页（cwd 空 = 跟随当前会话目录）；重复进入即重挂载，重置页内状态。 */
-  openNewTask: (cwd: string) => void;
+  /** 进入新建任务页（cwd 空 = 跟随当前会话目录）；重复进入即重挂载，重置页内状态。
+   *  sourceThreadId：来源会话定格（从会话打开时传——建树通告的投递目标，非 cwd 反查）。 */
+  openNewTask: (cwd: string, sourceThreadId?: string | null) => void;
   closeNewTask: () => void;
   setNewTaskDialogOpen: (open: boolean) => void;
   /** 草稿写入：无活跃线程（threadId 空）只写 composerDraft；否则同步落会话槽。 */
@@ -157,6 +160,7 @@ function initialUiState(): UiState {
     usageOpen: false,
     newTaskOpen: false,
     newTaskCwd: '',
+    newTaskSourceThreadId: null,
     newTaskKey: 0,
     newTaskDialogOpen: false,
     composerDraft: '',
@@ -195,9 +199,9 @@ export function createUiStore() {
     closeSettings: () => set({ settingsOpen: false, settingsEntry: null }),
     openUsage: () => set({ usageOpen: true }),
     closeUsage: () => set({ usageOpen: false }),
-    openNewTask: (cwd) =>
-      set((state) => ({ newTaskOpen: true, newTaskCwd: cwd, newTaskKey: state.newTaskKey + 1, newTaskDialogOpen: false })),
-    closeNewTask: () => set({ newTaskOpen: false }),
+    openNewTask: (cwd, sourceThreadId) =>
+      set((state) => ({ newTaskOpen: true, newTaskCwd: cwd, newTaskKey: state.newTaskKey + 1, newTaskDialogOpen: false, newTaskSourceThreadId: sourceThreadId ?? null })),
+    closeNewTask: () => set({ newTaskOpen: false, newTaskSourceThreadId: null }),
     setNewTaskDialogOpen: (open) => set({ newTaskDialogOpen: open }),
     setDraft: (threadId, value) =>
       set((state) => ({

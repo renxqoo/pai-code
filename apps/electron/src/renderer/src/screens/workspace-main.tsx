@@ -62,7 +62,7 @@ function WorkspaceMain(): React.JSX.Element {
   const newTaskCwd = useStore(uiStore, (s) => s.newTaskCwd);
   const newTaskKey = useStore(uiStore, (s) => s.newTaskKey);
   const newTaskDialogOpen = useStore(uiStore, (s) => s.newTaskDialogOpen);
-  const openNewTask = React.useCallback(() => uiStore.getState().openNewTask(''), []);
+  const openNewTask = React.useCallback(() => uiStore.getState().openNewTask('', liveStore.getState().activeThreadId), [liveStore]);
   const observeComposerLayer = useObservedHeight<HTMLDivElement>(publishComposerInset);
   /** Usage 总览页（I2；侧栏 footer 入口）——开合在 ui store，条目 UsageScreen 自取 */
   const usagePanel = useUsagePanel();

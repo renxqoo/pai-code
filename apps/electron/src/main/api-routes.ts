@@ -90,6 +90,7 @@ export interface ApiRouteDeps {
   gitStatus?: GitStatus;
   gitWorktree?: GitWorktree;
   onTreeRemoved?: (path: string) => void;
+  onTreeCreated?: (tree: { readonly path: string; readonly branch: string; readonly repoTop: string; readonly cwd: string; readonly originThreadHint: string | null }) => void;
   worktreeRegistry?: () => { dirs: string[]; treeToRepoTop: Record<string, string>; sessionTrees: Record<string, string> };
   /** 运行状态监控器（T29 app/runtime 快照源）。 */
   monitor: RuntimeMonitor;
@@ -265,6 +266,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     git,
     gitWorktree,
     onTreeRemoved: (path) => deps.onTreeRemoved?.(path),
+    onTreeCreated: (tree) => deps.onTreeCreated?.(tree),
     worktreeRegistry: deps.worktreeRegistry ?? (() => ({ dirs: [], treeToRepoTop: {}, sessionTrees: {} })),
     graph,
     gitStatus,

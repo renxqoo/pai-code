@@ -510,7 +510,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     searchFiles: (cwd: string, query: string) => searchFiles(client, cwd, query),
     listGitBranches: (cwd: string) => listGitBranches(client, cwd),
     listWorktrees: (cwd: string) => listWorktrees(client, cwd),
-    createWorktree: (cwd: string, branch: string) => createWorktree(client, cwd, branch),
+    createWorktree: (cwd: string, branch: string, originThreadHint?: string | null) => createWorktree(client, cwd, branch, originThreadHint),
     removeWorktree: (cwd: string, path: string) => removeWorktree(client, cwd, path),
     mergeWorktree: (cwd: string, branch: string) => mergeWorktree(client, cwd, branch),
     worktreeRegistry: () => worktreeRegistryOf(client),

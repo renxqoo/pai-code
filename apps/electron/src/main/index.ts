@@ -357,6 +357,36 @@ void app.whenReady().then(async () => {
       }),
       extraCwds: () => [...pickedDirectories, ...worktreeRegistry.read().dirs],
       onTreeRemoved: (path) => worktreeRegistry.removeTree(path),
+      onTreeCreated: (tree) => {
+        worktreeRegistry.addTree({ path: tree.path, repoTop: tree.repoTop });
+        // 来源会话判定（create 完成时刻重估 live/busy——打开新建页时定格的 originThreadHint；parked/retiring/dead 或 cwd 不符视为无来源）
+        const sourceThreadId = tree.originThreadHint;
+        if (sourceThreadId === null || runtime === null) return;
+        void runtime.hub.thread
+          .list()
+          .then((listed) => {
+            if (!listed.ok) return;
+            const rows = (listed.data as { threads?: readonly { threadId: string; cwd: string; state: string; streaming?: boolean }[] }).threads ?? [];
+            const row = rows.find((entry) => entry.threadId === sourceThreadId);
+            if (row?.state !== 'live' || row.cwd !== tree.cwd) return;
+            const busy = row.streaming === true;
+            void runtime?.hub.thread
+              .notify({
+                threadId: sourceThreadId,
+                source: 'git-worktree',
+                kind: 'content',
+                text: `[git-worktree] branch ${tree.branch} is now checked out at ${tree.path} for this task.\nSubsequent file operations for this task should use that directory as the working root; do not modify the main worktree at ${tree.cwd}.`,
+              })
+              .then(
+                () => {
+                  worktreeRegistry.addTree({ path: tree.path, repoTop: tree.repoTop, sessionThreadId: sourceThreadId });
+                  mainWindow?.webContents.send('worktree-notice', { kind: busy ? 'busy' : 'idle', path: tree.path });
+                },
+                () => undefined,
+              );
+          })
+          .catch(() => undefined);
+      },
       worktreeRegistry: () => {
         const data = worktreeRegistry.read();
         return { dirs: [...data.dirs], treeToRepoTop: { ...data.treeToRepoTop }, sessionTrees: { ...data.sessionTrees } };

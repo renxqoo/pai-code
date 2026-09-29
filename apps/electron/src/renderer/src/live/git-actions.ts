@@ -60,10 +60,10 @@ export async function listWorktrees(client: BridgeClient, cwd: string): Promise<
   return api.git.worktreeList({ cwd });
 }
 
-export async function createWorktree(client: BridgeClient, cwd: string, branch: string): Promise<ApiOutcome<'git/worktree/create'>> {
+export async function createWorktree(client: BridgeClient, cwd: string, branch: string, originThreadHint?: string | null): Promise<ApiOutcome<'git/worktree/create'>> {
   const api = createApiClient(client);
   if (cwd.length === 0) return emptyCwd();
-  return api.git.worktreeCreate({ cwd, branch });
+  return api.git.worktreeCreate({ cwd, branch, ...(originThreadHint !== undefined && originThreadHint !== null && originThreadHint !== '' ? { originThreadHint } : {}) });
 }
 
 export async function removeWorktree(client: BridgeClient, cwd: string, path: string): Promise<ApiOutcome<'git/worktree/remove'>> {

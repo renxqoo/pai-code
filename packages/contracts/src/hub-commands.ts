@@ -52,6 +52,15 @@ export interface ThreadRetireCmd {
   threadId: string;
 }
 
+/** 事实注入（live-only：非 live 表项态 host 拒 thread_not_live；source 开放词表，消费方禁止按 source 分支）。 */
+export interface ThreadNotifyCmd {
+  type: 'thread/notify';
+  threadId: string;
+  source: string;
+  kind: 'directive' | 'content';
+  text: string;
+}
+
 /** 会话删除（host 本地；trash 原子 rename + 血缘级联；幂等）。 */
 export interface ThreadDeleteCmd {
   type: 'thread/delete';
@@ -514,6 +523,7 @@ export type HubCommand =
   | (PluginsTrustedSourceListCmd & { id?: string })
   | (PluginsTrustedSourceConfirmCmd & { id?: string })
   | (PluginsTrustedSourceRejectCmd & { id?: string })
+  | (ThreadNotifyCmd & { id?: string })
   | (SubagentSteerCmd & { id?: string });
 
 /** 命令词表（与 host-hub COMMAND_NAMES 对应（app 消费子集 72 条——permission/grant|list_rules|remove_rule 三命令不经 app 面）；测试做封闭断言）。 */
@@ -522,6 +532,7 @@ export const HUB_COMMAND_TYPES = [
   'thread/resume',
   'thread/register',
   'thread/stop',
+  'thread/notify',
   'thread/retire',
   'thread/delete',
   'thread/set_keepalive',

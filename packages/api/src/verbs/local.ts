@@ -26,6 +26,8 @@ export type LocalRoutesDeps = {
   gitWorktree: GitWorktree;
   /** worktree 树被移除后的宿主回调（登记面 GC——api 包不持状态）。 */
   onTreeRemoved: (path: string) => void;
+  /** 建树成功后的宿主回调（通告投递与登记——busy/idle 分流和来源判定在宿主侧；originThreadHint = 打开新建页时定格的来源会话）。 */
+  onTreeCreated: (tree: { readonly path: string; readonly branch: string; readonly repoTop: string; readonly cwd: string; readonly originThreadHint: string | null }) => void;
   /** 登记面三张表读口（主进程 worktree-registry 注入）。 */
   worktreeRegistry: () => { dirs: string[]; treeToRepoTop: Record<string, string>; sessionTrees: Record<string, string> };
   graph: GitGraph;
@@ -101,6 +103,13 @@ export function createLocalRoutes(deps: LocalRoutesDeps) {
       if (outcome.ok) {
         deps.graph.invalidate(params.cwd);
         deps.gitStatus.invalidate(params.cwd);
+        deps.onTreeCreated({
+          path: outcome.data.path,
+          branch: params.branch,
+          repoTop: params.cwd,
+          cwd: params.cwd,
+          originThreadHint: typeof params.originThreadHint === 'string' && params.originThreadHint !== '' ? params.originThreadHint : null,
+        });
       }
       return outcome;
     },

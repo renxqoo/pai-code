@@ -10,7 +10,7 @@ export const GitApiSchemas = {
     result: z.object({ worktrees: z.array(WorktreeEntryViewSchema) }).strict(),
   },
   'git/worktree/create': {
-    params: z.object({ cwd: z.string().min(1), branch: z.string().min(1) }).strict(),
+    params: z.object({ cwd: z.string().min(1), branch: z.string().min(1), originThreadHint: z.string().min(1).optional() }).strict(),
     result: z.object({ path: z.string().min(1), branch: z.string().min(1) }).strict(),
   },
   'git/worktree/remove': {

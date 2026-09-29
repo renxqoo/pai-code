@@ -11,6 +11,8 @@ import { copy } from '@/strings';
 import { sessionCardsOf } from '@/sidebar/session-cards';
 import { store as liveStore, workspaceActions } from '@/live/workspace-runtime';
 import { uiStore } from '@/ui/ui-store';
+
+const sourceThreadId = (): string | null => uiStore.getState().newTaskSourceThreadId;
 import type { NewTaskScreenProps, NewTaskStart } from './new-task-screen';
 
 /** 新建任务页已知目录快捷条上限（更多走系统文件夹选择）。 */
@@ -115,7 +117,7 @@ export function useNewTaskScreen(enterCwd: string): NewTaskScreenProps {
     permissionModes,
     onSearchFiles: workspaceActions.searchFilesIn,
     onListBranches: workspaceActions.listGitBranches,
-    onCreateWorktree: workspaceActions.createWorktree,
+    onCreateWorktree: (cwd, branch) => workspaceActions.createWorktree(cwd, branch, sourceThreadId()),
     onListGraph: workspaceActions.listGitGraph,
     onCheckoutBranch: checkoutBranch,
     onPickDirectory: workspaceActions.pickDirectory,

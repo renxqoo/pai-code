@@ -139,7 +139,7 @@ export interface LiveController {
   /** 本地 git 分支列表（新任务页分支选择；非仓库为空形态，失败为 {ok:false}）。 */
   readonly listGitBranches: (cwd: string) => Promise<ApiOutcome<'git/branches'>>;
   readonly listWorktrees: (cwd: string) => Promise<ApiOutcome<'git/worktree/list'>>;
-  readonly createWorktree: (cwd: string, branch: string) => Promise<ApiOutcome<'git/worktree/create'>>;
+  readonly createWorktree: (cwd: string, branch: string, originThreadHint?: string | null) => Promise<ApiOutcome<'git/worktree/create'>>;
   readonly removeWorktree: (cwd: string, path: string) => Promise<ApiOutcome<'git/worktree/remove'>>;
   readonly mergeWorktree: (cwd: string, branch: string) => Promise<ApiOutcome<'git/worktree/merge'>>;
   readonly worktreeRegistry: () => Promise<ApiOutcome<'git/worktree/registry'>>;
