@@ -104,7 +104,7 @@ export const zhErrorCopy = {
   not_a_repo: '该目录不是 git 仓库。',
   git_unavailable: '系统未找到 git 命令，无法操作分支。',
   worktree_dirty: '该 worktree 有未合并的工作（详见错误信息中的明细），先合并回主仓或处理后再清理。',
-  worktree_path_exists: '目标路径已存在，可能残留了同名目录，请换一个分支名或手动清理。',
+  worktree_path_exists: '目标路径已存在：可能是同名残留目录，也可能是该分支已在别的 worktree 中（分支面板可见并可「清理」）——换一个分支名，或先清理对应 worktree。',
   worktree_detached_head: '当前处于分离 HEAD（无分支）状态，请先切回分支再操作。',
   worktree_nested: '已在 worktree 中——直接开始即可，无需再建。',
   worktree_in_use: '该 worktree 正被会话或代理占用（详见错误信息），关闭相关会话后再操作。',

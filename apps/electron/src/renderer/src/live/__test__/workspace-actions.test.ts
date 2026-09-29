@@ -120,19 +120,22 @@ describe('forkFromEntry 失败通知', () => {
 });
 
 describe('提交失败通知（D15：images 硬拒的友好文案）', () => {
-  test('hub 能力门拒绝（capability_images）→ imagesDenied 文案', async () => {
+  test('hub 能力门拒绝（capability_images）→ imagesDenied 文案；气泡回滚 + 草稿回填', async () => {
     jest.spyOn(controller, 'submitDraft').mockResolvedValue('capability_images');
-    expect(await workspaceActions.submitDraft('看图', [])).toBe('capability_images');
+    expect(workspaceActions.submitDraft('看图', [])).toBeNull();
+    await Promise.resolve();
     expect(store.getState().notices.map((notice) => notice.text)).toEqual([copy.flow.imagesDenied]);
   });
 
   test('hub 量限拒绝（images_too_many）→ imagesTooMany 文案；其他 kind 原样透传', async () => {
     // 症状回归：旧 startsWith('too many images') 是死 matcher（hub 实串/现 kind 均不命中）——kind 判定后量限文案恢复生效
     jest.spyOn(controller, 'submitDraft').mockResolvedValueOnce('images_too_many');
-    expect(await workspaceActions.submitDraft('图', [])).toBe('images_too_many');
+    expect(workspaceActions.submitDraft('图', [])).toBeNull();
+    await Promise.resolve();
     expect(store.getState().notices.map((notice) => notice.text)).toEqual([copy.flow.imagesTooMany]);
     jest.spyOn(controller, 'submitDraft').mockResolvedValueOnce('unknown_thread');
-    expect(await workspaceActions.submitDraft('文', [])).toBe('unknown_thread');
+    expect(workspaceActions.submitDraft('文', [])).toBeNull();
+    await Promise.resolve();
     expect(store.getState().notices.at(-1)?.text).toBe(copy.flow.sendFailed('unknown_thread'));
   });
 
@@ -141,29 +144,35 @@ describe('提交失败通知（D15：images 硬拒的友好文案）', () => {
     // 载荷/未识别 infra 串都归入该 face，落 sendFailed 透传 token；词表判定与
     // transientFaceCopy 同源闭集后新增 face 不再漂移
     jest.spyOn(controller, 'submitDraft').mockResolvedValueOnce('command_failed');
-    expect(await workspaceActions.submitDraft('文', [])).toBe('command_failed');
+    expect(workspaceActions.submitDraft('文', [])).toBeNull();
+    await Promise.resolve();
     expect(store.getState().notices.at(-1)?.text).toBe('命令执行失败，请重试。');
     jest.spyOn(controller, 'submitDraft').mockResolvedValueOnce('timeout');
-    expect(await workspaceActions.submitDraft('文', [])).toBe('timeout');
+    expect(workspaceActions.submitDraft('文', [])).toBeNull();
+    await Promise.resolve();
     expect(store.getState().notices.at(-1)?.text).toBe('操作超时，请重试。');
   });
 
   test('空舞台投递（no_active_session）→ noActiveSession 可行动文案，不透传 schema 密文', async () => {
     jest.spyOn(controller, 'submitDraft').mockResolvedValueOnce('no_active_session');
-    expect(await workspaceActions.submitDraft('写个脚本', [])).toBe('no_active_session');
+    expect(workspaceActions.submitDraft('写个脚本', [])).toBeNull();
+    await Promise.resolve();
     expect(store.getState().notices.map((notice) => notice.text)).toEqual([copy.flow.noActiveSession]);
   });
 });
 
 describe('发送回底信号（threadId 寻址，用户主动投递成功才触发）', () => {
-  test('submitDraft 成功：以投递线程递增 followLatest；失败不触发', async () => {
+  test('submitDraft 成功：以投递线程递增 followLatest；失败不触发且回滚气泡', async () => {
     store.setState({ activeThreadId: 't1', threads: { t1: { ...initialThreadState } } });
     jest.spyOn(controller, 'submitDraft').mockResolvedValueOnce(null);
-    expect(await workspaceActions.submitDraft('发出这条')).toBeNull();
+    expect(workspaceActions.submitDraft('发出这条')).toBeNull();
+    await Promise.resolve();
     expect(uiStore.getState().followLatest).toEqual({ token: 1, threadId: 't1' });
 
     jest.spyOn(controller, 'submitDraft').mockResolvedValueOnce('no_active_session');
-    expect(await workspaceActions.submitDraft('失败这条')).toBe('no_active_session');
+    expect(workspaceActions.submitDraft('失败这条')).toBeNull();
+    await Promise.resolve();
+    await Promise.resolve();
     expect(uiStore.getState().followLatest).toEqual({ token: 1, threadId: 't1' });
   });
 

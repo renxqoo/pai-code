@@ -14,7 +14,7 @@ export type PromptCardControls = { openFilePicker: () => void };
 type PromptCardProps = {
   value: string
   /** 提交（文本 + 附件原样交出，投递语义由父层决定）；resolve true = 已发出（据此清空附件） */
-  onSubmit: (text: string, attachments: readonly ComposerAttachment[]) => Promise<boolean>
+  onSubmit: (text: string, attachments: readonly ComposerAttachment[]) => boolean
   /** 附件作用域键（线程 id / 新任务页常量键）：变化即清空附件（防图片串发到别的会话） */
   scope: string
   /** 一次性图片回填信号：token 变化时把 images 并入附件态；null = 无回填 */
@@ -89,9 +89,7 @@ function PromptCard({ value, onSubmit, scope, restore, queued, input, actions, c
         onSubmit={(event) => {
           event.preventDefault();
           if (!submittable) return;
-          void onSubmit(value, attachments).then((sent) => {
-            if (sent) setAttachments([]);
-          });
+          if (onSubmit(value, attachments)) setAttachments([]);
         }}
         onPaste={(event) => {
           // 粘贴图片即入附件（事件从输入区冒泡上来；纯文本粘贴不受影响）

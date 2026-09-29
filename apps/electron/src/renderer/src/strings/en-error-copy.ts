@@ -106,7 +106,7 @@ export const enErrorCopy = {
   not_a_repo: 'That folder is not a git repository.',
   git_unavailable: 'git was not found on this system, so branches cannot be changed.',
   worktree_dirty: 'This worktree has unmerged work (see details in the error message). Merge it back or resolve before cleanup.',
-  worktree_path_exists: 'Target path already exists. A leftover directory may remain — pick another branch name or clean it manually.',
+  worktree_path_exists: 'Target path already exists — either a leftover directory, or the branch already lives in another worktree (visible in the branch panel, with Clean up). Pick another branch name, or clean up that worktree first.',
   worktree_detached_head: 'The repository is in detached HEAD state. Switch to a branch first.',
   worktree_nested: 'Already in a worktree — just start here, no new one needed.',
   worktree_in_use: 'This worktree is occupied by a session or agent (see the error message). Close it before retrying.',

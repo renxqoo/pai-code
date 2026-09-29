@@ -1,6 +1,7 @@
 import { isTodoTool, type UiEvent, type UsageView } from '@paiapp/contracts';
 
 import { previewArgs } from '../views/args-preview';
+import { flattenUserText } from '../views/content';
 import { diffFromToolCall } from '../views/diff-extract';
 import { subagentsField } from '../views/subagent-spawns';
 import { editHunksField } from '../views/edit-hunks';
@@ -24,7 +25,7 @@ import { todoSnapshotOf } from '../views/todo-snapshot';
  *   无 hub settled 债务，不合成则 loading 永挂；驱动轮的 settled 随后被去重吞掉）
  * agent/inbox/spliced（结构信号：主进程层拉取 get_state.queue 合成 queueChanged）
  * permission/decided（审计事件；对话框交互面是 ui_request 帧）
- * user/message、step/start|end、system/message、assistant/attempt、request/*、
+ * step/start|end、system/message、assistant/attempt、request/*、
  *   session/*、command/run|done、autocompact/*（前向兼容忽略）
  * agent/error（终态经 settled/turn/end 收敛）
  * todo 清单工具的 tool/call|result（对话流零痕迹——面板进程区由 todo/snapshot 呈现；
@@ -123,6 +124,22 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
           if (cwd.length === 0) return [];
           const branch = str(payload.branch);
           return [{ type: 'gitChanged', threadId, cwd, ...(branch.length > 0 ? { branch } : {}) }];
+        }
+        case 'user/message': {
+          // 用户消息直通：气泡随事件帧上屏（~16ms），不等条目对账；对账到达后由
+          // fold 的 seenIds 去重（乐观回显/事件直通/对账三源同文本）。id 不采
+          // WAL seq（帧载荷无 seq）——(turn, step) 坐标在单轮单 step 内唯一，
+          // 同坐标重复帧（重放）由 fold 去重吞掉。
+          const text = flattenUserText(payload.content);
+          if (text.length === 0) return [];
+          const origin = str(payload.origin);
+          return [
+            {
+              type: 'userMessage',
+              threadId,
+              message: { id: `ev-${threadId}-${num(payload.turn, 0)}-${num(payload.step, 0)}`, text, origin: origin === 'system' ? 'system' : 'user' },
+            },
+          ];
         }
         case 'turn/start':
           state.settledSynth.delete(threadId);

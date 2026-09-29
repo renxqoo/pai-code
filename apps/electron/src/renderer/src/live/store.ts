@@ -19,8 +19,13 @@ import type {
   UiEvent,
 } from '@paiapp/contracts';
 import type { SubagentModel, ThreadModel } from '@/thread/thread-model';
+import type { ThreadItem } from '@/thread/thread-model';
 
 import { foldDeath, foldStopIntent, foldThreadEvent } from './fold-events';
+
+const MAX_LIVE_CHARS = 4 * 1024 * 1024;
+import { capSeenIds } from './live-thread-state';
+import { insertBeforeLiveTurn } from './turn-ops';
 import { foldHydrate } from './fold-hydrate';
 import { initialThreadState, type HydrateAction, type LiveThreadState } from './live-thread-state';
 
@@ -107,6 +112,10 @@ export interface LiveStoreActions {
   /** 直执行 bash 开始/结束（流式尾部经 bashOutput 事件折叠）。 */
   bashStarted(threadId: string): void;
   bashSettled(threadId: string): void;
+  /** 乐观回显：提交同 tick 插入 pending 气泡（真实气泡由 userMessage 事件或对账收敛）。 */
+  echoPendingMessage(threadId: string, localId: string, text: string): void;
+  /** 投递失败回滚：移除 pending 气泡（草稿回填由调用方负责）。 */
+  dropPendingMessage(threadId: string, localId: string): void;
   /** 通知条追加（保留最近 5 条；controller/actions 共用的单一入口）。 */
   pushNotice(text: string): void;
   dismissNotice(id: string): void;
@@ -308,6 +317,31 @@ export function createLiveStore() {
       },
       bashSettled(threadId) {
         set((state) => ({ threads: { ...state.threads, [threadId]: { ...threadOf(state, threadId), bashRunning: false, bashTail: '' } } }));
+      },
+      echoPendingMessage(threadId, localId, text) {
+        set((state) => {
+          const thread = threadOf(state, threadId);
+          if (thread.seenIds.has(localId)) return {};
+          const message: ThreadItem = { kind: 'message', message: { id: `msg-${localId}`, role: 'user', text: text.slice(0, MAX_LIVE_CHARS), images: [] } };
+          return {
+            threads: {
+              ...state.threads,
+              [threadId]: {
+                ...thread,
+                seenIds: capSeenIds(new Set([...thread.seenIds, localId])),
+                items: insertBeforeLiveTurn(thread.items, message, thread.liveTurnId),
+              },
+            },
+          };
+        });
+      },
+      dropPendingMessage(threadId, localId) {
+        set((state) => {
+          const thread = threadOf(state, threadId);
+          const items = thread.items.filter((item) => !(item.kind === 'message' && item.message.id === `msg-${localId}`));
+          if (items.length === thread.items.length) return {};
+          return { threads: { ...state.threads, [threadId]: { ...thread, items } } };
+        });
       },
       pushNotice(text) {
         set((state) => ({ notices: [...state.notices.filter((notice) => notice.text !== text).slice(-4), { id: `notice-${(noticeSeq += 1)}`, text }] }));

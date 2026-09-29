@@ -36,7 +36,8 @@ function makeRoutes(initialRelay: { relayUrl: string; relayKeyFingerprint: strin
   const routes = createSettingsRoutes({
     settings: settings as never,
     keyStore: { getKey: () => null } as never,
-    restartHost: () => Promise.resolve(undefined),
+    reloadModels: () => Promise.resolve(undefined),
+      restartHost: () => Promise.resolve(undefined),
     restartGateway: () => {
       counters.gatewayRestart += 1;
       return Promise.resolve(undefined);

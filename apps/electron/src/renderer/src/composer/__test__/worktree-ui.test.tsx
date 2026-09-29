@@ -6,6 +6,7 @@ import type { GitBranchesView, WorktreeEntryView } from '@paiapp/contracts';
 import { BranchPanel } from '../branch-panel';
 import { WorktreeCleanDialog } from '../worktree-clean-dialog';
 import { render } from '@/testing/render';
+import { copy } from '@/strings';
 
 /** 开关动作区与清理确认框两级呈现（SESSION-WORKTREE-WORKFLOW §1.5/§8）。 */
 
@@ -32,7 +33,7 @@ function findButton(container: HTMLElement, text: string): HTMLButtonElement | u
 }
 
 describe('BranchPanel worktree 动作区', () => {
-  test('占用行渲染三动作；checkout 行禁用（被占用）', () => {
+  test('占用行渲染三动作；分支行可点（占用在点击时检查）', () => {
     const page = render(
       <BranchPanel
         view={view({ worktrees: [{ branch: 'feat/login', path: '/w/wt' }] })}
@@ -48,7 +49,8 @@ describe('BranchPanel worktree 动作区', () => {
       />,
     );
     const row = [...page.container.querySelectorAll('button')].find((b) => b.textContent?.includes('feat/login'));
-    expect(row?.disabled).toBe(true);
+    expect(row?.disabled).toBeFalsy();
+    expect(page.container.textContent ?? '').toContain(copy.branch.occupiedBy('/w/wt'));
     expect(findButton(page.container, '前往')).toBeDefined();
     expect(findButton(page.container, '合并回主仓')).toBeDefined();
     expect(findButton(page.container, '清理')).toBeDefined();

@@ -38,6 +38,7 @@ export const HOST_COMMAND_MATRIX: Readonly<Record<string, { read: boolean; inter
   set_model_override: { read: false, interact: true, full: true, ownerOnly: false },
   "models/add": { read: false, interact: false, full: false, ownerOnly: true },
   "models/remove": { read: false, interact: false, full: false, ownerOnly: true },
+  "models/reload": { read: false, interact: false, full: false, ownerOnly: true },
   "auth/list": { read: false, interact: false, full: false, ownerOnly: true },
   "auth/set_api_key": { read: false, interact: false, full: false, ownerOnly: true },
   "auth/remove_key": { read: false, interact: false, full: false, ownerOnly: true },

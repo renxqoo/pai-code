@@ -28,6 +28,7 @@
 - 业务包不 `import 'electron'`（Electron API 只出现在 apps/electron），保证 `bun test` 零 mock 可测；依赖白名单与环境面纪律由 oxlint 插件 `pai/*` 强制（`oxlint-plugins/pai/`，宪法见 `.oxlintrc.json`：改规则 = 修宪法，就近同步插件测试）
 - 注释只说明当前代码的作用与用途，以及代码表达不了的约束（协议事实、事件时序约定、平台坑）；禁止版本叙事（某版本改了什么/修复了什么），那是 log 文档的职责
 - 格式化用 oxfmt（非门禁）；命名与注释密度跟随所在模块现状
+- 禁止写代码注释
 
 ## 验证
 

@@ -73,7 +73,8 @@ function settingsRoutesWith(options: {
       patch: () => ({ ok: true as const, data: {} }),
     } as never,
     keyStore: { getKey: () => null } as never,
-    restartHost: () => Promise.resolve(undefined),
+    reloadModels: () => Promise.resolve(undefined),
+      restartHost: () => Promise.resolve(undefined),
     restartGateway: () => Promise.resolve(undefined),
     settingsCommands: () =>
       ({

@@ -32,6 +32,7 @@ export type PaiCommandType =
   | 'get_subagents'
   | 'get_pending_dialogs'
   | 'get_models'
+  | 'models/reload'
   | 'set_model'
   | 'set_thinking_level'
   | 'get_thinking_level'

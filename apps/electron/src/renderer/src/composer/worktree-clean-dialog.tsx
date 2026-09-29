@@ -27,14 +27,14 @@ function WorktreeCleanDialog({ entry, busy, onConfirm, onClose }: WorktreeCleanD
   const deletable = !busy && entry.locked !== true;
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6"
+      className="fixed inset-0 isolate z-50 flex items-center justify-center bg-black/40 p-6"
       role="dialog"
       aria-modal="true"
       aria-label={copy.branch.wtCleanTitle}
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-2xl border border-border bg-surface p-5 shadow-xl"
+        className="w-full max-w-md rounded-2xl border border-border bg-popover p-5 shadow-xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center gap-2">

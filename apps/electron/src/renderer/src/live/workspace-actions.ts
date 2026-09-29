@@ -12,6 +12,24 @@ import { notifySubmitFailure } from './submit-notify';
 import { apiClient, controller, store } from './workspace-runtime';
 import { uiStore } from '@/ui/ui-store';
 import { statsTargetsOf } from './stats-targets';
+import { pendingEchoes } from './pending-echoes';
+
+/** 投递结算（成功/失败/异常统一入口）：失败撤 pending 气泡并把文本回填草稿
+ *  （重发不变措辞）；成功发回底跟随信号。 */
+function settleSubmit(threadId: string, message: string, reason: string | null): void {
+  notifySubmitFailure(reason);
+  const pending = pendingEchoes.get(threadId);
+  if (reason === null) {
+    // 发送成功 = 用户主动看最新：回底一次性信号（threadId 寻址，舞台消费即贴底跟随）
+    uiStore.getState().requestFollowLatest(threadId);
+    return;
+  }
+  if (pending !== undefined) {
+    store.getState().dropPendingMessage(threadId, pending.localId);
+    pendingEchoes.delete(threadId);
+    uiStore.getState().setDraft(threadId, message);
+  }
+}
 
 /**
  * 稳定动作面：引用恒定（不随渲染重建），全部动作在调用时读 store 真相，
@@ -20,7 +38,7 @@ import { statsTargetsOf } from './stats-targets';
  */
 
 export type WorkspaceActions = {
-  readonly submitDraft: (message: string, images?: readonly ImagePayload[], mode?: 'auto' | 'steer' | 'followUp') => Promise<string | null>;
+  readonly submitDraft: (message: string, images?: readonly ImagePayload[], mode?: 'auto' | 'steer' | 'followUp') => string | null;
   readonly stopActiveTurn: () => void;
   /** 移除排队消息（threadId + entryId 寻址 hub inbox 条目；threadId 由卡片渲染处
    *  闭包捕获，不用点击时刻的活跃会话——防渲染后切会话的错投窗口）。 */
@@ -235,15 +253,20 @@ export function createWorkspaceActions(): WorkspaceActions {
   };
 
   return {
-    submitDraft: async (message, images, mode) => {
+    submitDraft: (message, images, mode) => {
       // 调用时读 store 真相：fork/重开等异步链路后的旧闭包不得打到旧线程；
       // 空舞台守卫/parked 懒唤醒/unknown_thread 自愈在主进程 session/prompt 管线内
       const threadId = activeThreadOf();
-      const reason = await controller.submitDraft(threadId, message, images, mode);
-      notifySubmitFailure(reason);
-      // 发送成功 = 用户主动看最新：回底一次性信号（threadId 寻址，舞台消费即贴底跟随）
-      if (reason === null) uiStore.getState().requestFollowLatest(threadId);
-      return reason;
+      if (message.trim().length > 0 && mode !== 'steer') {
+        // 乐观回显：同 tick 上屏 pending 气泡（直执行 `! ` 不回显——结果条目由 bash 事件
+        // 呈现；steer 不回显——注入消息非用户气泡）。权威气泡（userMessage 事件直通/
+        // 条目对账）到达时由 onEvent 侧按同文本替换本 pending（live-controller 协调）。
+        const localId = `local-${threadId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        store.getState().echoPendingMessage(threadId, localId, message);
+        pendingEchoes.set(threadId, { localId, text: message });
+      }
+      void controller.submitDraft(threadId, message, images, mode).then((reason) => settleSubmit(threadId, message, reason), () => settleSubmit(threadId, message, 'rejected'));
+      return null;
     },
     stopActiveTurn: () => void controller.stopActiveTurn(activeThreadOf()),
     removeQueuedMessage: (threadId, entryId) => {

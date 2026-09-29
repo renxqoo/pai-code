@@ -125,23 +125,35 @@ describe('BranchPanel 锁因与占用（GIT-INTERACTION-REDESIGN D6/A5）', () =
     expect(text).toContain(copy.branch.lockHintCreate);
   });
 
-  test('锁时：切换行禁用但当前行仍可视为展示态；创建动作不受锁', () => {
-    const page = render(panel({ lock: { runningCount: 1 } }));
+  test('锁时：行不禁用（点击时检查）；创建动作不受锁', () => {
+    let selected = '';
+    const page = render(panel({ lock: { runningCount: 1 }, onSelect: (branch: string) => { selected = branch; } }));
     const buttons = page.container.querySelectorAll('button');
     const createBtn = [...buttons].find((b) => (b.textContent ?? '').includes(copy.branch.createBranch));
     expect(createBtn?.disabled).toBeFalsy(); // create 放行（三出路之一）
+    const devBtn = [...buttons].find((b) => (b.textContent ?? '').includes('dev'));
+    expect(devBtn?.disabled).toBeFalsy();
+    React.act(() => {
+      devBtn?.click();
+    });
+    expect(selected).toBe('dev'); // 行可点——是否可切由调用面点击时检查并反馈
   });
 
-  test('占用分支：行禁用 + 占用者路径标注（A5）', () => {
+  test('占用分支：行可点（点击时检查）+ 占用者路径标注', () => {
     const view: GitBranchesView = {
       ...VIEW,
       worktrees: [{ branch: 'dev', path: '/w/x-harness-worktrees/agent-01' }],
     };
-    const page = render(panel({ view }));
+    let selected = '';
+    const page = render(panel({ view, onSelect: (branch: string) => { selected = branch; } }));
     const text = page.container.textContent ?? '';
     expect(text).toContain(copy.branch.occupiedBy('/w/x-harness-worktrees/agent-01'));
     const devBtn = [...page.container.querySelectorAll('button')].find((b) => (b.textContent ?? '').includes('dev'));
-    expect(devBtn?.disabled).toBe(true);
+    expect(devBtn?.disabled).toBeFalsy();
+    React.act(() => {
+      devBtn?.click();
+    });
+    expect(selected).toBe('dev');
   });
 });
 
@@ -160,3 +172,4 @@ describe('ConflictFilesDialog（D2\' 冲突确认弹窗）', () => {
     expect(closed).toBe(true);
   });
 });
+

@@ -20,6 +20,7 @@ import { searchProjectFiles } from './file-search';
 import { runGit } from './git-exec';
 import { withRepoLock } from './repo-lock';
 import { createOpenLocation, type OpenLocation } from './open-location';
+import { writeModelsConfig } from './models-config';
 import { createLocalRoutes } from '@paiapp/api';
 import { createSettingsRoutes } from '@paiapp/api';
 import { createSkillRoutes, failClosedSkillSources, type SkillSourcePort } from '@paiapp/api';
@@ -249,8 +250,23 @@ export function createApiRoutes(deps: ApiRouteDeps) {
   };
 
   /**
-   * provider 配置变更 → 重启 host 恢复链路：hub 的模型目录只在启动时读入 providers.json，
-   * 且 key 经 spawn env 注入——模型能力或 key 的任何变化都必须重 spawn 才生效。
+   * provider 配置结构变更（无 key 变更）→ 落盘 providers.json + hub models/reload 热更新：
+   * host 重读目录、广播 catalog/reload 给存量 worker——会话存活,不重启。
+   * host 未启动：providers.json 已落盘,下次 spawn 生效。
+   */
+  const reloadModelsForProviders = async (): Promise<void> => {
+    writeModelsConfig(deps.agentDir, deps.settings.listProviders(), deps.keyStore);
+    try {
+      const result = await runtime.hub.models.reloadModels();
+      if (!result.ok) deps.audit(`models_reload_rejected:${errorLogToken(result.error)}`);
+    } catch {
+      deps.audit('models_reload_failed:host_unavailable');
+    }
+  };
+
+  /**
+   * key 变更 → 重启 host 恢复链路：key 经 spawn env 注入（$PAI_KEY_*）——
+   * 进程存活期 env 不可变,必须重 spawn 才生效。
    * host 未启动则配置已落盘，下次启动时生效。
    */
   const restartHostForProviders = async (): Promise<void> => {
@@ -278,6 +294,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
   const settings = createSettingsRoutes({
     settings: deps.settings,
     keyStore: deps.keyStore,
+    reloadModels: reloadModelsForProviders,
     restartHost: restartHostForProviders,
     restartGateway: deps.restartGateway,
     settingsCommands: () => hub().settings,

@@ -6,6 +6,7 @@ import { copy } from '@/strings';
 import { uiStore } from '@/ui/ui-store';
 import { copyOfError } from '@/lib/error-text';
 import type { BridgeClient } from './client-invoke';
+import { pendingEchoes } from './pending-echoes';
 import { createRuntimeController } from './runtime-controller';
 import { createBashEndProbe } from './bash-end-probe';
 import { createEntryHydration, createReadonlyHydration } from './entry-hydration';
@@ -135,12 +136,32 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
   const onEvent = (event: UiEvent): void => {
     const state = store.getState();
     state.applyEvent(event, Date.now());
+    if (event.type === 'userMessage' && event.message.origin === 'user') {
+      // 权威用户气泡到达（主进程直通/对账）：同文本的在途 pending 已被权威版替换——
+      // 刚插入的 pending（乐观回显）与权威帧同文本，fold 的 seenIds 不去重异 id，
+      // 这里按「线程内最后一个同文本 message 项」移除 pending，保序不闪双。
+      const pending = pendingEchoes.get(event.threadId);
+      if (pending !== undefined && pending.text === event.message.text) {
+        const thread = state.threads[event.threadId];
+        if (thread !== undefined) {
+          for (let index = thread.items.length - 1; index >= 0; index -= 1) {
+            const item = thread.items[index];
+            if (item?.kind === 'message' && item.message.id === `msg-${pending.localId}`) {
+              store.getState().dropPendingMessage(event.threadId, pending.localId);
+              break;
+            }
+          }
+        }
+        pendingEchoes.delete(event.threadId);
+      }
+    }
     if (event.type === 'gitChanged') {
       // hub git/changed（外部 checkout 失效信号）：bump 分支代次——use-git-branches 按
       // cwd 匹配的会话分支视图重拉（ui-store 全局单值——多余重拉为已知可接受项）
       uiStore.getState().bumpBranchRevision();
       return;
     }
+    if (event.type === 'worktreeNotice') {
       // 建树通告投递结果（SESSION-WORKTREE-WORKFLOW §1.3 反馈分句）：busy 判定在主进程
       // create 完成时刻，这里只查表成句；bump 代次让派生树 chip 随登记重读
       state.pushNotice(
@@ -566,9 +587,15 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     },
     ensureHydrated: (threadId: string, options?: { force?: boolean }) => readonlyHydration.ensureHydrated(threadId, options),
     selectSession(threadId: string): void {
-      // parked 只读激活（历史经 host 直读水化，不唤醒 worker）；
-      // 发消息的唤醒居主进程 session/prompt 管线（T41 R1；读不唤醒、写才唤醒）
+      // parked 只读激活（历史经 host 直读水化，不唤醒 worker）；发消息的唤醒居主进程
+      // session/prompt 管线（T41 R1；读不唤醒、写才唤醒）。此处后台预热：激活即
+      // fire-and-forget 唤活（与 lazy-resume 的在途去重同键），用户打完字时 worker
+      // 已 live、prompt 缓存已热——发送路径上的 0.75s+ 懒唤醒串行窗被移出。
       activate(threadId);
+      const session = store.getState().sessions[threadId];
+      if (session?.state === 'parked' && session.sessionPath !== null) {
+        void lazy.resumeByPath(session.sessionPath).catch(() => undefined);
+      }
     },
   };
 

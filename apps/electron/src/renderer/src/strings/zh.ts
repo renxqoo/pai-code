@@ -209,10 +209,10 @@ export const zh: typeof en = {
     loading: '正在读取分支…',
     unavailable: '分支列表读取失败，请重试。',
     dirtyFiles: (count: number): string => `未提交的更改：${count} 个文件`,
-    /** 锁因行（D6：锁因可见 + 三出路——静默禁用是人机交互反模式） */
+    /** 锁因行（D6：锁因可见 + 三出路——行可点，点击时检查并反馈；静默禁用是人机交互反模式） */
     lockReason: (count: number): string => `${count} 个会话运行中——切分支会改写它们的工作基线`,
     lockHintCreate: '可先「创建并检出新分支」（不改工作树，安全）；或停止会话后再切换',
-    /** 占用标注（A5：该分支被其他 worktree 检出——行禁用 + 占用者路径） */
+    /** 占用标注（该分支被其他 worktree 检出——行可点，点击时检查并反馈占用者路径） */
     occupiedBy: (path: string): string => `已被 worktree 占用：${path}`,
     /** 冲突确认弹窗（D2' 试探式：git 自身拒绝的覆盖清单——知情裁决） */
     conflictTitle: '切换会被未提交改动阻止',
@@ -220,18 +220,21 @@ export const zh: typeof en = {
     conflictHint: '先提交或暂存这些文件后再切换（可让会话中的 agent 代办）。',
     createBranch: '创建并检出新分支…',
     openGraph: 'Git 图谱',
-    // —— 会话级 worktree 工作流（SESSION-WORKTREE-WORKFLOW §1.5；key 清单随阶段 3 首提交落档） ——
-    wtToggle: '在独立 worktree 中开始',
-    wtToggleOffRepo: '该目录不是 git 仓库，无法创建 worktree。',
-    wtToggleEmptyCwd: '先选择工作区，再开启 worktree。',
-    wtToggleLoading: '正在读取分支信息…',
-    wtToggleFailed: '分支信息不可用，无法开启 worktree。',
-    wtToggleNested: '已在 worktree 中——直接开始即可，无需再建。',
-    wtBranchLabel: '分支名',
-    wtBranchPlaceholder: 'feat-登录修复',
-    wtBranchRequired: '请输入分支名。',
+    // —— 会话级 worktree 工作流（SESSION-WORKTREE-WORKFLOW §1.5） ——
     wtStartInTree: '在独立 worktree 开始此任务',
     wtStartInTreeTitle: '在独立 worktree 开始',
+    wtStartInTreeDesc: '将基于当前 HEAD 创建新分支，并在独立目录（worktree）中开展本任务；主工作区保持不动。',
+    wtStartSubmit: '创建并开始',
+    wtBranchLabel: '分支名',
+    wtBranchPlaceholder: 'feat-登录修复',
+    wtStartLoading: '正在读取分支信息…',
+    wtStartFailed: '分支信息不可用，无法创建 worktree。',
+    wtStartOffRepo: '该目录不是 git 仓库，无法创建 worktree。',
+    wtStartNested: '已在 worktree 中——直接开始即可，无需再建。',
+    wtStartDetached: '当前处于分离 HEAD（无分支）状态，先切回分支再开始。',
+    wtPendingChip: (branch: string): string => `将在独立 worktree 中开始：${branch}`,
+    wtPendingClear: '删除该 worktree 并取消',
+    wtStartPending: (path: string): string => `会话将在 ${path} 中开始`,
     wtVisit: '前往',
     wtMergeBack: '合并回主仓',
     wtMergeTarget: (branch: string): string => `将合并到当前分支「${branch}」（--no-ff）`,
@@ -250,6 +253,7 @@ export const zh: typeof en = {
     wtLockedNote: '该 worktree 已被 git 锁定（locked），需先在终端解除锁定（git worktree unlock）。',
     wtCreatedBusy: (path: string): string => `树已建于 ${path}；会话空闲时通告将在下条消息生效。`,
     wtCreatedIdle: (path: string): string => `树已建于 ${path}，通告已送达会话。`,
+    wtCreatedDeferred: (path: string): string => `树已建于 ${path}；会话未在运行，通告未能送达。`,
     wtVisitHint: '将打开新建任务页并预填该 worktree 目录（不携带本会话上下文）。',
     createTitle: '创建并检出新分支',
     createSubtitle: '基于当前 HEAD 创建一个新的本地分支，并在创建成功后立即切换过去。',

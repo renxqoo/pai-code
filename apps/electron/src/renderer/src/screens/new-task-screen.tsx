@@ -13,6 +13,9 @@ import { PromptCard, type ComposerAttachment } from '@/composer/prompt-card';
 import { PromptContextBar } from '@/composer/prompt-context-bar';
 import { PromptInputArea } from '@/composer/prompt-input-area';
 import { QuickTaskChips } from '@/composer/quick-task-chips';
+import { WorktreePendingChip } from '@/composer/worktree-pending-chip';
+import { worktreeStartState } from '@/composer/worktree-start-state';
+import { switchBlockedReason } from '@/composer/branch-switch-guard';
 import { WorkspacePickerDialog } from '@/composer/workspace-picker-dialog';
 import { GitGraphDialog } from '@/git-graph/git-graph-dialog';
 import { store as liveStore } from '@/live/workspace-runtime';
@@ -22,27 +25,12 @@ import { greetingKeyOf } from '@/lib/greeting';
 import { baseNameOf } from '@/lib/project-dirs';
 import { copyOfError } from '@/lib/error-text';
 import { greetingTexts, quickTaskItems } from '@/screens/new-task-view-model';
+import { startTask, type NewTaskStart } from '@/screens/start-task';
 import { CONVERSATION_COLUMN_CLASS } from '@/thread/conversation-column';
 import { copy } from '@/strings';
 
 /** 本页互斥的浮层：同一时刻至多一个（目录弹窗 / 分支面板 → 创建分支 / 图谱弹窗顺次切换）。 */
-type NewTaskDialog = 'workspace' | 'branch' | 'create-branch' | 'graph' | null;
-
-/** 新建任务提交面（渲染层内部形状，图片载荷转换由接线层负责）。 */
-export type NewTaskStart = {
-  cwd: string
-  trusted: boolean
-  /** 在独立 worktree 中开始：分支名（宿主建树后以树路径为 cwd 建会话）。 */
-  worktreeBranch?: string
-  /** `provider/modelId` */
-  model: string
-  /** null = 不干预（hub 按 settings 缺省） */
-  permissionMode: string | null
-  /** 思考档（协议档位值；null = 跟随缺省） */
-  thinkingLevel: string | null
-  text: string
-  attachments: readonly ComposerAttachment[]
-}
+type NewTaskDialog = 'workspace' | 'create-branch' | 'graph' | null;
 
 type NewTaskScreenProps = {
   /** 已知项目目录（最近优先） */
@@ -67,8 +55,10 @@ type NewTaskScreenProps = {
   onListBranches: (cwd: string) => Promise<ApiOutcome<'git/branches'>>
   onListGraph: (cwd: string) => Promise<ApiOutcome<'git/graph'>>
   onCheckoutBranch: (cwd: string, branch: string, create: boolean) => Promise<ApiOutcome<'git/checkout'>>
-  /** worktree 建树（开关开启时提交前调用；成功返回树路径）。 */
+  /** worktree 建树（提交链前置；成功返回树路径）。 */
   onCreateWorktree: (cwd: string, branch: string) => Promise<ApiOutcome<'git/worktree/create'>>
+  /** 建树后 session/start 失败的回滚（树必 clean 零提交，remove 门必过）。 */
+  onRemoveWorktree: (cwd: string, path: string) => Promise<ApiOutcome<'git/worktree/remove'>>
   onPickDirectory: (defaultPath: string | null) => Promise<string | null>
   /** 创建会话并投递首条消息；resolve true = 已建会话（本页关闭） */
   onCreate: (input: NewTaskStart) => Promise<boolean>
@@ -99,6 +89,7 @@ function NewTaskScreen({
   onSearchFiles,
   onListBranches,
   onCreateWorktree,
+  onRemoveWorktree,
   onListGraph,
   onCheckoutBranch,
   onPickDirectory,
@@ -117,20 +108,20 @@ function NewTaskScreen({
   /** 思考档（协议档位值；null = 跟随缺省，创建时不干预） */
   const [thinkingLevel, setThinkingLevel] = React.useState<string | null>(null);
   const [dialog, setDialog] = React.useState<NewTaskDialog>(null);
+  /** 分支面板（锚定浮层）开合——与弹窗状态分离（同一次真实点击里 Base UI dismiss 会回灌 onOpenChange(false)，共用状态会把刚开的弹窗冲掉） */
+  const [panelOpen, setPanelOpen] = React.useState(false);
   const [picking, setPicking] = React.useState(false);
   const [checkingOut, setCheckingOut] = React.useState(false);
   const [branchError, setBranchError] = React.useState<string | null>(null);
   const [creating, setCreating] = React.useState(false);
-  const [worktreeOn, setWorktreeOn] = React.useState(false);
-  const [worktreeBranch, setWorktreeBranch] = React.useState('');
+  /** 已创建的 worktree 树（弹窗开关创建；会话以树路径开始，× 删除回滚） */
+  const [worktreeTree, setWorktreeTree] = React.useState<{ path: string; branch: string } | null>(null);
   /** 同步闸：连按 Enter/双击时 state 闭包仍为旧值，异步在途必须用 ref 拦 */
   const busyRef = React.useRef(false);
   /** 问候语按打开时刻定段（小时级，不挂 tick） */
   const [greetingKey] = React.useState(() => greetingKeyOf(new Date().getHours()));
   const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const branches = useGitBranches(cwd, onListBranches);
-  /** cwd 在 linked worktree 内（gitDir 含 /.git/worktrees/ 段）——开关正向指引态。 */
-  const nestedWorktreeCwd = branches.view?.gitDir?.includes('/.git/worktrees/') === true;
   /** 图谱只在弹窗打开时拉取（无轮询） */
   const graph = useGitGraph(cwd, onListGraph, 0, dialog === 'graph');
   /** 分支切换锁（与线程页同一把，T36 引用 T23 裁决）：所选目录上任一线程在跑即锁定——
@@ -140,39 +131,22 @@ function NewTaskScreen({
   const branchLocked = useStore(liveStore, (s) => branchSwitchLockState(s.sessions, s.threads, cwd).locked);
   const branchRunningCount = useStore(liveStore, (s) => branchSwitchLockState(s.sessions, s.threads, cwd).runningCount);
 
-  /** 锁定期间已开的「创建」弹窗就地收口（分支面板不再收——锁因行内嵌可见，创建放行） */
-  React.useEffect(() => {
-    if (branchLocked && dialog === 'create-branch') setDialog(null);
-  }, [branchLocked, dialog]);
-
   /** 面板打开即重拉：脏计数随工作区实时变化，缓存快照会过期（cwd 不变不会自动重拉） */
   React.useEffect(() => {
-    if (dialog === 'branch') branches.refresh();
-  }, [dialog, branches.refresh]);
+    if (panelOpen) branches.refresh();
+  }, [panelOpen, branches.refresh]);
   const texts = greetingTexts(greetingKey);
   const segment = branchSegmentOf(branches.view, branches.loading, branches.failed);
   const effectiveModel = model ?? defaultModelFor(cwd);
   const searchFiles = React.useCallback((query: string) => onSearchFiles(cwd, query), [cwd, onSearchFiles]);
   /** 可提交：有草稿 + 已选工作目录（无目录时主进程会拒绝，不给死路）+ 无在途动作 */
-  const canSubmit = draft.trim().length > 0 && cwd.length > 0 && !creating && (!worktreeOn || worktreeBranch.trim().length > 0);
-  /** 开关状态机：空 cwd / 加载 / 失败 / 非仓 / 树内 各态禁用（文案各异）；锁态放行（建树不动主仓工作树）。 */
-  const worktreeToggleState: { disabled: boolean; reason: string | null } = cwd.length === 0
-    ? { disabled: true, reason: copy.branch.wtToggleEmptyCwd }
-    : branches.loading
-      ? { disabled: true, reason: copy.branch.wtToggleLoading }
-      : branches.failed
-        ? { disabled: true, reason: copy.branch.wtToggleFailed }
-        : branches.view?.isRepo !== true
-          ? { disabled: true, reason: copy.branch.wtToggleOffRepo }
-          : nestedWorktreeCwd
-            ? { disabled: true, reason: copy.branch.wtToggleNested }
-            : { disabled: false, reason: null };
+  const canSubmit = draft.trim().length > 0 && cwd.length > 0 && !creating;
 
   // 浮层打开时把计数交给全局 Esc 链：浮层自行消费 Esc，不穿透关闭整页
   React.useEffect(() => {
-    onDialogOpenChange(dialog !== null);
+    onDialogOpenChange(dialog !== null || panelOpen);
     return () => onDialogOpenChange(false);
-  }, [dialog, onDialogOpenChange]);
+  }, [dialog, panelOpen, onDialogOpenChange]);
 
   const selectCwd = (next: string): void => {
     setCwd(next);
@@ -181,8 +155,8 @@ function NewTaskScreen({
     setThinkingLevel(null);
     setBranchError(null);
     setDialog(null);
-    setWorktreeOn(false);
-    setWorktreeBranch('');
+    setPanelOpen(false);
+    setWorktreeTree(null);
   };
 
   const openFolder = (): void => {
@@ -199,10 +173,16 @@ function NewTaskScreen({
 
   /** 切分支：失败走通知条，成功后刷新分支视图（当前分支与列表） */
   const switchBranch = (branch: string): void => {
-    if (busyRef.current || branchLocked) return;
+    if (busyRef.current) return;
+    // 点击时检查（行不禁用）：锁定/被 worktree 占用 → 反馈原因；脏区交 verb 恒重评
+    const blocked = switchBlockedReason(branches.view, branchLocked, branchRunningCount, branch);
+    if (blocked !== null) {
+      onNotify(blocked);
+      return;
+    }
     busyRef.current = true;
     setCheckingOut(true);
-    setDialog(null);
+    setPanelOpen(false);
     void onCheckoutBranch(cwd, branch, false).then(
       (outcome) => {
         busyRef.current = false;
@@ -245,33 +225,59 @@ function NewTaskScreen({
     );
   };
 
-  const submit = (text: string, attachments: readonly ComposerAttachment[]): Promise<boolean> => {
-    if (busyRef.current || cwd.length === 0) return Promise.resolve(false);
-    if (worktreeOn && worktreeBranch.trim().length === 0) return Promise.resolve(false);
+  /** 弹窗开关分派：关 = 建分支并检出；开 = 建分支并在独立 worktree 目录中开始（失败内联改名重试）。 */
+  const createBranchOrWorktree = (branch: string, inWorktree: boolean): void => {
+    if (!inWorktree) {
+      createBranch(branch);
+      return;
+    }
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setCheckingOut(true);
+    setBranchError(null);
+    void onCreateWorktree(cwd, branch).then(
+      (outcome) => {
+        busyRef.current = false;
+        setCheckingOut(false);
+        if (!outcome.ok) {
+          setBranchError(copyOfError(outcome.error));
+          return;
+        }
+        setWorktreeTree({ path: outcome.data.path, branch });
+        setDialog(null);
+      },
+      (reason: unknown) => {
+        busyRef.current = false;
+        setCheckingOut(false);
+        setBranchError(String(reason));
+      },
+    );
+  };
+
+  const submit = (text: string, attachments: readonly ComposerAttachment[]): boolean => {
+    if (busyRef.current || cwd.length === 0) return false;
     busyRef.current = true;
     setCreating(true);
-    const start = async (): Promise<boolean> => {
-      let sessionCwd = cwd;
-      if (worktreeOn) {
-        const made = await onCreateWorktree(cwd, worktreeBranch.trim());
-        if (!made.ok) return false;
-        sessionCwd = made.data.path;
-      }
-      return onCreate({ cwd: sessionCwd, trusted, model: effectiveModel, permissionMode, thinkingLevel, text, attachments });
-    };
-    return start().then(
+    const worktreePath = worktreeTree?.path ?? null;
+    void startTask(
+      { cwd: worktreePath ?? cwd, worktreePath, trusted, model: effectiveModel, permissionMode, thinkingLevel, text, attachments },
+      {
+        removeWorktree: onRemoveWorktree,
+        onCreate,
+        onRollbackError: onNotify,
+      },
+    ).then(
       (ok) => {
         busyRef.current = false;
         setCreating(false);
         if (ok) onClose();
-        return ok;
       },
       () => {
         busyRef.current = false;
         setCreating(false);
-        return false;
       },
     );
+    return true;
   };
 
   const prefill = (prompt: string): void => {
@@ -297,6 +303,20 @@ function NewTaskScreen({
         <h1 className="text-[26px] leading-[34px] font-semibold tracking-tight text-foreground">{texts.title}</h1>
         <p className="pt-[6px] text-[13px] leading-[20px] text-muted-foreground">{texts.subtitle}</p>
         <div className="mt-[26px] w-full">
+          {worktreeTree === null ? null : (
+            <WorktreePendingChip
+              branch={worktreeTree.branch}
+              onClear={() => {
+                void onRemoveWorktree(cwd, worktreeTree.path).then((outcome) => {
+                  if (!outcome.ok) {
+                    onNotify(copyOfError(outcome.error));
+                    return;
+                  }
+                  setWorktreeTree(null);
+                });
+              }}
+            />
+          )}
           <PromptContextBar
             project={{
               // 无预选目录时项目段仍可点（入口不能消失），文案退为「选择工作区」
@@ -315,8 +335,8 @@ function NewTaskScreen({
                     ...(branches.view?.isRepo === true
                       ? {
                           panel: {
-                            open: dialog === 'branch',
-                            onOpenChange: (open: boolean) => setDialog(open ? 'branch' : null),
+                            open: panelOpen,
+                            onOpenChange: setPanelOpen,
                             content: (
                               <BranchPanel
                                 view={branches.view}
@@ -327,9 +347,13 @@ function NewTaskScreen({
                                 onSelect={switchBranch}
                                 onCreate={() => {
                                   setBranchError(null);
+                                  setPanelOpen(false);
                                   setDialog('create-branch');
                                 }}
-                                onOpenGraph={() => setDialog('graph')}
+                                onOpenGraph={() => {
+                                  setPanelOpen(false);
+                                  setDialog('graph');
+                                }}
                               />
                             ),
                           },
@@ -338,50 +362,6 @@ function NewTaskScreen({
                   }
             }
           />
-          {worktreeToggleState.disabled || worktreeOn ? (
-            <div className="mt-2 flex items-center gap-2 rounded-lg border border-border bg-surface/60 px-3 py-2">
-              <label className="flex cursor-pointer select-none items-center gap-2" title={worktreeToggleState.reason ?? undefined}>
-                <input
-                  type="checkbox"
-                  checked={worktreeOn}
-                  disabled={worktreeToggleState.disabled}
-                  onChange={(event) => { setWorktreeOn(event.target.checked); }}
-                  className="size-3.5 cursor-pointer accent-foreground outline-none disabled:cursor-not-allowed"
-                />
-                <span className={worktreeToggleState.disabled ? 'text-xs text-muted-foreground' : 'text-xs text-foreground'}>
-                  {copy.branch.wtToggle}
-                </span>
-              </label>
-              {worktreeToggleState.reason !== null ? (
-                <span className="text-[11px] leading-4 text-muted-foreground">{worktreeToggleState.reason}</span>
-              ) : null}
-              {worktreeOn ? (
-                <input
-                  type="text"
-                  value={worktreeBranch}
-                  onChange={(event) => { setWorktreeBranch(event.target.value); }}
-                  placeholder={copy.branch.wtBranchPlaceholder}
-                  aria-label={copy.branch.wtBranchLabel}
-                  autoComplete="off"
-                  spellCheck={false}
-                  className="h-7 min-w-0 flex-1 rounded-md border border-border bg-transparent px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
-                />
-              ) : null}
-            </div>
-          ) : (
-            <div className="mt-2 flex items-center">
-              <label className="flex cursor-pointer select-none items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={worktreeOn}
-                  disabled={worktreeToggleState.disabled}
-                  onChange={(event) => { setWorktreeOn(event.target.checked); }}
-                  className="size-3.5 cursor-pointer accent-foreground outline-none"
-                />
-                <span className="text-xs text-foreground">{copy.branch.wtToggle}</span>
-              </label>
-            </div>
-          )}
           <PromptCard
             className="relative z-[1] -mt-[10px]"
             value={draft}
@@ -459,7 +439,8 @@ function NewTaskScreen({
         onOpenChange={(open) => setDialog(open ? 'create-branch' : null)}
         busy={checkingOut}
         error={branchError}
-        onSubmit={createBranch}
+        worktreeReason={worktreeStartState(branches.view, branches.loading, branches.failed).reason}
+        onSubmit={createBranchOrWorktree}
       />
     </div>
   );

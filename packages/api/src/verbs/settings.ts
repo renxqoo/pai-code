@@ -32,7 +32,9 @@ interface KeyStorePort { getKey(name: string): string | null; }
 export type SettingsRoutesDeps = {
   settings: SettingsStorePort;
   keyStore: KeyStorePort;
-  /** provider 配置变更后重启 host（providers.json 只在启动期读入）。 */
+  /** provider 配置结构变更（无 key 变更）：hub models/reload 热更新,存量会话存活。 */
+  reloadModels: () => Promise<void>;
+  /** key 变更后重启 host（$PAI_KEY_* 经 spawn env 注入,进程存活期不可变）。 */
   restartHost: () => Promise<void>;
   /** relay 配置变更后重启网关（gateway.json 只在启动期读入）。 */
   restartGateway: () => Promise<void>;
@@ -118,13 +120,14 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
         apiKey: params.apiKey,
       });
       if (!upserted.ok) return failLogged(appError('settings_unavailable'));
-      await deps.restartHost();
+      if (params.apiKey !== undefined) await deps.restartHost();
+      else await deps.reloadModels();
       return { ok: true as const, data: providersView() };
     },
     'provider/remove': async (params) => {
       const removed = deps.settings.removeProvider(params.name);
       if (!removed.ok) return failLogged(appError('settings_unavailable'));
-      await deps.restartHost();
+      await deps.reloadModels();
       return { ok: true as const, data: providersView() };
     },
     'provider/test': async (params) => {

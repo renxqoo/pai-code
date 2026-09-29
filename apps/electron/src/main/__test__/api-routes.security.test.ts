@@ -513,6 +513,7 @@ describe("渠道数据迁移端到端（T38 症状：渠道无法保存——旧
     const settingsRoutes = createSettingsRoutes({
       settings,
       keyStore,
+      reloadModels: () => Promise.resolve(undefined),
       restartHost: () => Promise.resolve(undefined),
       restartGateway: () => Promise.resolve(undefined),
       settingsCommands: () => ({

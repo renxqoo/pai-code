@@ -17,7 +17,7 @@ type BranchPanelProps = {
    *  （不改工作树不拆台）；值为运行中会话数（锁因行文案）。 */
   lock: { runningCount: number } | null
   onSelect: (branch: string) => void
-  /** 打开「创建并检出新分支」弹窗 */
+  /** 打开「创建并检出新分支」弹窗（worktree 与否同一弹窗，开关分派） */
   onCreate: () => void
   /** 打开「Git 图谱」弹窗 */
   onOpenGraph: () => void
@@ -59,7 +59,6 @@ function BranchPanel({ view, loading, failed, busy, lock, onSelect, onCreate, on
   const wtByPath = new Map((worktrees ?? []).map((entry) => [entry.path, entry]));
   const wtEntryOf = worktrees === undefined ? undefined : (branch: string): WorktreeEntryView | null => wtByPath.get(occupantOf.get(branch) ?? '') ?? null;
   const detachedEntries = (worktrees ?? []).filter((entry) => entry.branch === null);
-  const switchDisabled = busy || lock !== null;
   return (
     <>
       <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-3.5">
@@ -93,7 +92,8 @@ function BranchPanel({ view, loading, failed, busy, lock, onSelect, onCreate, on
           {filtered.map((name) => {
             const isCurrent = name === current;
             const occupant = occupantOf.get(name) ?? null;
-            const rowDisabled = busy || occupant !== null || (switchDisabled && !isCurrent);
+            // 行不禁用（锁定/占用在点击时检查并反馈——灰行预判是交互反模式）；只 busy 挡双发
+            const rowDisabled = busy;
             return (
               <React.Fragment key={name}>
               <button

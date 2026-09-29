@@ -9,6 +9,7 @@ type Input<C extends PaiCommand['type']> = Omit<Extract<PaiCommand, { type: C }>
 
 export interface ModelCommands {
   getModels(): Promise<HubResult<unknown>>;
+  reloadModels(): Promise<HubResult<unknown>>;
   setModel(input: Input<'set_model'>): Promise<HubResult<unknown>>;
   getThinkingLevel(input: Input<'get_thinking_level'>): Promise<HubResult<unknown>>;
   setThinkingLevel(input: Input<'set_thinking_level'>): Promise<HubResult<unknown>>;
@@ -17,6 +18,7 @@ export interface ModelCommands {
 export function createModelCommands(send: Transport): ModelCommands {
   return {
     getModels: () => send<unknown>({ type: 'get_models' }, TIMEOUTS.default),
+    reloadModels: () => send<unknown>({ type: 'models/reload' }, TIMEOUTS.default),
     setModel: (input) => send<unknown>({ type: 'set_model', ...input }, TIMEOUTS.default),
     getThinkingLevel: (input) => send<unknown>({ type: 'get_thinking_level', ...input }, TIMEOUTS.default),
     setThinkingLevel: (input) => send<unknown>({ type: 'set_thinking_level', ...input }, TIMEOUTS.default),

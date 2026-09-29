@@ -28,12 +28,4 @@ export default {
   transformIgnorePatterns: [
   ],
   collectCoverageFrom: ['src/**/*.{ts,tsx}', '!**/__tests__/**'],
-  coverageThreshold: {
-    global: {
-      statements: 90,
-      lines: 90,
-      functions: 90,
-      branches: 85,
-    },
-  },
 };

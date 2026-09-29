@@ -41,6 +41,7 @@ function makeRoutes() {
     routes: createSettingsRoutes({
       settings: settings as never,
       keyStore: keyStore as never,
+      reloadModels: () => Promise.resolve(undefined),
       restartHost: () => Promise.resolve(undefined),
       restartGateway: () => Promise.resolve(undefined),
       settingsCommands: () => {

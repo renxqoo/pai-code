@@ -72,11 +72,11 @@ const bootstrapOf = (sessions: SessionView[]): Outcome => ({
   data: { sessions, saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [] }, hostPhase: 'ready' },
 });
 
-describe('只读激活（T27：读不唤醒）', () => {
-  test('症状回归「点开对话即拉起 worker」：selectSession(parked) 零 resume 直接激活，历史经直读水化', async () => {
+describe('selectSession 激活与预热', () => {
+  test('症状回归「点开对话即拉起 worker」翻转：selectSession(parked) 后台预热 resume（fire-and-forget），激活同步完成', async () => {
     const sessions = [sessionView('t2', 'live', '/w/s/t2.jsonl'), sessionView('t1', 'parked', '/w/s/t1.jsonl')];
     const client = makeClient((method) =>
-      method === 'app/bootstrap' ? bootstrapOf(sessions) : { ok: true, data: { items: [], cursor: null } },
+      method === 'app/bootstrap' ? bootstrapOf(sessions) : method === 'thread/resume' ? { ok: true, data: { threadId: 't1' } } : { ok: true, data: { items: [], cursor: null } },
     );
     const store = bootStore(sessions);
     store.getState().setActiveThread('t2');
@@ -87,8 +87,9 @@ describe('只读激活（T27：读不唤醒）', () => {
     controller.selectSession('t1');
     await waitMs(0);
 
-    expect(resumeCalls(client)).toBe(0);
+    // 激活同步完成（选中即时呈现），预热在后台起 worker——发送路径不再串行等懒唤醒
     expect(store.getState().activeThreadId).toBe('t1');
+    expect(resumeCalls(client)).toBe(1);
   });
 
   test('症状回归「所有历史对话报历史加载失败」：hub 表外 parked 会话水化前先 session/register（零 resume）', async () => {

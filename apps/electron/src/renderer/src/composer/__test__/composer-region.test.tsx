@@ -251,7 +251,7 @@ describe('ComposerRegion 交互', () => {
   test('提交一行：表单提交 → 动作面 submitDraft（文本原样、回填附件经 ImagePayload 转换）；成功清草稿', async () => {
     seedLive({});
     uiStore.getState().setDraft('t1', '发出这条');
-    const submit = jest.spyOn(workspaceActions, 'submitDraft').mockResolvedValue(null);
+    const submit = jest.spyOn(workspaceActions, 'submitDraft').mockReturnValue(null);
     const view = render(<ComposerRegion />);
     // 回填信号并入附件态（token 变化消费一次性信号）
     React.act(() => {
@@ -273,7 +273,7 @@ describe('ComposerRegion 交互', () => {
   test('提交失败草稿保留（失败通知由动作面分派）：resolve 非 null 不清草稿', async () => {
     seedLive({});
     uiStore.getState().setDraft('t1', '重发这条');
-    jest.spyOn(workspaceActions, 'submitDraft').mockResolvedValue('no_active_session');
+    jest.spyOn(workspaceActions, 'submitDraft').mockReturnValue('no_active_session');
     const view = render(<ComposerRegion />);
     await React.act(async () => {
       view.container.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
@@ -283,91 +283,58 @@ describe('ComposerRegion 交互', () => {
     view.unmount();
   });
 
-  test('症状回归：发送卡很久时提交无反馈——在途发送位呈 loading 且禁用，连按 Enter 只投递一条；结算后恢复', async () => {
+  test('乐观回显：提交即上屏 pending 气泡；连按 Enter 只投递一条；投递失败气泡回滚 + 草稿回填', async () => {
     seedLive({});
     uiStore.getState().setDraft('t1', '在途消息');
-    // submitDraft 悬而不决（唤醒/受理慢）期间的可观察面：loading + 同线程在途闸
-    const holder: { settle: ((reason: string | null) => void) | null } = { settle: null };
-    const submit = jest.spyOn(workspaceActions, 'submitDraft').mockImplementation(
-      () => new Promise<string | null>((resolve) => {
-        holder.settle = resolve;
-      }),
-    );
+    const submit = jest.spyOn(workspaceActions, 'submitDraft').mockReturnValueOnce(null).mockReturnValueOnce('no_active_session');
     const view = render(<ComposerRegion />);
     try {
       const sendForm = (): void => {
         view.container.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
       };
-      const sendButton = (): HTMLButtonElement | undefined =>
-        [...view.container.querySelectorAll('button')].find((b) => b.getAttribute('aria-label') === copy.composer.send);
       React.act(sendForm);
-      expect(sendButton()?.hasAttribute('disabled')).toBe(true);
-      expect(sendButton()?.querySelector('[role="status"]')).not.toBeNull();
+      expect(submit).toHaveBeenCalledTimes(1);
       React.act(sendForm); // 连按 Enter：state 闭包仍为旧值，ref 闸拦截
       expect(submit).toHaveBeenCalledTimes(1);
       await React.act(async () => {
-        const settle = holder.settle as ((reason: string | null) => void) | null;
-        settle?.('no_active_session');
         for (let i = 0; i < 10; i += 1) await Promise.resolve();
       });
-      expect(sendButton()?.hasAttribute('disabled')).toBe(false);
-      expect(sendButton()?.querySelector('[role="status"]')).toBeNull();
-      React.act(sendForm); // 交界：结算后可继续提交（在途闸不残留）
+      // 交界：同步结算后可继续提交（闸不残留；草稿已清，重设可再发）
+      React.act(() => {
+        uiStore.getState().setDraft('t1', '第二条');
+      });
+      React.act(sendForm);
+      expect(submit).toHaveBeenCalledTimes(2);
       await React.act(async () => {
         for (let i = 0; i < 10; i += 1) await Promise.resolve();
       });
-      expect(submit).toHaveBeenCalledTimes(2);
     } finally {
       view.unmount();
     }
   });
 
-  test('症状回归：切线程不被在途会话误拦——在途闸按线程键控（跨线程照发），loading 只在在途线程呈现', async () => {
+  test('症状回归：切线程不被发送闸误拦——闸同步结算不跨线程，各线程草稿独立提交', () => {
     seedLive({ activeThreadId: 't1', threads: { t1: {}, t2: {} } });
     liveStore.setState({ sessions: { ...liveStore.getState().sessions, t2: session('t2') } });
     uiStore.getState().setDraft('t1', 'T1 在途');
     uiStore.getState().setDraft('t2', 'T2 提交');
-    const holder: { settle: ((reason: string | null) => void) | null } = { settle: null };
     const calls: string[] = [];
     jest.spyOn(workspaceActions, 'submitDraft').mockImplementation((message) => {
       calls.push(message);
-      return calls.length === 1
-        ? new Promise<string | null>((resolve) => {
-            holder.settle = resolve;
-          })
-        : Promise.resolve(null);
+      return null;
     });
     const view = render(<ComposerRegion />);
     try {
       const sendForm = (): void => {
         view.container.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
       };
-      const sendButton = (): HTMLButtonElement | undefined =>
-        [...view.container.querySelectorAll('button')].find((b) => b.getAttribute('aria-label') === copy.composer.send);
-      React.act(sendForm); // T1 在途（受理慢）
-      expect(sendButton()?.querySelector('[role="status"]')).not.toBeNull();
+      React.act(sendForm); // T1 提交
       React.act(() => {
         liveStore.setState({ activeThreadId: 't2' });
       });
       view.rerender(<ComposerRegion />);
-      // 切线程：loading 不串台，T2 发送位就绪
-      expect(sendButton()?.querySelector('[role="status"]')).toBeNull();
-      expect(sendButton()?.hasAttribute('disabled')).toBe(false);
-      React.act(sendForm); // T2 不被 T1 在途误拦（改前互斥闸静默吞掉）
-      await React.act(async () => {
-        for (let i = 0; i < 10; i += 1) await Promise.resolve();
-      });
+      React.act(sendForm); // T2 不被 T1 提交误拦（闸按线程同步结算，不跨线程残留）
       expect(calls).toEqual(['T1 在途', 'T2 提交']);
-      await React.act(async () => {
-        const settle = holder.settle as ((reason: string | null) => void) | null;
-        settle?.('no_active_session');
-        for (let i = 0; i < 10; i += 1) await Promise.resolve();
-      });
-      React.act(() => {
-        liveStore.setState({ activeThreadId: 't1' });
-      });
-      view.rerender(<ComposerRegion />);
-      expect(sendButton()?.querySelector('[role="status"]')).toBeNull(); // T1 结算后 loading 清除
     } finally {
       view.unmount();
     }
@@ -515,3 +482,4 @@ describe('重渲边界回归（B-keystroke）', () => {
     view.unmount();
   });
 });
+

@@ -24,6 +24,9 @@ import { ConfirmRequestBar } from '@/composer/confirm-request-bar';
 import { dialogsOfThread } from '@/dialogs/dialogs-of-thread';
 import { BranchPanel } from '@/composer/branch-panel';
 import { WorktreeCleanDialog } from '@/composer/worktree-clean-dialog';
+import { startWorktree } from '@/composer/start-worktree';
+import { worktreeStartState } from '@/composer/worktree-start-state';
+import { switchBlockedReason } from '@/composer/branch-switch-guard';
 import type { WorktreeEntryView } from '@paiapp/contracts';
 import { ConflictFilesDialog } from '@/composer/conflict-files-dialog';
 import { branchSegmentOf } from '@/composer/branch-segment';
@@ -40,7 +43,7 @@ import { uiStore } from '@/ui/ui-store';
 const EMPTY_QUEUED: readonly QueueEntry[] = [];
 
 /** 本区域互斥浮层：分支面板 → 创建分支弹窗 / 图谱弹窗（同一时刻至多一个）。 */
-type ComposerDialog = 'branch' | 'create-branch' | 'graph' | 'wt-clean' | null;
+type ComposerDialog = 'create-branch' | 'graph' | 'wt-clean' | null;
 
 /**
  * 线程页输入卡区域（T33 M2 / T34 M2，0 props）：live/ui store 自订阅 →
@@ -103,6 +106,8 @@ function ComposerRegion(): React.JSX.Element {
   const branchRunningCount = useStore(liveStore, (s) => branchSwitchLockState(s.sessions, s.threads, activeCwd).runningCount);
 
   const [dialog, setDialog] = React.useState<ComposerDialog>(null);
+  /** 分支面板（锚定浮层）开合——与弹窗状态分离（Base UI dismiss 的 onOpenChange(false) 不得冲掉刚开的弹窗） */
+  const [branchPanelOpen, setBranchPanelOpen] = React.useState(false);
   const [checkingOut, setCheckingOut] = React.useState(false);
   const [branchError, setBranchError] = React.useState<string | null>(null);
   /** 冲突确认弹窗文件清单（D2'：conflict_files 错误的 message tab 清单） */
@@ -115,20 +120,38 @@ function ComposerRegion(): React.JSX.Element {
   const [derivedTree, setDerivedTree] = React.useState<string | null>(null);
   /** 同步闸：连按 Enter/双击时 state 闭包仍为旧值，异步在途必须用 ref 拦 */
   const busyRef = React.useRef(false);
-  /** 发送在途按线程键控（Set，同步闸）：同线程连按 Enter 去重防双投，跨线程互不误拦
-   *  （唤醒/受理慢窗口里切会话仍可发送）；在途线程 id 供本区域按线程呈现 loading。 */
+  /** 发送同线程闸（ref，同步结算）：连按 Enter 去重防双投（异步在途时 state 闭包仍为
+   *  旧值，必须用 ref 拦）；投递不再呈 loading——乐观回显即上屏，受理在后台。 */
   const sendingRef = React.useRef<Set<string>>(new Set());
-  const [sendingThreadId, setSendingThreadId] = React.useState<string | null>(null);
-  const submitting = sendingThreadId === activeThreadId;
   /** 图谱只在弹窗打开时拉取（无轮询）；branchRevision 让 checkout 成功后重开即新谱 */
   const graph = useGitGraph(activeCwd, workspaceActions.listGitGraph, branchRevision, dialog === 'graph');
+  /** 弹窗开关分派的 worktree 路：建分支并在独立 worktree 中开始（立即建树 + 通告来源会话，
+   *  busy/idle/deferred 反馈经 worktreeNotice 事件）；失败内联改名重试。不受切换锁
+   *  （建树不动主仓工作树）。 */
+  const startInWorktree = (branchName: string): void => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setCheckingOut(true);
+    setBranchError(null);
+    void startWorktree(
+      { cwd: activeCwd, branch: branchName, originThreadId: activeThreadId },
+      {
+        createWorktree: (cwd, branch, originThreadId) => workspaceActions.createWorktree(cwd, branch, originThreadId),
+        onCreated: () => {
+          setDialog(null);
+          setBranchPanelOpen(false);
+          uiStore.getState().bumpBranchRevision();
+        },
+      },
+    ).then((failure) => {
+      busyRef.current = false;
+      setCheckingOut(false);
+      if (failure !== null) setBranchError(failure);
+    });
+  };
 
-  /** 锁定期间已开的「创建」弹窗就地收口（分支面板不再收——锁因行内嵌可见，创建放行） */
-  React.useEffect(() => {
-    if (branchLocked && dialog === 'create-branch') setDialog(null);
-  }, [branchLocked, dialog]);
-
-  /** 面板打开即重拉：脏计数随工作区实时变化，缓存快照会过期（cwd 不变不会自动重拉）；worktree 条目表同拍 */
+  /** 面板打开即重拉：脏计数随工作区实时变化，缓存快照会过期（cwd 不变不会自动重拉）；worktree 条目表同拍。
+   *  branchRevision 入 deps：建树/清理/合并与通告投递都 bump 代次，派生树登记随拍重读（投递在建树之后异步落定）。 */
   React.useEffect(() => {
     if (activeThreadId !== null) {
       void workspaceActions.worktreeRegistry().then((outcome) => {
@@ -140,15 +163,15 @@ function ComposerRegion(): React.JSX.Element {
     } else {
       setDerivedTree(null);
     }
-  }, [activeThreadId, activeCwd]);
+  }, [activeThreadId, activeCwd, branchRevision]);
   React.useEffect(() => {
-    if (dialog === 'branch') {
+    if (branchPanelOpen) {
       gitBranches.refresh();
       void workspaceActions.listWorktrees(activeCwd).then((outcome) => {
         if (outcome.ok) setWorktreeEntries(outcome.data.worktrees);
       });
     }
-  }, [dialog, gitBranches.refresh, activeCwd]);
+  }, [branchPanelOpen, gitBranches.refresh, activeCwd]);
 
   /** 切分支：失败走通知条；成功 bump 失效代次（本区域分支段与图谱随之重拉） */
   /** worktree 三动作：前往（预填新任务页）/ 合并回主仓（锁域内）/ 清理（确认框）。 */
@@ -162,7 +185,7 @@ function ComposerRegion(): React.JSX.Element {
       if (busyRef.current || branchLocked || entry.branch === null) return;
       busyRef.current = true;
       setWorktreeBusy(true);
-      setDialog(null);
+      setBranchPanelOpen(false);
       void workspaceActions.mergeWorktree(activeCwd, entry.branch).then(
         (outcome) => {
           busyRef.current = false;
@@ -181,6 +204,7 @@ function ComposerRegion(): React.JSX.Element {
       return;
     }
     setCleanTarget(entry);
+    setBranchPanelOpen(false);
     setDialog('wt-clean');
   };
 
@@ -209,10 +233,16 @@ function ComposerRegion(): React.JSX.Element {
   };
 
   const switchBranch = (branchName: string): void => {
-    if (busyRef.current || branchLocked) return; // 行级禁用 + 此闸双保险（锁=只读）
+    if (busyRef.current) return;
+    // 点击时检查（行不禁用）：锁定/被 worktree 占用 → 反馈原因；脏区交 verb 恒重评
+    const blocked = switchBlockedReason(gitBranches.view, branchLocked, branchRunningCount, branchName);
+    if (blocked !== null) {
+      liveStore.getState().pushNotice(blocked);
+      return;
+    }
     busyRef.current = true;
     setCheckingOut(true);
-    setDialog(null);
+    setBranchPanelOpen(false);
     void workspaceActions.checkoutGitBranch(activeCwd, branchName, false).then(
       (outcome) => {
         busyRef.current = false;
@@ -261,6 +291,15 @@ function ComposerRegion(): React.JSX.Element {
     );
   };
 
+  /** 弹窗开关分派：关 = 建分支并检出；开 = 建分支并在独立 worktree 中开始。 */
+  const createBranchOrWorktree = (branchName: string, inWorktree: boolean): void => {
+    if (inWorktree) {
+      startInWorktree(branchName);
+      return;
+    }
+    createBranch(branchName);
+  };
+
   const branchPanelAvailable = gitBranches.view?.isRepo === true;
   const cleanDialog =
     cleanTarget === null ? null : (
@@ -278,22 +317,19 @@ function ComposerRegion(): React.JSX.Element {
     return () => unregisterComposerTextarea(el);
   }, []);
 
-  /** 发送一行：附件转协议载荷 → submitDraft（`! `/排队语义在主进程管线内）→
-   *  成功清草稿（草稿清理 = 发送成功分支的一步；失败草稿保留重发）。
-   *  同线程在途闸 + loading：唤醒/受理慢窗口里发送位呈加载态，同线程连按 Enter 不重复投递（跨线程互不误拦）。 */
-  const submit = async (text: string, attachments: readonly ComposerAttachment[]): Promise<boolean> => {
+  /** 发送一行：附件转协议载荷 → submitDraft（乐观回显/`! `路由/排队语义在动作层与
+   *  主进程管线内，同 tick 返回）→ 清草稿（失败由动作层回滚：撤气泡 + 文本回填）。
+   *  同线程连按 Enter 由 ref 闸拦截。 */
+  const submit = (text: string, attachments: readonly ComposerAttachment[]): boolean => {
     if (sendingRef.current.has(activeThreadId)) return false;
     sendingRef.current.add(activeThreadId);
-    setSendingThreadId(activeThreadId);
     try {
       const images = attachments.length === 0 ? undefined : attachments.map(({ payload }) => imagePayloadOf(payload));
-      const reason = await workspaceActions.submitDraft(text, images);
-      if (reason !== null) return false;
+      if (workspaceActions.submitDraft(text, images) !== null) return false;
       uiStore.getState().clearDraft(activeThreadId);
       return true;
     } finally {
       sendingRef.current.delete(activeThreadId);
-      setSendingThreadId((current) => (current === activeThreadId ? null : current));
     }
   };
 
@@ -306,7 +342,7 @@ function ComposerRegion(): React.JSX.Element {
           type="button"
           onClick={() => { uiStore.getState().openNewTask(derivedTree); }}
           title={copy.branch.wtVisitHint}
-          className="mb-1 flex w-fit cursor-pointer items-center gap-1 rounded-full border border-border bg-surface/70 px-2 py-0.5 text-[11px] leading-4 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="mb-1 flex w-fit cursor-pointer items-center gap-1 rounded-full border border-border bg-surface-subtle/70 px-2 py-0.5 text-[11px] leading-4 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           <GitBranch aria-hidden="true" className="size-3" strokeWidth={1.75} />
           <span className="max-w-[240px] truncate">{copy.branch.wtDerivedTree(baseNameOf(derivedTree) || derivedTree)}</span>
@@ -321,8 +357,8 @@ function ComposerRegion(): React.JSX.Element {
           ...(branchPanelAvailable
             ? {
                 panel: {
-                  open: dialog === 'branch',
-                  onOpenChange: (open: boolean) => setDialog(open ? 'branch' : null),
+                  open: branchPanelOpen,
+                  onOpenChange: setBranchPanelOpen,
                   content: (
                     <BranchPanel
                       view={gitBranches.view}
@@ -335,9 +371,13 @@ function ComposerRegion(): React.JSX.Element {
                       onWorktreeAction={handleWorktreeAction}
                       onCreate={() => {
                         setBranchError(null);
+                        setBranchPanelOpen(false);
                         setDialog('create-branch');
                       }}
-                      onOpenGraph={() => setDialog('graph')}
+                      onOpenGraph={() => {
+                        setBranchPanelOpen(false);
+                        setDialog('graph');
+                      }}
                     />
                   ),
                 },
@@ -407,7 +447,7 @@ function ComposerRegion(): React.JSX.Element {
             sendLabel={copy.composer.send}
             stopLabel={copy.composer.stop}
             canSend={value.trim().length > 0}
-            sending={submitting}
+            sending={false}
             generating={generating}
             onStop={stopOrAbort}
             permissionMode={permissionMode}
@@ -428,7 +468,8 @@ function ComposerRegion(): React.JSX.Element {
         onOpenChange={(open) => setDialog(open ? 'create-branch' : null)}
         busy={checkingOut}
         error={branchError}
-        onSubmit={createBranch}
+        worktreeReason={worktreeStartState(gitBranches.view, gitBranches.loading, gitBranches.failed).reason}
+        onSubmit={createBranchOrWorktree}
       />
       <GitGraphDialog
         open={dialog === 'graph'}

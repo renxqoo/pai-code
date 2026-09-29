@@ -17,6 +17,7 @@ import { packagedGatewayEntry, packagedHubCandidates, resolveGatewayEntry, resol
 import { writeGatewayConfig } from './gateway-config';
 import { resolveAppPaths, resolveUserDataDir } from './paths';
 import { createWorktreeRegistry } from './worktree-registry';
+import { deliverWorktreeNotice } from './worktree-notice';
 import { createPaiRuntime } from './pai-runtime';
 import { staleGateway, startGatewayProcess, type GatewayProcess } from './gateway-process';
 import { createProviderKeyStore } from './provider-key-store';
@@ -412,6 +413,7 @@ void app.whenReady().then(async () => {
         // 来源会话判定（create 完成时刻重估 live/busy——打开新建页时定格的 originThreadHint；parked/retiring/dead 或 cwd 不符视为无来源）
         const sourceThreadId = tree.originThreadHint;
         if (sourceThreadId === null) return;
+        deliverWorktreeNotice(
           { branch: tree.branch, path: tree.path, cwd: tree.cwd },
           sourceThreadId,
           {
@@ -419,6 +421,7 @@ void app.whenReady().then(async () => {
             notify: async (input) => (runtime === null ? null : runtime.hub.thread.notify(input)),
             registerSessionTree: (threadId) =>
               worktreeRegistry.addTree({ path: tree.path, repoTop: tree.repoTop, sessionThreadId: threadId }),
+            emit: (kind) => emitToRenderer({ type: 'worktreeNotice', kind, path: tree.path }),
           },
         );
       },

@@ -42,8 +42,8 @@ describe('词表封闭（双向）', () => {
     );
   });
 
-  test('hub 命令词表 == 73（x-harness host-hub COMMAND_NAMES 镜像；thread/notify 为事实注入面；queue/drop、queue/send_now 为单条队列操作面；skills/inspect|install 为技能安装面；get_token_analytics 为上下文分析面；plugins/* 为插件管理面）', () => {
-    expect(HUB_COMMAND_TYPES.length).toBe(73);
+  test('hub 命令词表 == 74（x-harness host-hub COMMAND_NAMES 镜像；thread/notify 为事实注入面；queue/drop、queue/send_now 为单条队列操作面；skills/inspect|install 为技能安装面；get_token_analytics 为上下文分析面；plugins/* 为插件管理面）', () => {
+    expect(HUB_COMMAND_TYPES.length).toBe(74);
     expect(HUB_COMMAND_TYPES).toContain('thread/delete');
     expect(HUB_COMMAND_TYPES).toContain('queue/drop');
     expect(HUB_COMMAND_TYPES).toContain('queue/send_now');
@@ -63,7 +63,7 @@ describe('词表封闭（双向）', () => {
         'ui_response',
         'settings/get', 'settings/set',
         'workspace/trust',
-        'models/add', 'models/remove',
+        'models/add', 'models/remove', 'models/reload',
         'agents/list', 'agents/create', 'agents/remove',
         'skills/inspect', 'skills/install', 'skills/list', 'skills/set_enabled', 'skills/remove',
         'plugins/list', 'plugins/inspect', 'plugins/install', 'plugins/uninstall', 'plugins/set_enabled', 'plugins/remove', 'plugins/hot_install', 'plugins/hot_uninstall',
@@ -513,6 +513,9 @@ function samplePerUiEvent(): UiEvent[] {
     { type: 'dialogSettled', requestId: 'r1' },
     { type: 'bashOutput', threadId: t, id: 'b1', delta: 'out', truncated: false },
     { type: 'gitChanged', threadId: t, cwd: '/w', branch: 'main' },
+    { type: 'worktreeNotice', kind: 'busy', path: '/w/.x-harness-user-worktrees/app-feat-x' },
+    { type: 'worktreeNotice', kind: 'idle', path: '/w/.x-harness-user-worktrees/app-feat-y' },
+    { type: 'worktreeNotice', kind: 'deferred', path: '/w/.x-harness-user-worktrees/app-feat-z' },
   ];
 }
 

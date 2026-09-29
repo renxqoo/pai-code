@@ -353,6 +353,10 @@ export interface ModelsRemoveCmd {
   id: string;
 }
 
+export interface ModelsReloadCmd {
+  type: 'models/reload';
+}
+
 export interface AgentsListCmd {
   type: 'agents/list';
   threadId?: string;
@@ -504,6 +508,7 @@ export type HubCommand =
   | (WorkspaceTrustCmd & { id?: string })
   | (ModelsAddCmd & { id?: string })
   | (ModelsRemoveCmd & { id?: string })
+  | (ModelsReloadCmd & { id?: string })
   | (AgentsListCmd & { id?: string })
   | (AgentsCreateCmd & { id?: string })
   | (AgentsRemoveCmd & { id?: string })
@@ -581,6 +586,7 @@ export const HUB_COMMAND_TYPES = [
   'workspace/trust',
   'models/add',
   'models/remove',
+  'models/reload',
   'agents/list',
   'agents/create',
   'agents/remove',

@@ -15,4 +15,3 @@ resources/
 .env.*
 
 # 日志
-*.log
