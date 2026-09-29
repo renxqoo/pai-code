@@ -106,7 +106,8 @@ describe('hydrateNewItems · 对账增量', () => {
       bash('b1', 'ls'),
     ]);
     expect(groups.map((group) => group.item.kind)).toEqual(['message', 'turn', 'turn']);
-    expect(groups[0]?.entryIds).toEqual(['u1']);
+    // entryIds 用渲染身份（气泡 id `msg-<条目 id>`）——与事件帧路径同域才能在对账里去重
+    expect(groups[0]?.entryIds).toEqual(['msg-u1']);
     expect(groups[1]?.entryIds).toEqual(['a1', 'a2']);
     expect(groups[2]?.entryIds).toEqual(['b1']);
   });

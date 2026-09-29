@@ -8,6 +8,7 @@
  * 折叠为移动端 ChatMessage[]；未知事件类型保守跳过。
  */
 import type { ChatMessage } from '@/types/domain';
+import { isSnapshotFrame } from '@paiapp/api/views/snapshot-frame';
 
 interface WalLine {
   seq: number;
@@ -55,6 +56,9 @@ function walToMessages(line: WalLine): ChatMessage[] {
   const type = ev['type'];
   const at = new Date(line.ts).toISOString();
   if (type === 'user/message') {
+    // 内核尾部快照信封帧（agent-types/date/project-instructions/技能清单）：模型上下文
+    // 非对话内容——不做此门会把注入快照当用户消息渲染进手机端历史。
+    if (isSnapshotFrame(ev)) return [];
     const message: ChatMessage = { id: `u-${line.seq}`, kind: 'user', text: '', createdAt: at };
     const images: Array<{ uri: string }> = [];
     for (const block of blocks(ev['content'])) {

@@ -275,7 +275,7 @@ test('症状回归「轮结算后历史全没了（对话收起来）」：窗�
   emit({ type: 'turnStarted', threadId, at: 5 });
   // 读口是异步的（invoke → 微任务）；stubTimers 下不得用 setTimeout 冲刷
   for (let tick = 0; tick < 10; tick += 1) await Promise.resolve();
-  emit({ type: 'userMessage', threadId, message: { id: 'u2', text: '新问', origin: 'user' } });
+  emit({ type: 'userMessage', threadId, message: { seq: 647, images: [], text: '新问', origin: 'user' } });
   emit({ type: 'turnSettled', threadId, ok: true, usage: null });
   timers.fire();
   await new Promise((resolve) => {

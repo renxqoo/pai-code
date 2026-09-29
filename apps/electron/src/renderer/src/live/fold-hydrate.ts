@@ -13,13 +13,27 @@ import { insertBeforeLiveTurn } from './turn-ops';
  * 语义见 tasks/T35：reconcile 的尾 span 合入在途轮（幂等并集）、窗口重建、在途读口合入。
  */
 
+/** 已渲染条目的身份集（seenIds 的登记口径单一真相）：气泡 `msg-<条目 id>`、
+ *  轮次 `turn-<条目 id>`——事件帧（fold-events）与条目对账（hydrate-items）两路
+ *  同按此拼法登记，同一落账无论哪条路径先到都能被去重。 */
+function renderedIdsOf(items: readonly ThreadItem[]): Set<string> {
+  const ids = new Set<string>();
+  for (const item of items) {
+    if (item.kind === 'message') ids.add(item.message.id);
+    else if (item.kind === 'turn') ids.add(item.turn.id);
+  }
+  return ids;
+}
+
 export function foldHydrate(state: LiveThreadState, action: HydrateAction): LiveThreadState {
   switch (action.kind) {
     case 'hydrate/inflight':
       return applyInflight(state, action.view, action.at);
     case 'hydrate/initial': {
       const items = hydrateItems(action.items);
-      return { ...initialThreadState, items, cursor: action.cursor, seenIds: capSeenIds(new Set(action.items.map((item) => item.id))), hydrated: true, todo: mergeTodo(state.todo, action.todo) };
+      // seenIds 用**渲染身份**登记（气泡 id `msg-<条目 id>` / 轮 id `turn-<条目 id>`）：
+      // 事件帧（fold-events）按同一拼法查重，只登记条目 id 会让「转写先到、帧后到」重插。
+      return { ...initialThreadState, items, cursor: action.cursor, seenIds: capSeenIds(renderedIdsOf(items)), hydrated: true, todo: mergeTodo(state.todo, action.todo) };
     }
     case 'hydrate/reconcile': {
       const derived = hydrateNewItems(action.items);
@@ -125,7 +139,7 @@ export function foldHydrate(state: LiveThreadState, action: HydrateAction): Live
       }
       // messageTurns 与 turnSerial 随 state 保留：轮 id 全局单调唯一后，陈旧归属
       // 恒不等于新轮 id——清空反而放开守卫（迟到 final 以 owner undefined 直通污染新轮）
-      return { ...state, items, cursor: action.cursor, seenIds: capSeenIds(new Set(action.items.map((item) => item.id))), liveTurnId: null, liveMessageId: null, hydrateFailed: false, todo: mergeTodo(state.todo, action.todo) };
+      return { ...state, items, cursor: action.cursor, seenIds: capSeenIds(renderedIdsOf(items)), liveTurnId: null, liveMessageId: null, hydrateFailed: false, todo: mergeTodo(state.todo, action.todo) };
     }
     case 'hydrate/failed':
       return { ...state, hydrateFailed: true };

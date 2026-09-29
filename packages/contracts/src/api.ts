@@ -6,7 +6,7 @@ import { } from './git-views';
 import { PermModeSchema } from './permissions';
 import { RuntimeSnapshotViewSchema } from './runtime';
 import { InflightViewSchema, PendingDialogViewSchema, SubagentSnapshotViewSchema } from './inflight-views';
-import { DiffFileViewSchema, EditHunkViewSchema, SessionViewSchema, SubagentSpawnViewSchema } from './ui-events';
+import { DiffFileViewSchema, EditHunkViewSchema, SessionViewSchema, SubagentSpawnViewSchema, imagePayload } from './ui-events';
 import { IdleRecycleMinutesSchema, ProviderModelSchema, RelayConfigSchema } from './settings';
 import { TodoSnapshotEventDataSchema } from './todo-views';
 import { THINKING_LEVEL_ORDER } from './thinking-levels';
@@ -27,15 +27,6 @@ import {
  */
 
 // —— 视图形状（adapter 从协议响应收窄，渲染层唯一认识的形态）——
-
-/** 图片载荷（发送与历史条目共用形状；data 为无前缀 base64）。 */
-const imagePayload = z
-  .object({
-    type: z.literal('image'),
-    data: z.string().min(1),
-    mediaType: z.string().min(1),
-  })
-  .strict();
 
 /** 历史条目（session/entries 的正规化结果，渲染层水化为对话流）。 */
 export const HistoryItemSchema = z.discriminatedUnion('kind', [

@@ -259,10 +259,16 @@ export function createWorkspaceActions(): WorkspaceActions {
       const threadId = activeThreadOf();
       if (message.trim().length > 0 && mode !== 'steer') {
         // 乐观回显：同 tick 上屏 pending 气泡（直执行 `! ` 不回显——结果条目由 bash 事件
-        // 呈现；steer 不回显——注入消息非用户气泡）。权威气泡（userMessage 事件直通/
-        // 条目对账）到达时由 onEvent 侧按同文本替换本 pending（live-controller 协调）。
+        // 呈现；steer 不回显——注入消息非用户气泡；纯图无文本消息不回显——
+        // 失败回填草稿仅携文本，回显会造出失败后无法复原的气泡）。回显身份
+        // `msg-<localId>`；权威气泡到达时由 onEvent 侧按 WAL seq 收敛到 `msg-seq-<seq>`。
         const localId = `local-${threadId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        store.getState().echoPendingMessage(threadId, localId, message);
+        store.getState().echoPendingMessage(
+          threadId,
+          localId,
+          message,
+          (images ?? []).map(({ data, mediaType }) => ({ data, mimeType: mediaType })),
+        );
         pendingEchoes.set(threadId, { localId, text: message });
       }
       void controller.submitDraft(threadId, message, images, mode).then((reason) => settleSubmit(threadId, message, reason), () => settleSubmit(threadId, message, 'rejected'));

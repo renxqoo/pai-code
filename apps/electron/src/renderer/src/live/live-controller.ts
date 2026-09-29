@@ -137,21 +137,12 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     const state = store.getState();
     state.applyEvent(event, Date.now());
     if (event.type === 'userMessage' && event.message.origin === 'user') {
-      // 权威用户气泡到达（主进程直通/对账）：同文本的在途 pending 已被权威版替换——
-      // 刚插入的 pending（乐观回显）与权威帧同文本，fold 的 seenIds 不去重异 id，
-      // 这里按「线程内最后一个同文本 message 项」移除 pending，保序不闪双。
+      // 权威用户气泡到达（WAL 帧直通）：它带的 WAL seq 即本会话落账身份。在途回显
+      // （乐观回显）同步换到同一身份域——否则同文本异 id 两条并存。若宿主回执
+      // 已先对账（reconcileEcho 已消费登记），这里无可收敛。
       const pending = pendingEchoes.get(event.threadId);
-      if (pending !== undefined && pending.text === event.message.text) {
-        const thread = state.threads[event.threadId];
-        if (thread !== undefined) {
-          for (let index = thread.items.length - 1; index >= 0; index -= 1) {
-            const item = thread.items[index];
-            if (item?.kind === 'message' && item.message.id === `msg-${pending.localId}`) {
-              store.getState().dropPendingMessage(event.threadId, pending.localId);
-              break;
-            }
-          }
-        }
+      if (pending !== undefined) {
+        store.getState().reconcileEcho(event.threadId, pending.localId, event.message.seq);
         pendingEchoes.delete(event.threadId);
       }
     }

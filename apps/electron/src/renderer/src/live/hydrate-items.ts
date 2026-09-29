@@ -127,7 +127,10 @@ export function hydrateNewItems(history: readonly HistoryItem[]): readonly { ite
       flush();
       const converted = hydrateItems([entry]);
       const message = converted[0];
-      if (message !== undefined) out.push({ item: message, entryIds: [entry.id] });
+      // entryIds 用**渲染身份**（气泡 id `msg-<条目 id>`）：事件帧路径（fold-events）
+      // 插入气泡时登记的也是这个键——两路同域才能在 reconcile 的 fresh 判定里去重
+      // （沿用条目 id 会让「事件帧先到、转写后到」重插一条）。
+      if (message !== undefined) out.push({ item: message, entryIds: [message.kind === 'message' ? message.message.id : entry.id] });
       anchor = entry.at;
       continue;
     }

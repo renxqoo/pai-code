@@ -29,7 +29,15 @@ import { todoSnapshotOf } from './todo-snapshot';
  * 不产生渲染条目（cursor 仍推进——按行消费，不按渲染条目消费）。
  */
 
-const BASH_ENVELOPE = '[bash] $ ';
+/** 直执行 bash 信封首行前缀（hub bash-exec 落账形态）。**单一真相**：条目侧折叠为
+ *  bash 条目（entries-mapper）与事件帧侧跳过（event-mapper）共用——两侧判定不能各写一份
+ *  字面量（漂移即直执行命令双渲染：气泡 + 工具块） */
+export const BASH_ENVELOPE = '[bash] $ ';
+
+/** 直执行 bash 信封谓词（单一真相，见上） */
+export function isBashEnvelope(text: string): boolean {
+  return text.startsWith(BASH_ENVELOPE);
+}
 
 /** assistant 条目的工具调用元素（tool/result 并入的目标形状）。 */
 type AssistantToolCall = Extract<HistoryItem, { kind: 'assistant' }>['toolCalls'][number];
@@ -274,7 +282,7 @@ function applySurfaceOp(
 
 /** 直执行 bash 信封还原：首行 `[bash] $ <cmd>`、其余为输出。 */
 function bashItemOf(id: string, at: number, text: string): HistoryItem | null {
-  if (!text.startsWith(BASH_ENVELOPE)) return null;
+  if (!isBashEnvelope(text)) return null;
   const rest = text.slice(BASH_ENVELOPE.length);
   const newline = rest.indexOf('\n');
   const command = newline === -1 ? rest : rest.slice(0, newline);

@@ -28,7 +28,7 @@ function liveTurn(state: { items: readonly ThreadItem[] }): ThreadItem {
 describe('foldEvents · 轮次生命周期', () => {
   test('完整轮次：回显 → 流式 → 权威替换 → settle（恰好一次终态）', () => {
     let s = initialThreadState;
-    s = foldThreadEvent(s, ev({ type: 'userMessage', threadId: 't', message: { id: 'e1', text: 'hi', origin: 'user' } }), tick(0));
+    s = foldThreadEvent(s, ev({ type: 'userMessage', threadId: 't', message: { seq: 647, images: [], text: 'hi', origin: 'user' } }), tick(0));
     s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(10) }), tick(10));
     expect(s.streaming).toBe(true);
     s = foldThreadEvent(s, ev({ type: 'messageStarted', threadId: 't', messageId: 'm1', at: tick(11) }), tick(11));
@@ -209,7 +209,7 @@ describe('foldEvents · 真实协议形态回归（对抗审查 P0-1/P0-2）', (
     });
     expect(s.liveTurnId).toBeNull();
     expect(s.items.map((i) => (i.kind === 'message' ? i.message.text : i.turn.status))).toEqual(['问', 'stopped']);
-    expect([...s.seenIds]).toEqual(['u1', 'a1']);
+    expect([...s.seenIds]).toEqual(['msg-u1', 'turn-a1']);
   });
 });
 
@@ -323,15 +323,15 @@ describe('foldEvents · 水化与对账', () => {
 
   test('userMessage 事件去重（同 id 二次投递）', () => {
     let s = initialThreadState;
-    s = foldThreadEvent(s, ev({ type: 'userMessage', threadId: 't', message: { id: 'e1', text: 'hi', origin: 'user' } }), T);
+    s = foldThreadEvent(s, ev({ type: 'userMessage', threadId: 't', message: { seq: 647, images: [], text: 'hi', origin: 'user' } }), T);
     const before = s.items.length;
-    s = foldThreadEvent(s, ev({ type: 'userMessage', threadId: 't', message: { id: 'e1', text: 'hi', origin: 'user' } }), T);
+    s = foldThreadEvent(s, ev({ type: 'userMessage', threadId: 't', message: { seq: 647, images: [], text: 'hi', origin: 'user' } }), T);
     expect(s.items.length).toBe(before);
   });
 
   test('系统注入消息（task-notification）渲染为 system 角色', () => {
     let s = initialThreadState;
-    s = foldThreadEvent(s, ev({ type: 'userMessage', threadId: 't', message: { id: 'n1', text: '[task-notification] subagent done', origin: 'system' } }), T);
+    s = foldThreadEvent(s, ev({ type: 'userMessage', threadId: 't', message: { seq: 647, images: [], text: '[task-notification] subagent done', origin: 'system' } }), T);
     expect(s.items[0]).toMatchObject({ kind: 'message', message: { role: 'system' } });
   });
 });

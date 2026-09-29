@@ -1,8 +1,10 @@
 import { isTodoTool, type UiEvent, type UsageView } from '@paiapp/contracts';
 
 import { previewArgs } from '../views/args-preview';
-import { flattenUserText } from '../views/content';
+import { flattenUserText, userImages } from '../views/content';
 import { diffFromToolCall } from '../views/diff-extract';
+import { isBashEnvelope } from '../views/entries-mapper';
+import { isSnapshotFrame } from '../views/snapshot-frame';
 import { subagentsField } from '../views/subagent-spawns';
 import { editHunksField } from '../views/edit-hunks';
 import { todoSnapshotOf } from '../views/todo-snapshot';
@@ -126,18 +128,33 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
           return [{ type: 'gitChanged', threadId, cwd, ...(branch.length > 0 ? { branch } : {}) }];
         }
         case 'user/message': {
-          // 用户消息直通：气泡随事件帧上屏（~16ms），不等条目对账；对账到达后由
-          // fold 的 seenIds 去重（乐观回显/事件直通/对账三源同文本）。id 不采
-          // WAL seq（帧载荷无 seq）——(turn, step) 坐标在单轮单 step 内唯一，
-          // 同坐标重复帧（重放）由 fold 去重吞掉。
+          // 内核尾部快照信封帧（agent-types/date/project-instructions/技能清单）：模型上下文
+          // 非对话内容，整帧跳过（与 entries-mapper 同谓词、与内核 isSnapshotNode 同构）。
+          // 直通面曾无此门：注入快照（turn 0/step 0 无 origin）被当用户气泡上屏，
+          // 与转写侧的新增过滤面不一致。
+          if (isSnapshotFrame({ ...recordOf(payload), type: 'user/message' })) return [];
+          // 用户消息直通：气泡随事件帧上屏（~16ms），不等条目对账。身份取 **WAL seq**
+          // （sessionPayload 携带）——与条目对账的 `seq-<seq>` 同域，同一句话经两路
+          // 到达时由 fold 的 seenIds 直接去重（不再靠文本比对，连发同文本各自成条）。
+          // 帧缺 seq（非 WAL 派生：本地回显/宿主注入）不发气泡，权威气泡由转写承载。
           const text = flattenUserText(payload.content);
           if (text.length === 0) return [];
+          // 直执行 bash 信封（`[bash] $ <cmd>`）：条目侧折为 bash 工具条目（entries-mapper）——
+          // 帧侧不再出气泡，否则同一命令双渲染（原气泡 + 工具块，症状同重复消息家族）。
+          if (isBashEnvelope(text)) return [];
+          const seq = num(payload.seq, Number.NaN);
+          if (!Number.isFinite(seq)) return [];
           const origin = str(payload.origin);
           return [
             {
               type: 'userMessage',
               threadId,
-              message: { id: `ev-${threadId}-${num(payload.turn, 0)}-${num(payload.step, 0)}`, text, origin: origin === 'system' ? 'system' : 'user' },
+              message: {
+                seq,
+                text,
+                origin: origin === 'system' ? 'system' : 'user',
+                images: userImages(payload.content).map(({ data, mediaType }) => ({ type: 'image' as const, data, mediaType })),
+              },
             },
           ];
         }

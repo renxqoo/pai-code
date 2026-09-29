@@ -9,6 +9,16 @@ import { TodoSnapshotEventDataSchema } from './todo-views';
  * 同线程事件有序；跨线程无序保证。
  */
 
+/** 图片载荷（发送参数与历史条目共用形状；data 为无前缀 base64）。zod 形态对应
+ *  `ImagePayload`（hub-protocol，协议传输形状）——两域各持一份，此处供视图 schema 复用。 */
+export const imagePayload = z
+  .object({
+    type: z.literal('image'),
+    data: z.string().min(1),
+    mediaType: z.string().min(1),
+  })
+  .strict();
+
 /** task 工具参数展开出的子代理执行项（agent 名与任务描述分列展示）。 */
 export const SubagentSpawnViewSchema = z.object({
   agent: z.string(),
@@ -89,11 +99,13 @@ const uiEventDefs = {
 
   /** 一轮开始（turn/start；后台任务通知唤起的回合同样触发）。 */
   turnStarted: z.object({ type: z.literal('turnStarted'), threadId, at: z.number() }),
-  /** 用户角色消息：本地 prompt 回显或系统注入（task-notification / task-message）。 */
+  /** 用户角色消息：本地 prompt 回显或系统注入（task-notification / task-message）。
+   *  seq = 该落账的 WAL 行号，与条目对账（`seq-<seq>`）**同一身份域**——同一句话
+   *  经事件帧与转写两路到达时按 id 去重，不必靠文本比对（见 fold-events）。 */
   userMessage: z.object({
     type: z.literal('userMessage'),
     threadId,
-    message: z.object({ id: z.string(), text: z.string(), origin: z.enum(['user', 'system']) }),
+    message: z.object({ seq: z.number(), text: z.string(), origin: z.enum(['user', 'system']), images: z.array(imagePayload) }),
   }),
   messageStarted: z.object({ type: z.literal('messageStarted'), threadId, messageId: z.string(), at: z.number() }),
   /** 流式正文增量：只拼 delta，权威内容见 messageFinal。 */

@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./client": "./src/client.ts",
-    "./events/event-mapper": "./src/events/event-mapper.ts"
+    "./events/event-mapper": "./src/events/event-mapper.ts",
+    "./views/snapshot-frame": "./src/views/snapshot-frame.ts"
   },
   "dependencies": {
     "@paiapp/contracts": "workspace:*"

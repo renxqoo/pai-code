@@ -91,7 +91,7 @@ describe('foldHydrate · 在途轮归属（重载回落防同轮双渲染）', (
   test('症状回归「重载后同一轮折叠分裂成 共工作/已工作 两个轮」：不拆轮对账遇 live 轮时尾 span 归 live 轮独占', () => {
     // 重载回落（错过 turnStarted）：事件流先折出 live 轮
     let s = initialThreadState;
-    s = foldThreadEvent(s, ev({ type: 'userMessage', threadId: 't', message: { id: 'u1', text: '看一下天气', origin: 'user' } }), tick(0));
+    s = foldThreadEvent(s, ev({ type: 'userMessage', threadId: 't', message: { seq: 647, images: [], text: '看一下天气', origin: 'user' } }), tick(0));
     s = foldThreadEvent(s, ev({ type: 'messageStarted', threadId: 't', messageId: 'm1', at: tick(1) }), tick(1));
     s = foldThreadEvent(s, ev({ type: 'textDelta', threadId: 't', messageId: 'm1', delta: '在途后半' }), tick(2));
     expect(s.streaming).toBe(true);

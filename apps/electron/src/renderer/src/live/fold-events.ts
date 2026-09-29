@@ -25,20 +25,26 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
     case 'turnStarted':
       return onTurnStarted(state, event.at);
     case 'userMessage': {
-      if (state.seenIds.has(event.message.id)) return state;
+      // 身份 = `msg-seq-<seq>`——与条目对账（`seq-<seq>`）同源：同一句话经事件帧
+      // 与转写两路到达时此键相同，seenIds 直接去重（连发同文本各自 seq 不同，
+      // 不误合）。seq 为 WAL 行号，全局唯一且持久。
+      // 非有限 seq（畸形帧）不发气泡：无从与条目同域，宁缺勿冒造一个永不重复的键。
+      const seq = event.message.seq;
+      if (typeof seq !== 'number' || !Number.isFinite(seq)) return state;
+      const id = `msg-seq-${seq}`;
+      if (state.seenIds.has(id)) return state;
       const message: ThreadItem = {
         kind: 'message',
         message: {
-          id: `msg-${event.message.id}`,
+          id,
           role: event.message.origin === 'system' ? 'system' : 'user',
           text: event.message.text.slice(0, MAX_LIVE_CHARS),
-          // 事件不带图片；带图消息经条目对账（turnStarted 拉取）到达
-          images: [],
+          images: event.message.images.map(({ data, mediaType }) => ({ data, mimeType: mediaType })),
         },
       };
       return {
         ...state,
-        seenIds: capSeenIds(new Set([...state.seenIds, event.message.id])),
+        seenIds: capSeenIds(new Set([...state.seenIds, id])),
         items: insertBeforeLiveTurn(state.items, message, state.liveTurnId),
       };
     }

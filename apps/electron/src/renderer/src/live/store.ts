@@ -112,8 +112,13 @@ export interface LiveStoreActions {
   /** 直执行 bash 开始/结束（流式尾部经 bashOutput 事件折叠）。 */
   bashStarted(threadId: string): void;
   bashSettled(threadId: string): void;
-  /** 乐观回显：提交同 tick 插入 pending 气泡（真实气泡由 userMessage 事件或对账收敛）。 */
-  echoPendingMessage(threadId: string, localId: string, text: string): void;
+  /** 乐观回显：本地气泡即时上屏（文本/图片已知，WAL seq 未知）。宿主回执带回该落账
+   *  的 WAL seq——`reconcileEcho` 把本气泡换到 `msg-seq-<seq>` 同一身份域。 */
+  echoPendingMessage(threadId: string, localId: string, text: string, images?: ReadonlyArray<{ data: string; mimeType: string }>): void;
+  /** 回执对账：把在途回显气泡换成落账身份（`msg-seq-<seq>`）——随后到达的事件帧/条目
+   *  对账与它同键，seenIds/条目 id 直接去重（否则同文本两条并存）。转写已先到时
+   *  只除名（不重复插入）。 */
+  reconcileEcho(threadId: string, localId: string, seq: number): void;
   /** 投递失败回滚：移除 pending 气泡（草稿回填由调用方负责）。 */
   dropPendingMessage(threadId: string, localId: string): void;
   /** 通知条追加（保留最近 5 条；controller/actions 共用的单一入口）。 */
@@ -318,11 +323,11 @@ export function createLiveStore() {
       bashSettled(threadId) {
         set((state) => ({ threads: { ...state.threads, [threadId]: { ...threadOf(state, threadId), bashRunning: false, bashTail: '' } } }));
       },
-      echoPendingMessage(threadId, localId, text) {
+      echoPendingMessage(threadId, localId, text, images) {
         set((state) => {
           const thread = threadOf(state, threadId);
           if (thread.seenIds.has(localId)) return {};
-          const message: ThreadItem = { kind: 'message', message: { id: `msg-${localId}`, role: 'user', text: text.slice(0, MAX_LIVE_CHARS), images: [] } };
+          const message: ThreadItem = { kind: 'message', message: { id: `msg-${localId}`, role: 'user', text: text.slice(0, MAX_LIVE_CHARS), images: images ?? [] } };
           return {
             threads: {
               ...state.threads,
@@ -331,6 +336,33 @@ export function createLiveStore() {
                 seenIds: capSeenIds(new Set([...thread.seenIds, localId])),
                 items: insertBeforeLiveTurn(thread.items, message, thread.liveTurnId),
               },
+            },
+          };
+        });
+      },
+      reconcileEcho(threadId, localId, seq) {
+        set((state) => {
+          const thread = threadOf(state, threadId);
+          const nextId = `msg-seq-${seq}`;
+          // 转写已先到（同 seq 的权威气泡已并入，id 即 msg-seq-<seq>）：本气泡只除名，
+          // 身份归属转写侧（否则 rename 会撞出同 id 的两条）
+          if (thread.items.some((item) => item.kind === 'message' && item.message.id === nextId)) {
+            const items = thread.items.filter((item) => !(item.kind === 'message' && item.message.id === `msg-${localId}`));
+            return { threads: { ...state.threads, [threadId]: { ...thread, items } } };
+          }
+          let found = false;
+          const items = thread.items.map((item) => {
+            if (item.kind === 'message' && item.message.id === `msg-${localId}`) {
+              found = true;
+              return { kind: 'message' as const, message: { ...item.message, id: nextId } };
+            }
+            return item;
+          });
+          if (!found) return {};
+          return {
+            threads: {
+              ...state.threads,
+              [threadId]: { ...thread, items, seenIds: capSeenIds(new Set([...thread.seenIds, nextId])) },
             },
           };
         });

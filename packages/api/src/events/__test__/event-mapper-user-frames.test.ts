@@ -11,13 +11,23 @@ function frame(name: string, payload: Record<string, unknown>): Frame {
 
 describe('user/message（用户气泡直通——事件帧上屏不等对账）', () => {
   const mapper = createEventMapper({ now: () => 1_000 });
+  const ENVELOPE = ['<snapshot kind="agent-types">', 'This snapshot supersedes earlier snapshots of this kind.', 'body', '</snapshot>'].join('\n');
 
   test.each([
-    ['text 块载荷 → userMessage（origin 缺省回退 user）', { turn: 3, step: 0, content: [{ type: 'text', text: '你好' }] }, [{ type: 'userMessage', threadId: 't', message: { id: 'ev-t-3-0', text: '你好', origin: 'user' } }]],
-    ['origin=system；多 text 块换行拼接；图片块跳过', { turn: 1, step: 2, origin: 'system', content: [{ type: 'text', text: 'a' }, { type: 'image', data: 'x' }, { type: 'text', text: 'b' }] }, [{ type: 'userMessage', threadId: 't', message: { id: 'ev-t-1-2', text: 'a\nb', origin: 'system' } }]],
-    ['空文本（纯图）→ 丢弃（不产空气泡）', { turn: 0, step: 0, content: [{ type: 'image', data: 'x' }] }, []],
+    ['text 块载荷 → userMessage（origin 缺省回退 user）', { seq: 7, turn: 3, step: 0, content: [{ type: 'text', text: '你好' }] }, [{ type: 'userMessage', threadId: 't', message: { seq: 7, text: '你好', origin: 'user', images: [] } }]],
+    ['origin=system；多 text 块换行拼接；图片块随帧携带（不再丢弃）', { seq: 9, turn: 1, step: 2, origin: 'system', content: [{ type: 'text', text: 'a' }, { type: 'image', data: 'aGk=', mediaType: 'image/png' }, { type: 'text', text: 'b' }] }, [{ type: 'userMessage', threadId: 't', message: { seq: 9, text: 'a\nb', origin: 'system', images: [{ type: 'image', data: 'aGk=', mediaType: 'image/png' }] } }]],
+    ['空文本（纯图）→ 丢弃（不产空气泡）', { seq: 1, turn: 0, step: 0, content: [{ type: 'image', data: 'x' }] }, []],
     ['垃圾载荷 → 丢弃', {}, []],
-    ['子会话帧（payload.session ≠ threadId）不进主时间线', { session: 'child-s', turn: 0, step: 0, content: [{ type: 'text', text: 'hi' }] }, []],
+    // 帧缺 WAL seq（非条目派生）不发气泡：身份不能与条目对账同域，宁缺勿造永不重复的键
+    ['缺 seq → 丢弃（身份无从与条目同域）', { turn: 3, step: 0, content: [{ type: 'text', text: '你好' }] }, []],
+    ['子会话帧（payload.session ≠ threadId）不进主时间线', { session: 'child-s', seq: 2, turn: 0, step: 0, content: [{ type: 'text', text: 'hi' }] }, []],
+    // 症状回归「注入快照当用户消息上屏」：尾部快照信封帧整帧跳过（谓词与 entries-mapper 同源）。
+    // 帧携 surfaceOp=append（host 桥与 get_entries 条目投影同形）——谓词四重合取之一。
+    ['内核快照信封帧 → 整帧跳过', { seq: 4, surfaceOp: 'append', turn: 0, step: 0, content: [{ type: 'text', text: ENVELOPE }] }, []],
+    // 症状回归「直执行命令双渲染」：bash 信封帧侧不出气泡（条目侧折为工具块）
+    ['直执行 bash 信封 → 整帧跳过（工具块由条目侧承载）', { seq: 6, turn: 0, step: 0, content: [{ type: 'text', text: '[bash] $ ls\nfile-a' }] }, []],
+    // 非 append 的同形载荷不是快照（replace 型是压缩摘要）——不误跳
+    ['信封形态但 surfaceOp=replace → 不跳（压缩摘要载体）', { seq: 5, surfaceOp: { op: 'replace', startSeq: 0, endSeq: 4 }, turn: 0, step: 0, content: [{ type: 'text', text: ENVELOPE }] }, [{ type: 'userMessage', threadId: 't', message: { seq: 5, text: ENVELOPE, origin: 'user', images: [] } }]],
   ])('%s', (_label, payload, expected) => {
     expect(mapper.mapEvent(frame('user/message', payload as Record<string, unknown>))).toEqual(expected);
   });
