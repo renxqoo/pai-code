@@ -45,6 +45,7 @@ export function resolveResourceSources(
  *  缺包风险与拷贝成本同时归零（host-hub 形态不同，那边必须留 dist + 闭包）。 */
 export function gatewayBuildArgs(harnessRoot: string, outDir: string): string[] {
   return [
+    'build',
     join(harnessRoot, 'apps', 'hub-gateway', 'src', 'cli.ts'),
     '--outdir',
     outDir,

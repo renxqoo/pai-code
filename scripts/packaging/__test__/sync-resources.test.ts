@@ -27,8 +27,9 @@ test('缺省：本机 bun 与旁级 x-harness host-hub / hub-gateway 源码入�
   });
 });
 
-test('gateway 打包构建参数：源码入口 + bundled 单文件（不带 --external，依赖整体入产物）', () => {
+test('gateway 打包构建参数：build 子命令 + 源码入口 + bundled 单文件（不带 --external，依赖整体入产物）', () => {
   expect(gatewayBuildArgs('/x-harness', '/repo/resources/hub-gateway/dist')).toEqual([
+    'build',
     '/x-harness/apps/hub-gateway/src/cli.ts',
     '--outdir',
     '/repo/resources/hub-gateway/dist',
