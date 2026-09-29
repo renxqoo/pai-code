@@ -12,6 +12,7 @@ import { createBridgeClient, type BridgeClient, type ClientTransportFace } from 
 import { createRelayTransport, type RelayStatus, type RelayTransport } from './transport';
 import { createRelayRatchetCodec } from './ratchet-codec';
 import { dialWebSocket } from './ws-dial';
+import { refreshDeviceToken } from './token-refresh';
 import { createKvRatchetStore, preloadRelayCredentials, relayCredentialsStore, type RelayCredentials } from './credentials';
 import { createSessionSync } from '../state/session-sync';
 import { createEventMapper, type EventMapper } from '@paiapp/api/events/event-mapper';
@@ -33,6 +34,7 @@ export interface RelayRuntime {
 }
 
 let runtime: RelayRuntime | null = null;
+const eventMapper: EventMapper = createEventMapper({ now: () => Date.now() });
 let connectInFlight: Promise<void> | null = null;
 
 export function getRelayRuntime(): RelayRuntime | null {
@@ -111,9 +113,6 @@ export function initializeRelayRuntime(): RelayRuntime {
     },
   });
 
-  const eventMapper: EventMapper = createEventMapper({
-    now: () => Date.now(),
-  });
 
   /** L2 帧 → UiEvent（hub 事件名 camelCase 词表翻译——与桌面端同源 event-mapper）+ ui_request 面。 */
   function dispatchL2Frame(frame: { kind: string; body?: unknown }): void {
@@ -143,8 +142,9 @@ export function initializeRelayRuntime(): RelayRuntime {
       });
       return;
     }
-    // host 生命周期帧名 → UiEvent（M-6：thread_died/thread_parked——event-mapper 词表外）
-    if (frame.kind === 'event') return; // event 已在上方处理
+    // rekey 帧（L-2）：本端一期不做强制 rekey 应答——静默忽略（gateway sweep 60s 重发为
+    // 已知噪音；暴露窗由配对种子唯一性+设备撤销兜底，见 R2 申报）
+    if (frame.kind === 'rekey') return;
     if (textOf(body['type']) === 'thread_died' || textOf(body['name']) === 'thread_died') {
       clientRef?.dispatch({ type: 'sessionDied', threadId: textOf(body['threadId']) ?? textOf(body['threadId']) });
       return;
@@ -195,6 +195,8 @@ export function initializeRelayRuntime(): RelayRuntime {
       try {
         try {
       // 重建传输（真 codec + RN socket）
+      // token 续期（M12）：凭证 token 可能已过 15min TTL——签名挑战换新（失败回落旧值）
+      const freshToken = (await refreshDeviceToken(credentials)) ?? credentials.relayToken;
       const codec = await createRelayRatchetCodec({
         deviceId: credentials.deviceId,
         installationId: credentials.installationId,
@@ -203,7 +205,7 @@ export function initializeRelayRuntime(): RelayRuntime {
       });
       const real = createRelayTransport({
         relayUrl: credentials.relayUrl,
-        relayToken,
+        relayToken: freshToken,
         deviceId: credentials.deviceId,
         installationId: credentials.installationId,
         codec,
@@ -295,11 +297,14 @@ function routeEvent(event: UiEvent): void {
     return;
   }
   if (type === 'sessionRemoved') {
-    historySyncOf()?.removeSession(textOf(record['threadId']));
+    const threadId = textOf(record['threadId']);
+    historySyncOf()?.removeSession(threadId);
+    eventMapper.dispose(threadId);
     return;
   }
   if (type === 'sessionDied' || type === 'sessionParked') {
     const threadId = textOf(record['threadId']);
+    eventMapper.dispose(threadId); // L-3
     historySyncOf()?.updateSession({ threadId, state: 'dead' });
     if (threadId === activeThreadId) {
       sessionSyncRef?.handleEvent({ type: 'turnSettled', threadId, ok: false, reason: 'session ended' });

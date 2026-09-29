@@ -39,8 +39,10 @@ export interface RelayCredentials {
   sharedSecretHex: string;
   installationId: string;
   relayUrl: string;
-  /** relay WS 连接 token（kind:device——ack 帧下发；过期后需重新配对/刷新）。 */
+  /** relay WS 连接 token（kind:device——ack 帧下发；过期后签名挑战续期）。 */
   relayToken: string;
+  /** relay 节点 id（refresh 挑战转录域；注册时缓存，可经 /api/node-key 探测）。 */
+  relayNodeId?: string;
 }
 
 /** KV 注入（MMKV 形态：同步 get/set；测试内存实现）。 */
@@ -119,6 +121,10 @@ export const relayCredentialsStore = {
     cached = null;
     try {
       await Promise.all([secureDelete(KEY_DEVICE), secureDelete(KEY_SHARED), AsyncStorage.removeItem(KEY_ENDPOINT)]);
+      // ratchet KV 前缀清（M-3：链钥材料不滞留）
+      const keys = await AsyncStorage.getAllKeys();
+      const ratchetKeys = keys.filter((key) => key.startsWith(`kv:${RATCHET_PREFIX}`));
+      await AsyncStorage.multiRemove(ratchetKeys);
     } catch {
       // 清理失败：缓存已空（下次预载拿不到凭证）
     }

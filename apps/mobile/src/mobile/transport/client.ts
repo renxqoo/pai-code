@@ -33,9 +33,10 @@ export function createBridgeClient(deps: BridgeClientDeps): BridgeClient {
       const id = `c${invokeCounter++}`;
       // 词表翻译（H2）：ApiMethod → gateway host 命令 + 参数名
       const { command, args } = translateCommand(method, (params ?? {}) as Record<string, unknown>);
-      const sent = await deps.transport.sendCommand({ command, id, args });
+      const transportAtSend = deps.transport; // L-4：在途响应归旧 transport 认领（换绑不丢）
+      const sent = await transportAtSend.sendCommand({ command, id, args });
       if (!sent) return { ok: false, error: { kind: 'transient', message: 'host_unavailable' } };
-      const response = await deps.transport.waitResponse(id);
+      const response = await transportAtSend.waitResponse(id);
       return response.success ? { ok: true, data: mapResponseData(command, response.data) } : { ok: false, error: { kind: 'transient', message: response.error } };
     },
     subscribe(onEvent: (event: UiEvent) => void): Unsubscribe {
