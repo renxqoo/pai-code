@@ -29,7 +29,8 @@ export function useComposerSubmit(): () => void {
     }
     const store = useConversationStore.getState();
     const threadId = store.activeSessionId;
-    const workspace = store.session.project;
+    // cwd 真值优先（R3 M4：显示名建错工作区）；无路径选择时回退显示名（演示态）
+    const workspace = store.workspacePath ?? store.session.project;
     const failNote = (reason: string): void => {
       // 发送失败可见化（M6）：状态行入流——不再静默吞错
       useConversationStore.getState().appendMessage({ id: `send-fail-${Date.now()}`, kind: 'status', text: `发送失败：${reason}`, createdAt: new Date().toISOString(), status: 'failed', summary: '未送达' });

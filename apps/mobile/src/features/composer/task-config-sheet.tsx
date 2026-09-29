@@ -7,7 +7,7 @@ import { useComposerStore } from '@/store/composer-store';
 import { useNavigationStore } from '@/store/navigation-store';
 import { useAppTheme } from '@/theme/theme-context';
 import { radius, spacing } from '@/theme/tokens';
-import { models, permissionModes, thinkingLevels } from '@/strings/zh';
+import { models as demoModels, permissionModes, thinkingLevels } from '@/strings/zh';
 import { useDemoModeStore } from '@/store/demo-mode-store';
 import { useConversationStore } from '@/store/conversation-store';
 import { getBridge } from '@/mobile/relay/runtime';
@@ -18,7 +18,23 @@ export function TaskConfigSheet() {
   const close = useNavigationStore((state) => state.closeSheet);
   const store = useComposerStore();
   const [query, setQuery] = React.useState('');
-  const filteredModels = models.filter((item) => `${item.name}${item.provider}`.toLowerCase().includes(query.toLowerCase()));
+  // 真模型目录（R3 M5：连接态消费 get_models——静态数据仅演示模式兜底）
+  const [catalog, setCatalog] = React.useState<Array<{ name: string; provider: string }>>([]);
+  const bridgeReady = getBridge()?.status === 'ready' || getBridge()?.status === 'connected';
+  React.useEffect(() => {
+    if (!visible || !bridgeReady) return;
+    void getBridge()?.client.invoke('model/list', {}).then((raw) => {
+      const outcome = raw as { ok: boolean; data?: unknown };
+      if (outcome.ok) {
+        const rows = Array.isArray(outcome.data) ? (outcome.data as Array<{ provider: string; modelId: string }>) : [];
+        setCatalog(rows.map((row) => ({ name: row.modelId, provider: row.provider })));
+      }
+    });
+  }, [visible, bridgeReady]);
+  const modelSource: Array<{ id?: string; name: string; provider: string; description?: string }> = bridgeReady && catalog.length > 0 ? catalog : [...demoModels];
+  const filteredModels = modelSource
+    .map((item) => ({ id: item.id ?? item.name, name: item.name, provider: item.provider, description: item.description ?? '' }))
+    .filter((item) => `${item.name}${item.provider}`.toLowerCase().includes(query.toLowerCase()));
   // 连接模式：写档即时同步 hub（下一 turn 生效——setModel/setThinking/setMode）
   const syncRemote = (kind: 'model' | 'thinking' | 'permission', value: string): void => {
     if (useDemoModeStore.getState().enabled) return;

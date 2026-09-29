@@ -70,7 +70,7 @@ export function WorkspaceSheet() {
       <Text style={{ color: colors.textMuted, fontSize: 12, paddingBottom: spacing.sm, paddingHorizontal: 3 }}>选择 Pai Code 可以访问的代码目录</Text>
       {demo ? (
         <ScrollView contentContainerStyle={{ paddingBottom: spacing.xs3 }}>
-          <ContentCard items={workspaces.map((workspace) => ({ detail: workspace.path, icon: Folder, label: workspace.name, onPress: () => { chooseWorkspace(workspace.id, workspace.name); closeSheet(); }, selected: workspaceId === workspace.id }))} />
+          <ContentCard items={workspaces.map((workspace) => ({ detail: workspace.path, icon: Folder, label: workspace.name, onPress: () => { chooseWorkspace(workspace.id, workspace.name, workspace.path); closeSheet(); }, selected: workspaceId === workspace.id }))} />
         </ScrollView>
       ) : (
         <View>
@@ -92,7 +92,7 @@ export function WorkspaceSheet() {
             items={[
               { detail: '在电脑上打开目录选择器', icon: Folder, label: '浏览电脑目录', onPress: pickOnDesktop },
               ...(search.trim().length > 0 ? [{ detail: '', icon: Folder, label: `使用 ${search.trim()}`, onPress: () => { chooseWorkspace(search.trim(), search.trim().split('/').filter(Boolean).pop() ?? search.trim()); closeSheet(); } }] : []),
-              ...hits.map((hit) => ({ detail: hit.path, icon: Folder, label: hit.name, onPress: () => { chooseWorkspace(hit.path, hit.name); closeSheet(); }, selected: workspaceId === hit.path })),
+              ...hits.map((hit) => ({ detail: hit.path, icon: Folder, label: hit.name, onPress: () => { chooseWorkspace(hit.path, hit.name, hit.path); closeSheet(); }, selected: workspaceId === hit.path })),
             ]}
           />
           {searched && hits.length === 0 && !searching ? <Text style={{ color: colors.textFaint, fontSize: 12, paddingHorizontal: 3, paddingTop: spacing.sm }}>没有匹配的目录——试试「浏览电脑目录」或完整路径。</Text> : null}
