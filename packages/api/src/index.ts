@@ -68,6 +68,7 @@ export { slowCallTrace } from './verbs/slow-call-trace';
 export { envVarNameForProvider } from './verbs/env-name';
 export { autoTitleCandidateOf } from './verbs/auto-title';
 export { createGitBranches, classifyGitExecError, type GitBranches, type GitExec, type GitExecResult, type GitExecError } from './verbs/git-branches';
+export { createGitWorktree, encodeBranchDir, parseWorktreePorcelain, otherLocalBranches, isMergedIntoOthers, casDeleteBranch, type GitWorktree, type WorktreeEnv, type WorktreeOccupancy, type WorktreeOutcome, type CasOutcome, type ParsedWorktree } from './verbs/git-worktree';
 export { createGitGraph, type GitGraph } from './verbs/git-graph';
 export { createGitStatus, type GitStatus, type GitStatusOutcome } from './verbs/git-status';
 export {

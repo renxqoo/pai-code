@@ -15,6 +15,7 @@ import { createAgentDefinitionsStore } from './agent-definitions-store';
 import { createFileLogger, createFileSettings } from './file-settings';
 import { packagedHubCandidates, resolveHubPaths } from './hub-paths';
 import { resolveAppPaths, resolveUserDataDir } from './paths';
+import { createWorktreeRegistry } from './worktree-registry';
 import { createPaiRuntime } from './pai-runtime';
 import { staleGateway, startGatewayProcess, type GatewayProcess } from './gateway-process';
 import { createProviderKeyStore } from './provider-key-store';
@@ -127,6 +128,9 @@ void app.whenReady().then(async () => {
   let directoryPickerInFlight = false;
   // 本次运行中经系统选择器选过的目录：新任务页对尚无会话的目录也要能读分支/切分支
   const pickedDirectories = new Set<string>();
+  // 用户 worktree 登记面（三张表持久化；启动 GC 清外部 rm 残留）
+  const worktreeRegistry = createWorktreeRegistry(join(paths.userDataDir, 'worktree-registry.json'));
+  worktreeRegistry.gc();
 
   // 退出时序：先停 host（stdin EOF 落盘退出）再退 app；只执行一次。
   // 注册先于装配（waitForPhase 最长 30s 的 await 窗口内退出也要走停机链）；
@@ -351,7 +355,8 @@ void app.whenReady().then(async () => {
             .map((path) => path.split('/').slice(0, -1).join('/') || '/');
         },
       }),
-      extraCwds: () => [...pickedDirectories],
+      extraCwds: () => [...pickedDirectories, ...worktreeRegistry.read().dirs],
+      onTreeRemoved: (path) => worktreeRegistry.removeTree(path),
       // 对话框单飞：在途时再调用直接按取消返回（防被攻陷渲染层并发叠弹多个模态面板）
       pickDirectory: async (defaultPath) => {
         if (directoryPickerInFlight) return null;

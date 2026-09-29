@@ -1,7 +1,8 @@
 import { z } from 'zod';
+import { GitApiSchemas } from './git-api';
 
 import type { ApiError } from './hub-errors';
-import { GitBranchesViewSchema, GitGraphViewSchema, GitStatusViewSchema } from './git-views';
+import { } from './git-views';
 import { PermModeSchema } from './permissions';
 import { RuntimeSnapshotViewSchema } from './runtime';
 import { InflightViewSchema, PendingDialogViewSchema, SubagentSnapshotViewSchema } from './inflight-views';
@@ -25,9 +26,7 @@ import {
  * 传输层统一应答 {ok:true,data} | {ok:false,error}（ApiOutcome）。
  */
 
-// ---------------------------------------------------------------------------
-// 视图形状（adapter 从协议响应收窄而来，渲染层唯一认识的形态）
-// ---------------------------------------------------------------------------
+// —— 视图形状（adapter 从协议响应收窄，渲染层唯一认识的形态）——
 
 /** 图片载荷（发送与历史条目共用形状；data 为无前缀 base64）。 */
 const imagePayload = z
@@ -188,17 +187,13 @@ export const BootstrapViewSchema = z.object({
 });
 export type BootstrapView = z.infer<typeof BootstrapViewSchema>;
 
-// ---------------------------------------------------------------------------
-// 运行状态面（T29：监控页快照与其组成视图）
-// ---------------------------------------------------------------------------
+// —— 运行状态面（T29：监控页快照与其组成视图）——
 
 
 export { HostInfoViewSchema, WorkerRowViewSchema, ResourceSampleViewSchema, RuntimeEventViewSchema, RuntimeSnapshotViewSchema } from './runtime';
 export type { HostInfoView, WorkerRowView, ResourceSampleView, RuntimeEventView, RuntimeSnapshotView } from './runtime';
 
-// ---------------------------------------------------------------------------
-// 方法 schema（单一真相）：api 服务端做参数校验，渲染层类型从此推导
-// ---------------------------------------------------------------------------
+// —— 方法 schema（单一真相）：服务端参数校验，渲染层类型从此推导 ——
 
 const empty = z.object({}).strict();
 const threadOnly = z.object({ threadId: z.string().min(1) }).strict();
@@ -206,6 +201,7 @@ const threadOnly = z.object({ threadId: z.string().min(1) }).strict();
 import { PluginMethodsSchema } from './plugin-views';
 
 export const ApiSchemas = {
+  ...GitApiSchemas,
   ...PluginMethodsSchema,
   'app/bootstrap': {
     params: empty,
@@ -360,13 +356,11 @@ export const ApiSchemas = {
     params: empty,
     result: z.array(CommandViewSchema),
   },
-  /** agent 定义管理枚举（user = hub agents/list；project = 各已知项目 .my-agent/agents；含 systemPrompt 原文）。 */
-  'agent/definitions': {
+  'agent/definitions': { /** agent 定义管理枚举（user = hub agents/list；project = 各已知项目 .my-agent/agents；含 systemPrompt 原文）。 */
     params: empty,
     result: z.array(AgentDefinitionSchema),
   },
-  /** agent 定义新建/编辑（previous 给定时含改名与作用域移动；身份键 = name+scope+project）。 */
-  'agent/upsert': {
+  'agent/upsert': { /** agent 定义新建/编辑（previous 给定时含改名与作用域移动；身份键 = name+scope+project）。 */
     params: z
       .object({
         definition: AgentDefinitionSchema,
@@ -375,13 +369,11 @@ export const ApiSchemas = {
       .strict(),
     result: z.null(),
   },
-  /** agent 定义删除（user = agents/remove 命令；project = 删项目内文件；运行中的子代理不受影响）。 */
-  'agent/remove': {
+  'agent/remove': { /** agent 定义删除（user = agents/remove 命令；project = 删项目内文件；运行中的子代理不受影响）。 */
     params: z.object({ name: z.string().min(1), scope: z.enum(['user', 'project']), project: z.string().nullable() }).strict(),
     result: z.null(),
   },
-  /** 项目文件搜索（@ 引用数据源；cwd 必须是本应用已知会话目录）。 */
-  'file/search': {
+  'file/search': { /** 项目文件搜索（@ 引用数据源；cwd 必须是本应用已知会话目录）。 */
     params: z.object({ cwd: z.string().min(1), query: z.string() }).strict(),
     result: z.array(z.string()),
   },
@@ -400,8 +392,7 @@ export const ApiSchemas = {
       })
       .strict(),
   },
-  /** 在系统工具中打开已知项目目录（访达/文件管理器、终端、编辑器）；动作落审计。 */
-  'shell/open': {
+  'shell/open': { /** 在系统工具中打开已知项目目录（访达/文件管理器、终端、编辑器）；动作落审计。 */
     params: z.object({ cwd: z.string().min(1), target: z.enum(['finder', 'terminal', 'editor']) }).strict(),
     result: z.null(),
   },
@@ -411,8 +402,7 @@ export const ApiSchemas = {
     params: z.object({ threadId: z.string().min(1), seq: z.number().int().positive(), position: z.enum(['before', 'at']).optional() }).strict(),
     result: SessionViewSchema,
   },
-  /** 在系统文件管理器中显示会话文件（路径白名单同 resume）。 */
-  'session/reveal': {
+  'session/reveal': { /** 在系统文件管理器中显示会话文件（路径白名单同 resume）。 */
     params: z.object({ sessionPath: z.string().min(1) }).strict(),
     result: z.null(),
   },
@@ -421,28 +411,7 @@ export const ApiSchemas = {
     params: z.object({ defaultPath: z.string().min(1).optional() }).strict(),
     result: z.string().nullable(),
   },
-  /** 本地 git 分支列表（新建任务页分支选择）；非 git 目录返回空形态（不报错）。 */
-  'git/branches': {
-    params: z.object({ cwd: z.string().min(1) }).strict(),
-    result: GitBranchesViewSchema,
-  },
-  /** 切换分支（create=true 为创建并检出）；cwd 必须是本应用已知项目目录，脏工作区拒绝。 */
-  'git/checkout': {
-    params: z.object({ cwd: z.string().min(1), branch: z.string().min(1), create: z.boolean().default(false) }).strict(),
-    result: z.object({ branch: z.string() }).strict(),
-  },
-  /** 本地 git 图谱（分支面板入口）：topo 序提交 + parents + 本地分支装饰；超上限截断并置 truncated。 */
-  'git/graph': {
-    params: z.object({ cwd: z.string().min(1) }).strict(),
-    result: GitGraphViewSchema,
-  },
-  /** 工作区变更速览（速览面板 Git 区）：变更文件 + 增删行数 + 上游计数；非 git 目录空形态（不报错）。 */
-  'git/status': {
-    params: z.object({ cwd: z.string().min(1) }).strict(),
-    result: GitStatusViewSchema,
-  },
-  /** 用户级技能目录（含启用态；启停真相 = hub-settings.json skills.disabled，经 skills/set_enabled）。 */
-  'skills/list': {
+  'skills/list': { /** 用户级技能目录（含启用态；启停真相 = hub-settings.json skills.disabled，经 skills/set_enabled）。 */
     params: empty,
     result: z.array(SkillViewSchema),
   },
@@ -451,13 +420,11 @@ export const ApiSchemas = {
     params: z.object({ name: z.string().min(1), enabled: z.boolean() }).strict(),
     result: z.array(SkillViewSchema),
   },
-  /** 技能候选扫描（导入对话框数据源）：无 sourcePath = 扫固定源根；有 = 扫该目录（须在批准根之下）。 */
-  'skills/candidates': {
+  'skills/candidates': { /** 技能候选扫描（导入对话框数据源）：无 sourcePath = 扫固定源根；有 = 扫该目录（须在批准根之下）。 */
     params: z.object({ sourcePath: z.string().min(1).optional() }).strict(),
     result: z.object({ candidates: z.array(SkillCandidateViewSchema) }).strict(),
   },
-  /** 导入单个技能（经 hub skills/install；name = 目标名，副本 frontmatter name 行同步改写；结果为写后完整清单）。 */
-  'skills/import': {
+  'skills/import': { /** 导入单个技能（经 hub skills/install；name = 目标名，副本 frontmatter name 行同步改写；结果为写后完整清单）。 */
     params: z
       .object({
         sourcePath: z.string().min(1),
@@ -474,8 +441,7 @@ export const ApiSchemas = {
       })
       .strict(),
   },
-  /** 删除用户级技能（hub skills/remove；删整技能目录——含捆绑文件）。 */
-  'skills/remove': {
+  'skills/remove': { /** 删除用户级技能（hub skills/remove；删整技能目录——含捆绑文件）。 */
     params: z.object({ name: z.string().min(1) }).strict(),
     result: z.array(SkillViewSchema),
   },
@@ -484,8 +450,7 @@ export const ApiSchemas = {
     params: threadOnly,
     result: z.null(),
   },
-  /** 直执行 shell（结果在 response；流式经 bashOutput 事件；>64KiB 截断置 truncated）。 */
-  'session/bash': {
+  'session/bash': { /** 直执行 shell（结果在 response；流式经 bashOutput 事件；>64KiB 截断置 truncated）。 */
     params: z.object({ threadId: z.string().min(1), command: z.string().min(1) }).strict(),
     result: z.object({ output: z.string(), exitCode: z.number().int(), cancelled: z.boolean(), truncated: z.boolean(), fullOutputPath: z.string().nullable() }).strict(),
   },
@@ -493,8 +458,7 @@ export const ApiSchemas = {
     params: threadOnly,
     result: z.null(),
   },
-  /** 会话权限模式读（permission/get_mode；source = 生效层级；modes = host 词表——UI 选项渲染源）。 */
-  'permission/mode': {
+  'permission/mode': { /** 会话权限模式读（permission/get_mode；source = 生效层级；modes = host 词表——UI 选项渲染源）。 */
     params: threadOnly,
     result: z.object({ mode: z.string(), source: z.enum(['session', 'project', 'user', 'default']), modes: z.array(z.string()) }).strict(),
   },
@@ -541,13 +505,11 @@ export const ApiSchemas = {
     params: z.object({ name: z.string().min(1) }).strict(),
     result: z.array(ProviderConfigViewSchema),
   },
-  /** 连接探活：主进程直发指定模型的最小完成请求（缺省 = 渠道第一个模型），不经 hub、不落状态。 */
-  'provider/test': {
+  'provider/test': { /** 连接探活：主进程直发指定模型的最小完成请求（缺省 = 渠道第一个模型），不经 hub、不落状态。 */
     params: z.object({ name: z.string().min(1), modelId: z.string().min(1).optional() }).strict(),
     result: z.object({ latencyMs: z.number().int().nonnegative() }).strict(),
   },
-  /** 运行状态快照（T29 监控页 2s 轮询；host 未构建时安全降级 hostInfo=null）。 */
-  'app/runtime': {
+  'app/runtime': { /** 运行状态快照（T29 监控页 2s 轮询；host 未构建时安全降级 hostInfo=null）。 */
     params: empty,
     result: RuntimeSnapshotViewSchema,
   },
@@ -566,13 +528,11 @@ export const ApiSchemas = {
     params: empty,
     result: z.object({ directory: z.string() }).strict(),
   },
-  /** 手动回收空闲 worker（thread/retire；会话保留转 parked）。 */
-  'session/retire': {
+  'session/retire': { /** 手动回收空闲 worker（thread/retire；会话保留转 parked）。 */
     params: threadOnly,
     result: z.null(),
   },
-  /** 会话删除（thread/delete：trash 原子 rename + 血缘级联；幂等；活族先拒）。 */
-  'session/delete': {
+  'session/delete': { /** 会话删除（thread/delete：trash 原子 rename + 血缘级联；幂等；活族先拒）。 */
     params: z.object({ sessionPath: z.string().min(1) }).strict(),
     result: z.object({ removed: z.array(z.string()) }),
   },
