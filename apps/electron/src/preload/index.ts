@@ -28,6 +28,15 @@ const bridge = {
       return ipcRenderer.invoke('pai:window-get-state');
     },
   },
+  /** remote-access 网关面（桌面 = gateway owner）：状态 / owner 命令（配对与设备管理）。 */
+  gateway: {
+    status(): Promise<unknown> {
+      return ipcRenderer.invoke('pai:gateway-status');
+    },
+    command(payload: { command: string; args?: Record<string, unknown> }): Promise<unknown> {
+      return ipcRenderer.invoke('pai:gateway-command', payload);
+    },
+  },
 };
 
 contextBridge.exposeInMainWorld('pai', bridge);

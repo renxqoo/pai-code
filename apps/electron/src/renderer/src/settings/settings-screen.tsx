@@ -4,6 +4,7 @@ import { RuntimeContent } from '@/screens/runtime-content';
 import type { SettingsScreenProps } from './use-settings-screen';
 import { AgentsSection } from './agents-section';
 import { GeneralSection } from './general-section';
+import { DevicesSection } from './devices-section';
 import { HistorySection } from './history-section';
 import { PermissionsSection } from './permissions-section';
 import { ProvidersSection } from './providers-section';
@@ -30,6 +31,8 @@ function SettingsScreen({ open, onClose, section, onSelectSection, general, prov
             <GeneralSection {...general} />
           ) : section === 'providers' ? (
             <ProvidersSection {...providers} />
+          ) : section === 'devices' ? (
+            <DevicesSection />
           ) : section === 'permissions' ? (
             <PermissionsSection {...permissions} />
           ) : section === 'agents' ? (

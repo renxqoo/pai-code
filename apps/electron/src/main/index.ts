@@ -16,6 +16,7 @@ import { createFileLogger, createFileSettings } from './file-settings';
 import { packagedHubCandidates, resolveHubPaths } from './hub-paths';
 import { resolveAppPaths, resolveUserDataDir } from './paths';
 import { createPaiRuntime } from './pai-runtime';
+import { staleGateway, startGatewayProcess, type GatewayProcess } from './gateway-process';
 import { createProviderKeyStore } from './provider-key-store';
 import { createRuntimeMonitor } from '@paiapp/infra';
 import { writeDiagnosticsBundle } from './export-diagnostics';
@@ -39,7 +40,7 @@ if (!app.requestSingleInstanceLock()) {
   });
 }
 
-app.on('window-all-closed', () => {
+  app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
@@ -370,6 +371,46 @@ void app.whenReady().then(async () => {
         }
       },
     });
+  // ── remote-access 网关（桌面 App = gateway 生命周期 owner + owner 全权客户端）──
+  let gatewayProcess: GatewayProcess | null = null;
+  const getGateway = (): GatewayProcess => {
+    if (gatewayProcess !== null) return gatewayProcess;
+    const hubPaths = resolveHubPathsForRuntime();
+    if (hubPaths === null) {
+      gatewayProcess = startGatewayProcess({
+        bunPath: process.execPath,
+        xHarnessRoot: null,
+        agentDir: paths.agentDir,
+        gatewayConfig: null,
+        hostExec: null,
+        log: (message) => logger.log(message),
+      });
+      return gatewayProcess;
+    }
+    gatewayProcess = startGatewayProcess({
+      bunPath: hubPaths.bunPath,
+      xHarnessRoot: process.env.PAI_X_HARNESS_ROOT ?? null,
+      agentDir: paths.agentDir,
+      gatewayConfig: null,
+      hostExec: { command: hubPaths.bunPath, args: hubPaths.hubEntry !== null ? [hubPaths.hubEntry] : [] },
+      log: (message) => logger.log(message),
+    });
+    return gatewayProcess;
+  };
+  ipcMain.handle('pai:gateway-command', (_event, payload: unknown) => {
+    if (typeof payload !== 'object' || payload === null) return { ok: false as const, reason: 'bad_payload' };
+    const record = payload as { command?: unknown; args?: unknown };
+    if (typeof record.command !== 'string') return { ok: false as const, reason: 'bad_command' };
+    return getGateway().command({ command: record.command, args: (record.args ?? {}) as Record<string, unknown> }).then((body) => ({ ok: true as const, body }));
+  });
+  ipcMain.handle('pai:gateway-status', () => {
+    const stale = staleGateway(paths.agentDir);
+    return { process: gatewayProcess?.status() ?? 'stopped', connected: gatewayProcess?.connected() ?? false, staleSocket: stale.stale };
+  });
+  app.on('before-quit', () => {
+    void gatewayProcess?.stop();
+  });
+
   ipcMain.handle('pai:invoke', (_event, payload: unknown) => {
     if (typeof payload !== 'object' || payload === null) {
       return { ok: false, error: appError('invalid_payload') };

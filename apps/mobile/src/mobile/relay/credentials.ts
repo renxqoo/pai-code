@@ -71,7 +71,7 @@ const memoryKv: SyncKv = (() => {
 })();
 /** 等待全部在途边界写完成（RatchetBoundaryStore 保存面调用——落盘成功才放行）。 */
 export async function awaitKvFlush(): Promise<void> {
-  await Promise.all([...kvPending.values()]);
+  await Promise.all(kvPending.values());
 }
 
 let kv: SyncKv = memoryKv;

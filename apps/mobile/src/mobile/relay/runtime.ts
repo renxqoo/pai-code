@@ -196,7 +196,7 @@ export function initializeRelayRuntime(): RelayRuntime {
     transport,
     status: 'disconnected',
     credentials: null,
-    async connectWithCredentials(relayToken) {
+    async connectWithCredentials(_relayToken) {
       const credentials = relayCredentialsStore.load();
       if (credentials === null) return;
       // 并发护栏（R2 H-6）：in-flight 互斥——await 窗口的二次调用等待/复用前者，防乱序覆盖
