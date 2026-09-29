@@ -70,6 +70,7 @@
       "name": "@paiapp/mobile",
       "version": "0.1.0",
       "dependencies": {
+        "@paiapp/api": "workspace:*",
         "@paiapp/contracts": "workspace:*",
         "@paiapp/relay-protocol": "workspace:*",
         "@paiapp/ui-thread": "workspace:*",
