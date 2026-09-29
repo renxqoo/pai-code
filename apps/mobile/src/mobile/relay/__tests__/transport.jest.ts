@@ -197,10 +197,10 @@ describe('R1 修复回归', () => {
   it('命令经翻译层：session/prompt → prompt + message→text 改名', () => {
     const t1 = translateCommand('session/prompt', { threadId: 't1', message: 'hi' });
     expect(t1.command).toBe('prompt');
-    expect(t1.args).toMatchObject({ threadId: 't1', text: 'hi' });
+    expect(t1.args).toMatchObject({ threadId: 't1', message: 'hi' });
     const t2 = translateCommand('session/start', { cwd: '/w', trusted: true });
     expect(t2.command).toBe('thread/start');
-    expect(t2.args).toMatchObject({ cwd: '/w', trust: 'trusted' });
+    expect(t2.args).toMatchObject({ cwd: '/w', trusted: true });
     const t3 = translateCommand('unknown/method', { a: 1 });
     expect(t3.command).toBe('unknown/method');
     expect(t3.args).toEqual({ a: 1 });

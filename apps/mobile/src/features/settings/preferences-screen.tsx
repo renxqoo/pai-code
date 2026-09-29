@@ -21,7 +21,7 @@ export function PreferencesScreen() {
   const openSheet = useNavigationStore((state) => state.openSheet);
   const model = models.find((item) => item.id === settings.defaultModel);
   const thinking = thinkingLevels.find((item) => item.id === settings.defaultThinking);
-  const permission = { ask: '每次询问', auto: '自动批准', plan: '仅规划' }[settings.defaultPermission];
+  const permission = { 'edit-confirm': '每次确认', auto: '自动批准', plan: '仅规划', full: '完全信任' }[settings.defaultPermission];
   return (
     <>
       <View style={{ backgroundColor: colors.settingsBackground, flex: 1 }}>

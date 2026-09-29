@@ -20,7 +20,7 @@ type SettingsState = {
 };
 
 export const useSettingsStore = create<SettingsState>((set) => ({
-  theme: 'system', locale: 'zh-CN', defaultModel: 'gpt-5.2-codex', defaultThinking: 'medium', defaultPermission: 'ask',
+  theme: 'system', locale: 'zh-CN', defaultModel: 'gpt-5.2-codex', defaultThinking: 'medium', defaultPermission: 'edit-confirm',
   notifications: true, haptics: true, compactHistory: false,
   setTheme: (theme) => set({ theme }),
   setDefaultModel: (defaultModel) => set({ defaultModel: defaultModel.trim() || 'gpt-5.2-codex' }),

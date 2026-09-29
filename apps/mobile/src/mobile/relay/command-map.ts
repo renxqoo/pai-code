@@ -14,6 +14,8 @@
  */
 
 /** ApiMethod → host 命令映射（args 键改名 + 值变换） */
+import { mapEntriesResponse, mapModelRows, mapSavedSessions, mapThreadRows } from './response-map';
+
 interface CommandMapping {
   host: string;
   /** ApiMethod args 键 → host 参数键（未列出的键丢弃） */
@@ -26,20 +28,22 @@ const COMMAND_MAP: Record<string, CommandMapping> = {
   'session/start': {
     host: 'thread/start',
     transform: (args) => {
+      // host ThreadStartSpec：{cwd?, provider?, modelId?, trusted?: boolean, …}（R2 H-2 修正）
       const out: Record<string, unknown> = {};
       if (typeof args['cwd'] === 'string') out['cwd'] = args['cwd'];
-      if (args['trusted'] === true) out['trust'] = 'trusted';
+      if (args['trusted'] === true) out['trusted'] = true;
       return out;
     },
   },
-  'session/resume': { host: 'thread/resume', args: { threadId: 'threadId' } },
+  'session/resume': { host: 'thread/resume', args: { sessionPath: 'sessionPath', trusted: 'trusted' } },
   'session/prompt': {
     host: 'prompt',
     transform: (args) => {
+      // host PromptSpec：{threadId, message}（R2 H-1 修正——text 键 host 不读）
       const out: Record<string, unknown> = {};
       if (typeof args['threadId'] === 'string') out['threadId'] = args['threadId'];
       const text = args['message'] ?? args['text'];
-      if (typeof text === 'string') out['text'] = text;
+      if (typeof text === 'string') out['message'] = text;
       return out;
     },
   },
@@ -47,15 +51,14 @@ const COMMAND_MAP: Record<string, CommandMapping> = {
   'session/entries': { host: 'get_entries', args: { threadId: 'threadId', since: 'since' } },
   'session/messages': { host: 'get_messages', args: { threadId: 'threadId' } },
   'session/list': { host: 'thread/list' },
-  'session/listSaved': { host: 'thread/list_saved' },
+  'session/liveThreads': { host: 'thread/list' },
+  'session/listSaved': { host: 'thread/list_saved', args: { cwd: 'cwd' } },
   'session/setName': { host: 'set_session_name', args: { threadId: 'threadId', name: 'name' } },
   'session/stop': {
-    host: 'thread/stop',
-    transform: (args) => {
-      const out: Record<string, unknown> = { threadId: args['threadId'] };
-      if (args['remove'] === true) out['remove'] = true;
-      return out;
-    },
+    // host thread/stop 无 remove 键（R2 M-7：真删除是 owner-only thread/delete——
+    // 设备面不可达）；remove 请求路由 thread/retire（设备权限面内的归档删除语义）
+    host: 'thread/retire',
+    args: { threadId: 'threadId' },
   },
   'session/setModel': {
     host: 'set_model',
@@ -66,7 +69,7 @@ const COMMAND_MAP: Record<string, CommandMapping> = {
   'session/stats': { host: 'get_session_stats', args: { threadId: 'threadId' } },
   'session/state': { host: 'get_state', args: { threadId: 'threadId' } },
   'session/inflight': { host: 'get_inflight', args: { threadId: 'threadId' } },
-  'session/fork': { host: 'fork', args: { threadId: 'threadId' } },
+  'session/fork': { host: 'fork', args: { threadId: 'threadId', seq: 'seq' } },
   'model/list': { host: 'get_models' },
   'permission/mode': { host: 'permission/get_mode', args: { threadId: 'threadId' } },
   'permission/setMode': { host: 'permission/set_mode', args: { threadId: 'threadId', mode: 'mode' } },
@@ -86,7 +89,27 @@ export function translateCommand(method: string, args: Record<string, unknown>):
   return { command: mapping.host, args: { ...renamed, ...transformed } };
 }
 
-/** host response data → ApiData（当前字段形状兼容直通；出现差异时在此扩展）。 */
-export function mapResponseData(_host: string, data: unknown): unknown {
-  return data;
+/**
+ * host response data → ApiData 形状翻译（R2 H-4：直通在 get_entries/get_models/
+ * thread/list/thread/list_saved 上形状不符——历史水化清屏/模型列表空/会话列表裸串）。
+ */
+export function mapResponseData(host: string, data: unknown): unknown {
+  switch (host) {
+    case 'get_entries': {
+      // 调用方（runtime.hydrateThread）读 data.items——items 已是 ChatMessage[]
+      return mapEntriesResponse(data);
+    }
+    case 'thread/list': {
+      // loadBootstrap 读 data.sessions
+      return { sessions: mapThreadRows(data) };
+    }
+    case 'get_models': {
+      return mapModelRows(data);
+    }
+    case 'thread/list_saved': {
+      return mapSavedSessions(data);
+    }
+    default:
+      return data;
+  }
 }

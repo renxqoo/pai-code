@@ -88,6 +88,7 @@ export function createRelayTransport(options: RelayTransportOptions): RelayTrans
   let silentBeats = 0;
   let lastInboundAt = 0;
   let commandSeq = 1;
+  let consecutiveTimeouts = 0;
   let ackSeq = 1;
   const commandOutbox = new Map<string, Frame>();
   const commandSentAt = new Map<string, number>();
@@ -206,6 +207,7 @@ export function createRelayTransport(options: RelayTransportOptions): RelayTrans
 
   const deliver = (frame: Frame): void => {
     if (frame.kind === 'response') {
+      consecutiveTimeouts = 0;
       const body = frame.body as ResponseBody;
       const waiter = responseWaiters.get(body.id);
       if (waiter !== undefined) {
@@ -292,9 +294,14 @@ export function createRelayTransport(options: RelayTransportOptions): RelayTrans
   return {
     async sendCommand(spec) {
       const frame: Frame = { kind: 'command', streamId: `cmd:${options.deviceId}`, seq: commandSeq++, body: { command: spec.command, id: spec.id, args: spec.args ?? {} } };
+      const sent = await sendSealed(frame);
+      if (!sent) {
+        // 断连期失败不留箱（M-5：重连后重复执行面）；已通才入箱（重连重发语义保留）
+        return false;
+      }
       commandOutbox.set(spec.id, frame);
       commandSentAt.set(spec.id, now());
-      return sendSealed(frame);
+      return true;
     },
     async sendFrame(frame) {
       return sendSealed(frame);
@@ -313,6 +320,16 @@ export function createRelayTransport(options: RelayTransportOptions): RelayTrans
         const timer = setTimeout(() => {
           responseWaiters.delete(id);
           resolve({ id, command: '', success: false, error: 'timeout' });
+          // 半开恢复（R2 H-5）：连续超时 = 连接死而未察——强制断开触发 onClose→重连
+          consecutiveTimeouts += 1;
+          if (consecutiveTimeouts >= 2) {
+            consecutiveTimeouts = 0;
+            try {
+              socket?.close();
+            } catch {
+              // 已死
+            }
+          }
         }, timeoutMs);
         responseWaiters.set(id, { resolve, timer });
       });

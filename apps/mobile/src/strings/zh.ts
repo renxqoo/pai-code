@@ -143,8 +143,10 @@ export const thinkingLevels = [
   { id: 'high', label: '高', detail: '更深入地分析复杂任务' },
 ] as const;
 
+// host permission 值域（PROFILE_IDS：plan/auto/edit-confirm/full/sandboxed-auto——R2 M-1 对齐）
 export const permissionModes = [
-  { id: 'ask', label: '每次询问', detail: '执行命令或修改文件前请求确认' },
+  { id: 'edit-confirm', label: '每次确认', detail: '执行命令或修改文件前请求确认' },
   { id: 'auto', label: '自动批准', detail: '在当前工作空间内自动批准常规操作' },
   { id: 'plan', label: '仅规划', detail: '只读取和规划，不执行有副作用的操作' },
+  { id: 'full', label: '完全信任', detail: '全部操作免确认（含任意目录）' },
 ] as const;

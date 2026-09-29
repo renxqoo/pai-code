@@ -20,7 +20,7 @@ type ComposerState = {
 };
 
 export const useComposerStore = create<ComposerState>((set, get) => ({
-  draft: '', model: 'gpt-5.2-codex', thinking: 'medium', permission: 'ask', sending: false, generating: false, contextPercent: 24,
+  draft: '', model: 'gpt-5.2-codex', thinking: 'medium', permission: 'edit-confirm', sending: false, generating: false, contextPercent: 24,
   setDraft: (draft) => set({ draft: draft.slice(0, 10000) }),
   selectModel: (model) => set({ model }),
   selectThinking: (thinking) => set({ thinking }),

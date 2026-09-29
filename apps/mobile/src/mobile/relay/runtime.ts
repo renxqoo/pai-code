@@ -33,6 +33,7 @@ export interface RelayRuntime {
 }
 
 let runtime: RelayRuntime | null = null;
+let connectInFlight: Promise<void> | null = null;
 
 export function getRelayRuntime(): RelayRuntime | null {
   return runtime;
@@ -118,12 +119,35 @@ export function initializeRelayRuntime(): RelayRuntime {
   function dispatchL2Frame(frame: { kind: string; body?: unknown }): void {
     const body = (frame.body ?? {}) as Record<string, unknown>;
     if (frame.kind === 'event') {
-      const mapped = eventMapper.mapEvent({ threadId: textOf(body['threadId']), name: textOf(body['name']), payload: (body['payload'] ?? {}) as Record<string, unknown>, ...(textOf(body['agentName']).length > 0 ? { agentName: textOf(body['agentName']) } : {}) });
+      const name = textOf(body['name']);
+      // host 生命周期词表（event-mapper 外——M-6）：thread_died/thread_parked → sessionDied/sessionParked
+      if (name === 'thread_died' || name === 'thread_parked') {
+        clientRef?.dispatch({ type: name === 'thread_died' ? 'sessionDied' : 'sessionParked', threadId: textOf(body['threadId']) });
+        return;
+      }
+      const mapped = eventMapper.mapEvent({ threadId: textOf(body['threadId']), name, payload: (body['payload'] ?? {}) as Record<string, unknown>, ...(textOf(body['agentName']).length > 0 ? { agentName: textOf(body['agentName']) } : {}) });
       for (const uiEvent of mapped) clientRef?.dispatch(uiEvent);
       return;
     }
     if (frame.kind === 'ui_request') {
-      clientRef?.dispatch({ type: 'dialogRequest', requestId: textOf(body['requestId']), method: textOf(body['method']), threadId: textOf(body['threadId']) });
+      // 载荷平铺（M-8：tool/summary/reason 在 body.payload——卡片信息完整）
+      const payload = (body['payload'] ?? {}) as Record<string, unknown>;
+      clientRef?.dispatch({
+        type: 'dialogRequest',
+        requestId: textOf(body['requestId']),
+        method: textOf(body['method']),
+        threadId: textOf(body['threadId']),
+        ...(typeof payload['tool'] === 'string' ? { tool: payload['tool'] } : {}),
+        ...(typeof payload['summary'] === 'string' ? { summary: payload['summary'] } : {}),
+        ...(typeof payload['reason'] === 'string' ? { reason: payload['reason'] } : {}),
+      });
+      return;
+    }
+    // host 生命周期帧名 → UiEvent（M-6：thread_died/thread_parked——event-mapper 词表外）
+    if (frame.kind === 'event') return; // event 已在上方处理
+    if (textOf(body['type']) === 'thread_died' || textOf(body['name']) === 'thread_died') {
+      clientRef?.dispatch({ type: 'sessionDied', threadId: textOf(body['threadId']) ?? textOf(body['threadId']) });
+      return;
     }
   }
 
@@ -162,6 +186,14 @@ export function initializeRelayRuntime(): RelayRuntime {
     async connectWithCredentials(relayToken) {
       const credentials = relayCredentialsStore.load();
       if (credentials === null) return;
+      // 并发护栏（R2 H-6）：in-flight 互斥——await 窗口的二次调用等待/复用前者，防乱序覆盖
+      if (connectInFlight !== null) {
+        await connectInFlight;
+        return;
+      }
+      const run = (async () => {
+      try {
+        try {
       // 重建传输（真 codec + RN socket）
       const codec = await createRelayRatchetCodec({
         deviceId: credentials.deviceId,
@@ -197,6 +229,17 @@ export function initializeRelayRuntime(): RelayRuntime {
       (runtime as RelayRuntime & { transport: RelayTransport }).transport = real;
       (runtime as RelayRuntime & { credentials: RelayCredentials | null }).credentials = credentials;
       real.connect();
+        } catch (error) {
+          (runtime as RelayRuntime & { status: RelayStatus }).status = 'disconnected';
+          notifyStatusListeners();
+          void error;
+        }
+      } finally {
+        connectInFlight = null;
+      }
+      })();
+      connectInFlight = run;
+      await run;
     },
     disconnect() {
       transport.stop();
@@ -225,10 +268,11 @@ export async function hydrateThread(threadId: string): Promise<void> {
   const outcome = (await rt.client.invoke('session/entries', { threadId })) as { ok: boolean; data?: { items?: unknown[] } };
   if (activeThreadId !== threadId) return;
   if (!outcome.ok) return;
-  const items = Array.isArray(outcome.data?.items) ? (outcome.data?.items as unknown[]) : [];
+  // data.items 经 mapResponseData 已是 ChatMessage[]（WAL→HistoryItem 折叠在 response-map）
+  const items = Array.isArray(outcome.data?.items) ? (outcome.data.items as ChatMessage[]) : []; 
   const sync = sessionSyncRef;
   if (sync === null) return;
-  sync.seed(entriesToMessages(items));
+  sync.seed(items);
   useConversationStore.getState().appendMessages(sync.snapshot().messages);
 }
 
@@ -371,12 +415,18 @@ export function loadBootstrap(client: Client): Promise<void> {
   if (bootstrapInFlight !== null) return bootstrapInFlight;
   bootstrapInFlight = (async () => {
     try {
-      const outcome = (await client.invoke('app/bootstrap', {})) as { ok: boolean; data?: Record<string, unknown> };
-      if (!outcome.ok || outcome.data === undefined) return;
-      const data = outcome.data;
-      const sessions = Array.isArray(data['sessions']) ? (data['sessions'] as Array<Record<string, unknown>>) : [];
-      const saved = Array.isArray(data['saved']) ? (data['saved'] as Array<Record<string, unknown>>) : [];
-      const preferences = (data['preferences'] ?? {}) as Record<string, unknown>;
+      // host 无聚合命令（R2 H-4④）：thread/list + thread/list_saved 并行拼装（偏好经 settings/get）
+      const results = (await Promise.all([
+        client.invoke('session/liveThreads', {}),
+        client.invoke('session/listSaved', {}),
+      ])) as unknown as Array<{ ok: boolean; data?: unknown }>;
+      const threadsOut = results[0];
+      const savedOut = results[1];
+      if (threadsOut === undefined || !threadsOut.ok) return;
+      const sessionsData = (threadsOut.data ?? {}) as { sessions?: unknown };
+      const sessions = Array.isArray(sessionsData.sessions) ? (sessionsData.sessions as Array<Record<string, unknown>>) : [];
+      const saved = savedOut?.ok === true && Array.isArray(savedOut.data) ? (savedOut.data as Array<Record<string, unknown>>) : [];
+      const preferences = {} as Record<string, unknown>;
       currentPreferences = {
         pinnedSessions: Array.isArray(preferences['pinnedSessions']) ? (preferences['pinnedSessions'] as string[]) : [],
         archivedSessions: Array.isArray(preferences['archivedSessions']) ? (preferences['archivedSessions'] as string[]) : [],

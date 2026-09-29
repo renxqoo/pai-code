@@ -2,7 +2,8 @@ import type { EditHunkView, SubagentSpawnView, ToolCallStatus } from '@paiapp/co
 
 export type ThemePreference = 'light' | 'dark' | 'system';
 export type ThinkingLevel = 'off' | 'low' | 'medium' | 'high';
-export type PermissionMode = 'ask' | 'auto' | 'plan';
+// host permission 值域（R2 M-1 对齐——PROFILE_IDS 子集）
+export type PermissionMode = 'edit-confirm' | 'auto' | 'plan' | 'full';
 export type RuntimeStatus = 'idle' | 'working' | 'paused';
 
 export type ModelOption = {

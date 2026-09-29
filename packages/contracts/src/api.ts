@@ -246,6 +246,12 @@ export const ApiSchemas = {
     params: z.object({ threadId: z.string().min(1), remove: z.boolean() }).strict(),
     result: z.null(),
   },
+  'session/liveThreads': {
+    params: empty,
+    // relay 形态：host thread/list 行（threadId/cwd/state/streaming/sessionPath）——
+    // x-harness host 词表（手机端 history-sync 直接消费）
+    result: z.array(z.object({ threadId: z.string(), cwd: z.string(), state: z.string(), streaming: z.boolean(), sessionPath: z.string().nullable() })),
+  },
   'session/listSaved': {
     params: z.object({ cwd: z.string().optional() }).strict(),
     result: z.array(SavedSessionViewSchema),
