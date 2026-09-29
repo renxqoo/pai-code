@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from '@jest/globals';
 
 import { createPairingSession, generateDeviceIdentity, type PairingWire } from '../pairing';
-import { pakeRespond } from '@paiapp/relay-protocol';
+import { pakeRespond, pakeConfirm } from '@paiapp/relay-protocol';
 import { relayCredentialsStore, setRatchetKv, createKvRatchetStore } from '../credentials';
 
 /** 内存配对线（gateway pairing-server 模拟）。 */
@@ -161,8 +161,9 @@ describe('pairing ack token 旅程（WIRE 设备注册收尾回归）', () => {
     await session.startManual('abcd1234', 'x');
     // gateway 侧 pake 应答（pake-b 帧 → 手机 shared 建立）
     const pakeAFrame = wire.sentOf().find((f) => f['p'] === 'pake-a');
+    const pairingIdForConfirm = session.pairingId;
     const resp = pakeRespond('abcd1234', typeof pakeAFrame?.['pakeA'] === 'string' ? (pakeAFrame['pakeA'] as string) : '');
-    wire.serverReply({ p: 'pake-b', pakeB: resp.message, confirm: 'any' });
+    wire.serverReply({ p: 'pake-b', pakeB: resp.message, confirm: pakeConfirm(resp.shared, pairingIdForConfirm), gwEph: 'gweph_test', gatewayPub: 'gwpub_test' });
     await new Promise((r) => {
       setTimeout(r, 30);
     });
@@ -197,8 +198,9 @@ describe('pairing ack token 旅程（WIRE 设备注册收尾回归）', () => {
     });
     await session.startManual('abcd1234', 'x');
     const pakeAFrame = wire.sentOf().find((f) => f['p'] === 'pake-a');
+    const pairingIdForConfirm = session.pairingId;
     const resp = pakeRespond('abcd1234', typeof pakeAFrame?.['pakeA'] === 'string' ? (pakeAFrame['pakeA'] as string) : '');
-    wire.serverReply({ p: 'pake-b', pakeB: resp.message, confirm: 'any' });
+    wire.serverReply({ p: 'pake-b', pakeB: resp.message, confirm: pakeConfirm(resp.shared, pairingIdForConfirm), gwEph: 'gweph_test', gatewayPub: 'gwpub_test' });
     await new Promise((r) => {
       setTimeout(r, 30);
     });
@@ -226,8 +228,9 @@ describe('pairing ack token 旅程（WIRE 设备注册收尾回归）', () => {
     await session.startManual('abcd1234', 'x');
     // gateway 侧 pake 应答（pake-b 帧 → 手机 shared 建立）
     const pakeAFrame = wire.sentOf().find((f) => f['p'] === 'pake-a');
+    const pairingIdForConfirm = session.pairingId;
     const resp = pakeRespond('abcd1234', typeof pakeAFrame?.['pakeA'] === 'string' ? (pakeAFrame['pakeA'] as string) : '');
-    wire.serverReply({ p: 'pake-b', pakeB: resp.message, confirm: 'any' });
+    wire.serverReply({ p: 'pake-b', pakeB: resp.message, confirm: pakeConfirm(resp.shared, pairingIdForConfirm), gwEph: 'gweph_test', gatewayPub: 'gwpub_test' });
     await new Promise((r) => {
       setTimeout(r, 30);
     });
@@ -259,8 +262,9 @@ describe('pairing ack token 旅程（WIRE 设备注册收尾回归）', () => {
     });
     await session.startManual('abcd1234', 'x');
     const pakeAFrame = wire.sentOf().find((f) => f['p'] === 'pake-a');
+    const pairingIdForConfirm = session.pairingId;
     const resp = pakeRespond('abcd1234', typeof pakeAFrame?.['pakeA'] === 'string' ? (pakeAFrame['pakeA'] as string) : '');
-    wire.serverReply({ p: 'pake-b', pakeB: resp.message, confirm: 'any' });
+    wire.serverReply({ p: 'pake-b', pakeB: resp.message, confirm: pakeConfirm(resp.shared, pairingIdForConfirm), gwEph: 'gweph_test', gatewayPub: 'gwpub_test' });
     await new Promise((r) => {
       setTimeout(r, 30);
     });

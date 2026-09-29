@@ -12,14 +12,14 @@
  */
 import {
   encodeEnvelope,
+  computeSas,
+  devicePakeFinalize,
   mixRatchetRoot,
   derivePakeChannelKey,
   generateSigningKeyPair,
   generateBoxKeyPair,
   pakeInitiate,
-  pakeFinalize,
   pakeConfirm,
-  pakeConfirmVerify,
   x25519,
 } from '@paiapp/relay-protocol';
 
@@ -144,20 +144,24 @@ export function createPairingSession(spec: {
       emit({ phase: 'awaiting-owner' });
     } else if (p === 'pake-b') {
       // 手输码：finalize → confirm 互验 → 本地 SAS
-      if (pakeState !== null && typeof message['pakeB'] === 'string') {
-        const rawShared = pakeFinalize(pakeState.state, message['pakeB']);
-        channelKeyHex = rawShared;
-        if (typeof message['confirm'] === 'string') {
-          // 网关 confirm 转录 = pairingId（WIRE 手输码路径契约）
-          const ok = pakeConfirmVerify(rawShared, spec.pairingId, message['confirm'] as string);
-          if (!ok) {
-            emit({ phase: 'failed', reason: 'confirm_mismatch' });
-            return;
-          }
+      if (pakeState !== null && typeof message['pakeB'] === 'string' && typeof message['confirm'] === 'string') {
+        // 强制 confirm 校验（R2 P0：缺失即失败——此前可选分支可被无 confirm 的伪造 pake-b 绕过）
+        const confirmHex = message['confirm'] as string;
+        const rawShared = devicePakeFinalize({ code: pakeState.state.code, secret: pakeState.state.secret, messageB: message['pakeB'], gatewayConfirm: confirmHex, transcript: spec.pairingId });
+        if (rawShared === null) {
+          emit({ phase: 'failed', reason: 'confirm_mismatch' });
+          return;
         }
-        // gateway 下发的 sas 是目视比对唯一真相（本地推导仅兜底）
-        const gatewaySas = typeof message['sas'] === 'string' ? (message['sas'] as string) : '';
-        sas = gatewaySas.length > 0 ? gatewaySas : sasOf(rawShared, spec.pairingId);
+        channelKeyHex = rawShared;
+        // SAS 本地计算是唯一真相（R2 P0-2）：pake-b 帧 gwEph/gatewayPub 重建网关同式转录；
+        // 帧缺字段（旧 gateway）→ 本地无转录域可用，退回 sasOf 并标记不可比对
+        const gwEph = typeof message['gwEph'] === 'string' ? (message['gwEph'] as string) : '';
+        const gatewayPub = typeof message['gatewayPub'] === 'string' ? (message['gatewayPub'] as string) : '';
+        if (gwEph.length > 0 && gatewayPub.length > 0) {
+          sas = computeSas({ channelKey: Buffer.from(rawShared, 'hex'), transcript: { pairingId: spec.pairingId, gwEph, devEph: pakeState.message, relayUrl: spec.endpoints.relayUrl, scope: 'read' }, gatewayFingerprint: gatewayPub, deviceFingerprint: lastDeviceKeys !== null ? lastDeviceKeys.signingPub : 'pending' });
+        } else {
+          sas = sasOf(rawShared, spec.pairingId);
+        }
         emit({ phase: 'sas-shown', sas: sas ?? '' });
         emit({ phase: 'awaiting-owner' });
       }
