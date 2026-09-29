@@ -12,6 +12,8 @@
  */
 import {
   encodeEnvelope,
+  mixRatchetRoot,
+  derivePakeChannelKey,
   generateSigningKeyPair,
   generateBoxKeyPair,
   pakeInitiate,
@@ -86,6 +88,7 @@ export function createPairingSession(spec: {
 }): PairingSessionLike {
   let sas: string | null = null;
   let sharedSecret: string | null = null;
+  let channelKeyHex: string | null = null;
   let pakeState: { state: { secret: string; code: string }; message: string } | null = null;
   const listeners = new Set<(step: PairingStep) => void>();
   /** ack 帧下发的连接凭据（WIRE 设备注册收尾）。 */
@@ -142,11 +145,11 @@ export function createPairingSession(spec: {
     } else if (p === 'pake-b') {
       // 手输码：finalize → confirm 互验 → 本地 SAS
       if (pakeState !== null && typeof message['pakeB'] === 'string') {
-        const shared = pakeFinalize(pakeState.state, message['pakeB']);
-        sharedSecret = shared;
+        const rawShared = pakeFinalize(pakeState.state, message['pakeB']);
+        channelKeyHex = rawShared;
         if (typeof message['confirm'] === 'string') {
           // 网关 confirm 转录 = pairingId（WIRE 手输码路径契约）
-          const ok = pakeConfirmVerify(shared, spec.pairingId, message['confirm'] as string);
+          const ok = pakeConfirmVerify(rawShared, spec.pairingId, message['confirm'] as string);
           if (!ok) {
             emit({ phase: 'failed', reason: 'confirm_mismatch' });
             return;
@@ -154,7 +157,7 @@ export function createPairingSession(spec: {
         }
         // gateway 下发的 sas 是目视比对唯一真相（本地推导仅兜底）
         const gatewaySas = typeof message['sas'] === 'string' ? (message['sas'] as string) : '';
-        sas = gatewaySas.length > 0 ? gatewaySas : sasOf(shared, spec.pairingId);
+        sas = gatewaySas.length > 0 ? gatewaySas : sasOf(rawShared, spec.pairingId);
         emit({ phase: 'sas-shown', sas: sas ?? '' });
         emit({ phase: 'awaiting-owner' });
       }
@@ -170,6 +173,12 @@ export function createPairingSession(spec: {
       if (resendTimer !== null) {
         clearTimeout(resendTimer);
         resendTimer = null;
+      }
+      // 种子终定（与 gateway confirmWithSas 同式）：mixRatchetRoot(channelKey, 设备长期钥)
+      const channelKey = typeof channelKeyHex === 'string' ? Buffer.from(channelKeyHex, 'hex') : null;
+      const devicePub = lastDeviceKeys !== null ? lastDeviceKeys.signingPub : '';
+      if (channelKey !== null && devicePub.length > 0) {
+        sharedSecret = Buffer.from(mixRatchetRoot(channelKey, devicePub)).toString('hex');
       }
       ackRelayToken = relayToken;
       if (ackDeviceId !== null) ackDeviceIdValue = ackDeviceId;
@@ -187,9 +196,16 @@ export function createPairingSession(spec: {
   if (spec.gatewayEphemeralPub !== undefined) {
     emit({ phase: 'connecting' });
     const eph = generateBoxKeyPair();
-    sharedSecret = x25519(eph.secret, spec.gatewayEphemeralPub);
-    sendFrame({ p: 'request', ephemeralPub: eph.pub, deviceInfo: spec.deviceInfo });
-    emit({ phase: 'awaiting-sas' });
+    const rawShared = x25519(eph.secret, spec.gatewayEphemeralPub);
+    if (rawShared === null) {
+      emit({ phase: 'failed', reason: 'dh_failed' });
+    } else {
+      // channelKey = HKDF(rawShared)（gateway establishChannel 同式）；ratchet 种子在 ack 时
+      // 经 mixRatchetRoot(channelKey, 设备长期钥) 终定（与 gateway confirmWithSas 同式）
+      channelKeyHex = Buffer.from(derivePakeChannelKey(rawShared)).toString('hex');
+      sendFrame({ p: 'request', ephemeralPub: eph.pub, deviceInfo: spec.deviceInfo });
+      emit({ phase: 'awaiting-sas' });
+    }
   }
 
   return {
