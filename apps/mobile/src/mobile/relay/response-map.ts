@@ -121,14 +121,15 @@ export function mapSavedSessions(data: unknown): Array<Record<string, string | n
   const rows = data !== null && typeof data === 'object' && Array.isArray((data as { sessions?: unknown }).sessions) ? ((data as { sessions: unknown[] }).sessions) : Array.isArray(data) ? data : [];
   const out: Array<Record<string, string | number | undefined>> = [];
   for (const row of rows as Array<Record<string, unknown>>) {
-    if (typeof row?.['sessionPath'] !== 'string' && typeof row?.['sessionId'] !== 'string' && typeof row?.['threadId'] !== 'string') continue;
+    // R3 H8：host saved 行主键是 id（saved-query）——id/threadId/sessionId/sessionPath 任一
+    if (typeof row?.['id'] !== 'string' && typeof row?.['sessionPath'] !== 'string' && typeof row?.['sessionId'] !== 'string' && typeof row?.['threadId'] !== 'string') continue;
     const entry: Record<string, string | number | undefined> = {
-      sessionId: typeof row['threadId'] === 'string' ? (row['threadId'] as string) : typeof row['sessionId'] === 'string' ? (row['sessionId'] as string) : (row['sessionPath'] as string),
+      sessionId: typeof row['id'] === 'string' ? (row['id'] as string) : typeof row['threadId'] === 'string' ? (row['threadId'] as string) : typeof row['sessionId'] === 'string' ? (row['sessionId'] as string) : (row['sessionPath'] as string),
     };
     if (typeof row['sessionPath'] === 'string') entry['sessionPath'] = row['sessionPath'] as string;
     if (typeof row['title'] === 'string') entry['title'] = row['title'] as string;
     if (typeof row['cwd'] === 'string') entry['cwd'] = row['cwd'] as string;
-    const activity = num(row['lastActivityAt']) ?? num(row['endedAtMs']);
+    const activity = num(row['lastActivityAt']) ?? num(row['updatedAt']) ?? num(row['endedAtMs']);
     if (activity !== undefined) entry['lastActivityAt'] = activity;
     out.push(entry);
   }

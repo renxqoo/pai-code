@@ -51,17 +51,28 @@ export interface SyncKv {
   set(key: string, value: string): void;
 }
 
+/** ratchet 边界持久写（R3 M2：seal 语义「批首落盘成功才放行发送」——异步写必须可等待；
+ *  内存 Map 先记（同步读面），pending 尾链串行化落盘，失败拒绝（fail-closed 拒发）。 */
+const kvPending = new Map<string, Promise<void>>();
 const memoryKv: SyncKv = (() => {
   const map = new Map<string, string>();
   return {
     get: (key) => map.get(key) ?? null,
     set: (key, value) => {
       map.set(key, value);
-      // 写穿持久（web/native 通吃——ratchet 边界的崩溃恢复依据，H5）
-      void AsyncStorage.setItem(`kv:${key}`, value).catch(() => undefined);
+      const previous = kvPending.get(key) ?? Promise.resolve();
+      const next = previous.then(() => AsyncStorage.setItem(`kv:${key}`, value));
+      kvPending.set(key, next);
+      void next.catch(() => undefined).finally(() => {
+        if (kvPending.get(key) === next) kvPending.delete(key);
+      });
     },
   };
 })();
+/** 等待全部在途边界写完成（RatchetBoundaryStore 保存面调用——落盘成功才放行）。 */
+export async function awaitKvFlush(): Promise<void> {
+  await Promise.all([...kvPending.values()]);
+}
 
 let kv: SyncKv = memoryKv;
 
@@ -135,12 +146,12 @@ export const relayCredentialsStore = {
 export function createKvRatchetStore(): RatchetBoundaryStore {
   return {
     async saveSend(deviceId, boundary) {
-      await Promise.resolve();
       kv.set(`${RATCHET_PREFIX}${deviceId}.send`, JSON.stringify(boundary));
+      await awaitKvFlush(); // R3 M2：持久写完成才返回（ratchet seal 的放行条件）
     },
     async saveRecv(deviceId, boundary) {
-      await Promise.resolve();
       kv.set(`${RATCHET_PREFIX}${deviceId}.recv`, JSON.stringify(boundary));
+      await awaitKvFlush();
     },
     async loadSend(deviceId) {
       await Promise.resolve();

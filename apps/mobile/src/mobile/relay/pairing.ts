@@ -171,7 +171,7 @@ export function createPairingSession(spec: {
         const gwEph = typeof message['gwEph'] === 'string' ? (message['gwEph'] as string) : '';
         const gatewayPub = typeof message['gatewayPub'] === 'string' ? (message['gatewayPub'] as string) : '';
         if (gwEph.length > 0 && gatewayPub.length > 0) {
-          sas = computeSas({ channelKey: Buffer.from(rawShared, 'hex'), transcript: { pairingId: spec.pairingId, gwEph, devEph: pakeState.message, relayUrl: spec.endpoints.relayUrl, scope: 'read' }, gatewayFingerprint: gatewayPub, deviceFingerprint: lastDeviceKeys !== null ? lastDeviceKeys.signingPub : 'pending' });
+          sas = computeSas({ channelKey: Buffer.from(rawShared, 'hex'), transcript: { pairingId: spec.pairingId, gwEph, devEph: pakeState.message, relayUrl: spec.endpoints.relayUrl, scope: 'read' }, gatewayFingerprint: gatewayPub, deviceFingerprint: spec.deviceInfo.name }); // R3 H5：与 gateway 同源（name 域——非签名钥）
         } else {
           sas = sasOf(rawShared, spec.pairingId);
         }

@@ -82,6 +82,19 @@ export function initializeRelayRuntime(): RelayRuntime {
 
   // client 经活引用取 transport（connectWithCredentials 换绑后 invoke 即刻生效——H1 修复）
   const liveTransport = { current: transport as unknown as ClientTransportFace };
+  // M8：鉴权拒绝（token 过期）→ 签名挑战续期一次 → 重连（不在退避环里 401 打转）
+  let authRetryArmed = true;
+  const onStatusWrapper = (status: RelayStatus, detail: string): void => {
+    if (status === 'disconnected' && detail === 'auth-rejected' && authRetryArmed && runtime !== null) {
+      authRetryArmed = false;
+      const credentials = relayCredentialsStore.load();
+      if (credentials !== null) {
+        void runtime.connectWithCredentials(credentials.relayToken).then(() => {
+          authRetryArmed = true;
+        });
+      }
+    }
+  };
   const client = createBridgeClient({
     transport: {
       sendCommand: (spec) => liveTransport.current.sendCommand(spec),
@@ -197,6 +210,10 @@ export function initializeRelayRuntime(): RelayRuntime {
       // 重建传输（真 codec + RN socket）
       // token 续期（M12）：凭证 token 可能已过 15min TTL——签名挑战换新（失败回落旧值）
       const freshToken = (await refreshDeviceToken(credentials)) ?? credentials.relayToken;
+      if (freshToken !== credentials.relayToken) {
+        // 续期成功：落盘（否则每次连接都重新续期——R3 H2）
+        void relayCredentialsStore.save({ ...credentials, relayToken: freshToken });
+      }
       const codec = await createRelayRatchetCodec({
         deviceId: credentials.deviceId,
         installationId: credentials.installationId,
@@ -209,12 +226,12 @@ export function initializeRelayRuntime(): RelayRuntime {
         deviceId: credentials.deviceId,
         installationId: credentials.installationId,
         codec,
-        socketFactory: (url) => rnSocketFactoryWithToken(url, relayToken),
+        socketFactory: (url) => rnSocketFactoryWithToken(url, freshToken),
         callbacks: {
           onStatus(status, detail) {
             (runtime as RelayRuntime & { status: RelayStatus }).status = status;
             notifyStatusListeners();
-            void detail;
+            onStatusWrapper(status, detail);
           },
           onFrame(frame) {
             dispatchL2Frame(frame);

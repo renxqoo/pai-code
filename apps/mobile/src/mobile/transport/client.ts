@@ -23,6 +23,11 @@ export interface BridgeClient extends Client {
   dispatch(rawEvent: unknown): void;
 }
 
+// R3 H7：id 每安装随机前缀——gateway (deviceId,commandId) 去重磁盘持久，跨重启
+// 同 id 碰撞会重放陈旧响应（错线程数据上屏）
+const bootId = Array.from(globalThis.crypto.getRandomValues(new Uint8Array(4)))
+  .map((b) => b.toString(16).padStart(2, '0'))
+  .join('');
 let invokeCounter = 1;
 
 export function createBridgeClient(deps: BridgeClientDeps): BridgeClient {
@@ -30,7 +35,7 @@ export function createBridgeClient(deps: BridgeClientDeps): BridgeClient {
   return {
     capabilities: deps.capabilities ?? { fileDialog: false, systemNotification: true },
     async invoke(method: ApiMethod, params: unknown): Promise<unknown> {
-      const id = `c${invokeCounter++}`;
+      const id = `c${bootId}.${invokeCounter++}`;
       // 词表翻译（H2）：ApiMethod → gateway host 命令 + 参数名
       const { command, args } = translateCommand(method, (params ?? {}) as Record<string, unknown>);
       const transportAtSend = deps.transport; // L-4：在途响应归旧 transport 认领（换绑不丢）
