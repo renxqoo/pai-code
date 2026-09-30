@@ -1,4 +1,4 @@
-import type { HistoryItem } from '@paiapp/contracts';
+import type { HistoryItem, Usage } from '@paiapp/contracts';
 import type { ThreadItem, TurnBlock } from '@/thread/thread-model';
 
 import { entrySeqOf } from './entry-seq';
@@ -31,9 +31,13 @@ export function foldHydrate(state: LiveThreadState, action: HydrateAction): Live
       return applyInflight(state, action.view, action.at);
     case 'hydrate/initial': {
       const items = hydrateItems(action.items);
+      // 占用随转写恢复：重开 app / 打开历史会话走这条（整态重置），不恢复会让
+      // 已发过消息的会话在重开后用量整块消失——水化路径不产事件流
+      // （assistant/message 帧不重放），转写里的 usage 是唯一来源。
+      const restored = lastUsageOf(action.items);
       // seenIds 用**渲染身份**登记（气泡 id `msg-<条目 id>` / 轮 id `turn-<条目 id>`）：
       // 事件帧（fold-events）按同一拼法查重，只登记条目 id 会让「转写先到、帧后到」重插。
-      return { ...initialThreadState, items, cursor: action.cursor, seenIds: capSeenIds(renderedIdsOf(items)), hydrated: true, todo: mergeTodo(state.todo, action.todo) };
+      return { ...initialThreadState, items, cursor: action.cursor, seenIds: capSeenIds(renderedIdsOf(items)), hydrated: true, todo: mergeTodo(state.todo, action.todo), ...(restored !== null ? { liveUsage: restored } : {}) };
     }
     case 'hydrate/reconcile': {
       const derived = hydrateNewItems(action.items);
@@ -124,6 +128,10 @@ export function foldHydrate(state: LiveThreadState, action: HydrateAction): Live
       return { ...state, items, cursor: action.cursor ?? state.cursor, seenIds: seen, liveTurnId: liveTurn, hydrated: true, hydrateFailed: false, todo: mergeTodo(state.todo, action.todo) };
     }
     case 'hydrate/rebuild': {
+      // 占用随转写恢复：水化路径不产事件流，liveUsage 从最后一条带 usage 的
+      // assistant 条目复原（重开 app / parked 激活后，已发过消息的会话不该丢用量）；
+      // 无则保持原值（不塌成 null——残留值比空更接近真相，且首轮前的会话本就没有）
+      const restored = lastUsageOf(action.items);
       const items = [...hydrateItems(action.items)];
       // 继承用户停止语义：live 轮在 settle 前被停止时，末轮标 stopped
       const wasStopped =
@@ -139,7 +147,7 @@ export function foldHydrate(state: LiveThreadState, action: HydrateAction): Live
       }
       // messageTurns 与 turnSerial 随 state 保留：轮 id 全局单调唯一后，陈旧归属
       // 恒不等于新轮 id——清空反而放开守卫（迟到 final 以 owner undefined 直通污染新轮）
-      return { ...state, items, cursor: action.cursor, seenIds: capSeenIds(renderedIdsOf(items)), liveTurnId: null, liveMessageId: null, hydrateFailed: false, todo: mergeTodo(state.todo, action.todo) };
+      return { ...state, items, cursor: action.cursor, seenIds: capSeenIds(renderedIdsOf(items)), liveTurnId: null, liveMessageId: null, hydrateFailed: false, todo: mergeTodo(state.todo, action.todo), ...(restored !== null ? { liveUsage: restored } : {}) };
     }
     case 'hydrate/failed':
       return { ...state, hydrateFailed: true };
@@ -172,6 +180,15 @@ function lastUserAt(items: readonly HistoryItem[]): number | null {
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index];
     if (item?.kind === 'user' && Number.isFinite(item.at)) return item.at;
+  }
+  return null;
+}
+
+/** 转写里最后一条带 usage 的 assistant 条目（水化路径恢复占用的来源）。 */
+function lastUsageOf(items: readonly HistoryItem[]): Usage | null {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index];
+    if (item?.kind === 'assistant' && item.usage !== null) return item.usage;
   }
   return null;
 }

@@ -54,7 +54,6 @@ function ComposerRegion(): React.JSX.Element {
   /** 条目级订阅（非整表）：后台线程的会话更新不进本区域订阅面（B-keystroke 预算） */
   const activeSession = useStore(liveStore, (s) => (s.activeThreadId === null ? undefined : s.sessions[s.activeThreadId]));
   const models = useStore(liveStore, (s) => s.models);
-  const activeStats = useStore(liveStore, (s) => s.stats[s.activeThreadId ?? '']) ?? null;
   // 实时占用/窗口（事件流派生）：每 step 一条 assistant/message 推进，无需拉取
   const activeLiveUsage = useStore(liveStore, (s) => s.threads[s.activeThreadId ?? '']?.liveUsage ?? null);
   const activeComposition = useStore(liveStore, (s) => s.analytics[s.activeThreadId ?? ''] ?? null);
@@ -324,7 +323,6 @@ function ComposerRegion(): React.JSX.Element {
               onSelect: workspaceActions.selectEffort,
             }}
             usage={{
-              stats: activeStats,
               live: liveUsageOf(activeLiveUsage, windowOfModel(models, activeSession?.model ?? null)),
               cache: activeLiveUsage !== null ? { read: activeLiveUsage.cacheRead, input: activeLiveUsage.input } : null,
               composition: activeComposition,

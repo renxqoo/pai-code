@@ -1,11 +1,10 @@
 import * as React from 'react';
 import { ArrowUp, ChevronDown, Plus } from 'lucide-react';
 
-import type { SessionStatsView } from '@paiapp/contracts';
 
 import { UsageDetails, formatWindowPct, type LiveUsageView } from './usage-details';
 
-import { formatTokenCount, IconButton, MenuButton, menuTriggerClassName, PickerDialog, Progress, Spinner } from '@paiapp/ui';
+import { IconButton, MenuButton, menuTriggerClassName, PickerDialog, Progress, Spinner } from '@paiapp/ui';
 import { groupModelOptions } from '@/components/group-model-options';
 import { copy } from '@/strings';
 import { cn } from '@/lib/utils';
@@ -23,10 +22,9 @@ type EffortControls = {
 
 /** 用量控件组（会话面数据；无会话不渲染，不摆没有数据面的假控件）。 */
 type UsageControls = {
-  /** 用量明细（I1）；null = 未拉取，不可点。 */
-  stats: SessionStatsView | null
-  /** 实时上下文用量（事件流派生：每 step 一条 assistant/message 推进）；
-   *  null = 尚无实报或无窗口——主芯片不渲染百分比（无分母不给假值）。 */
+  /** 实时上下文用量（事件流派生：每 step 一条 assistant/message 推进）。
+   *  null = 尚无实报或无窗口——**整个用量控件不渲染**：不回落累计 token
+   *  （那是工作量口径，不是上下文占用，Codex #3630 混淆教训），也不摆占位符。 */
   live: LiveUsageView | null
   /** 缓存观测（实报 cacheRead/input；null = 无实报）。 */
   cache: { read: number; input: number } | null
@@ -143,21 +141,7 @@ function ComposerActionsRow({
               >
                 <Progress value={liveUsagePct(usage.live)} />
               </button>
-            ) : usage.stats === null ? (
-              <span title={usage.label} className="font-mono text-[11px] leading-none text-muted-foreground/50 tabular-nums">
-                —
-              </span>
-            ) : (
-              <button
-                type="button"
-                title={usage.label}
-                aria-label={usage.label}
-                aria-expanded={usageHover.open}
-                className="rounded-md px-[2px] font-mono text-[11px] leading-none text-muted-foreground tabular-nums outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
-              >
-                {formatTokenCount(usage.stats.tokens.total) ?? '0'}
-              </button>
-            )}
+            ) : null}
           </span>
         )}
         {modelOptions.length === 0 && onOpenSettings !== undefined ? (

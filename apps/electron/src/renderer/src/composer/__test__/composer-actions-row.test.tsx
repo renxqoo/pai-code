@@ -103,19 +103,19 @@ describe('输入框底行模型选择（弹窗入口）', () => {
     expect(html).not.toContain('aria-label="high"');
   });
 
-  test('用量入口：stats 已拉取为可点按钮（title=用量），未拉取退化为纯展示占位', () => {
+  test('用量入口：live 在场才是可点按钮（title=用量）；无 live 整块不渲染（不回落累计、不摆占位）', () => {
     const fetched = renderToStaticMarkup(
       <ComposerActionsRow
-        {...makeProps({ usage: { stats: { userMessages: 1, assistantMessages: 2, toolCalls: 3, tokens: { input: 1200, output: 340, total: 1540 }, cost: 0 }, live: null, cache: null, composition: null, analytics: null, label: copy.composer.usageSummary } })}
+        {...makeProps({ usage: { ...liveOf(27.5), composition: null, analytics: null, label: copy.composer.usageSummary } })}
       />,
     );
     const tag = buttonTag(fetched, copy.composer.usageSummary);
     expect(tag).toContain('aria-expanded="false"');
-    expect(fetched).toContain('1.5k');
+    expect(fetched).toContain('<circle'); // 进度环
 
     const unfetched = renderToStaticMarkup(<ComposerActionsRow {...makeProps()} />);
     expect(buttonTag(unfetched, copy.composer.usageSummary)).toBeNull();
-    expect(unfetched).toContain('—');
+    expect(unfetched).not.toContain('—'); // 占位符也不再摆
   });
 });
 
@@ -278,20 +278,15 @@ describe('用量主芯片（实时占用口径——事件流每 step 推进）'
     expect(tag).not.toContain('47.9%'); // 128k 假分母下的错误值
   });
 
-  test('无 live（未发消息/无窗口）：不渲染百分比环；有累计 stats 时回落累计 total', () => {
+  test('症状回归：无 live（无窗口/未发消息）时整块不渲染——不显累计 token（239925.3k 那类）', () => {
     const html = renderToStaticMarkup(
-      <ComposerActionsRow {...makeProps({ usage: { stats: STATS_FIXTURE, live: null, cache: null, composition: null, analytics: null, label: copy.composer.usageSummary } })} />,
-    );
-    expect(html).toContain('1.5k');
-    expect(html).not.toContain('<circle');
-  });
-
-  test('无 live 且无 stats（都未拉取）：占位符不在弹层/环上摆假数据', () => {
-    const html = renderToStaticMarkup(
-      <ComposerActionsRow {...makeProps({ usage: { stats: null, live: null, cache: null, composition: null, analytics: null, label: copy.composer.usageSummary } })} />,
+      <ComposerActionsRow {...makeProps({ usage: { live: null, cache: null, composition: null, analytics: null, label: copy.composer.usageSummary } })} />,
     );
     expect(html).not.toContain('<circle');
-    expect(html).not.toContain('1.5k');
+    // 累计口径的数字一概不出现（239925.3k 那类）——按数字形态断言，避免误伤 class 属性
+    expect(html).not.toMatch(/\d+(\.\d+)?k</);
+    expect(html).not.toContain('—');
+    expect(buttonTag(html, copy.composer.usageSummary)).toBeNull();
   });
 });
 

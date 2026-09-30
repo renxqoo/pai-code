@@ -34,6 +34,59 @@ function visibleText(state: LiveThreadState): string {
   return parts.join('\n');
 }
 
+describe('foldHydrate · 占用随转写恢复（重开 app/parked 激活后不丢用量）', () => {
+  const usage = { input: 61_444, output: 12, cacheRead: 61_000, cacheWrite: 0 };
+
+  test('症状回归：重开 app 后 liveUsage 从最后一条带 usage 的 assistant 条目复原', () => {
+    // 水化路径不产事件流（assistant/message 帧不会重放），若不从转写恢复，
+    // 已发过消息的会话在重开后用量整块消失
+    const state = foldHydrate(initialThreadState, {
+      kind: 'hydrate/rebuild',
+      items: [
+        history({ id: 'u1', kind: 'user', text: '你好' }),
+        history({ id: 'a1', kind: 'assistant', text: '早', usage: { ...usage, input: 50_000 } }),
+        history({ id: 'u2', kind: 'user', text: '再来' }),
+        history({ id: 'a2', kind: 'assistant', text: '好', usage }),
+      ],
+      cursor: 5,
+    });
+    expect(state.liveUsage).toEqual(usage); // 取最后一条（a2），不是第一条
+  });
+
+  test('转写无 usage（纯工具轮/中断未报）：保持原值不塌成 null', () => {
+    const state = foldHydrate({ ...initialThreadState, liveUsage: usage }, {
+      kind: 'hydrate/rebuild',
+      items: [history({ id: 'u1', kind: 'user', text: 'x' }), history({ id: 'a1', kind: 'assistant', text: 'y', usage: null })],
+      cursor: 2,
+    });
+    expect(state.liveUsage).toEqual(usage);
+  });
+
+  test('症状回归：重开 app 打开历史会话（hydrate/initial 整态重置）也从转写恢复占用', () => {
+    // 重开 app 打开会话走的是 hydrate/initial（不是 rebuild）：整态重置回
+    // initialThreadState，若不在此恢复 usage，已发过消息的会话重开后用量全丢
+    const state = foldHydrate(initialThreadState, {
+      kind: 'hydrate/initial',
+      items: [
+        history({ id: 'u1', kind: 'user', text: '你好' }),
+        history({ id: 'a1', kind: 'assistant', text: '早', usage }),
+      ],
+      cursor: 3,
+    });
+    expect(state.liveUsage).toEqual(usage);
+    expect(state.hydrated).toBe(true);
+  });
+
+  test('全新会话（无线程内 usage）：保持 null（不编造）', () => {
+    const state = foldHydrate(initialThreadState, {
+      kind: 'hydrate/rebuild',
+      items: [history({ id: 'a1', kind: 'assistant', text: 'y', usage: null })],
+      cursor: 1,
+    });
+    expect(state.liveUsage).toBeNull();
+  });
+});
+
 describe('foldHydrate · reconcile 拆轮防线（窗口重建语义）', () => {
   function liveTurnState(): ReturnType<typeof foldThreadEvent> {
     let s = foldHydrate(initialThreadState, {

@@ -158,18 +158,26 @@ describe('ComposerRegion 数据形态', () => {
     view.unmount();
   });
 
-  test('用量入口：stats 已拉取为可点按钮（title=用量、显 token 合计），未拉取退化为纯展示占位', () => {
+  test('症状回归：用量入口只在有实报占用+窗口时渲染进度环；无 live 整块不渲染（不显累计 token）', () => {
+    // 无 live（未发消息/无窗口）：控件整块不渲染——不回落累计 token、不摆占位
     seedLive({});
+    const empty = render(<ComposerRegion />);
+    expect(empty.container.querySelector(`button[aria-label="${copy.composer.usageSummary}"]`)).toBeNull();
+    expect(empty.container.textContent ?? '').not.toMatch(/\d+(\.\d+)?k/); // 不显累计 token
+    empty.unmount();
+
+    // 有 live + 目录窗口：渲染可点按钮（内含进度环）
+    seedLive({
+      threads: { t1: { liveUsage: { input: 55_000, output: 10, cacheRead: 44_000, cacheWrite: 0 } } },
+      models: [{ provider: 'glm', modelId: 'glm-4.7', contextWindow: 200_000 }],
+      sessionOverrides: { model: 'glm/glm-4.7' },
+    });
     const view = render(<ComposerRegion />);
-    const usageButton = view.container.querySelector(`button[title="${copy.composer.usageSummary}"]`);
+    // 进度环分支的 title 带百分比后缀，故按 aria-label 定位
+    const usageButton = view.container.querySelector(`button[aria-label="${copy.composer.usageSummary}"]`);
     expect(usageButton).not.toBeNull();
-    expect(usageButton?.textContent).toBe('1.2k');
+    expect(usageButton?.querySelector('circle')).not.toBeNull(); // 进度环
     view.unmount();
-    seedLive({ stats: {} as Record<string, SessionStatsView> });
-    const plain = render(<ComposerRegion />);
-    expect(plain.container.querySelector(`button[title="${copy.composer.usageSummary}"]`)).toBeNull();
-    expect(plain.container.querySelector(`span[title="${copy.composer.usageSummary}"]`)).not.toBeNull();
-    plain.unmount();
   });
 
   test('权限模式：读口已加载渲染操作栏控件（展示名随词表），未加载不渲染', () => {
