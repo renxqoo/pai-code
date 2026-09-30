@@ -2,6 +2,16 @@
 # bun 锁定修订、哈希清单与 license 审计属 T9 M6，此处不实现。
 appId: app.paiapp.pai
 productName: Pai
+# @electron/get 每次构建都绕过缓存重新下载 SHASUMS256.txt（源码标定 cacheMode:
+# Bypass），GitHub 不可达时 packaging 阶段会挂在 TCP 连接上直到 ECONNREFUSED。
+# 钉死官方校验和后走本地生成的校验文件，打包不再依赖网络；zip 本体仍用
+# @electron/get 缓存（bun install 的 electron postinstall 填充）。
+# force: false 仅作 ElectronGetOptions 形状判别（无强制重下语义）；升 electron
+# 版本或新增打包目标 arch 时需同步补对应条目，不匹配会校验失败显式报错。
+electronDownload:
+  force: false
+  checksums:
+    electron-v44.2.0-darwin-arm64.zip: f906dff5d054b1b92e5711781b13cc206fd7139ce66467503b9d0a3e6fbc9b02
 directories:
   output: release
 files:
