@@ -233,7 +233,7 @@ describe('savedSessions（thread/list_saved）', () => {
 });
 
 describe('modelInfos（get_models 扁平数组）', () => {
-  test('provider+id 必填、source 词表收窄', () => {
+  test('provider+id 必填、source 词表收窄、contextWindow 透传（症状回归：镜像曾丢窗口字段）', () => {
     expect(
       modelInfos([
         { id: 'glm-5.3', provider: 'glm', source: 'preset', contextWindow: 200000 },
@@ -244,7 +244,8 @@ describe('modelInfos（get_models 扁平数组）', () => {
         42,
       ]),
     ).toEqual([
-      { provider: 'glm', modelId: 'glm-5.3', source: 'preset' },
+      // contextWindow 透传（模型本体属性；窗口是分母的唯一来源）
+      { provider: 'glm', modelId: 'glm-5.3', contextWindow: 200000, source: 'preset' },
       { provider: 'glm', modelId: 'm2', source: 'custom' },
       { provider: 'glm', modelId: 'm3' },
     ]);

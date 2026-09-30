@@ -92,9 +92,6 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
       return mapLiveCall(state, event.callId, (call) => ({ ...call, output: clip(event.output) }));
     case 'toolEnded':
       return onToolEnded(state, event.callId, event.output, event.isError, event.diff, now);
-    case 'contextWindow':
-      // 拨号窗口（WAL 实拨事实）：分母单一来源。占用由 assistant/message 每 step 推进。
-      return { ...state, dialWindow: { provider: event.provider, model: event.model, window: event.window } };
     case 'messageFinal':
       return onMessageFinal(state, event);
     case 'turnSettled': {

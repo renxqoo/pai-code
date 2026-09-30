@@ -64,10 +64,9 @@ export interface AgentStreamFrame {
   frame: { phase: 'start' | 'chunk' | 'end'; kind: 'text' | 'thinking'; text: string };
 }
 
-/** app 消费的事件名词表（x-harness 还会发 request/header、system/message、
+/** app 消费的事件名词表（x-harness 还会发 request/*、system/message、
  *  assistant/attempt、session/*、command/run|done、autocompact/*、
  *  compaction/served-window|diagnostic、agent/error、step/start|end——一律忽略）。
- *  request/context：内核实拨窗口事实（contextWindow 分母的唯一来源）。
  *  turn/end：主会话轮终局兜底源（内部驱动轮无 settled 债务——event-mapper 就地
  *  合成 turnSettled；驱动轮的 settled 帧随后到达被去重）。
  *  todo/snapshot：todo 清单全量快照（载荷 = TodoSnapshotEventData；速览面板
@@ -75,7 +74,6 @@ export interface AgentStreamFrame {
 export type HubEventName =
   | 'turn/start'
   | 'turn/end'
-  | 'request/context'
   | 'user/message'
   | 'assistant/message'
   | 'tool/call'
@@ -97,7 +95,6 @@ export type HubEventName =
 export const HUB_EVENT_NAMES = [
   'turn/start',
   'turn/end',
-  'request/context',
   'user/message',
   'assistant/message',
   'tool/call',

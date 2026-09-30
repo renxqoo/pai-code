@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useStore } from 'zustand';
 
-import { normalizePermMode, type QueueEntry } from '@paiapp/contracts';
+import { normalizePermMode, type ModelInfoView, type QueueEntry } from '@paiapp/contracts';
 
 import { CONVERSATION_COLUMN_CLASS } from '@/thread/conversation-column';
 import { baseNameOf } from '@/lib/project-dirs';
@@ -57,7 +57,6 @@ function ComposerRegion(): React.JSX.Element {
   const activeStats = useStore(liveStore, (s) => s.stats[s.activeThreadId ?? '']) ?? null;
   // 实时占用/窗口（事件流派生）：每 step 一条 assistant/message 推进，无需拉取
   const activeLiveUsage = useStore(liveStore, (s) => s.threads[s.activeThreadId ?? '']?.liveUsage ?? null);
-  const activeDialWindow = useStore(liveStore, (s) => s.threads[s.activeThreadId ?? '']?.dialWindow ?? null);
   const sessionPermissionMode = useStore(liveStore, (s) => s.sessionPermissionMode);
   const hostPhase = useStore(liveStore, (s) => s.hostPhase);
   const commands = useStore(liveStore, (s) => s.commands);
@@ -325,7 +324,7 @@ function ComposerRegion(): React.JSX.Element {
             }}
             usage={{
               stats: activeStats,
-              live: liveUsageOf(activeLiveUsage, activeDialWindow?.window ?? null),
+              live: liveUsageOf(activeLiveUsage, windowOfModel(models, activeSession?.model ?? null)),
               cache: activeLiveUsage !== null ? { read: activeLiveUsage.cacheRead, input: activeLiveUsage.input } : null,
               label: copy.composer.usageSummary,
             }}
@@ -349,6 +348,21 @@ function ComposerRegion(): React.JSX.Element {
       />
     </div>
   );
+}
+
+/** 当前拨号模型在目录里的上下文窗口（分母的唯一来源）。
+ *  窗口是「模型」的本体属性，不是会话运行时的观测——故随目录（get_models）下发、
+ *  按拨号查表，而非从会话事件里挖（后者对 resume/parked 会话拿不到：request/context
+ *  只在拨号变化时落账，重开历史会话不会再发该事件）。
+ *  目录未声明（或拨号未知）→ null：展示层按无分母不渲染百分比。
+ *  拆分约定与 groupModelOptions 同源：首个 '/' 前为 provider、其后为 modelId。 */
+function windowOfModel(models: readonly ModelInfoView[], dial: string | null): number | null {
+  if (dial === null || dial.length === 0) return null;
+  const slash = dial.indexOf('/');
+  const provider = slash === -1 ? '' : dial.slice(0, slash);
+  const modelId = slash === -1 ? dial : dial.slice(slash + 1);
+  const hit = models.find((m) => m.provider === provider && m.modelId === modelId);
+  return hit?.contextWindow ?? null;
 }
 
 const ComposerRegionMemo = React.memo(ComposerRegion);

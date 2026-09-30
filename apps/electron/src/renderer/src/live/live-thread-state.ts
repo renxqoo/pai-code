@@ -57,9 +57,6 @@ export type LiveThreadState = {
   /** 上下文占用（最近一次 LLM 实报 input；null = 本会话尚无实报）。
    *  展示层直接用它除窗口得百分比——每 step 一条 assistant/message 推进，无需拉取。 */
   liveUsage: Usage | null;
-  /** 上下文窗口 + 拨号（WAL request/context 事实；null = 尚未落账）。
-   *  provider/model 与 liveUsage 同源校验：换模型后旧占用不得配新窗口。 */
-  dialWindow: { provider: string; model: string; window: number } | null;
   /** 直执行 bash 在途（`!` 命令；横幅呈现，停止键转中止）。 */
   bashRunning: boolean;
   /** 直执行 bash 的流式输出尾部（bashOutput 增量，封顶 2000 字符）。 */
@@ -90,7 +87,6 @@ export const initialThreadState: LiveThreadState = {
   hydrated: false,
   turnsSettled: 0,
   liveUsage: null,
-  dialWindow: null,
   bashRunning: false,
   bashTail: '',
 };

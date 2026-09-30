@@ -94,9 +94,6 @@ const uiEventDefs = {
 
   /** 一轮开始（turn/start；后台任务通知唤起的回合同样触发）。 */
   turnStarted: z.object({ type: z.literal('turnStarted'), threadId, at: z.number() }),
-  /** 会话拨号窗口（WAL request/context 落账时下发；拨号变化才落一条）。
-   *  分母来源单一真相 = 内核实拨窗口（provider/model 一并带上，消费方校验同源）。 */
-  contextWindow: z.object({ type: z.literal('contextWindow'), threadId, provider: z.string(), model: z.string(), window: z.number() }),
   /** 用户角色消息：本地 prompt 回显或系统注入（task-notification / task-message）。
    *  seq = 该落账的 WAL 行号，与条目对账（`seq-<seq>`）**同一身份域**——同一句话
    *  经事件帧与转写两路到达时按 id 去重，不必靠文本比对（见 fold-events）。 */

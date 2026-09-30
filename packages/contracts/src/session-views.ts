@@ -51,6 +51,10 @@ export const ModelInfoViewSchema = z.object({
   modelId: z.string(),
   /** 模型思考能力（app 渠道配置 join 而来；预设条目缺省 = 未知）。 */
   reasoning: z.boolean().optional(),
+  /** 上下文窗口（hub 目录已解析值：模型级 > 档案级）。**本体属性**——窗口是
+   *  「模型」的函数，不是会话运行时的观测，故随目录下发（展示层分母的唯一来源）；
+   *  缺省 = 目录未声明，展示层按无分母不渲染百分比。 */
+  contextWindow: z.number().optional(),
   /** 目录来源（preset = hub 内置预设；custom = app 写入的渠道模型）。 */
   source: z.enum(['preset', 'custom']).optional(),
 });

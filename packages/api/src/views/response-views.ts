@@ -228,7 +228,9 @@ export function savedSessions(data: unknown, sessionsRoot: string): SavedSession
   return out;
 }
 
-/** get_models 响应（扁平数组）→ 模型视图；reasoning 能力位由主进程渠道配置 join。 */
+/** get_models 响应（扁平数组）→ 模型视图；reasoning 能力位由主进程渠道配置 join。
+ *  contextWindow 透传（hub 目录已解析的模型级 > 档案级值）——窗口是模型的本体属性，
+ *  展示层分母据此查表；此处丢掉会让下游只能从会话事件里绕路挖（且 resumed 会话挖不到）。 */
 export function modelInfos(data: unknown): ModelInfoView[] {
   const models = Array.isArray(data) ? data : [];
   const out: ModelInfoView[] = [];
@@ -238,7 +240,13 @@ export function modelInfos(data: unknown): ModelInfoView[] {
     const modelId = str(m.id);
     if (provider.length === 0 || modelId.length === 0) continue;
     const source = m.source === 'preset' || m.source === 'custom' ? m.source : undefined;
-    out.push({ provider, modelId, ...(source !== undefined ? { source } : {}) });
+    const contextWindow = numOrNull(m.contextWindow);
+    out.push({
+      provider,
+      modelId,
+      ...(contextWindow !== null && contextWindow > 0 ? { contextWindow } : {}),
+      ...(source !== undefined ? { source } : {}),
+    });
   }
   return out;
 }

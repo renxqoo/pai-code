@@ -174,11 +174,9 @@ describe('live store（对话框/通知/bootstrap 合并）', () => {
     expect(store.getState().threads['t1']?.crashed).toBe(true);
   });
 
-  test('实时用量（事件流）：assistant/message 的 usage 推进 liveUsage；request/context 落窗口；线程移除随行清理', () => {
+  test('实时用量（事件流）：assistant/message 的 usage 推进 liveUsage；线程移除随行清理', () => {
     const store = createLiveStore();
     store.getState().bootstrap(bootstrapOf([session('t1'), session('t2')]));
-    store.getState().applyEvent({ type: 'contextWindow', threadId: 't1', provider: 'deepseek', model: 'deepseek-flash', window: 1_000_000 }, 1);
-    expect(store.getState().threads['t1']?.dialWindow).toEqual({ provider: 'deepseek', model: 'deepseek-flash', window: 1_000_000 });
     store.getState().applyEvent({ type: 'turnStarted', threadId: 't1', at: 2 }, 2);
     store.getState().applyEvent({ type: 'messageStarted', threadId: 't1', messageId: 'm1', at: 3 }, 3);
     // 流式期间无 usage，messageFinal 才带权威实报
@@ -189,9 +187,8 @@ describe('live store（对话框/通知/bootstrap 合并）', () => {
     expect(store.getState().threads['t1']?.liveUsage?.input).toBe(61_444);
     store.getState().applyEvent({ type: 'sessionRemoved', threadId: 't1' }, 9);
     expect(store.getState().threads['t1']).toBeUndefined(); // 线程移除随行清理
-    // t2 未收事件：bootstrap 建了空线程态，但用量/窗口仍是空（无残留串写）
+    // t2 未收事件：bootstrap 建了空线程态，但用量仍是空（无残留串写）
     expect(store.getState().threads['t2']?.liveUsage).toBeNull();
-    expect(store.getState().threads['t2']?.dialWindow).toBeNull();
   });
 
   test('hydrate/stopIntent/updateStats/reset 动作', () => {
