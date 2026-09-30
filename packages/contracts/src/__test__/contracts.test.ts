@@ -73,11 +73,11 @@ describe('词表封闭（双向）', () => {
     );
   });
 
-  test('hub 事件名词表封闭（app 消费子集；x-harness 另发 request/*、system/message、assistant/attempt、session/*、command/run|done、autocompact/*、compaction/served-window|diagnostic、agent/error、step/start|end——app 忽略）', () => {
-    expect(HUB_EVENT_NAMES.length).toBe(19);
+  test('hub 事件名词表封闭（app 消费子集；x-harness 另发 request/header、system/message、assistant/attempt、session/*、command/run|done、autocompact/*、compaction/served-window|diagnostic、agent/error、step/start|end——app 忽略）', () => {
+    expect(HUB_EVENT_NAMES.length).toBe(20);
     expect([...HUB_EVENT_NAMES].sort(byStr)).toEqual(
       [
-        'turn/start', 'turn/end',
+        'turn/start', 'turn/end', 'request/context',
         'user/message', 'assistant/message',
         'tool/call', 'tool/result',
         'llm/retry', 'llm/chunk',
@@ -469,6 +469,7 @@ function samplePerUiEvent(): UiEvent[] {
     { type: 'sessionParked', threadId: t, reason: 'idle' },
     { type: 'sessionParked', threadId: t, reason: 'manual' },
     { type: 'turnStarted', threadId: t, at: 1 },
+    { type: 'contextWindow', threadId: t, provider: 'deepseek', model: 'deepseek-flash', window: 1_000_000 },
     { type: 'userMessage', threadId: t, message: { seq: 42, text: 'hi', origin: 'user', images: [] } },
     { type: 'userMessage', threadId: t, message: { seq: 43, text: '[task-notification]', origin: 'system', images: [] } },
     { type: 'messageStarted', threadId: t, messageId: 'a1', at: 1 },

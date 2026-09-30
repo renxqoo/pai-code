@@ -5,7 +5,6 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { copy } from '@/strings';
 import { render } from '@/testing/render';
 
-import type { TokenAnalyticsView } from '@paiapp/contracts';
 
 import { ComposerActionsRow, type EffortControls, type UsageControls } from '../composer-actions-row';
 
@@ -23,6 +22,8 @@ const EFFORT: EffortControls = {
 
 const USAGE: UsageControls = {
   stats: null,
+  live: null,
+  cache: null,
   analytics: null,
   label: copy.composer.usageSummary,
 };
@@ -104,7 +105,7 @@ describe('输入框底行模型选择（弹窗入口）', () => {
   test('用量入口：stats 已拉取为可点按钮（title=用量），未拉取退化为纯展示占位', () => {
     const fetched = renderToStaticMarkup(
       <ComposerActionsRow
-        {...makeProps({ usage: { stats: { userMessages: 1, assistantMessages: 2, toolCalls: 3, tokens: { input: 1200, output: 340, total: 1540 }, cost: 0 }, analytics: null, label: copy.composer.usageSummary } })}
+        {...makeProps({ usage: { stats: { userMessages: 1, assistantMessages: 2, toolCalls: 3, tokens: { input: 1200, output: 340, total: 1540 }, cost: 0 }, live: null, cache: null, analytics: null, label: copy.composer.usageSummary } })}
       />,
     );
     const tag = buttonTag(fetched, copy.composer.usageSummary);
@@ -213,31 +214,30 @@ describe('发送在途 loading（症状：提交卡很久时发送位无任何�
 
 const STATS_FIXTURE = { userMessages: 1, assistantMessages: 2, toolCalls: 3, toolResults: 4, tokens: { input: 1200, output: 340, total: 1540 }, cost: 0 };
 
-function analyticsOf(pct: number): TokenAnalyticsView {
-  return {
-    used: 55_000, window: 200_000, utilizationPct: pct, remaining: 145_000,
-    systemPrompt: 2_000, tools: 35_000, messages: 18_000,
-    cacheHitRate: 0.8, totalCacheRead: 44_000, totalCacheWrite: 5_000, sessionOutput: 3_000,
-  };
+/** 实时用量夹具（占窗口 pct%）。 */
+function liveOf(pct: number): { live: { used: number; window: number }; cache: { read: number; input: number } } {
+  const window = 200_000;
+  const used = (window * pct) / 100;
+  return { live: { used, window }, cache: { read: used * 0.8, input: used } };
 }
 
-describe('用量主芯片（T43 上下文占用口径——累计 total 不冒充上下文）', () => {
-  test('analytics 在场：主指标渲染上下文占用环 + title 带已用占窗口比；不再显百分比文本/累计 total', () => {
+describe('用量主芯片（实时占用口径——事件流每 step 推进）', () => {
+  test('live 在场：主指标渲染上下文占用环 + title 带已用占窗口比；不显百分比文本/累计 total', () => {
     const html = renderToStaticMarkup(
-      <ComposerActionsRow {...makeProps({ usage: { stats: STATS_FIXTURE, analytics: analyticsOf(28), label: copy.composer.usageSummary } })} />,
+      <ComposerActionsRow {...makeProps({ usage: { stats: STATS_FIXTURE, ...liveOf(27.5), analytics: null, label: copy.composer.usageSummary } })} />,
     );
     expect(html).toContain('<circle'); // 环形进度（底环 + 弧段）
-    expect(html).not.toContain('28%'); // 百分比文本不再渲染
+    expect(html).not.toContain('27.5%</button>'); // 百分比文本不渲染
     expect(html).not.toContain('1.5k'); // 累计口径不出现
     const tag = buttonTag(html, copy.composer.usageSummary);
     expect(tag).not.toBeNull();
-    expect(tag).toContain('27.5%'); // title 占窗口比（已用 27.5%）
+    expect(tag).toContain('27.5%'); // title 占窗口比
     expect(tag).not.toContain('200k');
   });
 
   test('阈值变色矩阵（Claude Code 官方示例阈值）：<70 muted；70-89 琥珀；>=90 红', () => {
     const muted = renderToStaticMarkup(
-      <ComposerActionsRow {...makeProps({ usage: { stats: STATS_FIXTURE, analytics: analyticsOf(69), label: copy.composer.usageSummary } })} />,
+      <ComposerActionsRow {...makeProps({ usage: { stats: STATS_FIXTURE, ...liveOf(69), analytics: null, label: copy.composer.usageSummary } })} />,
     );
     const mutedTag = buttonTag(muted, copy.composer.usageSummary);
     expect(mutedTag).toContain('text-muted-foreground');
@@ -245,29 +245,48 @@ describe('用量主芯片（T43 上下文占用口径——累计 total 不冒�
     expect(mutedTag).not.toContain('destructive');
 
     const warn = renderToStaticMarkup(
-      <ComposerActionsRow {...makeProps({ usage: { stats: STATS_FIXTURE, analytics: analyticsOf(70), label: copy.composer.usageSummary } })} />,
+      <ComposerActionsRow {...makeProps({ usage: { stats: STATS_FIXTURE, ...liveOf(70), analytics: null, label: copy.composer.usageSummary } })} />,
     );
     const warnTag = buttonTag(warn, copy.composer.usageSummary);
     expect(warnTag).toContain('text-amber-600');
     expect(warnTag).not.toContain('text-destructive');
 
     const warnHigh = renderToStaticMarkup(
-      <ComposerActionsRow {...makeProps({ usage: { stats: STATS_FIXTURE, analytics: analyticsOf(89), label: copy.composer.usageSummary } })} />,
+      <ComposerActionsRow {...makeProps({ usage: { stats: STATS_FIXTURE, ...liveOf(89), analytics: null, label: copy.composer.usageSummary } })} />,
     );
     expect(buttonTag(warnHigh, copy.composer.usageSummary)).toContain('text-amber-600');
 
     const danger = renderToStaticMarkup(
-      <ComposerActionsRow {...makeProps({ usage: { stats: STATS_FIXTURE, analytics: analyticsOf(90), label: copy.composer.usageSummary } })} />,
+      <ComposerActionsRow {...makeProps({ usage: { stats: STATS_FIXTURE, ...liveOf(90), analytics: null, label: copy.composer.usageSummary } })} />,
     );
     expect(buttonTag(danger, copy.composer.usageSummary)).toContain('text-destructive');
   });
 
-  test('降级回落：analytics 缺席（插件禁用/旧 hub）显累计 total（现状行为）', () => {
+  test('症状回归：已配置窗口不再被假分母污染——live=1M 窗口的 6% 显 6%，不是 104%', () => {
+    // 实测形态：deepseek-flash 实报 input 61444、窗口 1000000 → 6.1%；
+    // 旧实现窗口被 128k 兜底覆盖 → 47.9%（且 remaining 钳 0）
     const html = renderToStaticMarkup(
-      <ComposerActionsRow {...makeProps({ usage: { stats: STATS_FIXTURE, analytics: null, label: copy.composer.usageSummary } })} />,
+      <ComposerActionsRow {...makeProps({ usage: { stats: STATS_FIXTURE, live: { used: 61_444, window: 1_000_000 }, cache: null, analytics: null, label: copy.composer.usageSummary } })} />,
+    );
+    const tag = buttonTag(html, copy.composer.usageSummary);
+    expect(tag).toContain('6.1%');
+    expect(tag).not.toContain('47.9%'); // 128k 假分母下的错误值
+  });
+
+  test('无 live（未发消息/无窗口）：不渲染百分比环；有累计 stats 时回落累计 total', () => {
+    const html = renderToStaticMarkup(
+      <ComposerActionsRow {...makeProps({ usage: { stats: STATS_FIXTURE, live: null, cache: null, analytics: null, label: copy.composer.usageSummary } })} />,
     );
     expect(html).toContain('1.5k');
-    expect(html).not.toContain('%</button>');
+    expect(html).not.toContain('<circle');
+  });
+
+  test('无 live 且无 stats（都未拉取）：占位符不在弹层/环上摆假数据', () => {
+    const html = renderToStaticMarkup(
+      <ComposerActionsRow {...makeProps({ usage: { stats: null, live: null, cache: null, analytics: null, label: copy.composer.usageSummary } })} />,
+    );
+    expect(html).not.toContain('<circle');
+    expect(html).not.toContain('1.5k');
   });
 });
 
@@ -308,7 +327,7 @@ function usageTriggerHost(container: HTMLElement): Element {
 describe('用量明细弹层 hover 触发（延迟开关防闪烁）', () => {
   test('进入出现、移出消失', async () => {
     const view = render(
-      <ComposerActionsRow {...makeProps({ usage: { stats: STATS_FIXTURE, analytics: analyticsOf(28), label: copy.composer.usageSummary } })} />,
+      <ComposerActionsRow {...makeProps({ usage: { stats: STATS_FIXTURE, ...liveOf(27.5), analytics: null, label: copy.composer.usageSummary } })} />,
     );
     const host = usageTriggerHost(view.container);
     expect(showsDetails(view.container)).toBe(false);
@@ -323,7 +342,7 @@ describe('用量明细弹层 hover 触发（延迟开关防闪烁）', () => {
 
   test('症状：扫过触发区闪弹层——进→出同帧不开', async () => {
     const view = render(
-      <ComposerActionsRow {...makeProps({ usage: { stats: STATS_FIXTURE, analytics: analyticsOf(28), label: copy.composer.usageSummary } })} />,
+      <ComposerActionsRow {...makeProps({ usage: { stats: STATS_FIXTURE, ...liveOf(27.5), analytics: null, label: copy.composer.usageSummary } })} />,
     );
     const host = usageTriggerHost(view.container);
     hoverIn(host);
@@ -335,7 +354,7 @@ describe('用量明细弹层 hover 触发（延迟开关防闪烁）', () => {
 
   test('症状：跨触发器与弹层缝隙闪断——开启后 出→进 同帧不关', async () => {
     const view = render(
-      <ComposerActionsRow {...makeProps({ usage: { stats: STATS_FIXTURE, analytics: analyticsOf(28), label: copy.composer.usageSummary } })} />,
+      <ComposerActionsRow {...makeProps({ usage: { stats: STATS_FIXTURE, ...liveOf(27.5), analytics: null, label: copy.composer.usageSummary } })} />,
     );
     const host = usageTriggerHost(view.container);
     hoverIn(host);

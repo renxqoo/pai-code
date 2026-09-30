@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { ArrowUp, ChevronDown, Plus } from 'lucide-react';
 
-import type { SessionStatsView, TokenAnalyticsView } from '@paiapp/contracts';
+import type { SessionStatsView } from '@paiapp/contracts';
 
-import { UsageDetails, formatWindowPct } from './usage-details';
+import { UsageDetails, formatWindowPct, type LiveUsageView } from './usage-details';
 
 import { formatTokenCount, IconButton, MenuButton, menuTriggerClassName, PickerDialog, Progress, Spinner } from '@paiapp/ui';
 import { groupModelOptions } from '@/components/group-model-options';
@@ -25,8 +25,11 @@ type EffortControls = {
 type UsageControls = {
   /** 用量明细（I1）；null = 未拉取，不可点。 */
   stats: SessionStatsView | null
-  /** 上下文分析（T43）；在场 = 主芯片显上下文占用环，缺席 = 回落累计 total。 */
-  analytics: TokenAnalyticsView | null
+  /** 实时上下文用量（事件流派生：每 step 一条 assistant/message 推进）；
+   *  null = 尚无实报或无窗口——主芯片不渲染百分比（无分母不给假值）。 */
+  live: LiveUsageView | null
+  /** 缓存观测（实报 cacheRead/input；null = 无实报）。 */
+  cache: { read: number; input: number } | null
   label: string
 }
 
@@ -59,6 +62,11 @@ type ComposerActionsRowProps = {
   effort: EffortControls | null
   /** 用量控件（null = 无会话数据面，不渲染） */
   usage: UsageControls | null
+}
+
+/** 实时占用的整百分比（阈值配色用；window 必为正——liveUsageOf 已保证）。 */
+function liveUsagePct(live: LiveUsageView): number {
+  return Math.min(100, Math.round((live.used / live.window) * 100));
 }
 
 function optionItems(options: readonly string[], selected: string) {
@@ -115,28 +123,28 @@ function ComposerActionsRow({
             onFocus={usageHover.openNow}
             onBlur={usageHover.closeNow}
           >
-            {usageHover.open && usage.stats !== null ? <UsageDetails analytics={usage.analytics} /> : null}
-            {usage.stats === null ? (
-              <span title={usage.label} className="font-mono text-[11px] leading-none text-muted-foreground/50 tabular-nums">
-                —
-              </span>
-            ) : usage.analytics !== null ? (
+            {usageHover.open && usage.live !== null ? <UsageDetails live={usage.live} cache={usage.cache} /> : null}
+            {usage.live !== null ? (
               <button
                 type="button"
-                title={`${usage.label} · ${copy.usage.contextUsed(formatWindowPct(usage.analytics.used, usage.analytics.window))}`}
+                title={`${usage.label} · ${copy.usage.contextUsed(formatWindowPct(usage.live.used, usage.live.window))}`}
                 aria-label={usage.label}
                 aria-expanded={usageHover.open}
                 className={cn(
                   'rounded-md p-[2px] outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50',
-                  usage.analytics.utilizationPct >= 90
+                  liveUsagePct(usage.live) >= 90
                     ? 'text-destructive'
-                    : usage.analytics.utilizationPct >= 70
+                    : liveUsagePct(usage.live) >= 70
                       ? 'text-amber-600 dark:text-amber-400'
                       : 'text-muted-foreground',
                 )}
               >
-                <Progress value={usage.analytics.utilizationPct} />
+                <Progress value={liveUsagePct(usage.live)} />
               </button>
+            ) : usage.stats === null ? (
+              <span title={usage.label} className="font-mono text-[11px] leading-none text-muted-foreground/50 tabular-nums">
+                —
+              </span>
             ) : (
               <button
                 type="button"

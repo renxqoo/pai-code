@@ -92,6 +92,9 @@ export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: num
       return mapLiveCall(state, event.callId, (call) => ({ ...call, output: clip(event.output) }));
     case 'toolEnded':
       return onToolEnded(state, event.callId, event.output, event.isError, event.diff, now);
+    case 'contextWindow':
+      // 拨号窗口（WAL 实拨事实）：分母单一来源。占用由 assistant/message 每 step 推进。
+      return { ...state, dialWindow: { provider: event.provider, model: event.model, window: event.window } };
     case 'messageFinal':
       return onMessageFinal(state, event);
     case 'turnSettled': {
@@ -271,13 +274,17 @@ function onMessageFinal(
   state: LiveThreadState,
   event: Extract<UiEvent, { type: 'messageFinal' }>,
 ): LiveThreadState {
+  // 上下文占用推进（LLM 实报 input，每 step 一条）：**先于** UI 归属守卫——
+  // 占用是会话级事实，不随轮次归属丢弃。usage 缺席（用户中断/空回复 step）
+  // 保持上一 step 值，不得塌成 0。
+  const next: LiveThreadState = event.message.usage !== null ? { ...state, liveUsage: event.message.usage } : state;
   // 跨轮守卫：该消息曾登记过归属轮且不属当前 live 轮（错序/重放的迟到权威快照）
-  // → 丢弃——补进新轮会把旧轮正文拼接成双份/错位
-  const owner = state.messageTurns[event.message.id];
-  if (owner !== undefined && owner !== state.liveTurnId) return state;
-  const turn = findTurn(state, state.liveTurnId);
-  if (turn === null) return state;
-  return updateTurn(state, turn.id, (current) => {
+  // → 正文不入新轮（会拼成双份/错位）；占用已在上方推进，不受此限
+  const owner = next.messageTurns[event.message.id];
+  if (owner !== undefined && owner !== next.liveTurnId) return next;
+  const turn = findTurn(next, next.liveTurnId);
+  if (turn === null) return next;
+  return updateTurn(next, turn.id, (current) => {
     // 权威身份到达即认领匿名块（重载落在消息流式中：增量空 id 折出的中转块），
     // 下方替换/补块才能寻址到它；不认领则同一条消息永久渲染成两个体
     let blocks = claimAnonymousBlocks(current.blocks, event.message.id).map((block) => {

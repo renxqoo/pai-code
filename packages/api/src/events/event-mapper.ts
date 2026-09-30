@@ -1,4 +1,4 @@
-import { isTodoTool, usageOf, type UiEvent, type Usage } from '@paiapp/contracts';
+import { isTodoTool, usageOf, type UiEvent } from '@paiapp/contracts';
 
 import { previewArgs } from '../views/args-preview';
 import { flattenUserText, userImages } from '../views/content';
@@ -27,7 +27,7 @@ import { todoSnapshotOf } from '../views/todo-snapshot';
  *   无 hub settled 债务，不合成则 loading 永挂；驱动轮的 settled 随后被去重吞掉）
  * agent/inbox/spliced（结构信号：主进程层拉取 get_state.queue 合成 queueChanged）
  * permission/decided（审计事件；对话框交互面是 ui_request 帧）
- * step/start|end、system/message、assistant/attempt、request/*、
+ * step/start|end、system/message、assistant/attempt、request/header、
  *   session/*、command/run|done、autocompact/*（前向兼容忽略）
  * agent/error（终态经 settled/turn/end 收敛）
  * todo 清单工具的 tool/call|result（对话流零痕迹——面板进程区由 todo/snapshot 呈现；
@@ -45,7 +45,6 @@ interface StreamBuffer {
   step: number;
   text: string;
   thinking: string;
-  usage: Usage | null;
 }
 
 /** 映射器实例的流式累积域（per-mapper 状态；calls = callId→工具名，tool/result 无名字段——diff 提取靠它回查）。 */
@@ -180,6 +179,15 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
         }
         case 'llm/chunk':
           return mapChunk(state, threadId, payload, deps);
+        case 'request/context': {
+          // 内核实拨窗口（拨号变化才落一条）：contextWindow 分母的唯一来源。
+          // 窗口缺席（未配且无档案级）→ 不发事件，展示层按无分母不渲染百分比。
+          const provider = str(payload['provider']);
+          const model = str(payload['model']);
+          const window = payload['contextWindow'];
+          if (typeof window !== 'number' || !Number.isFinite(window) || window <= 0) return [];
+          return [{ type: 'contextWindow', threadId, provider, model, window }];
+        }
         case 'agent/assistant-stream': {
           // 主会话 attempt 边界（内核 runAttempt 流失败重试在同 turn/step 内从头发
           // 第二段流——llm/chunk 面无重开标记）：phase:'start' 与当前缓冲同一步时
@@ -204,7 +212,7 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
           let buffer = state.streams.get(threadId);
           if (buffer === undefined || buffer.turn !== turn || buffer.step !== step) {
             state.counter += 1;
-            buffer = { messageId: `stream-${state.counter}`, turn, step, text: '', thinking: '', usage: null };
+            buffer = { messageId: `stream-${state.counter}`, turn, step, text: '', thinking: '' };
             state.streams.set(threadId, buffer);
           }
           return [
@@ -346,7 +354,7 @@ function mapChunk(state: StreamState, threadId: string, payload: Record<string, 
     if (settledTurn !== undefined && Number.isFinite(settledTurn) && turn <= settledTurn) return [];
     // 步边界开新缓冲；无缓冲的首增量（订阅窗口边界/竞争）同样开缓冲兜底，不丢单词
     state.counter += 1;
-    buffer = { messageId: `stream-${state.counter}`, turn, step, text: '', thinking: '', usage: null };
+    buffer = { messageId: `stream-${state.counter}`, turn, step, text: '', thinking: '' };
     state.streams.set(threadId, buffer);
     const started: UiEvent = { type: 'messageStarted', threadId, messageId: buffer.messageId, at: deps.now() };
     return [started, ...emitChunk(threadId, buffer, chunk)];
@@ -382,9 +390,7 @@ function emitChunk(threadId: string, buffer: StreamBuffer, chunk: Record<string,
     buffer.thinking += delta;
     return [{ type: 'thinkingDelta', threadId, messageId: buffer.messageId, delta }];
   }
-  if (kind === 'usage') {
-    buffer.usage = usageOf(chunk['usage']);
-  }
+  // usage chunk 不产事件：终局 usage 以 WAL assistant/message 载荷为权威
   return [];
 }
 

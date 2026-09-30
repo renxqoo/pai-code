@@ -263,10 +263,10 @@ describe('app API 全接口 × 真 x-harness host-hub（script 默认门）', ()
     // script adapter 实报 output = 16+len('analytics') = 25（按会话独立计）
     expect(view.sessionOutput).toBe(25);
     expect(view.window).toBe(200_000);
-    // 实报优先律（hub 契约）：used = 实报 input（64）；估算偏大时 messages 归零
+    // 实报优先律（hub 契约）：used = 实报 input（64）。
+    // 分项估算（messages/tools/systemPrompt）与剩余/使用率已删——展示层自算，
+    // hub 不再产「估算相减的残差」。
     expect(view.used).toBe(64);
-    expect(view.messages).toBe(0);
-    expect([view.remaining, view.utilizationPct]).toEqual([200_000 - 64, 0]);
   }, 30_000);
 
   test.if(hubAvailable && hubTokenAnalytics)('全接口旅程 + 落存储断言', async () => {

@@ -9,6 +9,7 @@ import { copyOfError } from '@/lib/error-text';
 import { copy } from '@/strings';
 import { imagePayloadOf } from '@/composer/read-image-file';
 import { ComposerActionsRow } from '@/composer/composer-actions-row';
+import { liveUsageOf } from '@/composer/usage-details';
 import { composerSelectionOf } from '@/composer/composer-selection';
 import {
   registerComposerTextarea,
@@ -54,7 +55,9 @@ function ComposerRegion(): React.JSX.Element {
   const activeSession = useStore(liveStore, (s) => (s.activeThreadId === null ? undefined : s.sessions[s.activeThreadId]));
   const models = useStore(liveStore, (s) => s.models);
   const activeStats = useStore(liveStore, (s) => s.stats[s.activeThreadId ?? '']) ?? null;
-  const activeAnalytics = useStore(liveStore, (s) => s.analytics[s.activeThreadId ?? '']) ?? null;
+  // 实时占用/窗口（事件流派生）：每 step 一条 assistant/message 推进，无需拉取
+  const activeLiveUsage = useStore(liveStore, (s) => s.threads[s.activeThreadId ?? '']?.liveUsage ?? null);
+  const activeDialWindow = useStore(liveStore, (s) => s.threads[s.activeThreadId ?? '']?.dialWindow ?? null);
   const sessionPermissionMode = useStore(liveStore, (s) => s.sessionPermissionMode);
   const hostPhase = useStore(liveStore, (s) => s.hostPhase);
   const commands = useStore(liveStore, (s) => s.commands);
@@ -320,7 +323,12 @@ function ComposerRegion(): React.JSX.Element {
               options: selection.effortOptions,
               onSelect: workspaceActions.selectEffort,
             }}
-            usage={{ stats: activeStats, analytics: activeAnalytics, label: copy.composer.usageSummary }}
+            usage={{
+              stats: activeStats,
+              live: liveUsageOf(activeLiveUsage, activeDialWindow?.window ?? null),
+              cache: activeLiveUsage !== null ? { read: activeLiveUsage.cacheRead, input: activeLiveUsage.input } : null,
+              label: copy.composer.usageSummary,
+            }}
           />
         )}
       />

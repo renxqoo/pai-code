@@ -41,17 +41,15 @@ export function UsageCard() {
         setRows([]);
         return;
       }
+      // 真值两件：实报占用与实拨窗口（分项估算已从 hub 契约删除——估算归
+      // token-meter，不再由展示层产「估算相减的残差」）。
       const used = typeof data.data['used'] === 'number' ? (data.data['used'] as number) : 0;
       const window = typeof data.data['window'] === 'number' ? (data.data['window'] as number) : 0;
-      const messages = typeof data.data['messages'] === 'number' ? (data.data['messages'] as number) : 0;
-      const system = typeof data.data['systemPrompt'] === 'number' ? (data.data['systemPrompt'] as number) : 0;
-      const tools = typeof data.data['tools'] === 'number' ? (data.data['tools'] as number) : 0;
       const rowsOut: UsageRow[] = [];
+      // 窗口缺失 = 无分母：不算百分比（不给假值）
       if (window > 0) {
         rowsOut.push({ label: '上下文占用', percent: Math.min(100, Math.round((used / window) * 100)), value: formatTokens(used) });
-        if (messages > 0) rowsOut.push({ label: '消息', percent: Math.min(100, Math.round((messages / window) * 100)), value: formatTokens(messages) });
-        if (system > 0) rowsOut.push({ label: '系统提示', percent: Math.min(100, Math.round((system / window) * 100)), value: formatTokens(system) });
-        if (tools > 0) rowsOut.push({ label: '工具', percent: Math.min(100, Math.round((tools / window) * 100)), value: formatTokens(tools) });
+        rowsOut.push({ label: '剩余空间', percent: Math.min(100, Math.round(((window - used) / window) * 100)), value: formatTokens(Math.max(0, window - used)) });
       }
       setRows(rowsOut);
     });

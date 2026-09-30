@@ -7,7 +7,6 @@ import type {
   SubagentSnapshotView,
   CommandView,
   SessionStatsView,
-  TokenAnalyticsView,
   SkillView,
   ApiData,
   ModelInfoView,
@@ -86,8 +85,6 @@ export interface LiveStoreState {
   dialogs: readonly PendingDialog[];
   activeThreadId: string | null;
   stats: Readonly<Record<string, SessionStatsView>>;
-  /** 上下文分析（T43）：线程级快照；缺席 = 插件未装载/未拉取（芯片回落累计口径）。 */
-  analytics: Readonly<Record<string, TokenAnalyticsView>>;
   /** 通知条（bash 携图拒绝/失败类接线层提示的瞬时呈现）。 */
   notices: readonly { id: string; text: string }[];
 }
@@ -108,7 +105,6 @@ export interface LiveStoreActions {
   bootstrapFailed(reason: string): void;
   setActiveThread(threadId: string | null): void;
   updateStats(threadId: string, stats: SessionStatsView): void;
-  updateAnalytics(threadId: string, analytics: TokenAnalyticsView): void;
   /** 直执行 bash 开始/结束（流式尾部经 bashOutput 事件折叠）。 */
   bashStarted(threadId: string): void;
   bashSettled(threadId: string): void;
@@ -167,7 +163,6 @@ export function createLiveStore() {
               const sessions = omitKey(state.sessions, event.threadId);
               const threads = omitKey(state.threads, event.threadId);
               const stats = omitKey(state.stats, event.threadId);
-              const analytics = omitKey(state.analytics, event.threadId);
               // 线程已移除，挂起对话框永无应答对象：随行收走（与 sessionDied/host 同口径）
               const dialogs = state.dialogs.filter((dialog) => dialog.threadId !== event.threadId);
               let activeThreadId = state.activeThreadId;
@@ -179,7 +174,7 @@ export function createLiveStore() {
                     : undefined;
                 activeThreadId = successor?.threadId ?? firstSessionId(sessions);
               }
-              return { sessions, threads, stats, analytics, dialogs, ...activeThreadFlip(state, activeThreadId) };
+              return { sessions, threads, stats, dialogs, ...activeThreadFlip(state, activeThreadId) };
             }
             case 'sessionDied': {
               const thread = threadOf(state, event.threadId);
@@ -313,9 +308,6 @@ export function createLiveStore() {
       },
       updateStats(threadId, stats) {
         set((state) => ({ stats: { ...state.stats, [threadId]: stats } }));
-      },
-      updateAnalytics(threadId, analytics) {
-        set((state) => ({ analytics: { ...state.analytics, [threadId]: analytics } }));
       },
       bashStarted(threadId) {
         set((state) => ({ threads: { ...state.threads, [threadId]: { ...threadOf(state, threadId), bashRunning: true, bashTail: '' } } }));
@@ -480,7 +472,6 @@ function initialStoreState(): LiveStoreState {
     dialogs: [],
     activeThreadId: null,
     stats: {},
-    analytics: {},
     notices: [],
   };
 }
