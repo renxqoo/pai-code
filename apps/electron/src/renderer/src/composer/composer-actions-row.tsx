@@ -30,6 +30,8 @@ type UsageControls = {
   live: LiveUsageView | null
   /** 缓存观测（实报 cacheRead/input；null = 无实报）。 */
   cache: { read: number; input: number } | null
+  /** 占用构成的两个静态分量（会话级拉取；null = 未拉到，三行不渲染）。 */
+  composition: { systemPrompt: number; tools: number } | null
   label: string
 }
 
@@ -123,7 +125,7 @@ function ComposerActionsRow({
             onFocus={usageHover.openNow}
             onBlur={usageHover.closeNow}
           >
-            {usageHover.open && usage.live !== null ? <UsageDetails live={usage.live} cache={usage.cache} /> : null}
+            {usageHover.open && usage.live !== null ? <UsageDetails live={usage.live} cache={usage.cache} composition={usage.composition} /> : null}
             {usage.live !== null ? (
               <button
                 type="button"

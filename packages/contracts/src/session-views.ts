@@ -28,21 +28,17 @@ export const SessionStatsViewSchema = z.object({
 });
 export type SessionStatsView = z.infer<typeof SessionStatsViewSchema>;
 
-/** tokenAnalytics 视图（T43）：上下文占用展示就绪派生（used = 实报 input 优先——
- *  输入侧口径不含 output；无实报退估算下限。utilizationPct 取整主指标；构成分项为
- *  估算口径——与实报占用分开命名；window 为会话拨号查表值：模型级 > 档案级）。 */
+/** tokenAnalytics 视图：占用构成的两个**静态分量**（会话内近似不变——系统提示词含
+ *  技能段、工具 schema；技能/项目指令变更时才动）。
+ *
+ *  只承载展示层无法自行得知的静态分量：**占用与窗口不在这里**——占用走事件流
+ *  （assistant/message 实报 usage，每 step 推进）、窗口走模型目录（get_models 的
+ *  contextWindow，模型本体属性）。messages 也不提供：它是「占用 − 两估」的残差，
+ *  两估之和超实报时会被钳成 0（旧「已用 5.6% / 消息 0%」自相矛盾的成因），
+ *  改由展示层从实报占用实时派生，三行天然满足求和恒等式。 */
 export const TokenAnalyticsViewSchema = z.object({
-  used: z.number(),
-  window: z.number(),
-  utilizationPct: z.number().int(),
-  remaining: z.number(),
   systemPrompt: z.number(),
   tools: z.number(),
-  messages: z.number(),
-  cacheHitRate: z.number(),
-  totalCacheRead: z.number(),
-  totalCacheWrite: z.number(),
-  sessionOutput: z.number(),
 });
 export type TokenAnalyticsView = z.infer<typeof TokenAnalyticsViewSchema>;
 

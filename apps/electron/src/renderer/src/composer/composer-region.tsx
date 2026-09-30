@@ -57,6 +57,7 @@ function ComposerRegion(): React.JSX.Element {
   const activeStats = useStore(liveStore, (s) => s.stats[s.activeThreadId ?? '']) ?? null;
   // 实时占用/窗口（事件流派生）：每 step 一条 assistant/message 推进，无需拉取
   const activeLiveUsage = useStore(liveStore, (s) => s.threads[s.activeThreadId ?? '']?.liveUsage ?? null);
+  const activeComposition = useStore(liveStore, (s) => s.analytics[s.activeThreadId ?? ''] ?? null);
   const sessionPermissionMode = useStore(liveStore, (s) => s.sessionPermissionMode);
   const hostPhase = useStore(liveStore, (s) => s.hostPhase);
   const commands = useStore(liveStore, (s) => s.commands);
@@ -326,6 +327,7 @@ function ComposerRegion(): React.JSX.Element {
               stats: activeStats,
               live: liveUsageOf(activeLiveUsage, windowOfModel(models, activeSession?.model ?? null)),
               cache: activeLiveUsage !== null ? { read: activeLiveUsage.cacheRead, input: activeLiveUsage.input } : null,
+              composition: activeComposition,
               label: copy.composer.usageSummary,
             }}
           />

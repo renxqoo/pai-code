@@ -24,6 +24,7 @@ const USAGE: UsageControls = {
   stats: null,
   live: null,
   cache: null,
+  composition: null,
   analytics: null,
   label: copy.composer.usageSummary,
 };
@@ -105,7 +106,7 @@ describe('输入框底行模型选择（弹窗入口）', () => {
   test('用量入口：stats 已拉取为可点按钮（title=用量），未拉取退化为纯展示占位', () => {
     const fetched = renderToStaticMarkup(
       <ComposerActionsRow
-        {...makeProps({ usage: { stats: { userMessages: 1, assistantMessages: 2, toolCalls: 3, tokens: { input: 1200, output: 340, total: 1540 }, cost: 0 }, live: null, cache: null, analytics: null, label: copy.composer.usageSummary } })}
+        {...makeProps({ usage: { stats: { userMessages: 1, assistantMessages: 2, toolCalls: 3, tokens: { input: 1200, output: 340, total: 1540 }, cost: 0 }, live: null, cache: null, composition: null, analytics: null, label: copy.composer.usageSummary } })}
       />,
     );
     const tag = buttonTag(fetched, copy.composer.usageSummary);
@@ -215,10 +216,14 @@ describe('发送在途 loading（症状：提交卡很久时发送位无任何�
 const STATS_FIXTURE = { userMessages: 1, assistantMessages: 2, toolCalls: 3, toolResults: 4, tokens: { input: 1200, output: 340, total: 1540 }, cost: 0 };
 
 /** 实时用量夹具（占窗口 pct%）。 */
-function liveOf(pct: number): { live: { used: number; window: number }; cache: { read: number; input: number } } {
+function liveOf(pct: number): {
+  live: { used: number; window: number };
+  cache: { read: number; input: number };
+  composition: { systemPrompt: number; tools: number };
+} {
   const window = 200_000;
   const used = (window * pct) / 100;
-  return { live: { used, window }, cache: { read: used * 0.8, input: used } };
+  return { live: { used, window }, cache: { read: used * 0.8, input: used }, composition: { systemPrompt: 2_000, tools: 3_000 } };
 }
 
 describe('用量主芯片（实时占用口径——事件流每 step 推进）', () => {
@@ -275,7 +280,7 @@ describe('用量主芯片（实时占用口径——事件流每 step 推进）'
 
   test('无 live（未发消息/无窗口）：不渲染百分比环；有累计 stats 时回落累计 total', () => {
     const html = renderToStaticMarkup(
-      <ComposerActionsRow {...makeProps({ usage: { stats: STATS_FIXTURE, live: null, cache: null, analytics: null, label: copy.composer.usageSummary } })} />,
+      <ComposerActionsRow {...makeProps({ usage: { stats: STATS_FIXTURE, live: null, cache: null, composition: null, analytics: null, label: copy.composer.usageSummary } })} />,
     );
     expect(html).toContain('1.5k');
     expect(html).not.toContain('<circle');
@@ -283,7 +288,7 @@ describe('用量主芯片（实时占用口径——事件流每 step 推进）'
 
   test('无 live 且无 stats（都未拉取）：占位符不在弹层/环上摆假数据', () => {
     const html = renderToStaticMarkup(
-      <ComposerActionsRow {...makeProps({ usage: { stats: null, live: null, cache: null, analytics: null, label: copy.composer.usageSummary } })} />,
+      <ComposerActionsRow {...makeProps({ usage: { stats: null, live: null, cache: null, composition: null, analytics: null, label: copy.composer.usageSummary } })} />,
     );
     expect(html).not.toContain('<circle');
     expect(html).not.toContain('1.5k');

@@ -264,26 +264,13 @@ export function sessionStatsView(data: unknown): SessionStatsView {
   };
 }
 
-/** get_token_analytics 响应 → 视图（T43）：展示就绪派生单点。utilizationPct 取整
- *  边界用 total/window 全精度先乘后取整（不先用 hub 的 utilization 浮点再取整——
- *  同源同式，避免两处取整差一）；window ≤0 时 pct 恒 0（垃圾输入降级不崩）。 */
+/** get_token_analytics 响应 → 视图：只收两个静态分量（占用/窗口/缓存各有通道，
+ *  见 TokenAnalyticsViewSchema 注释）。缺字段退 0（垃圾输入降级不崩）。 */
 export function tokenAnalyticsView(data: unknown): TokenAnalyticsView {
-  const d = recordOf(data);
-  const b = recordOf(d.breakdown);
-  const used = num(b.total, 0);
-  const window = num(b.contextWindow, 0);
+  const b = recordOf(recordOf(data).breakdown);
   return {
-    used,
-    window,
-    utilizationPct: window > 0 ? Math.round((used / window) * 100) : 0,
-    remaining: num(b.remaining, 0),
     systemPrompt: num(b.systemPrompt, 0),
     tools: num(b.tools, 0),
-    messages: num(b.messages, 0),
-    cacheHitRate: num(b.cacheHitRate, 0),
-    totalCacheRead: num(b.totalCacheRead, 0),
-    totalCacheWrite: num(b.totalCacheWrite, 0),
-    sessionOutput: num(d.sessionOutput, 0),
   };
 }
 

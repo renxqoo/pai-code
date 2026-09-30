@@ -260,13 +260,10 @@ describe('app API 全接口 × 真 x-harness host-hub（script 默认门）', ()
     const analytics = (await h.invoke('session/tokenAnalytics', { threadId })) as { ok: true; data: TokenAnalyticsView } | { ok: false };
     if (!analytics.ok) throw new Error('tokenAnalytics failed');
     const view = analytics.data;
-    // script adapter 实报 output = 16+len('analytics') = 25（按会话独立计）
-    expect(view.sessionOutput).toBe(25);
-    expect(view.window).toBe(200_000);
-    // 实报优先律（hub 契约）：used = 实报 input（64）。
-    // 分项估算（messages/tools/systemPrompt）与剩余/使用率已删——展示层自算，
-    // hub 不再产「估算相减的残差」。
-    expect(view.used).toBe(64);
+    // 契约收窄为占用构成的两个静态分量：占用走事件流、窗口走模型目录、缓存随 usage 帧；
+    // hub 只提供展示层无从得知的静态分量（系统提示词含技能段、工具 schema）。
+    expect(view.systemPrompt).toBeGreaterThan(0);
+    expect(view.tools).toBeGreaterThan(0);
   }, 30_000);
 
   test.if(hubAvailable && hubTokenAnalytics)('全接口旅程 + 落存储断言', async () => {

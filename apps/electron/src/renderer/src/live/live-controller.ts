@@ -555,10 +555,15 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
       return outcome.ok ? { ok: true, latencyMs: outcome.data.latencyMs } : { ok: false, reason: copyOfError(outcome.error) };
     },
     async refreshUsage(threadId: string): Promise<void> {
-      // 只拉累计统计：上下文占用与窗口走事件流（每 step 一条 assistant/message +
-      // request/context），不再有轮末拉取的上下文分析面。
-      const stats = await api.session.stats({ threadId });
+      // 累计统计 + 占用构成的两个静态分量（系统提示词/工具）。占用本身走事件流
+      // （assistant/message 实报 usage，每 step 推进）、窗口走模型目录——此处只取
+      // 展示层无从得知的静态分量；缺席（插件未装载/旧 hub）不报错不重试。
+      const [stats, analytics] = await Promise.all([
+        api.session.stats({ threadId }),
+        api.session.tokenAnalytics({ threadId }).catch(() => null),
+      ]);
       if (stats.ok) store.getState().updateStats(threadId, stats.data);
+      if (analytics?.ok) store.getState().updateAnalytics(threadId, analytics.data);
     },
     ensureHydrated: (threadId: string, options?: { force?: boolean }) => readonlyHydration.ensureHydrated(threadId, options),
     selectSession(threadId: string): void {

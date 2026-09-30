@@ -249,13 +249,10 @@ describe('API schema：每方法合法/非法样本', () => {
   test('session/tokenAnalytics（T43）：params threadId 必填；result 形状往返与垃圾拒绝', () => {
     expect(ApiSchemas['session/tokenAnalytics'].params.parse({ threadId: 't1' })).toEqual({ threadId: 't1' });
     expect(() => ApiSchemas['session/tokenAnalytics'].params.parse({})).toThrow();
-    const view = {
-      used: 55_000, window: 200_000, utilizationPct: 28, remaining: 145_000,
-      systemPrompt: 2_000, tools: 35_000, messages: 18_000,
-      cacheHitRate: 0.8, totalCacheRead: 44_000, totalCacheWrite: 5_000, sessionOutput: 3_000,
-    };
+    // 契约收窄为占用构成的两个静态分量：占用走事件流、窗口走模型目录
+    const view = { systemPrompt: 2_000, tools: 35_000 };
     expect(ApiSchemas['session/tokenAnalytics'].result.parse(view)).toEqual(view);
-    expect(() => ApiSchemas['session/tokenAnalytics'].result.parse({ ...view, utilizationPct: 27.5 })).toThrow(); // int 约束
+    expect(() => ApiSchemas['session/tokenAnalytics'].result.parse({ systemPrompt: 2_000 })).toThrow(); // tools 必填
   });
 
   test('session/prompt 携带 images 合法；畸形 image 拒绝', () => {

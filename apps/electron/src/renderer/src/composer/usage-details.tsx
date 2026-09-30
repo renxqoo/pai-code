@@ -5,7 +5,7 @@ import type { Usage } from '@paiapp/contracts';
 import { copy } from '@/strings';
 
 /** 上下文用量视图（实时计算，来自事件流——不是拉取快照）。
- *  used = 最近一次 LLM 实报 input；window = 内核实拨窗口（两者皆真值）。 */
+ *  used = 最近一次 LLM 实报 input；window = 模型目录的上下文窗口（两者皆真值）。 */
 export type LiveUsageView = {
   used: number;
   window: number;
@@ -16,6 +16,8 @@ type UsageDetailsProps = {
   live: LiveUsageView | null;
   /** 缓存命中率分子分母（实报 cacheRead / input；无实报退 null 不显示）。 */
   cache: { read: number; input: number } | null;
+  /** 占用构成的两个静态分量（会话级拉取）；null = 未拉到，三行不渲染。 */
+  composition: { systemPrompt: number; tools: number } | null;
 };
 
 /** 占窗口比：token 换算成窗口百分比（一位小数）。窗口非法退 '—'——
@@ -31,6 +33,25 @@ export function liveUsageOf(usage: Usage | null, window: number | null): LiveUsa
   return { used: usage.input, window };
 }
 
+/** 占用构成三行：系统提示词/工具为**静态分量**（hub 目录侧提供），
+ *  消息 = 实报占用 − 前两项（展示层实时派生）。
+ *
+ *  为何消息不由 hub 给：那样它是「占用 − 两估」的残差，两估之和超实报时会被钳成 0，
+ *  与占用自相矛盾（旧「已用 5.6% / 消息 0%」的成因）。改为此处派生后三行恒满足
+ *  系统提示词 + 工具 + 消息 = 占用，夹紧只发生在占用本身小于两估之和的罕见情形。 */
+export function compositionRows(
+  live: LiveUsageView,
+  composition: { systemPrompt: number; tools: number } | null,
+): ReadonlyArray<[string, string]> {
+  if (composition === null) return [];
+  const messages = Math.max(0, live.used - composition.systemPrompt - composition.tools);
+  return [
+    [copy.usage.systemPromptLabel, formatWindowPct(composition.systemPrompt, live.window)],
+    [copy.usage.toolsLabel, formatWindowPct(composition.tools, live.window)],
+    [copy.usage.contextMessagesLabel, formatWindowPct(messages, live.window)],
+  ];
+}
+
 function rowsOf(rows: ReadonlyArray<[string, string]>): React.JSX.Element[] {
   return rows.map(([label, value]) => (
     <div key={label} className="flex items-center justify-between px-[10px] py-[3px]">
@@ -40,13 +61,13 @@ function rowsOf(rows: ReadonlyArray<[string, string]>): React.JSX.Element[] {
   ));
 }
 
-/** 用量明细弹层：只列真值行（剩余/窗口/缓存命中率）。
- *  估算分项（系统提示词/工具/消息）已删——那些是「实报 − 两估」的残差，
- *  估算和超实报时被钳成 0，与占用自相矛盾；估算归 token-meter，不进展示层。 */
-function UsageDetails({ live, cache }: UsageDetailsProps) {
+/** 用量明细弹层：占用构成三行（系统提示词/工具/消息）+ 剩余空间 + 窗口 + 缓存命中率，
+ *  一律占窗口百分比。分项为估算口径但不再标注文案——整块同一口径（百分比）呈现。 */
+function UsageDetails({ live, cache, composition }: UsageDetailsProps) {
   if (live === null) return null;
   const remaining = Math.max(0, live.window - live.used);
   const rows: ReadonlyArray<[string, string]> = [
+    ...compositionRows(live, composition),
     [copy.usage.freeSpaceLabel, formatWindowPct(remaining, live.window)],
     [copy.usage.windowLabel, formatWindowPct(live.window, live.window)],
     ...(cache !== null && cache.input > 0

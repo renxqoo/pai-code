@@ -257,49 +257,25 @@ describe('modelInfos（get_models 扁平数组）', () => {
   });
 });
 
-describe('tokenAnalyticsView（get_token_analytics · T43 上下文占用视图）', () => {
-  const fullBreakdown = {
-    breakdown: {
-      systemPrompt: 2_000, tools: 35_000, messages: 18_000, total: 55_000,
-      contextWindow: 200_000, remaining: 145_000, utilization: 0.275,
-      lastReportedInput: 55_000, totalOutputTokens: 3_000,
-      cacheHitRate: 0.8, totalCacheRead: 44_000, totalCacheWrite: 5_000,
-    },
-    sessionOutput: 3_000,
-  };
-
-  test('完整 breakdown → 展示就绪派生（used/window 透传；utilizationPct 全精度先乘后取整）', () => {
-    expect(tokenAnalyticsView(fullBreakdown)).toEqual({
-      used: 55_000,
-      window: 200_000,
-      utilizationPct: 28, // 0.275*100=27.5 → Math.round
-      remaining: 145_000,
-      systemPrompt: 2_000,
-      tools: 35_000,
-      messages: 18_000,
-      cacheHitRate: 0.8,
-      totalCacheRead: 44_000,
-      totalCacheWrite: 5_000,
-      sessionOutput: 3_000,
-    });
+describe('tokenAnalyticsView（get_token_analytics · 占用构成静态分量）', () => {
+  test('只收 systemPrompt/tools 两个静态分量（占用/窗口/缓存各有通道）', () => {
+    expect(
+      tokenAnalyticsView({
+        breakdown: {
+          systemPrompt: 2_000, tools: 35_000, messages: 18_000, total: 55_000,
+          contextWindow: 200_000, remaining: 145_000, utilization: 0.275,
+          lastReportedInput: 55_000, totalOutputTokens: 3_000,
+          cacheHitRate: 0.8, totalCacheRead: 44_000, totalCacheWrite: 5_000,
+        },
+        sessionOutput: 3_000,
+      }),
+    ).toEqual({ systemPrompt: 2_000, tools: 35_000 });
   });
 
-  test('取整边界：27.5 → 28（四舍五入）；window ≤ 0 → pct 恒 0（垃圾不崩）', () => {
-    expect(tokenAnalyticsView({ breakdown: { total: 275, contextWindow: 1_000 } }).utilizationPct).toBe(28);
-    expect(tokenAnalyticsView({ breakdown: { total: 500, contextWindow: 0 } }).utilizationPct).toBe(0);
-    expect(tokenAnalyticsView({ breakdown: { total: -1, contextWindow: -5 } }).utilizationPct).toBe(0);
-  });
-
-  test('resume 无实报形态：分项估算在场（used=sys+tools+messages）', () => {
-    const view = tokenAnalyticsView({ breakdown: { systemPrompt: 2_000, tools: 35_000, messages: 0, total: 37_000, contextWindow: 200_000 }, sessionOutput: 0 });
-    expect(view.used).toBe(37_000);
-    expect(view.utilizationPct).toBe(19); // 37000/200000 = 18.5% → Math.round
-  });
-
-  test('垃圾输入降级全零形态不抛', () => {
-    expect(tokenAnalyticsView({})).toEqual({ used: 0, window: 0, utilizationPct: 0, remaining: 0, systemPrompt: 0, tools: 0, messages: 0, cacheHitRate: 0, totalCacheRead: 0, totalCacheWrite: 0, sessionOutput: 0 });
-    expect(tokenAnalyticsView('junk').used).toBe(0);
-    expect(tokenAnalyticsView({ breakdown: 'x' }).window).toBe(0);
+  test('垃圾输入降级：缺字段退 0 不崩', () => {
+    expect(tokenAnalyticsView({})).toEqual({ systemPrompt: 0, tools: 0 });
+    expect(tokenAnalyticsView('junk')).toEqual({ systemPrompt: 0, tools: 0 });
+    expect(tokenAnalyticsView(null)).toEqual({ systemPrompt: 0, tools: 0 });
   });
 });
 
