@@ -5,6 +5,7 @@ import type { HistoryItem, SessionView, UiEvent } from '@paiapp/contracts';
 
 import { foldThreadEvent } from '../fold-events';
 import { foldHydrate } from '../fold-hydrate';
+import { bindEchoEntries, claimEchoes, pendingEchoes } from '../pending-echoes';
 import { initialThreadState, type LiveThreadState } from '../live-thread-state';
 import { createLiveStore } from '../store';
 
@@ -146,6 +147,127 @@ describe('乐观回显收敛（reconcileEcho——提交即上屏，权威到达
     store.getState().reconcileEcho('t', 'local-2', 660);
     const items = threadOf(store).items.filter((item) => item.kind === 'message');
     expect(items.map((item) => (item.kind === 'message' ? item.message.id : ''))).toEqual(['msg-seq-647', 'msg-seq-660']);
+  });
+});
+
+/** 症状链路复现（2026-10-03 WAL seq 13246/13247）：压缩摘要 replace 帧直通 → 误领
+ * 乐观回显队首 → 真消息再达不收敛。mapper + fold + store + 回显认领全链——与
+ * live-controller.onEvent 的认领路径同一条（帧侧此前缺 replace 门，条目侧一直有）。 */
+describe('压缩摘要 replace 帧 × 乐观回显（链路级症状回归）', () => {
+  const SUMMARY = ['<goals>', '- goal-a', '</goals>', '', 'The message above is an automatic continuation summary generated mid-task. Continue the current work directly. Do not recap the summary to the user and do not ask for confirmation.'].join('\n');
+
+  test('症状回归「发一条消息出现两条相同气泡」：摘要帧不冒领回显，真消息按 seq 收敛', () => {
+    const mapper = createEventMapper({ now: () => T });
+    const store = createLiveStore();
+    store.getState().bootstrap(bootstrapOf([session('t')]) as never);
+    // 提交即回显（submitDraft 两段之一）：本地气泡 msg-local-1 在场，入队登记
+    store.getState().echoPendingMessage('t', 'local-1', TEXT);
+    pendingEchoes.set('t', [{ localId: 'local-1', text: TEXT }]);
+    // 轮启动边沿：autocompact L2 摘要以 replace 型 user/message 落账（WAL 13246 形态）
+    const summaryEvents = mapper.mapEvent({
+      threadId: 't',
+      name: 'user/message',
+      payload: { seq: 13246, surfaceOp: { op: 'replace', startSeq: 10, endSeq: 103 }, turn: 1, step: 0, content: [{ type: 'text', text: SUMMARY }] },
+    });
+    expect(summaryEvents).toEqual([]);
+    // 真用户消息帧（WAL 13249 形态）——唯一有权认领回显的帧
+    const realEvents = mapper.mapEvent({
+      threadId: 't',
+      name: 'user/message',
+      payload: { seq: 13249, turn: 47, step: 0, content: [{ type: 'text', text: TEXT }] },
+    });
+    // onEvent 认领路径：真认领单元（claimEchoes——与生产同一段代码，非测试重演）
+    for (const event of [...summaryEvents, ...realEvents]) {
+      store.getState().applyEvent(event, T);
+      if (event.type === 'userMessage' && event.message.origin === 'user') {
+        claimEchoes(store.getState(), 't', event.message.seq, event.message.claimedIds, event.message.userBlocks);
+      }
+    }
+    const messages = (store.getState().threads['t'] ?? initialThreadState).items.filter((item) => item.kind === 'message');
+    // 一条真消息 + 一条回显收敛到同一 seq 身份 = 恰好一条气泡；摘要全文不上屏
+    const texts = messages.flatMap((item) => (item.kind === 'message' ? [item.message.text] : []));
+    expect(texts).toEqual([TEXT]);
+    expect(texts.some((t) => t.includes('<goals>'))).toBe(false);
+    expect(messages[0]?.kind === 'message' ? messages[0].message.id : '').toBe('msg-seq-13249');
+  });
+});
+
+/** 症状链路复现二（2026-10-01 WAL seq 8335/8337）：流式中连发两条并「立即改向」→
+ * 两条回显在队；step 边界一次 claim 合并物化为**单帧** user/message（双 text 块）
+ * → 帧只到达一次，FIFO 只认领队首一条，另一条回显永不收敛 = 重启即失的重复气泡。 */
+describe('批量认领合并帧 × 乐观回显（链路级症状回归）', () => {
+  const A = '为什么要这个文件';
+  const B = '这里不是有了吗';
+
+  test('症状回归「聊着聊着出现两条相同消息」：合并帧按块拆分认领全部在途回显', () => {
+    const mapper = createEventMapper({ now: () => T });
+    const store = createLiveStore();
+    store.getState().bootstrap(bootstrapOf([session('t')]) as never);
+    // 连发两条（各自回显、各自入队——与 submitDraft 同构）
+    store.getState().echoPendingMessage('t', 'local-1', A);
+    store.getState().echoPendingMessage('t', 'local-2', B);
+    pendingEchoes.set('t', [
+      { localId: 'local-1', text: A },
+      { localId: 'local-2', text: B },
+    ]);
+    // 内核 appendUserBatch 把同批认领的多条输入合并成单帧（双 text 块——WAL 8337 形态）；
+    // mapper 携带 userBlocks=2（输入条数来自帧结构，非换行计数）
+    const frameEvents = mapper.mapEvent({
+      threadId: 't',
+      name: 'user/message',
+      payload: { seq: 8337, turn: 33, step: 50, content: [{ type: 'text', text: A }, { type: 'text', text: B }] },
+    });
+    expect(frameEvents).toHaveLength(1);
+    const frame = frameEvents[0];
+    if (frame?.type !== 'userMessage') throw new Error('frame missing');
+    expect(frame.message.userBlocks).toBe(2);
+    store.getState().applyEvent(frame, T);
+    // 认领：真单元（claimEchoes——与 onEvent 同一段代码，非测试重演）
+    claimEchoes(store.getState(), 't', frame.message.seq, frame.message.claimedIds, frame.message.userBlocks);
+    const messages = (store.getState().threads['t'] ?? initialThreadState).items.filter((item) => item.kind === 'message');
+    const texts = messages.flatMap((item) => (item.kind === 'message' ? [item.message.text] : []));
+    // 合并帧一条气泡（双输入拼合）+ 零孤儿回显（否则 B 的 msg-local-* 永不收敛，
+    // 与合并气泡并存 = 用户所报「同样的消息两条」，重启后转写重建只剩一条）
+    expect(texts).toEqual([`${A}\n${B}`]);
+    const ids = messages.map((item) => (item.kind === 'message' ? item.message.id : ''));
+    expect(ids.some((id) => id.startsWith('msg-local-'))).toBe(false);
+  });
+
+  test('症状回归「较新条目先物化」（立即改向时序）：claimedIds 精准配对，不错领别人的回显', () => {
+    const mapper = createEventMapper({ now: () => T });
+    const store = createLiveStore();
+    store.getState().bootstrap(bootstrapOf([session('t')]) as never);
+    // 流式中连发 M1、M2（两条回显），对 M2 点「立即改向」→ M2 先物化（内核双队列
+    // 认领序 ≠ 提交序）。queueChanged 先把 inbox 条目 id 绑到回显（onEvent 同一条）。
+    store.getState().echoPendingMessage('t', 'local-1', '消息一');
+    store.getState().echoPendingMessage('t', 'local-2', '消息二');
+    pendingEchoes.set('t', [
+      { localId: 'local-1', text: '消息一' },
+      { localId: 'local-2', text: '消息二' },
+    ]);
+    bindEchoEntries('t', [
+      { id: 'entry-m1', text: '消息一' },
+      { id: 'entry-m2', text: '消息二' },
+    ]);
+    // M2 单独物化（steer 路径）：帧携带 claimedIds=[entry-m2]（内核 user 标记条目）
+    const frameEvents = mapper.mapEvent({
+      threadId: 't',
+      name: 'user/message',
+      payload: { seq: 9001, turn: 5, step: 3, content: [{ type: 'text', text: '消息二' }], claimedIds: ['entry-m2'] },
+    });
+    const frame = frameEvents[0];
+    if (frame?.type !== 'userMessage') throw new Error('frame missing');
+    expect(frame.message.claimedIds).toEqual(['entry-m2']);
+    store.getState().applyEvent(frame, T);
+    claimEchoes(store.getState(), 't', frame.message.seq, frame.message.claimedIds, frame.message.userBlocks);
+    // M2 的回显收敛；M1 的回显原封不动（它还在 next-turn 队列里，未被错领）
+    const items = (store.getState().threads['t'] ?? initialThreadState).items.filter((item) => item.kind === 'message');
+    const ids = items.map((item) => (item.kind === 'message' ? item.message.id : ''));
+    expect(ids).toContain('msg-seq-9001');
+    expect(ids).toContain('msg-local-1');
+    expect(ids).not.toContain('msg-local-2');
+    const bound = pendingEchoes.get('t') ?? [];
+    expect(bound.map((slot) => slot.localId)).toEqual(['local-1']);
   });
 });
 

@@ -96,11 +96,14 @@ const uiEventDefs = {
   turnStarted: z.object({ type: z.literal('turnStarted'), threadId, at: z.number() }),
   /** 用户角色消息：本地 prompt 回显或系统注入（task-notification / task-message）。
    *  seq = 该落账的 WAL 行号，与条目对账（`seq-<seq>`）**同一身份域**——同一句话
-   *  经事件帧与转写两路到达时按 id 去重，不必靠文本比对（见 fold-events）。 */
+   *  经事件帧与转写两路到达时按 id 去重，不必靠文本比对（见 fold-events）。
+   *  claimedIds = 帧内用户输入的 inbox 条目 id（按序；内核仅标记 prompt/
+   *  followup/steer 物化物）：乐观回显按 id 精准配对收敛（双队列认领序 ≠ 提交序，
+   *  FIFO 只作旧 hub 兼容兑底）。userBlocks = 旧 hub 兼容字段（块数兑底）。 */
   userMessage: z.object({
     type: z.literal('userMessage'),
     threadId,
-    message: z.object({ seq: z.number(), text: z.string(), origin: z.enum(['user', 'system']), images: z.array(imagePayload) }),
+    message: z.object({ seq: z.number(), text: z.string(), origin: z.enum(['user', 'system']), images: z.array(imagePayload), claimedIds: z.array(z.string()).optional(), userBlocks: z.number().int().positive().max(64).optional() }),
   }),
   messageStarted: z.object({ type: z.literal('messageStarted'), threadId, messageId: z.string(), at: z.number() }),
   /** 流式正文增量：只拼 delta，权威内容见 messageFinal。 */

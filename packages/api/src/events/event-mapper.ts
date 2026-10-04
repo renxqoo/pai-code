@@ -3,7 +3,7 @@ import { isTodoTool, usageOf, type UiEvent } from '@paiapp/contracts';
 import { previewArgs } from '../views/args-preview';
 import { flattenUserText, userImages } from '../views/content';
 import { diffFromToolCall } from '../views/diff-extract';
-import { isBashEnvelope } from '../views/entries-mapper';
+import { isBashEnvelope, isReplaceOp } from '../views/entries-mapper';
 import { isSnapshotFrame } from '../views/snapshot-frame';
 import { subagentsField } from '../views/subagent-spawns';
 import { editHunksField } from '../views/edit-hunks';
@@ -132,6 +132,12 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
           // 直通面曾无此门：注入快照（turn 0/step 0 无 origin）被当用户气泡上屏，
           // 与转写侧的新增过滤面不一致。
           if (isSnapshotFrame({ ...recordOf(payload), type: 'user/message' })) return [];
+          // replace 型 user/message 是内核压缩摘要（compaction/autocompact L2 的区间
+          // 落账，surfaceOp=replace 是唯一产生者特征）：条目侧归系统条并整条折叠
+          // （entries-mapper isReplaceOp + compaction-summary 标记），帧侧同口径整帧
+          // 跳过——否则摘要全文当用户气泡上屏，并按 seq 误领乐观回显的队首
+          //（真实消息随后以自身 seq 到达，回显已出队 → 同一句话两条气泡）。
+          if (isReplaceOp(payload.surfaceOp)) return [];
           // 用户消息直通：气泡随事件帧上屏（~16ms），不等条目对账。身份取 **WAL seq**
           // （sessionPayload 携带）——与条目对账的 `seq-<seq>` 同域，同一句话经两路
           // 到达时由 fold 的 seenIds 直接去重（不再靠文本比对，连发同文本各自成条）。
@@ -144,6 +150,11 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
           const seq = num(payload.seq, Number.NaN);
           if (!Number.isFinite(seq)) return [];
           const origin = str(payload.origin);
+          // 认领身份（内核 claimedIds：仅 user 标记的 prompt/followup/steer 物化物）。
+          // 乐观回显按 id 精准配对——双队列认领序 ≠ 提交序（立即改向的较新条目可先
+          // 物化），纯 FIFO 会错领。旧 hub 无 claimedIds：退回块数兑底（text 块数）。
+          const claimedIds = stringArrayOf(payload.claimedIds);
+          const userBlocks = textBlocksOf(payload.content);
           return [
             {
               type: 'userMessage',
@@ -153,6 +164,8 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
                 text,
                 origin: origin === 'system' ? 'system' : 'user',
                 images: userImages(payload.content).map(({ data, mediaType }) => ({ type: 'image' as const, data, mediaType })),
+                ...(origin !== 'system' && claimedIds.length > 0 ? { claimedIds } : {}),
+                ...(origin !== 'system' && claimedIds.length === 0 && userBlocks > 1 ? { userBlocks } : {}),
               },
             },
           ];
@@ -508,6 +521,26 @@ function str(value: unknown): string {
 
 function num(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+/** 响载荷内的用户 text 块数（合并物化帧的输入条数；非数组/无块→1）。 */
+function textBlocksOf(content: unknown): number {
+  if (!Array.isArray(content)) return 1;
+  let count = 0;
+  for (const block of content) {
+    if (typeof block === 'object' && block !== null && (block as Record<string, unknown>)['type'] === 'text' && typeof (block as Record<string, unknown>)['text'] === 'string') count += 1;
+  }
+  return Math.max(1, count);
+}
+
+/** 响载荷内的字符串数组收窄（claimedIds 透传；垃圾成员剔除，非数组→空）。 */
+function stringArrayOf(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const out: string[] = [];
+  for (const item of value) {
+    if (typeof item === 'string' && item.length > 0) out.push(item);
+  }
+  return out;
 }
 
 function recordOf(value: unknown): Record<string, unknown> {

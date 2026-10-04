@@ -6,7 +6,7 @@ import { copy } from '@/strings';
 import { uiStore } from '@/ui/ui-store';
 import { copyOfError } from '@/lib/error-text';
 import type { BridgeClient } from './client-invoke';
-import { pendingEchoes } from './pending-echoes';
+import { bindEchoEntries, claimEchoes } from './pending-echoes';
 import { createRuntimeController } from './runtime-controller';
 import { createBashEndProbe } from './bash-end-probe';
 import { createEntryHydration, createReadonlyHydration } from './entry-hydration';
@@ -137,19 +137,14 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
     const state = store.getState();
     state.applyEvent(event, Date.now());
     if (event.type === 'userMessage' && event.message.origin === 'user') {
-      // 权威用户气泡到达（WAL 帧直通）：它带的 WAL seq 即本会话落账身份。在途回显
-      // （乐观回显）同步换到同一身份域——否则同文本异 id 两条并存。若宿主回执
-      // 已先对账（reconcileEcho 已消费登记），这里无可收敛。
-      const pending = pendingEchoes.get(event.threadId)?.[0];
-      if (pending !== undefined) {
-        store.getState().reconcileEcho(event.threadId, pending.localId, event.message.seq);
-        // FIFO 出队：WAL seq 单调 ⇒ 权威帧到达序 = 提交序（队首即最近未认领的回显）
-        const queue = pendingEchoes.get(event.threadId);
-        if (queue !== undefined) {
-          queue.shift();
-          if (queue.length === 0) pendingEchoes.delete(event.threadId);
-        }
-      }
+      // 权威用户气泡到达（WAL 帧直通）：认领逻辑单一真相在 pending-echoes（claimedIds
+      // 精准配对优先，FIFO 块数兑底——症状回归锚定见 user-bubble-identity.test）。
+      claimEchoes(store.getState(), event.threadId, event.message.seq, event.message.claimedIds, event.message.userBlocks);
+    }
+    if (event.type === 'queueChanged') {
+      // 队列镜像到达：把 hub 物化的 inbox 条目 id 绑到在途回显（claimedIds 配对的
+      // 前置登记；steering + followUp 合并登记，顺序即提交序）。
+      bindEchoEntries(event.threadId, [...event.steering, ...event.followUp]);
     }
     if (event.type === 'gitChanged') {
       // hub git/changed（外部 checkout 失效信号）：bump 分支代次——use-git-branches 按

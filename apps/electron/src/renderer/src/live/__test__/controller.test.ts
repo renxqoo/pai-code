@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 
 import { createLiveController } from '../live-controller';
 import { createLiveStore } from '../store';
+import { pendingEchoes } from '../pending-echoes';
 import type { BridgeClient } from '../client-invoke';
 
 /**
@@ -524,5 +525,38 @@ test('症状回归「重载落在轮次进行中：同一轮折叠分裂成两�
   });
   // 拒绝不外抛（.catch 兜住）；live 轮照常折出，分裂留待 settle 权威重建收口
   expect(store.getState().threads.t2?.liveTurnId ?? null).not.toBeNull();
+  controller.dispose();
+});
+
+test('症状回归「两条相同消息/孤儿回显」：真 onEvent 驱动 claimedIds 配对认领（controller 级）', async () => {
+  const timers = stubTimers();
+  const store = createLiveStore();
+  const client = makeClient();
+  const controller = createLiveController(client, store);
+  await controller.start();
+  store.getState().bootstrap({ sessions: [{ threadId: 't1', cwd: '/w', sessionPath: null, title: 'T', state: 'live', streaming: false, model: null, thinkingLevel: null, lastActivityAt: 1 }], saved: [], models: [], providers: [], preferences: { defaultModel: null, onboarded: true, projectModels: {}, pinnedSessions: [], trustedDefault: false, hiddenProjects: [], idleRecycleMinutes: 5, archivedSessions: [] }, hostPhase: 'ready' } as never);
+
+  const emit = client.emitToController;
+  // submitDraft 两段之一：回显入队（与 workspace-actions 同构）
+  store.getState().echoPendingMessage('t1', 'local-1', '消息一');
+  store.getState().echoPendingMessage('t1', 'local-2', '消息二');
+  pendingEchoes.set('t1', [
+    { localId: 'local-1', text: '消息一' },
+    { localId: 'local-2', text: '消息二' },
+  ]);
+  // hub 受理物化：queueChanged 到达（真 onEvent 内 bindEchoEntries 登记 id 配对面）
+  emit({ type: 'queueChanged', threadId: 't1', steering: [], followUp: [{ id: 'entry-m1', text: '消息一' }, { id: 'entry-m2', text: '消息二' }] });
+  // 较新条目先物化（立即改向时序）：claimedIds 只含 entry-m2
+  emit({ type: 'userMessage', threadId: 't1', message: { seq: 9001, text: '消息二', origin: 'user', images: [], claimedIds: ['entry-m2'] } });
+  // 合并帧随后（M1 与续轮输入合并）：claimedIds 只含 entry-m1
+  emit({ type: 'userMessage', threadId: 't1', message: { seq: 9002, text: '消息一', origin: 'user', images: [], claimedIds: ['entry-m1'] } });
+
+  const items = (store.getState().threads.t1?.items ?? []).filter((item) => item.kind === 'message');
+  const ids = items.map((item) => (item.kind === 'message' ? item.message.id : ''));
+  // 两条权威气泡各就位、零孤儿回显（旧 FIFO 行为下第二条 userMessage 到达时队列已空，
+  // local-1 沦为孤儿与气泡并存——即「聊着聊着出现两条相同消息」）
+  expect([...ids].sort((a, b) => a.localeCompare(b))).toEqual(['msg-seq-9001', 'msg-seq-9002']);
+  expect(pendingEchoes.get('t1')).toBeUndefined();
+  timers.fire();
   controller.dispose();
 });

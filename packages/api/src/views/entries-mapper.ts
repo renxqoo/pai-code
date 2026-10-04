@@ -241,8 +241,9 @@ export function mapEntries(data: unknown): { items: HistoryItem[]; cursor: numbe
 
 /** surfaceOp replace 判别：replace 型 user/message 的唯一产生者是内核压缩摘要落账
  *  （compaction/autocompact L2——与内核 findLastSummary 同款结构特征），按协议字段
- *  判别，非文本嗅探。 */
-function isReplaceOp(surfaceOp: unknown): boolean {
+ *  判别，非文本嗅探。帧侧（event-mapper）与条目侧（entries-mapper）共用——
+ *  replace 型在渲染面不是用户发言，两入口必须同一判据。 */
+export function isReplaceOp(surfaceOp: unknown): boolean {
   return recordOf(surfaceOp)['op'] === 'replace';
 }
 

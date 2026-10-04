@@ -23,10 +23,19 @@ function settleSubmit(threadId: string, localId: string, message: string, reason
     uiStore.getState().requestFollowLatest(threadId);
     return;
   }
-  // 失败：按 localId 精确出队回滚（不与后续提交的回显混淆；即使彼时队列里已有新条目）
+  // 失败：按 localId 精确出队回滚（不与后续提交的回显混淆；即使彼时队列里已有新条目）。
+  // 回显不在队：气泡若还在场（认领异常序）直接除名并回填草稿；已不在场 = 被认领
+  // 收敛（权威气泡承载文本），不得回填（否则「已发出的消息又出现在输入框»）。
   const queue = pendingEchoes.get(threadId);
   const index = queue === undefined ? -1 : queue.findIndex((entry) => entry.localId === localId);
-  if (queue === undefined || index === -1) return;
+  if (queue === undefined || index === -1) {
+    const stillPending = (store.getState().threads[threadId]?.items ?? []).some(
+      (item) => item.kind === 'message' && item.message.id === `msg-${localId}`,
+    );
+    if (stillPending) store.getState().dropPendingMessage(threadId, localId);
+    if (!stillPending) uiStore.getState().setDraft(threadId, message);
+    return;
+  }
   const [entry] = queue.splice(index, 1);
   if (queue.length === 0) pendingEchoes.delete(threadId);
   if (entry === undefined) return;
