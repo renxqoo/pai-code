@@ -13,6 +13,8 @@ import { Platform } from 'react-native';
 import { createPairingSession, generateDeviceIdentity, type PairingStep } from '@/mobile/relay/pairing';
 import { dialWebSocket } from '@/mobile/relay/ws-dial';
 import { relayCredentialsStore } from '@/mobile/relay/credentials';
+import { QrScanModal } from '@/mobile/relay/qr-scan-modal';
+import { discoverGateway } from '@/mobile/relay/discover';
 
 const STATUS_LABEL: Record<string, string> = {
   disconnected: '未连接',
@@ -73,13 +75,12 @@ function makePairingWire(relayUrl: string, pairingTicket: string) {
 export default function DevicesRoute() {
   const { colors } = useAppTheme();
   const { status, runtime } = useRelayStatus();
-  const [relayHost, setRelayHost] = React.useState('');
   const [pairCode, setPairCode] = React.useState('');
-  const [pairPayload, setPairPayload] = React.useState('');
   const [pairing, setPairing] = React.useState(false);
   const [pairError, setPairError] = React.useState<string | null>(null);
   const [sas, setSas] = React.useState<string | null>(null);
   const [hasCredentials, setHasCredentials] = React.useState(relayCredentialsStore.load() !== null);
+  const [qrScanning, setQrScanning] = React.useState(false);
   React.useEffect(() => {
     // preload 完成后（未配对态无 status 事件）随 status 变化刷新（M4）
     setHasCredentials(relayCredentialsStore.load() !== null);
@@ -188,73 +189,41 @@ export default function DevicesRoute() {
           <Text style={{ color: colors.textMuted, fontSize: 12, paddingHorizontal: 3, paddingBottom: spacing.sm }}>尚未配对——在桌面端「设置 → 设备与连接」发起配对，然后扫码或输入配对码。</Text>
         )}
 
-        <SectionHeader title="配对（扫码载荷或 8 位码）" />
-        <View style={{ backgroundColor: colors.surface, borderRadius: radius.lg, marginBottom: spacing.xs2, paddingHorizontal: 12 }}>
-          <TextInput
-            accessibilityLabel="配对载荷"
-            autoCapitalize="none"
-            autoCorrect={false}
-            onChangeText={(value) => setPairPayload(value.trim())}
-            placeholder="粘贴桌面端配对码（{relayUrl,pairingId,…}）
-或手输 8 位码 + relay 地址"
-            placeholderTextColor={colors.textFaint}
-            multiline
-            style={{ color: colors.text, fontSize: 13, minHeight: 60, padding: 10, textAlignVertical: 'top' }}
-            value={pairPayload}
-          />
-        </View>
+        <SectionHeader title="配对（扫码或手输）" />
+        <Button
+          containerStyle={{ marginBottom: spacing.xs2 }}
+          disabled={pairing}
+          label={pairing ? '配对中…' : '扫码配对'}
+          onPress={() => { setPairError(null); setQrScanning(true); }}
+        />
         <View style={{ backgroundColor: colors.surface, borderRadius: radius.lg, marginBottom: spacing.xs2, paddingHorizontal: 12 }}>
           <TextInput
             accessibilityLabel="配对码"
-            autoCapitalize="characters"
-            autoCorrect={false}
-            maxLength={9}
-            onChangeText={(value) => setPairCode(value.toUpperCase())}
-            placeholder="如 ABCD-EFGH"
-            placeholderTextColor={colors.textFaint}
-            style={{ color: colors.text, fontSize: 15, letterSpacing: 2, minHeight: 46, textAlign: 'center' }}
-            value={pairCode}
-          />
-        </View>
-        <View style={{ backgroundColor: colors.surface, borderRadius: radius.lg, marginBottom: spacing.xs2, paddingHorizontal: 12 }}>
-          <TextInput
-            accessibilityLabel="服务器地址"
             autoCapitalize="none"
             autoCorrect={false}
-            onChangeText={(value) => setRelayHost(value.trim())}
-            placeholder="relay 地址（如 relay.example.com 或 ws://ip:端口）"
+            keyboardType="number-pad"
+            maxLength={6}
+            onChangeText={(value) => setPairCode(value.replace(/[^0-9]/g, '').slice(0, 6))}
+            placeholder="输入桌面端显示的 6 位配对码"
             placeholderTextColor={colors.textFaint}
-            style={{ color: colors.text, fontSize: 14, minHeight: 46 }}
-            value={relayHost}
+            style={{ color: colors.text, fontSize: 22, fontWeight: '600', letterSpacing: 6, minHeight: 54, textAlign: 'center' }}
+            value={pairCode}
           />
         </View>
         <Button
           containerStyle={{ flex: 1 }}
-          disabled={pairing || pairPayload.length === 0}
-          label={pairing ? '配对中…' : '配对'}
+          disabled={pairing || pairCode.length !== 6}
+          label={pairing ? '配对中…' : '输入 6 位码配对'}
           onPress={() => {
-            // 手输码路径：gateway 经 relay 转发配对面（pairingTicket 由桌面端发起时生成）
-            if (pairPayload.length > 0) {
-              try {
-                const payload = JSON.parse(pairPayload) as { relayUrl?: string; pairingId?: string; installationId?: string; gatewayEphemeralPub?: string; gatewayKeyFingerprint?: string; pairingTicket?: string; code?: string };
-                if (typeof payload.relayUrl === 'string' && typeof payload.pairingId === 'string' && typeof payload.installationId === 'string' && payload.installationId.length > 0 && typeof payload.gatewayKeyFingerprint === 'string') {
-                  void pairWithTicket(payload.relayUrl, payload.pairingId, payload.installationId, payload.pairingTicket ?? '', typeof payload.gatewayEphemeralPub === 'string' ? payload.gatewayEphemeralPub : undefined, typeof payload.code === 'string' ? payload.code : undefined, payload.gatewayKeyFingerprint);
-                  return;
-                }
-                setPairError('配对载荷缺少 relayUrl/pairingId/installationId/gatewayKeyFingerprint');
-                return;
-              } catch {
-                setPairError('配对载荷不是合法 JSON');
+            void (async () => {
+              setPairError(null);
+              const hit = await discoverGateway(pairCode);
+              if (hit === null) {
+                setPairError('未找到配对码——确认桌面端已发起配对，且手机与电脑在同一网络');
                 return;
               }
-            }
-            if (relayHost.length === 0) {
-              setPairError('手输码模式需同时填 relay 地址');
-              return;
-            }
-            // 手输码路径（M6 接线）：需 installationId（gw_ 地址域）——载荷缺省时经
-            // gateway 节点发现不可行（ pairing 面无该面），要求载荷或扫码承载
-            setPairError('手输码需配对载荷（含 installationId）——从桌面端复制完整配对码后粘贴');
+              void pairWithTicket(hit.relayUrl, hit.pairingId, hit.installationId, hit.pairingTicket, undefined, pairCode, hit.gatewayKeyFingerprint);
+            })();
           }}
           size="small"
         />
@@ -270,6 +239,24 @@ export default function DevicesRoute() {
           </Card>
         ) : null}
         {pairError !== null ? <Text style={{ color: colors.destructive, fontSize: 12, marginTop: spacing.sm }}>{pairError}</Text> : null}
+
+        <QrScanModal
+          onClose={() => { setQrScanning(false); }}
+          onPayload={(payload) => {
+            setQrScanning(false);
+            try {
+              const parsed = JSON.parse(payload) as { relayUrl?: string; pairingId?: string; installationId?: string; gatewayEphemeralPub?: string; gatewayKeyFingerprint?: string; pairingTicket?: string };
+              if (typeof parsed.relayUrl === 'string' && typeof parsed.pairingId === 'string' && typeof parsed.installationId === 'string' && parsed.installationId.length > 0 && typeof parsed.gatewayKeyFingerprint === 'string') {
+                void pairWithTicket(parsed.relayUrl, parsed.pairingId, parsed.installationId, parsed.pairingTicket ?? '', typeof parsed.gatewayEphemeralPub === 'string' ? parsed.gatewayEphemeralPub : undefined, undefined, parsed.gatewayKeyFingerprint);
+                return;
+              }
+              setPairError('二维码内容缺少 relayUrl/pairingId/installationId/gatewayKeyFingerprint');
+            } catch {
+              setPairError('二维码内容不是合法配对载荷');
+            }
+          }}
+          visible={qrScanning}
+        />
 
         <View style={{ alignItems: 'flex-start', flexDirection: 'row', gap: 6, marginTop: spacing.xs3 }}>
           <Link2 color={colors.textFaint} size={14} />

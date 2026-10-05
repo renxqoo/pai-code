@@ -18,6 +18,7 @@
     "doctor": "expo-doctor"
   },
   "dependencies": {
+    "@paiapp/api": "workspace:*",
     "@paiapp/contracts": "workspace:*",
     "@paiapp/relay-protocol": "workspace:*",
     "@paiapp/ui-thread": "workspace:*",
@@ -28,6 +29,7 @@
     "buffer": "^6.0.3",
     "diff": "^9",
     "expo": "^57.0.25",
+    "expo-camera": "~57.0.6",
     "expo-constants": "~57.0.19",
     "expo-crypto": "^57.0.3",
     "expo-document-picker": "~57.0.2",
@@ -50,8 +52,7 @@
     "react-native-svg": "15.15.4",
     "react-native-web": "~0.21.0",
     "shiki": "^3",
-    "zustand": "^5.0.15",
-    "@paiapp/api": "workspace:*"
+    "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@babel/core": "^7.28.6",

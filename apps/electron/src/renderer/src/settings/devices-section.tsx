@@ -1,4 +1,5 @@
 import * as React from 'react';
+import QRCode from 'qrcode';
 
 import type { RelayConfig } from '@paiapp/contracts';
 import { ActionButton } from '@paiapp/ui';
@@ -48,10 +49,11 @@ interface DeviceRow {
   lastSeenAt: number;
 }
 
-/** gw/pairing/start 数据（qr 模式）。 */
+/** gw/pairing/start 数据（qr+manual 双展示）。 */
 interface PairingSession {
   pairingId: string;
   qrPayload: string;
+  manualCode: string;
   expiresAt: number;
 }
 
@@ -84,6 +86,7 @@ export function DevicesSection({ relay, onRelaySave }: DevicesSectionProps): Rea
   const [pairing, setPairing] = React.useState<PairingSession | null>(null);
   const [pairingScope, setPairingScope] = React.useState<'read' | 'interact' | 'full'>('interact');
   const [sasInput, setSasInput] = React.useState('');
+  const [qrImage, setQrImage] = React.useState<string | null>(null);
   const [pairingError, setPairingError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [relayUrl, setRelayUrl] = React.useState(relay.relayUrl);
@@ -119,6 +122,22 @@ export function DevicesSection({ relay, onRelaySave }: DevicesSectionProps): Rea
     return () => clearInterval(timer);
   }, [refresh]);
 
+  React.useEffect(() => {
+    if (pairing === null) {
+      setQrImage(null);
+      return;
+    }
+    let cancelled = false;
+    void QRCode.toDataURL(pairing.qrPayload, { errorCorrectionLevel: 'M', margin: 1, width: 320 }).then((url) => {
+      if (!cancelled) setQrImage(url);
+    }, () => {
+      if (!cancelled) setQrImage(null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [pairing]);
+
   // 配对会话 120s 单次——倒计时到期清面
   React.useEffect(() => {
     if (pairing === null) return;
@@ -144,11 +163,12 @@ export function DevicesSection({ relay, onRelaySave }: DevicesSectionProps): Rea
         const data = gatewayData(result);
         const pairingId = (data as { pairingId?: unknown } | null)?.pairingId;
         const qrPayload = (data as { qrPayload?: unknown } | null)?.qrPayload;
+        const manualCode = (data as { manualCode?: unknown } | null)?.manualCode;
         if (typeof pairingId !== 'string' || typeof qrPayload !== 'string') {
           setPairingError(copy.settings.pairBadResponse);
           return;
         }
-        setPairing({ pairingId, qrPayload, expiresAt: now() + 120_000 });
+        setPairing({ pairingId, qrPayload, manualCode: typeof manualCode === 'string' ? manualCode : '', expiresAt: now() + 120_000 });
       })
       .finally(() => {
         setBusy(false);
@@ -201,7 +221,7 @@ export function DevicesSection({ relay, onRelaySave }: DevicesSectionProps): Rea
     if (relayBusy) return;
     setRelayBusy(true);
     setRelayNotice(null);
-    void onRelaySave({ relayUrl: relayUrl.trim(), relayKeyFingerprint: relayFingerprint.trim() }).then((saved) => {
+    void onRelaySave({ remoteEnabled: true, relayUrl: relayUrl.trim(), relayKeyFingerprint: relayFingerprint.trim() }).then((saved) => {
       setRelayNotice(saved ? copy.settings.relaySaved : copy.settings.relaySaveFailed);
     }).finally(() => {
       setRelayBusy(false);
@@ -291,14 +311,31 @@ export function DevicesSection({ relay, onRelaySave }: DevicesSectionProps): Rea
           {pairing !== null ? (
             <div className="mt-[14px] flex flex-col gap-[10px]">
               <p className="text-[12px] text-muted-foreground">{copy.settings.pairShowPayload}</p>
-              <div className="flex items-center gap-[10px]">
-                <code className="max-w-full flex-1 overflow-hidden text-ellipsis whitespace-nowrap rounded-lg border border-border bg-surface-subtle px-[10px] py-[8px] text-[11px] text-foreground">
-                  {pairing.qrPayload.slice(0, 96)}…
-                </code>
-                <ActionButton size="sm" variant="outline" onClick={copyPayload}>
-                  {copy.settings.pairCopy}
-                </ActionButton>
-              </div>
+              {qrImage !== null ? (
+                <div className="flex items-start gap-[14px]">
+                  <img alt="pairing qr" className="h-[180px] w-[180px] rounded-lg border border-border bg-white p-[6px]" src={qrImage} />
+                  <div className="flex min-w-0 flex-1 flex-col gap-[10px]">
+                    <p className="text-[12px] leading-[17px] text-muted-foreground">手机端「设置 → 设备与连接」扫码，或输入下方 6 位配对码；随后比对两侧数字并在下方确认。</p>
+                    {pairing.manualCode.length > 0 ? (
+                      <p className="select-all font-mono text-[30px] font-bold tracking-[0.32em] text-foreground">{pairing.manualCode}</p>
+                    ) : null}
+                    <div>
+                      <ActionButton size="sm" variant="outline" onClick={copyPayload}>
+                        {copy.settings.pairCopy}
+                      </ActionButton>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-[10px]">
+                  <code className="max-w-full flex-1 overflow-hidden text-ellipsis whitespace-nowrap rounded-lg border border-border bg-surface-subtle px-[10px] py-[8px] text-[11px] text-foreground">
+                    {pairing.qrPayload.slice(0, 96)}…
+                  </code>
+                  <ActionButton size="sm" variant="outline" onClick={copyPayload}>
+                    {copy.settings.pairCopy}
+                  </ActionButton>
+                </div>
+              )}
               <div className="flex items-center gap-[8px]">
                 <input
                   aria-label={copy.settings.sasInputLabel}

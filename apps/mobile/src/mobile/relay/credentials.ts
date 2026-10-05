@@ -15,15 +15,35 @@ import { Platform } from 'react-native';
 const secureAvailable = Platform.OS !== 'web';
 
 const secureGet = async (key: string): Promise<string | null> => {
-  if (!secureAvailable) return null;
+  if (!secureAvailable) {
+    try {
+      return globalThis.sessionStorage?.getItem(`pai.web.${key}`) ?? null;
+    } catch {
+      return null;
+    }
+  }
   return SecureStore.getItemAsync(key);
 };
 const secureSet = async (key: string, value: string): Promise<void> => {
-  if (!secureAvailable) return;
+  if (!secureAvailable) {
+    try {
+      globalThis.sessionStorage?.setItem(`pai.web.${key}`, value);
+    } catch {
+      // 无 sessionStorage（隐私模式）——内存单会话语义，save 仍报成功（App 内 cached 已生效）
+    }
+    return;
+  }
   await SecureStore.setItemAsync(key, value);
 };
 const secureDelete = async (key: string): Promise<void> => {
-  if (!secureAvailable) return;
+  if (!secureAvailable) {
+    try {
+      globalThis.sessionStorage?.removeItem(`pai.web.${key}`);
+    } catch {
+      // 同上
+    }
+    return;
+  }
   await SecureStore.deleteItemAsync(key);
 };
 
@@ -118,14 +138,13 @@ export const relayCredentialsStore = {
     cached = next;
     try {
       await AsyncStorage.setItem(KEY_ENDPOINT, JSON.stringify({ relayUrl: next.relayUrl }));
-      if (!secureAvailable) return false; // web：endpoint 持久、密钥材料内存单会话
       await Promise.all([
         secureSet(KEY_DEVICE, JSON.stringify({ deviceId: next.deviceId, signingSecret: next.signingSecret, signingPub: next.signingPub, installationId: next.installationId, relayToken: next.relayToken })),
         secureSet(KEY_SHARED, next.sharedSecretHex),
       ]);
       return true;
     } catch {
-      return false; // 原生 SecureStore 失败：内存态本会话可用——UI 提示「凭证未持久化」
+      return false; // 持久层失败：内存态本会话可用——UI 提示「凭证未持久化」
     }
   },
   async clear(): Promise<void> {

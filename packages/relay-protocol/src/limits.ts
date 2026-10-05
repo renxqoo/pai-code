@@ -41,7 +41,7 @@ export const PAIRING_MAX_CONCURRENT = 8;
 /** SAS 显示位数 */
 export const SAS_DIGITS = 6;
 /** 手输码位数 */
-export const MANUAL_CODE_DIGITS = 8;
+export const MANUAL_CODE_DIGITS = 6;
 
 /** ratchet（§1.3） */
 export const RATCHET_BATCH_FRAMES = 64;

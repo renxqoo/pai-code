@@ -171,7 +171,7 @@ export function createPairingSession(spec: {
         const gwEph = typeof message['gwEph'] === 'string' ? (message['gwEph'] as string) : '';
         const gatewayPub = typeof message['gatewayPub'] === 'string' ? (message['gatewayPub'] as string) : '';
         if (gwEph.length > 0 && gatewayPub.length > 0) {
-          sas = computeSas({ channelKey: Buffer.from(rawShared, 'hex'), transcript: { pairingId: spec.pairingId, gwEph, devEph: pakeState.message, relayUrl: spec.endpoints.relayUrl, scope: 'read' }, gatewayFingerprint: gatewayPub, deviceFingerprint: spec.deviceInfo.name }); // R3 H5：与 gateway 同源（name 域——非签名钥）
+          sas = computeSas({ channelKey: Buffer.from(rawShared, 'hex'), transcript: { pairingId: spec.pairingId, gwEph, devEph: pakeState.message, relayUrl: '', scope: 'read' }, gatewayFingerprint: gatewayPub, deviceFingerprint: spec.deviceInfo.name });
         } else {
           sas = sasOf(rawShared, spec.pairingId);
         }
@@ -246,8 +246,8 @@ export function createPairingSession(spec: {
     async startManual(code, deviceName) {
       await Promise.resolve();
       emit({ phase: 'connecting' });
-      const digits = code.replace(/[^0-9a-hj-z]/g, '').toLowerCase();
-      if (digits.length !== 8) {
+      const digits = code.replace(/[^0-9]/g, '');
+      if (digits.length !== 6) {
         emit({ phase: 'failed', reason: 'bad_code' });
         return;
       }

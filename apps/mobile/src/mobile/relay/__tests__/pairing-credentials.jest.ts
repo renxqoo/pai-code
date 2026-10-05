@@ -30,7 +30,7 @@ function makeWire() {
 }
 
 describe('pairing session（T58 P3）', () => {
-  it('手输码路径：startManual → pake-a 帧（8 位码/设备名随帧）', async () => {
+  it('手输码路径：startManual → pake-a 帧（6 位码/设备名随帧）', async () => {
     const wire = makeWire();
     const steps: string[] = [];
     const session = createPairingSession({
@@ -40,7 +40,7 @@ describe('pairing session（T58 P3）', () => {
       deviceInfo: { name: 'iPhone-test', deviceType: 'phone', platform: 'ios', appVersion: '1' },
     });
     session.onStep((step) => steps.push(step.phase));
-    await session.startManual('abcd1234', 'iPhone-test');
+    await session.startManual('123456', 'iPhone-test');
     const frames = wire.sentOf();
     expect(frames[0]?.['p']).toBe('pake-a');
     expect(typeof frames[0]?.['pakeA']).toBe('string');
@@ -49,7 +49,7 @@ describe('pairing session（T58 P3）', () => {
     session.close();
   });
 
-  it('非法码（≠8 位）立即 failed: bad_code 不发帧', async () => {
+  it('非法码（≠6 位）立即 failed: bad_code 不发帧', async () => {
     const wire = makeWire();
     const session = createPairingSession({
       wire,
@@ -158,11 +158,11 @@ describe('pairing ack token 旅程（WIRE 设备注册收尾回归）', () => {
       deviceInfo: { name: 'x', deviceType: 'phone', platform: 'ios', appVersion: '1' },
     });
     // 手输码路径建立 shared
-    await session.startManual('abcd1234', 'x');
+    await session.startManual('123456', 'x');
     // gateway 侧 pake 应答（pake-b 帧 → 手机 shared 建立）
     const pakeAFrame = wire.sentOf().find((f) => f['p'] === 'pake-a');
     const pairingIdForConfirm = session.pairingId;
-    const resp = pakeRespond('abcd1234', typeof pakeAFrame?.['pakeA'] === 'string' ? (pakeAFrame['pakeA'] as string) : '');
+    const resp = pakeRespond('123456', typeof pakeAFrame?.['pakeA'] === 'string' ? (pakeAFrame['pakeA'] as string) : '');
     wire.serverReply({ p: 'pake-b', pakeB: resp.message, confirm: pakeConfirm(resp.shared, pairingIdForConfirm), gwEph: 'gweph_test', gatewayPub: 'gwpub_test' });
     await new Promise((r) => {
       setTimeout(r, 30);
@@ -196,10 +196,10 @@ describe('pairing ack token 旅程（WIRE 设备注册收尾回归）', () => {
       pairingId: 'pr_ack2',
       deviceInfo: { name: 'x', deviceType: 'phone', platform: 'ios', appVersion: '1' },
     });
-    await session.startManual('abcd1234', 'x');
+    await session.startManual('123456', 'x');
     const pakeAFrame = wire.sentOf().find((f) => f['p'] === 'pake-a');
     const pairingIdForConfirm = session.pairingId;
-    const resp = pakeRespond('abcd1234', typeof pakeAFrame?.['pakeA'] === 'string' ? (pakeAFrame['pakeA'] as string) : '');
+    const resp = pakeRespond('123456', typeof pakeAFrame?.['pakeA'] === 'string' ? (pakeAFrame['pakeA'] as string) : '');
     wire.serverReply({ p: 'pake-b', pakeB: resp.message, confirm: pakeConfirm(resp.shared, pairingIdForConfirm), gwEph: 'gweph_test', gatewayPub: 'gwpub_test' });
     await new Promise((r) => {
       setTimeout(r, 30);
@@ -225,11 +225,11 @@ describe('pairing ack token 旅程（WIRE 设备注册收尾回归）', () => {
       pairingId: 'pr_ack1',
       deviceInfo: { name: 'x', deviceType: 'phone', platform: 'ios', appVersion: '1' },
     });
-    await session.startManual('abcd1234', 'x');
+    await session.startManual('123456', 'x');
     // gateway 侧 pake 应答（pake-b 帧 → 手机 shared 建立）
     const pakeAFrame = wire.sentOf().find((f) => f['p'] === 'pake-a');
     const pairingIdForConfirm = session.pairingId;
-    const resp = pakeRespond('abcd1234', typeof pakeAFrame?.['pakeA'] === 'string' ? (pakeAFrame['pakeA'] as string) : '');
+    const resp = pakeRespond('123456', typeof pakeAFrame?.['pakeA'] === 'string' ? (pakeAFrame['pakeA'] as string) : '');
     wire.serverReply({ p: 'pake-b', pakeB: resp.message, confirm: pakeConfirm(resp.shared, pairingIdForConfirm), gwEph: 'gweph_test', gatewayPub: 'gwpub_test' });
     await new Promise((r) => {
       setTimeout(r, 30);
@@ -260,10 +260,10 @@ describe('pairing ack token 旅程（WIRE 设备注册收尾回归）', () => {
       pairingId: 'pr_ack2',
       deviceInfo: { name: 'x', deviceType: 'phone', platform: 'ios', appVersion: '1' },
     });
-    await session.startManual('abcd1234', 'x');
+    await session.startManual('123456', 'x');
     const pakeAFrame = wire.sentOf().find((f) => f['p'] === 'pake-a');
     const pairingIdForConfirm = session.pairingId;
-    const resp = pakeRespond('abcd1234', typeof pakeAFrame?.['pakeA'] === 'string' ? (pakeAFrame['pakeA'] as string) : '');
+    const resp = pakeRespond('123456', typeof pakeAFrame?.['pakeA'] === 'string' ? (pakeAFrame['pakeA'] as string) : '');
     wire.serverReply({ p: 'pake-b', pakeB: resp.message, confirm: pakeConfirm(resp.shared, pairingIdForConfirm), gwEph: 'gweph_test', gatewayPub: 'gwpub_test' });
     await new Promise((r) => {
       setTimeout(r, 30);
