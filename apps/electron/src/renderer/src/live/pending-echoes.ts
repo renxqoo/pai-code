@@ -28,11 +28,11 @@ export function bindEchoEntries(threadId: string, entries: readonly { id: string
 }
 
 /** 权威用户气泡到达的回显认领（单一真相——onEvent 与测试共用）。
- *  配对序：claimedIds 精准配对（按 entryId 找回显，找不到的不动——它是别人的）
- *  → 无 claimedIds 的旧 hub 退回 FIFO 按块数认领。认领动作：首条收敛
- *  （reconcileEcho → msg-seq-<seq>），合并帧内其余条目的回显直接除名（文本已在
- *  合并气泡内，逐条 rename 会撞出同 id 多条——孤儿回显即「同样的消息两条、
- *  重启即失」的症状根源）。 */
+ *  配对序：claimedIds 精准配对（按 entryId 找回显）→ 配对落空（空闲发送 4ms 内
+ *  insert→claim 完成，queueChanged 镜像来不及绑定——回显 entryId 缺席）退回
+ *  FIFO 按块数认领。认领是排他的：首条收敛（reconcileEcho → msg-seq-<seq>），
+ *  合并帧内其余条目的回显直接除名（文本已在合并气泡内，逐条 rename 会撞出同
+ *  id 多条——孤儿回显即「同样的消息两条、重启即失」的症状根源）。 */
 export function claimEchoes(
   store: {
     reconcileEcho: (threadId: string, localId: string, seq: number) => void;
@@ -59,10 +59,15 @@ export function claimEchoes(
         store.dropPendingMessage(threadId, slot.localId);
       }
     }
-    if (queue.length === 0) pendingEchoes.delete(threadId);
-    return;
+    if (converged) {
+      if (queue.length === 0) pendingEchoes.delete(threadId);
+      return;
+    }
+    // 配对全部落空：镜像未及绑定（空闲发送常态）——退回 FIFO 认领队首，
+    // 本帧条目数（claimedIds 数）即认领名额。
   }
-  const [first, ...rest] = queue.splice(0, Math.max(1, userBlocks ?? 1));
+  const quota = Math.max(1, userBlocks ?? claimedIds?.length ?? 1);
+  const [first, ...rest] = queue.splice(0, quota);
   if (first !== undefined) store.reconcileEcho(threadId, first.localId, seq);
   for (const extra of rest) store.dropPendingMessage(threadId, extra.localId);
   if (queue.length === 0) pendingEchoes.delete(threadId);

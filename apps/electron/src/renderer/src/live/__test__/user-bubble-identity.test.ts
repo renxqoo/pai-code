@@ -269,6 +269,31 @@ describe('批量认领合并帧 × 乐观回显（链路级症状回归）', () 
     const bound = pendingEchoes.get('t') ?? [];
     expect(bound.map((slot) => slot.localId)).toEqual(['local-1']);
   });
+
+  test('症状回归「空闲发送两条相同消息」（2026-10-05 WAL seq 2282/2286）：claimedIds 配对落空时退回 FIFO 认领', () => {
+    const mapper = createEventMapper({ now: () => T });
+    const store = createLiveStore();
+    store.getState().bootstrap(bootstrapOf([session('t')]) as never);
+    // 空闲发送：insert→claim 4ms 内完成，queueChanged 镜像（get_state 往返）
+    // 回来时队列已空 —— bindEchoEntries 从未绑定，回显 entryId 缺席
+    store.getState().echoPendingMessage('t', 'local-1', '现在如何本地启动服务');
+    pendingEchoes.set('t', [{ localId: 'local-1', text: '现在如何本地启动服务' }]);
+    // （不词 bindEchoEntries —— 镜像未及到达）
+    const frameEvents = mapper.mapEvent({
+      threadId: 't',
+      name: 'user/message',
+      payload: { seq: 2286, turn: 3, step: 0, content: [{ type: 'text', text: '现在如何本地启动服务' }], claimedIds: ['59fb627c-391e-45bd-8df6-2324878494ca'] },
+    });
+    const frame = frameEvents[0];
+    if (frame?.type !== 'userMessage') throw new Error('frame missing');
+    store.getState().applyEvent(frame, T);
+    claimEchoes(store.getState(), 't', frame.message.seq, frame.message.claimedIds, frame.message.userBlocks);
+    // 配对落空不得孤儿化回显：退回 FIFO 认领队首（认领是排他的——未绑定回显按队列序）
+    const items = (store.getState().threads['t'] ?? initialThreadState).items.filter((item) => item.kind === 'message');
+    const texts = items.flatMap((item) => (item.kind === 'message' ? [item.message.text] : []));
+    expect(texts).toEqual(['现在如何本地启动服务']);
+    expect(pendingEchoes.get('t')).toBeUndefined();
+  });
 });
 
 /** 直执行 bash（`! ` 命令）：信封同走两通道，渲染形态不同——必须只出一条（工具块）。 */
