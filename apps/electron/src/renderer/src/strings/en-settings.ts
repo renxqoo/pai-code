@@ -42,6 +42,8 @@ export const enSettings = {
     pairCancel: 'Cancel',
     sasInputLabel: 'SAS code',
     sasConfirm: 'Confirm',
+    sasOwnerLabel: "This Mac's code",
+    sasCompareHint: "Confirm only if it matches this Mac's code; otherwise cancel and retry.",
     sasWaitHint: 'The phone shows a 6-digit code once it enters the payload — confirm only if they match.',
     pairBadResponse: 'Pairing response is missing required fields; no session was established (see the gateway log for details).',
     pairFailed: 'Pairing request failed (gateway gave no reason).',

@@ -87,6 +87,7 @@ export function DevicesSection({ relay, onRelaySave }: DevicesSectionProps): Rea
   const [pairingScope, setPairingScope] = React.useState<'read' | 'interact' | 'full'>('interact');
   const [sasInput, setSasInput] = React.useState('');
   const [qrImage, setQrImage] = React.useState<string | null>(null);
+  const [ownerSas, setOwnerSas] = React.useState<string | null>(null);
   const [pairingError, setPairingError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [relayUrl, setRelayUrl] = React.useState(relay.relayUrl);
@@ -147,6 +148,31 @@ export function DevicesSection({ relay, onRelaySave }: DevicesSectionProps): Rea
     }, 1_000);
     return () => clearInterval(timer);
   }, [pairing]);
+
+  // owner 侧 SAS 轮询：手机 PAKE/QR 请求到达后网关即算出，两端数字供目视比对
+  React.useEffect(() => {
+    if (gateway === undefined || pairing === null) {
+      setOwnerSas(null);
+      return;
+    }
+    let cancelled = false;
+    const tick = (): void => {
+      void gateway
+        .command({ command: 'gw/pairing/status', args: { pairingId: pairing.pairingId } })
+        .then((result) => {
+          if (cancelled) return;
+          const data = gatewayData(result) as { ownerSas?: unknown } | null;
+          if (typeof data?.ownerSas === 'string' && data.ownerSas.length > 0) setOwnerSas(data.ownerSas);
+        })
+        .catch(() => undefined);
+    };
+    tick();
+    const timer = setInterval(tick, 1_500);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [gateway, pairing]);
 
   const startPairing = (): void => {
     if (gateway === undefined || busy) return;
@@ -346,6 +372,12 @@ export function DevicesSection({ relay, onRelaySave }: DevicesSectionProps): Rea
                 </div>
               )}
               <div className="flex items-center gap-[8px]">
+                {ownerSas !== null ? (
+                  <div className="flex flex-col">
+                    <span className="select-all font-mono text-[22px] font-bold tracking-[0.3em] text-foreground">{ownerSas}</span>
+                    <span className="text-[11px] text-muted-foreground">{copy.settings.sasOwnerLabel}</span>
+                  </div>
+                ) : null}
                 <input
                   aria-label={copy.settings.sasInputLabel}
                   className="w-[140px] rounded-lg border border-border bg-transparent px-[10px] py-[8px] text-[15px] tracking-[0.3em] text-foreground"
@@ -363,7 +395,7 @@ export function DevicesSection({ relay, onRelaySave }: DevicesSectionProps): Rea
                   {copy.settings.pairCancel}
                 </ActionButton>
               </div>
-              <p className="text-[12px] text-muted-foreground">{copy.settings.sasWaitHint}</p>
+              <p className="text-[12px] text-muted-foreground">{ownerSas !== null ? copy.settings.sasCompareHint : copy.settings.sasWaitHint}</p>
             </div>
           ) : null}
           {pairingError !== null ? <p className="mt-[10px] text-[12px] text-destructive">{pairingError}</p> : null}

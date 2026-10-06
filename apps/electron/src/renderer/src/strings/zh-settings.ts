@@ -42,6 +42,8 @@ export const zhSettings: typeof enSettings = {
     pairCancel: '取消',
     sasInputLabel: 'SAS 确认码',
     sasConfirm: '确认',
+    sasOwnerLabel: '本机比对数字',
+    sasCompareHint: '与本机数字一致才确认；不一致说明通道异常，取消重来。',
     sasWaitHint: '手机完成配对码输入后会显示 6 位比对数字——两串一致才确认。',
     pairBadResponse: '配对应答缺少必要字段，配对会话未建立（网关侧原因见日志）。',
     pairFailed: '配对请求失败（网关未给出原因）。',
