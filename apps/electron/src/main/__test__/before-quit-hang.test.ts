@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { join } from 'node:path';
 
 /**
  * 退出链路回归（runner）：真实 index.ts 的驱动装置在子进程跑（mock electron +
@@ -9,8 +10,10 @@ import { describe, expect, test } from 'bun:test';
 
 describe('before-quit 退出链路（子进程驱动真实 index.ts）', () => {
   test('四场景全绿：装配失败 quit 兜底 / 控制组 / SIGTERM 停机链 / 窗口生命周期', () => {
-    const result = Bun.spawnSync([process.execPath, 'test', './apps/electron/src/main/__test__/before-quit-harness.ts'], {
-      cwd: process.cwd(),
+    const harnessPath = join(import.meta.dir, 'before-quit-harness.ts');
+    const repoRoot = join(import.meta.dir, '..', '..', '..', '..');
+    const result = Bun.spawnSync([process.execPath, 'test', harnessPath], {
+      cwd: repoRoot,
       stdout: 'pipe',
       stderr: 'pipe',
       env: process.env,

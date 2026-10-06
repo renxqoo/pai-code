@@ -92,6 +92,7 @@ export function DevicesSection({ relay, onRelaySave }: DevicesSectionProps): Rea
   const [relayUrl, setRelayUrl] = React.useState(relay.relayUrl);
   const [relayFingerprint, setRelayFingerprint] = React.useState(relay.relayKeyFingerprint);
   const [relayNotice, setRelayNotice] = React.useState<string | null>(null);
+  const [relayAdvanced, setRelayAdvanced] = React.useState(relay.relayUrl.length > 0);
   const [relayBusy, setRelayBusy] = React.useState(false);
 
   // props（偏好面）变化即回写草稿：外部保存（其他面板/另一端）不被本地草稿盖住
@@ -268,26 +269,34 @@ export function DevicesSection({ relay, onRelaySave }: DevicesSectionProps): Rea
               <p className="text-[13px] font-medium text-foreground">{copy.settings.relayCardTitle}</p>
               <p className="mt-[2px] text-[12px] leading-[17px] text-muted-foreground">{copy.settings.relayCardHint}</p>
             </div>
-            <ActionButton size="sm" onClick={saveRelay} disabled={relayBusy}>
-              {copy.settings.relaySave}
+            <ActionButton size="sm" variant="outline" onClick={() => { setRelayAdvanced((v) => !v); }}>
+              {relayAdvanced ? copy.settings.relayAdvancedHide : copy.settings.relayAdvancedShow}
             </ActionButton>
           </div>
-          <div className="mt-[10px] flex flex-col gap-[8px]">
-            <input
-              aria-label={copy.settings.relayUrlLabel}
-              className="w-full rounded-lg border border-border bg-transparent px-[10px] py-[8px] text-[13px] text-foreground"
-              onChange={(event) => { setRelayUrl(event.target.value); }}
-              placeholder="wss://relay.example.com"
-              value={relayUrl}
-            />
-            <input
-              aria-label={copy.settings.relayFingerprintLabel}
-              className="w-full rounded-lg border border-border bg-transparent px-[10px] py-[8px] text-[13px] text-foreground"
-              onChange={(event) => { setRelayFingerprint(event.target.value); }}
-              value={relayFingerprint}
-            />
-          </div>
-          {relayNotice !== null ? <p className="mt-[8px] text-[12px] text-muted-foreground">{relayNotice}</p> : null}
+          {relayAdvanced ? (
+            <div className="mt-[10px] flex flex-col gap-[8px]">
+              <p className="text-[12px] leading-[17px] text-muted-foreground">{copy.settings.relayAdvancedHint}</p>
+              <input
+                aria-label={copy.settings.relayUrlLabel}
+                className="w-full rounded-lg border border-border bg-transparent px-[10px] py-[8px] text-[13px] text-foreground"
+                onChange={(event) => { setRelayUrl(event.target.value); }}
+                placeholder="wss://relay.example.com"
+                value={relayUrl}
+              />
+              <input
+                aria-label={copy.settings.relayFingerprintLabel}
+                className="w-full rounded-lg border border-border bg-transparent px-[10px] py-[8px] text-[13px] text-foreground"
+                onChange={(event) => { setRelayFingerprint(event.target.value); }}
+                value={relayFingerprint}
+              />
+              <div>
+                <ActionButton size="sm" onClick={saveRelay} disabled={relayBusy}>
+                  {copy.settings.relaySave}
+                </ActionButton>
+              </div>
+              {relayNotice !== null ? <p className="mt-[4px] text-[12px] text-muted-foreground">{relayNotice}</p> : null}
+            </div>
+          ) : null}
         </SettingsCard>
 
         <SettingsCard className="px-[20px] py-[16px]">
@@ -357,7 +366,6 @@ export function DevicesSection({ relay, onRelaySave }: DevicesSectionProps): Rea
               <p className="text-[12px] text-muted-foreground">{copy.settings.sasWaitHint}</p>
             </div>
           ) : null}
-          {relay.relayUrl === '' ? <p className="mt-[8px] text-[12px] text-amber-600">{copy.settings.relayNotConfigured}</p> : null}
           {pairingError !== null ? <p className="mt-[10px] text-[12px] text-destructive">{pairingError}</p> : null}
         </SettingsCard>
 

@@ -115,10 +115,11 @@ describe('DevicesSection（症状回归：配对失败被吞成兜底文案）',
     view.unmount();
   });
 
-  test('未配置 relay → 配对卡显引导（配对必失败的前置态可见）', async () => {
+  test('未配置自建 relay → 默认内置中继形态：高级区收起、无误导告警', async () => {
     const view = section();
     await flush();
-    expect(view.container.textContent).toContain(copy.settings.relayNotConfigured);
+    expect(view.container.textContent).toContain(copy.settings.relayAdvancedShow);
+    expect(view.container.textContent).not.toContain('wss://relay.example.com');
     view.unmount();
   });
 
@@ -178,7 +179,7 @@ describe('DevicesSection（症状回归：配对失败被吞成兜底文案）',
     expect(fpInput.value).toBe('fp-1');
     buttonOf(view, copy.settings.relaySave)?.click();
     await flush();
-    expect(saved).toEqual([{ relayUrl: 'wss://relay.example.com', relayKeyFingerprint: 'fp-1' }]);
+    expect(saved).toEqual([{ remoteEnabled: true, relayUrl: 'wss://relay.example.com', relayKeyFingerprint: 'fp-1' }]);
     expect(view.container.textContent).toContain(copy.settings.relaySaved);
     view.unmount();
   });
