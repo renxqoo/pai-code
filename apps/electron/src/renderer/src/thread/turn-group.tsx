@@ -17,6 +17,8 @@ import type { TurnModel } from './thread-model';
 type TurnGroupProps = {
   turn: TurnModel
   now: number
+  /** 本轮有子代理在跑：子代理清单只挂在过程组里，收起即信息丢失 */
+  subagentBusy: boolean
   onOpenDiff: () => void
 }
 
@@ -26,7 +28,7 @@ type TurnGroupProps = {
  * 展开时相邻思考/工具聚合为带竖轨的过程组，正文/diff 等独立呈现。
  * section 带 data-turn-id：锚点带（TurnAnchorRail）按它定位并跳转滚入视口。
  */
-function TurnGroup({ turn, now, onOpenDiff }: TurnGroupProps) {
+function TurnGroup({ turn, now, subagentBusy, onOpenDiff }: TurnGroupProps) {
   const collapse = useTurnCollapse(turn);
   const elapsed = turnElapsedMs(turn, now);
   const label =
@@ -52,8 +54,9 @@ function TurnGroup({ turn, now, onOpenDiff }: TurnGroupProps) {
           run.kind === 'process' ? (
             <ProcessGroup
               key={`process-${run.blocks[0]?.id ?? ''}`}
-              blocks={run.blocks}
+              run={run}
               streamingThinkingBlockId={turn.streamingThinkingBlockId}
+              subagentBusy={subagentBusy}
             />
           ) : (
             <TurnBlockView key={run.block.id} block={run.block} onOpenDiff={onOpenDiff} />

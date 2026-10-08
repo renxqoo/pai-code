@@ -66,8 +66,20 @@ export const zhFlow: typeof enFlow = {
   groupOtherPhrase: (name: string): string => `调用了${name}`,
   groupMorePhrase: '等',
   groupPhraseJoin: (phrases: readonly string[]): string => phrases.join(''),
+  /** 整轮过程组的计数式标题（与上方动宾流水并存：后者服务消息级并行批次） */
+  groupCountEdit: (count: number): string => `编辑 ${count} 个文件`,
+  groupCountThinking: (count: number): string => `思考 ${count} 次`,
+  groupCountRead: (count: number): string => `查看 ${count} 个文件`,
+  groupCountSearch: (count: number): string => `搜索 ${count} 次`,
+  groupCountList: (count: number): string => `列出 ${count} 个目录`,
+  groupCountBash: (count: number): string => `运行 ${count} 条命令`,
+  groupCountSubagent: (count: number): string => `派生 ${count} 个智能体`,
+  groupCountOther: (count: number, name: string): string => (name.length > 0 ? `调用 ${count} 次 ${name}` : `调用 ${count} 次`),
+  groupCountJoin: (phrases: readonly string[]): string => phrases.join(', '),
   /** 并行执行组标题的无障碍名（图标装饰位，语义由标题文字承担） */
   groupTitleAria: '工具执行组',
+  /** 整轮过程组标题的无障碍名 */
+  processGroupTitleAria: '执行过程',
   /** 文件内容面板头（read 工具详情） */
   fileContentLabel: '文件内容',
   /** 单条执行行的已完成前缀（状态写进动词；后面紧跟具体文件/命令摘要，不带名词） */

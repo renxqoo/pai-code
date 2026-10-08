@@ -20,12 +20,13 @@ export type { ToolIconKey } from './tool-icon-key';
 export { toolGroupIconKey, toolIconKey } from './tool-icon-key';
 export { toolSummary } from './tool-summary';
 export { toolRowLabel, toolRowLabelOf } from './tool-row-label';
-export type { GroupBucketKind, ToolGroupBucket } from './tool-group-summary';
+export type { GroupBucketKind, GroupSummaryInput, SummaryBucketKind, ToolGroupBucket } from './tool-group-summary';
 export {
   toolGroupBuckets,
   toolGroupIsParallel,
   toolGroupLabel,
   toolGroupStatus,
+  toolGroupSummary,
 } from './tool-group-summary';
 export type { HunkLine } from './hunk-lines';
 export { allHunkLines, hunkLines } from './hunk-lines';

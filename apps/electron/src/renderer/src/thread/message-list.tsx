@@ -4,6 +4,7 @@ import { copy } from '@/strings';
 import { EmptyThread } from '@/thread/empty-thread';
 import { TextBlock } from '@/thread/text-block';
 import { TurnGroup } from '@/thread/turn-group';
+import { summarizeAgents } from './panel-summary';
 import { TurnLoadingRow } from '@/thread/turn-loading-row';
 import { SystemMessageRow } from '@/thread/system-message-row';
 import { CONVERSATION_COLUMN_CLASS } from '@/thread/conversation-column';
@@ -73,7 +74,7 @@ function MessageList({ thread, now, loading, bottomInset, emptyTitle, emptyHint,
                   <TextBlock text={item.message.text} />
                 )
               ) : (
-                <TurnGroup turn={item.turn} now={now} onOpenDiff={onOpenDiff} />
+                <TurnGroup turn={item.turn} now={now} subagentBusy={summarizeAgents(thread.agents).busyCount > 0} onOpenDiff={onOpenDiff} />
               )}
             </div>
           ))}

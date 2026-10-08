@@ -69,8 +69,20 @@ export const enFlow = {
   groupOtherPhrase: (name: string): string => `Called ${name}`,
   groupMorePhrase: 'and others',
   groupPhraseJoin: (phrases: readonly string[]): string => phrases.join(', '),
+  /** Counted title of a whole-turn process group (the verb-phrase form above still serves per-message batches) */
+  groupCountEdit: (count: number): string => `Edited ${count} ${count === 1 ? 'file' : 'files'}`,
+  groupCountThinking: (count: number): string => `Thought ${count} ${count === 1 ? 'time' : 'times'}`,
+  groupCountRead: (count: number): string => `Read ${count} ${count === 1 ? 'file' : 'files'}`,
+  groupCountSearch: (count: number): string => `Searched ${count} ${count === 1 ? 'time' : 'times'}`,
+  groupCountList: (count: number): string => `Listed ${count} ${count === 1 ? 'directory' : 'directories'}`,
+  groupCountBash: (count: number): string => `Ran ${count} ${count === 1 ? 'command' : 'commands'}`,
+  groupCountSubagent: (count: number): string => `Spawned ${count} ${count === 1 ? 'agent' : 'agents'}`,
+  groupCountOther: (count: number, name: string): string => (name.length > 0 ? `Called ${name} ${count} ${count === 1 ? 'time' : 'times'}` : `Called a tool ${count} ${count === 1 ? 'time' : 'times'}`),
+  groupCountJoin: (phrases: readonly string[]): string => phrases.join(', '),
   /** Accessible name of the parallel batch header icon (decorative slot) */
   groupTitleAria: 'Tool execution group',
+  /** Accessible name of a whole-turn process group header */
+  processGroupTitleAria: 'Execution process',
   /** File-content panel header (read tool detail) */
   fileContentLabel: 'File content',
   /** Single-call row prefix in the past tense (status carried by the verb) */

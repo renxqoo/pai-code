@@ -16,6 +16,20 @@ export type ToolCopy = {
   groupMorePhrase: string;
   /** 短语连接（中文无连接词直拼，英文逗号分隔） */
   groupPhraseJoin: (phrases: readonly string[]) => string;
+  /**
+   * 计数式短语（整轮过程组的折叠标题：「编辑 3 个文件, 思考 2 次, 执行 1 条命令」）。
+   * 与动宾流水版并存——后者服务消息级并行批次的组头。
+   */
+  groupCountEdit: (count: number) => string;
+  groupCountThinking: (count: number) => string;
+  groupCountRead: (count: number) => string;
+  groupCountSearch: (count: number) => string;
+  groupCountList: (count: number) => string;
+  groupCountBash: (count: number) => string;
+  groupCountSubagent: (count: number) => string;
+  groupCountOther: (count: number, name: string) => string;
+  /** 计数短语的连接（与 turnChangedFiles「· 改了 3 个文件」同一语感） */
+  groupCountJoin: (phrases: readonly string[]) => string;
   /** 执行行已完成前缀（状态写进动词；后面紧跟具体文件/命令摘要，不带名词） */
   rowDoneBash: string;
   rowDoneRead: string;
