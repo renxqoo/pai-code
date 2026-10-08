@@ -20,8 +20,8 @@ import { useEscDismiss } from '@/screens/use-esc-dismiss';
 import { hotkeyGating } from '@/screens/hotkey-gating';
 import { ThreadBanner } from '@/thread/thread-banner';
 import { PanelLayer } from '@/screens/panel-layer';
-import { CommandPalette } from '@/palette/command-palette';
-import { useCommandPalette } from '@/screens/use-command-palette';
+import { CommandPanel } from '@/palette/command-panel';
+import { useCommandPanel } from '@/screens/use-command-panel';
 import { ThreadStage } from '@/screens/thread-stage';
 import { PulsePanel } from '@/pulse-panel/pulse-panel';
 import { NewTaskPage } from '@/screens/new-task-page';
@@ -31,11 +31,11 @@ import { copy } from '@/strings';
 
 /** ui store 动作引用恒定（zustand 动作创建即稳定），模块级取出，渲染期零重建。 */
 const {
-  openSidebarSearch,
   openSettings,
   openSettingsAt,
   closeSettings,
   toggleSidebarCollapsed,
+  toggleCommandPanel,
   setConfirmStop,
 } = uiStore.getState();
 
@@ -79,31 +79,31 @@ function WorkspaceMain(): React.JSX.Element {
     wasSettingsOpen.current = settingsOpen;
   }, [settingsOpen]);
 
-  /** 命令面板（⌘P）装配：开关/条目/派发（hub 对话框模态期间不唤起）。 */
-  const commandPalette = useCommandPalette({
+  /** 命令面板（⌘K）装配：开关/条目/派发（整页覆盖期间不唤起）。 */
+  const commandPanel = useCommandPanel({
     openNewTask,
     openSettings,
     openSettingsAt,
     openUsage: usagePanel.openUsage,
     navigateSession: navigation.onSelectSession,
   });
-  const { open: paletteOpen, close: closePalette, toggle: togglePalette, onSelect: onPaletteSelect } = commandPalette;
-  /** 面板 props 引用恒定：CommandPalette 是 memo 边界（T30 审查 高-2）；items 已随组件
+  const { open: commandPanelOpen, setOpen: setCommandPanelOpen, defaultItemValue: commandPanelDefaultValue, onSelect: onCommandPanelSelect } = commandPanel;
+  /** 面板 props 引用恒定：CommandPanel 是 memo 边界；items 已随组件
    * 自订阅；@ 搜索按调用时活跃 cwd 读 store 真相——工作区根对 live store 零订阅。 */
-  const paletteFileSearch = React.useCallback((query: string) => {
+  const commandPanelFileSearch = React.useCallback((query: string) => {
     const state = liveStore.getState();
     const threadId = state.activeThreadId;
     const cwd = threadId === null ? '' : (state.sessions[threadId]?.cwd ?? '');
     return workspaceActions.searchFilesIn(cwd, query);
   }, []);
-  const paletteLabels = React.useMemo(
+  const commandPanelLabels = React.useMemo(
     () => ({ aria: copy.palette.aria, placeholder: copy.palette.placeholder, empty: copy.palette.empty, groups: copy.palette.groups }),
     [],
   );
 
-  /** ⌘N/⌘K/⌘P 门控矩阵单一真相在 hotkey-gating 纯函数（表驱动用例钉住）。 */
-  const { hotkeysEnabled, paletteHotkeyEnabled } = hotkeyGating({
-    paletteOpen,
+  /** ⌘N/⌘K/⌘⇧D/⌘⇧A 门控矩阵单一真相在 hotkey-gating 纯函数（表驱动用例钉住）。 */
+  const { hotkeysEnabled, panelHotkeyEnabled } = hotkeyGating({
+    commandPanelOpen,
     newTaskOpen,
     usageOpen,
     settingsOpen,
@@ -112,20 +112,18 @@ function WorkspaceMain(): React.JSX.Element {
   useCmdHotkeys(
     {
       onNewThread: openNewTask,
-      onSearch: openSidebarSearch,
+      onSearch: toggleCommandPanel,
       onToggleDiff: () => uiStore.getState().toggleDiffPane(),
       onToggleAgents: () => uiStore.getState().toggleAgentsPane(),
-      onPalette: togglePalette,
     },
     hotkeysEnabled,
-    paletteHotkeyEnabled,
+    panelHotkeyEnabled,
   );
 
   useEscDismiss({
     /** 新建任务页本地浮层自行消费 Esc（hub confirm 内联条非模态，不参与 Esc 链） */
     localDialogOpen: newTaskDialogOpen,
-    paletteOpen,
-    onPaletteClose: closePalette,
+    commandPanelOpen,
     panelOpen: useStore(uiStore, (s) => s.panel.activeId !== null),
     onPanelClose: () => uiStore.getState().closePanel(),
     abortBash: workspaceActions.abortBash,
@@ -159,12 +157,13 @@ function WorkspaceMain(): React.JSX.Element {
         )}
       </div>
       {usageOpen ? <UsageScreen onClose={closeUsage} /> : null}
-      <CommandPalette
-        open={paletteOpen}
-        onClose={closePalette}
-        searchFiles={paletteFileSearch}
-        labels={paletteLabels}
-        onSelect={onPaletteSelect}
+      <CommandPanel
+        open={commandPanelOpen}
+        onOpenChange={setCommandPanelOpen}
+        searchFiles={commandPanelFileSearch}
+        labels={commandPanelLabels}
+        defaultItemValue={commandPanelDefaultValue}
+        onSelect={onCommandPanelSelect}
       />
       <PanelLayer />
       <TitleBarLeft
@@ -184,7 +183,7 @@ function WorkspaceMain(): React.JSX.Element {
           onOpenSaved: navigation.onOpenSavedSession,
         }}
       />
-      <NoticeStrip notices={notices} onDismiss={workspaceActions.dismissNotice} />
+      <NoticeStrip notices={notices} onDismiss={workspaceActions.dismissNotice} suppressed={commandPanelOpen} />
     </div>
   );
 }

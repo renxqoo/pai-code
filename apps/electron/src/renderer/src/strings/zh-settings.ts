@@ -5,6 +5,7 @@ import type { enSettings } from './en-settings';
 
 export const zhSettings: typeof enSettings = {
     title: '设置',
+    clearSearch: '清空搜索',
     navGroupBasics: '基础设置',
     navGroupAgent: 'Agent 能力',
     navGroupData: '数据与统计',

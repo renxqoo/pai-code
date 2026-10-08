@@ -164,8 +164,8 @@ function ProjectFilesPanel({ projectName, projectPath, tree, loading, onClose }:
       <div className="flex items-center gap-[6px] pt-[2px]">
         <button
           type="button"
-          aria-label={copy.sidebar.closeProjectFiles}
-          title={copy.sidebar.closeProjectFiles}
+          aria-label={copy.projectFiles.close}
+          title={copy.projectFiles.close}
           onClick={onClose}
           className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-[6px] text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
         >
@@ -189,9 +189,9 @@ function ProjectFilesPanel({ projectName, projectPath, tree, loading, onClose }:
       </label>
       <div className="min-h-0 flex-1 overflow-y-auto pt-2 pb-2">
         {loading ? (
-          <p className={EMPTY_STATE_CLASS}>{copy.sidebar.projectFilesLoading}</p>
+          <p className={EMPTY_STATE_CLASS}>{copy.projectFiles.loading}</p>
         ) : rows.length === 0 ? (
-          <p className={EMPTY_STATE_CLASS}>{copy.sidebar.projectFilesEmpty}</p>
+          <p className={EMPTY_STATE_CLASS}>{copy.projectFiles.empty}</p>
         ) : (
           <ul className="flex flex-col gap-[1px]">
             {rows.map(({ node, depth }) => {

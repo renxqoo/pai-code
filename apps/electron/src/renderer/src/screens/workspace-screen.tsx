@@ -46,7 +46,7 @@ function WorkspaceScreen(): React.JSX.Element {
           onSkip={workspaceActions.completeOnboarding}
         />
         {/* 引导屏同样承接失败通知（完成/首会话/偏好写失败） */}
-        <NoticeStrip notices={notices} onDismiss={workspaceActions.dismissNotice} />
+        <NoticeStrip notices={notices} onDismiss={workspaceActions.dismissNotice} suppressed={false} />
       </>
     );
   }

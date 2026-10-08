@@ -117,11 +117,10 @@ describe('Sidebar 列表区域（客户端渲染）', () => {
     view.unmount();
   });
 
-  test('查询过滤无匹配：过滤空态文案（B7 回归——文案直读 copy 单轨）', () => {
-    seedLive({ a: makeSession('a') });
-    uiStore.setState({ sidebarQuery: 'zzz-不存在' });
+  test('全部会话被隐藏项目清空 = 引导空态（文案直读 copy 单轨）', () => {
+    seedLive({ a: makeSession('a') }, 'a', makePreferences({ hiddenProjects: ['/tmp/pai'] }));
     const view = render(<Sidebar />);
-    expect(view.container.textContent).toContain('没有匹配的会话');
+    expect(view.container.textContent).toContain('暂无任务');
     view.unmount();
   });
 
@@ -165,7 +164,7 @@ describe('Sidebar 列表区域（客户端渲染）', () => {
 });
 
 describe('Sidebar 交互（客户端渲染，动作直落 store）', () => {
-  test('快捷区「新建任务」→ newTaskOpen；「搜索」→ 展开并聚焦输入框', () => {
+  test('快捷区「新建任务」→ newTaskOpen；「搜索」→ 打开命令面板', () => {
     seedLive({});
     const view = render(<Sidebar />);
     const buttons = [...view.container.querySelectorAll('button')];
@@ -176,32 +175,8 @@ describe('Sidebar 交互（客户端渲染，动作直落 store）', () => {
     React.act(() => {
       buttons.find((b) => b.textContent?.includes('搜索'))?.click();
     });
-    const ui = uiStore.getState();
-    expect(ui.sidebarSearchOpen).toBe(true);
-    expect(ui.searchFocusToken).toBe(1);
-    expect((document.activeElement as HTMLInputElement | null)?.tagName).toBe('INPUT');
-    view.unmount();
-  });
-
-  test('搜索框受控回显（store → input）与过滤联动；Esc 收起并清空（过滤词不残留）', () => {
-    // 装置适配（T32）：happy-dom + React 19 的 input 合成事件链不通（click/keydown 正常），
-    // 「输入 → store」方向由 SidebarSearchInput 的受控 props 装配（3 行）经对抗审查覆盖，
-    // 此处以 store 种子驱动过滤行为并断言受控回显（双向覆盖的单侧化）。
-    seedLive({ a: makeSession('a', { title: '修复排队消息' }), b: makeSession('b', { title: '另一条' }) });
-    uiStore.getState().openSidebarSearch();
-    uiStore.setState({ sidebarQuery: '排队' });
-    const view = render(<Sidebar />);
-    const input = view.container.querySelector('input[aria-label="搜索"]') as HTMLInputElement;
-    expect(input).not.toBeNull();
-    expect(input.value).toBe('排队'); // 受控回显：store 真相驱动输入框
-    expect(view.container.textContent).toContain('修复排队消息');
-    expect(view.container.textContent).not.toContain('另一条');
-    React.act(() => {
-      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    });
-    const ui = uiStore.getState();
-    expect(ui.sidebarSearchOpen).toBe(false);
-    expect(ui.sidebarQuery).toBe('');
+    // 面板真身在 workspace-main 装配；此处只钉住入口行的动作落点
+    expect(uiStore.getState().commandPanelOpen).toBe(true);
     view.unmount();
   });
 
@@ -231,25 +206,6 @@ describe('Sidebar 交互（客户端渲染，动作直落 store）', () => {
     });
     expect(uiStore.getState().projectFiles.target).toBe(null);
     expect(view.container.textContent).toContain('新建任务');
-    view.unmount();
-  });
-
-  test('清空搜索钮：查询非空时在位，空查询不渲染', () => {
-    seedLive({ a: makeSession('a') });
-    uiStore.getState().openSidebarSearch();
-    uiStore.setState({ sidebarQuery: 'x' });
-    const view = render(<Sidebar />);
-    const input = view.container.querySelector('input[aria-label="搜索"]') as HTMLInputElement;
-    expect(input).not.toBeNull();
-    expect(input.value).toBe('x'); // 受控回显
-    React.act(() => {
-      uiStore.getState().setSidebarQuery('');
-    });
-    expect(view.container.querySelector('button[aria-label="清空搜索"]')).toBeNull();
-    React.act(() => {
-      uiStore.getState().setSidebarQuery('x');
-    });
-    expect(view.container.querySelector('button[aria-label="清空搜索"]')).not.toBeNull();
     view.unmount();
   });
 
@@ -301,9 +257,9 @@ describe('重渲边界回归（B1/B2）', () => {
       uiStore.setState({ composerDraft: 'unrelated' });
     });
     expect(commits).toBe(0);
-    // 订阅切片 set（过滤词）：子树提交——边界只挡无关更新，不挡正常更新
+    // 订阅切片 set（视图切换）：子树提交——边界只挡无关更新，不挡正常更新
     React.act(() => {
-      uiStore.setState({ sidebarQuery: '会话' });
+      uiStore.setState({ sidebarView: 'projects' });
     });
     expect(commits).toBeGreaterThan(0);
     // 宿主重渲照常发生（阳性对照：探针非 memo，随宿主渲染）

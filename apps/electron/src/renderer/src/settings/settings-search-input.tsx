@@ -32,7 +32,7 @@ function SettingsSearchInput({ value, onChange, placeholder, className }: Settin
       {value.length > 0 ? (
         <button
           type="button"
-          aria-label={copy.sidebar.clearSearch}
+          aria-label={copy.settings.clearSearch}
           onClick={() => onChange('')}
           className="flex size-[18px] shrink-0 cursor-pointer items-center justify-center rounded-full text-muted-foreground outline-none select-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
         >

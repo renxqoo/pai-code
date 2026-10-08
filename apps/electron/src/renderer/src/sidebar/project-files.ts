@@ -21,9 +21,8 @@ export function installProjectFilesLister(next: ListProjectFiles): void {
 
 let epoch = 0;
 
-/** 打开面板：先收侧栏搜索（面板自带搜索框，两个输入框不得同时可见），再立目标拉树。 */
+/** 打开面板：立目标拉树（请求按代次防竞态，关闭即复位）。 */
 export function openProjectFiles(cwd: string): void {
-  uiStore.getState().closeSidebarSearch();
   epoch += 1;
   const current = epoch;
   uiStore.getState().beginProjectFiles({ name: baseNameOf(cwd) || cwd, path: cwd });

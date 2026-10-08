@@ -34,11 +34,7 @@ describe('project-files 控制器', () => {
   test('打开：目标+加载态即刻就位（显示名取 basename），响应到达落树停载', async () => {
     const seed = controlledLister();
     installProjectFilesLister(seed.lister);
-    uiStore.setState({ sidebarSearchOpen: true, sidebarQuery: 'x' });
     openProjectFiles('/tmp/pai');
-    // 打开面板先收侧栏搜索（面板自带搜索框，两个输入框不得同时可见）
-    expect(uiStore.getState().sidebarSearchOpen).toBe(false);
-    expect(uiStore.getState().sidebarQuery).toBe('');
     expect(uiStore.getState().projectFiles).toEqual({ target: { name: 'pai', path: '/tmp/pai' }, tree: [], loading: true });
     seed.resolve('/tmp/pai', ['src/a.ts', 'src/b.ts', 'README.md']);
     await flushMicrotasks();

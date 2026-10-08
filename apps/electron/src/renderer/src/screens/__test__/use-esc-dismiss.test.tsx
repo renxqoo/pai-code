@@ -14,16 +14,16 @@ import { useEscDismiss } from '../use-esc-dismiss';
 
 type ProbeProps = {
   localDialogOpen: boolean
+  commandPanelOpen: boolean
   panelOpen: boolean
   calls: string[]
 };
 
-function EscProbe({ localDialogOpen, panelOpen, calls }: ProbeProps): null {
+function EscProbe({ localDialogOpen, commandPanelOpen, panelOpen, calls }: ProbeProps): null {
   useEscDismiss({
     localDialogOpen,
-    paletteOpen: false,
+    commandPanelOpen,
     panelOpen,
-    onPaletteClose: () => calls.push('palette'),
     onPanelClose: () => calls.push('panel'),
     abortBash: () => calls.push('abortBash'),
     stopActiveTurn: () => calls.push('stopActiveTurn'),
@@ -66,7 +66,7 @@ afterEach(() => {
 describe('useEscDismiss 分发', () => {
   function mount(over: Partial<ProbeProps> = {}): { calls: string[]; unmount: () => void } {
     const calls: string[] = [];
-    const view = render(<EscProbe localDialogOpen={false} panelOpen={false} calls={calls} {...over} />);
+    const view = render(<EscProbe localDialogOpen={false} commandPanelOpen={false} panelOpen={false} calls={calls} {...over} />);
     return { calls, unmount: view.unmount };
   }
 
@@ -114,6 +114,16 @@ describe('useEscDismiss 分发', () => {
     pressEsc();
     expect(bash.calls).toEqual(['abortBash']);
     bash.unmount();
+  });
+
+  test('命令面板开着：Esc 无全局动作（IME 泄漏由兑底层吸收，不停轮次/不收侧栏层）', () => {
+    seedLive(true, false);
+    uiStore.getState().openCommandPanel();
+    const { calls, unmount } = mount({ commandPanelOpen: true });
+    pressEsc();
+    expect(calls).toEqual([]);
+    expect(uiStore.getState().commandPanelOpen).toBe(true);
+    unmount();
   });
 
   test('右侧面板开着：Esc 收面板；空闲无动作不误触', () => {

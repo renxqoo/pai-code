@@ -6,7 +6,6 @@ import { QuickActionsRow } from '@/sidebar/quick-actions-row';
 import { closeProjectFiles } from '@/sidebar/project-files';
 import { SessionListRegion } from '@/sidebar/session-list-region';
 import { SidebarFooter } from '@/sidebar/sidebar-footer';
-import { SidebarSearch } from '@/sidebar/sidebar-search';
 import { ViewSwitchTabs } from '@/sidebar/view-switch-tabs';
 import { useSidebarResize } from '@/hooks/use-sidebar-resize';
 import { SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH, uiStore } from '@/ui/ui-store';
@@ -15,7 +14,7 @@ import { cn } from '@/lib/utils';
 
 /**
  * 会话侧栏（布局壳，0 props）：几何（宽度拖拽 + 折叠）、各功能区域（快捷操作/
- * 搜索/视图切换/列表/项目文件面板/底部工具条）全部区域内部自订阅解决——
+ * 视图切换/列表/项目文件面板/底部工具条）全部区域内部自订阅解决——
  * 父级重渲被 memo 边界挡住，区域只随自己的订阅面重渲。标题行由窗口顶栏承担。
  */
 function Sidebar(): React.JSX.Element {
@@ -49,7 +48,6 @@ function Sidebar(): React.JSX.Element {
           <div className="flex min-h-0 flex-1 flex-col pt-2 ">
             <div className="px-2 ">
               <QuickActionsRow />
-              <SidebarSearch />
             </div>
 
             <div className="overflow-y-auto   overflow-x-hidden">

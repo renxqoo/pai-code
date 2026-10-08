@@ -77,7 +77,7 @@ function RuntimeWorkerTable({
       {rows.length === 0 ? (
         <p className="py-[28px] text-center text-[12px] text-muted-foreground">{copy.runtime.noWorkers}</p>
       ) : visible.length === 0 ? (
-        <p className="py-[28px] text-center text-[12px] text-muted-foreground">{copy.sidebar.noMatches}</p>
+        <p className="py-[28px] text-center text-[12px] text-muted-foreground">{copy.runtime.noMatches}</p>
       ) : (
         <table className="w-full min-w-[760px] border-collapse">
           <thead>

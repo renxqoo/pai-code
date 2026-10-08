@@ -8,7 +8,7 @@ import { uiStore } from '@/ui/ui-store';
 /** 自动化入口刻意保留为占位（入口位稳定的用户裁决 U1），其余死入口已删除。 */
 function noop(): void {}
 
-const { openNewTask, openSidebarSearch } = uiStore.getState();
+const { openNewTask, openCommandPanel } = uiStore.getState();
 
 type QuickActionEntry = {
   key: string
@@ -33,7 +33,7 @@ function QuickActionsRow(): React.JSX.Element {
       label: copy.sidebar.search,
       hotkey: copy.sidebar.hotkeySearch(MODIFIER_KEY_LABEL),
       icon: <Search className="size-4 shrink-0 text-foreground/80" strokeWidth={1.75} />,
-      onSelect: openSidebarSearch,
+      onSelect: openCommandPanel,
     },
     {
       key: 'automation',

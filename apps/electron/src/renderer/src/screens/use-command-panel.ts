@@ -12,13 +12,13 @@ import { copy } from '@/strings';
 import { MODIFIER_KEY_LABEL } from '@/lib/platform';
 
 /**
- * 命令面板（⌘P）装配面（T34 M3：漏斗退役——条目与派发自订阅 store + 单例）：
+ * 命令面板（⌘K）装配面：条目与派发自订阅 store + 单例。
  * 开关是本地低频态；静态条目（动作/会话/命令/设置）在条目侧 hook（items 归
- * CommandPalette 组件内消费，不进工作区订阅面）。id 词表封闭（palette-items）；
- * 文件组由 CommandPalette 按输入词动态搜索。
+ * CommandPanel 组件内消费，不进工作区订阅面）。id 词表封闭（palette-items）；
+ * 文件组由 CommandPanel 按输入词动态搜索。
  */
 
-export function usePaletteItems(active: boolean): readonly PaletteItem[] {
+export function useCommandItems(active: boolean): readonly PaletteItem[] {
   const activeThreadId = useStore(liveStore, (s) => s.activeThreadId) ?? '';
   const activeCwd = useStore(liveStore, (s) => (s.activeThreadId === null ? '' : s.sessions[s.activeThreadId]?.cwd ?? ''));
   const sessionViews = useStore(liveStore, (s) => s.sessions);
@@ -43,7 +43,7 @@ export function usePaletteItems(active: boolean): readonly PaletteItem[] {
   }, [activeThreadId, activeCwd, sessionViews, commands]);
 }
 
-type UseCommandPaletteArgs = {
+type UseCommandPanelArgs = {
   openNewTask: () => void
   openSettings: () => void
   openSettingsAt: (section: SettingsSectionId) => void
@@ -52,21 +52,28 @@ type UseCommandPaletteArgs = {
   navigateSession: (threadId: string) => void
 }
 
-type CommandPaletteApi = {
+type CommandPanelApi = {
   open: boolean
-  close: () => void
-  toggle: () => void
+  /** 受控开合出口（⌘K toggle、侧栏入口行、遮罩/Esc 关闭共用）。 */
+  setOpen: (open: boolean) => void
+  /** 打开面板时的默认高亮项 id（当前会话的 `session:<threadId>`；无会话时 null）。 */
+  defaultItemValue: string | null
   onSelect: (id: string) => void
 }
 
-export function useCommandPalette(args: UseCommandPaletteArgs): CommandPaletteApi {
+export function useCommandPanel(args: UseCommandPanelArgs): CommandPanelApi {
   const { openNewTask, openSettings, openSettingsAt, openUsage, navigateSession } = args;
   const activeThreadId = useStore(liveStore, (s) => s.activeThreadId) ?? '';
   const activeCwd = useStore(liveStore, (s) => (s.activeThreadId === null ? '' : s.sessions[s.activeThreadId]?.cwd ?? ''));
+  const open = useStore(uiStore, (s) => s.commandPanelOpen);
 
-  const [open, setOpen] = React.useState(false);
-  const close = React.useCallback(() => setOpen(false), []);
-  const toggle = React.useCallback(() => setOpen((current) => !current), []);
+  /** 受控开合：Dialog 的 onOpenChange 只给布尔，统一折算到 open/close 两个动作。 */
+  const setOpen = React.useCallback((next: boolean) => {
+    const state = uiStore.getState();
+    if (next === state.commandPanelOpen) return;
+    if (next) state.openCommandPanel();
+    else state.closeCommandPanel();
+  }, []);
 
   const onSelect = React.useCallback(
     (id: string) => {
@@ -91,5 +98,5 @@ export function useCommandPalette(args: UseCommandPaletteArgs): CommandPaletteAp
     [activeThreadId, activeCwd, openNewTask, openSettings, openUsage, navigateSession, openSettingsAt],
   );
 
-  return { open, close, toggle, onSelect };
+  return { open, setOpen, defaultItemValue: activeThreadId.length > 0 ? `session:${activeThreadId}` : null, onSelect };
 }

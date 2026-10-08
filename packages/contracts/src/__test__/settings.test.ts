@@ -55,19 +55,21 @@ describe("relay 全局配置", () => {
     const settings = parseSettings({
       providers: [{ name: "glm", baseUrl: "https://x.example.com", api: "openai", models: [{ id: "m", reasoning: false, vision: false }] }],
     });
-    expect(settings.relay).toEqual({ relayUrl: "", relayKeyFingerprint: "" });
+    expect(settings.relay).toEqual({ remoteEnabled: true, relayUrl: "", relayKeyFingerprint: "" });
     expect(settings.providers).toHaveLength(1);
   });
 
-  test("relay 键读回原值", () => {
+  test("relay 键读回原值；未写 remoteEnabled 的旧档落缺省 true", () => {
     const settings = parseSettings({ relay: { relayUrl: "wss://relay.example.com", relayKeyFingerprint: "fp-1" } });
-    expect(settings.relay).toEqual({ relayUrl: "wss://relay.example.com", relayKeyFingerprint: "fp-1" });
+    expect(settings.relay).toEqual({ remoteEnabled: true, relayUrl: "wss://relay.example.com", relayKeyFingerprint: "fp-1" });
+    const explicit = parseSettings({ relay: { remoteEnabled: false, relayUrl: "", relayKeyFingerprint: "" } });
+    expect(explicit.relay).toEqual({ remoteEnabled: false, relayUrl: "", relayKeyFingerprint: "" });
   });
 
   test("垃圾形状（字符串/数组）不崩，落回缺省", () => {
     for (const bad of ["wss://x", ["wss://x"], 42, null]) {
       const settings = parseSettings({ relay: bad });
-      expect(settings.relay).toEqual({ relayUrl: "", relayKeyFingerprint: "" });
+      expect(settings.relay).toEqual({ remoteEnabled: true, relayUrl: "", relayKeyFingerprint: "" });
     }
   });
 });

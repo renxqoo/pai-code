@@ -16,36 +16,27 @@ describe('ui store', () => {
     expect(s.sidebarWidth).toBe(264);
     expect(s.sidebarCollapsed).toBe(false);
     expect(s.sidebarView).toBe('grouped');
-    expect(s.sidebarSearchOpen).toBe(false);
-    expect(s.sidebarQuery).toBe('');
-    expect(s.searchFocusToken).toBe(0);
     expect(s.settingsOpen).toBe(false);
     expect(s.settingsEntry).toBe(null);
     expect(s.usageOpen).toBe(false);
+    expect(s.commandPanelOpen).toBe(false);
     expect(s.newTaskOpen).toBe(false);
     expect(s.composerDraft).toBe('');
     expect(s.drafts).toEqual({});
     expect(s.projectFiles).toEqual({ target: null, tree: [], loading: false });
   });
 
-  test('openSidebarSearch：收起态先展开（焦点不得劫进零宽容器）+ token 递增；重复触发再递增', () => {
-    store.setState({ sidebarCollapsed: true });
-    store.getState().openSidebarSearch();
-    let s = store.getState();
-    expect(s.sidebarCollapsed).toBe(false);
-    expect(s.sidebarSearchOpen).toBe(true);
-    expect(s.searchFocusToken).toBe(1);
-    store.getState().openSidebarSearch();
-    s = store.getState();
-    expect(s.searchFocusToken).toBe(2);
-  });
-
-  test('closeSidebarSearch：收起并清空过滤词', () => {
-    store.setState({ sidebarSearchOpen: true, sidebarQuery: 'pai' });
-    store.getState().closeSidebarSearch();
-    const s = store.getState();
-    expect(s.sidebarSearchOpen).toBe(false);
-    expect(s.sidebarQuery).toBe('');
+  test('命令面板：open/close 幂等、toggle 来回翻转', () => {
+    store.getState().openCommandPanel();
+    expect(store.getState().commandPanelOpen).toBe(true);
+    store.getState().openCommandPanel();
+    expect(store.getState().commandPanelOpen).toBe(true);
+    store.getState().toggleCommandPanel();
+    expect(store.getState().commandPanelOpen).toBe(false);
+    store.getState().toggleCommandPanel();
+    expect(store.getState().commandPanelOpen).toBe(true);
+    store.getState().closeCommandPanel();
+    expect(store.getState().commandPanelOpen).toBe(false);
   });
 
   test('groupFold：折叠切换联动重置该组展开态，再展开恢复（行为单一真相在 group-collapse 纯函数）', () => {
