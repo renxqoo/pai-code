@@ -123,7 +123,7 @@ describe('Settings zod：round-trip 与拒绝表', () => {
     expect(s.hubDev).toEqual({ bunPath: null, hubEntry: null, gatewayEntry: null });
     expect(s.defaultModel).toBeNull();
     expect(s.onboarded).toBe(false);
-    expect(s.relay).toEqual({ relayUrl: '', relayKeyFingerprint: '' });
+    expect(s.relay).toEqual({ remoteEnabled: true, relayUrl: '', relayKeyFingerprint: '' });
   });
 
   test('全量字段 round-trip', () => {
@@ -138,7 +138,7 @@ describe('Settings zod：round-trip 与拒绝表', () => {
       hiddenProjects: ['/w/gone'],
       idleRecycleMinutes: 15,
       archivedSessions: ['/b.jsonl'],
-      relay: { relayUrl: 'wss://relay.example.com', relayKeyFingerprint: 'fp-1' },
+      relay: { remoteEnabled: false, relayUrl: 'wss://relay.example.com', relayKeyFingerprint: 'fp-1' },
     };
     expect(SettingsSchema.parse(input)).toEqual(input);
   });
@@ -214,9 +214,9 @@ describe('API schema：每方法合法/非法样本', () => {
   /** T59：relay 是全局统一配置（settings.json 唯一真相），偏好面可读可写。 */
   test('app/setPreference 接受 relay 配置；空 patch 拒绝', () => {
     expect(ApiSchemas['app/setPreference'].params.parse({ relay: { relayUrl: 'wss://relay.example.com', relayKeyFingerprint: 'fp-1' } })).toEqual({
-      relay: { relayUrl: 'wss://relay.example.com', relayKeyFingerprint: 'fp-1' },
+      relay: { remoteEnabled: true, relayUrl: 'wss://relay.example.com', relayKeyFingerprint: 'fp-1' },
     });
-    expect(ApiSchemas['app/setPreference'].params.parse({ relay: {} })).toEqual({ relay: { relayUrl: '', relayKeyFingerprint: '' } });
+    expect(ApiSchemas['app/setPreference'].params.parse({ relay: {} })).toEqual({ relay: { remoteEnabled: true, relayUrl: '', relayKeyFingerprint: '' } });
     expect(() => ApiSchemas['app/setPreference'].params.parse({})).toThrow();
     expect(() => ApiSchemas['app/setPreference'].params.parse({ relay: { relayUrl: 42 } })).toThrow();
   });
@@ -231,7 +231,7 @@ describe('API schema：每方法合法/非法样本', () => {
       hiddenProjects: [],
       idleRecycleMinutes: 5,
       archivedSessions: [],
-      relay: { relayUrl: 'wss://relay.example.com', relayKeyFingerprint: 'fp-1' },
+      relay: { remoteEnabled: true, relayUrl: 'wss://relay.example.com', relayKeyFingerprint: 'fp-1' },
     };
     expect(PreferencesViewSchema.parse(view)).toEqual(view);
     const { relay: _omit, ...withoutRelay } = view;
