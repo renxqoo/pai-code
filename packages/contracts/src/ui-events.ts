@@ -165,15 +165,16 @@ const uiEventDefs = {
   compacting: z.object({ type: z.literal('compacting'), threadId, active: z.boolean() }),
   /** 压缩完成事实（compaction 单事件——host-hub 无 start/end 对；active=false 随后必发）。 */
   compacted: z.object({ type: z.literal('compacted'), threadId, replacedCount: z.number().int() }),
-  /** auto-retry 进行中（llm/retry）。turn/step 定位被重试的 attempt——同轮多次重试互不覆盖，
-   *  上一轮迟到的帧不得点亮当前轮。code 与 message 分开传：界面按 code 出人话，
+  /** auto-retry 进行中（llm/retry）。turn/step 定位被重试的 attempt——同轮多次重试互不覆盖。
+   *  mapper 丢弃缺坐标与结算轮水位以下的迟到帧（hub gates 保证线上帧坐标恒在）：
+   *  本词表只收真实坐标（非负）。code 与 message 分开传：界面按 code 出人话，
    *  原始报文由界面自行决定是否展示（拼成单串会逼 UI 要么全显示要么全不显示）。 */
   retrying: z.object({
     type: z.literal('retrying'),
     threadId,
-    turn: z.number().int(),
-    step: z.number().int(),
-    attempt: z.number().int(),
+    turn: z.number().int().nonnegative(),
+    step: z.number().int().nonnegative(),
+    attempt: z.number().int().positive(),
     code: z.string().nullable(),
     message: z.string().nullable(),
   }),

@@ -300,6 +300,15 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
             { type: 'compacted', threadId, replacedCount: num(payload.replacedNodes, 0) },
           ];
         case 'llm/retry': {
+          // hub gates 强制 turn/step/retry 在场且非负（≥1）：坐标缺失的帧不产事件
+          // （mapper 惯例同 git/changed——垃圾输入丢弃，不降级续传）；结算轮水位
+          // 以下的帧是迟到帧（与 llm/chunk 同判据），不产事件
+          const turn = num(payload.turn, -1);
+          const step = num(payload.step, -1);
+          const attempt = num(payload.retry, 0);
+          if (turn < 0 || step < 0 || attempt < 1) return [];
+          const settledTurn = state.settledTurn.get(threadId);
+          if (settledTurn !== undefined && Number.isFinite(settledTurn) && turn <= settledTurn) return [];
           const failure = recordOf(payload.failure);
           const code = str(failure['code']);
           const message = str(failure['message']);
@@ -307,11 +316,9 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
             {
               type: 'retrying',
               threadId,
-              // 轮步坐标缺失落 -1 哨兵（≠ 任何真实 attempt）：折叠层按 attempt 归属拒收，
-              // 错轮迟到的帧不会点亮当前轮——比降级成 0 冒充第一轮安全
-              turn: num(payload.turn, -1),
-              step: num(payload.step, -1),
-              attempt: num(payload.retry, 0),
+              turn,
+              step,
+              attempt,
               code: code.length > 0 ? code : null,
               message: message.length > 0 ? message : null,
             },

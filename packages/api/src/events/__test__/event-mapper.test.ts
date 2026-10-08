@@ -397,9 +397,23 @@ describe('createEventMapper · 主线程事件', () => {
     expect(createEventMapper(deps).mapEvent(frame('llm/retry', { turn: 0, step: 0, retry: 1 }))).toEqual([
       { type: 'retrying', threadId: 't', turn: 0, step: 0, attempt: 1, code: null, message: null },
     ]);
-    // 帧缺轮步坐标（垃圾帧）：落 -1 哨兵——不等于任何真实 attempt，折叠层据此拒收，不会误画
-    expect(createEventMapper(deps).mapEvent(frame('llm/retry', { retry: 1, failure: { message: 'x' } }))).toEqual([
-      { type: 'retrying', threadId: 't', turn: -1, step: -1, attempt: 1, code: null, message: 'x' },
+    // 帧缺轮步坐标/序号非正（垃圾帧）：不产事件（hub gates 保证线上帧坐标恒在；
+    // mapper 惯例同 git/changed——垃圾输入丢弃，不降级续传）
+    expect(createEventMapper(deps).mapEvent(frame('llm/retry', { retry: 1, failure: { message: 'x' } }))).toEqual([]);
+    expect(createEventMapper(deps).mapEvent(frame('llm/retry', { turn: 3, step: 0, failure: { message: 'x' } }))).toEqual([]);
+    expect(createEventMapper(deps).mapEvent(frame('llm/retry', { turn: 3, step: 0, retry: 0, failure: { message: 'x' } }))).toEqual([]);
+  });
+
+  test('llm/retry 迟到帧（结算轮水位以下）不产事件（与 llm/chunk 同判据）', () => {
+    const mapper = createEventMapper(deps);
+    // 轮 1 流式后结算（settled 帧无轮号：水位取流缓冲轮号）
+    mapper.mapEvent(chunk(1, 0, 'text-delta', { text: 'x' }));
+    mapper.mapEvent(frame('settled', { ok: true }));
+    expect(mapper.mapEvent(frame('llm/retry', { turn: 1, step: 0, retry: 1, failure: { message: 'late' } }))).toEqual([]);
+    // 新轮开启清除水位：当前轮的重试帧照常产出
+    mapper.mapEvent(frame('turn/start', { time: 2 }));
+    expect(mapper.mapEvent(frame('llm/retry', { turn: 2, step: 0, retry: 1, failure: { message: 'x' } }))).toEqual([
+      { type: 'retrying', threadId: 't', turn: 2, step: 0, attempt: 1, code: null, message: 'x' },
     ]);
   });
 

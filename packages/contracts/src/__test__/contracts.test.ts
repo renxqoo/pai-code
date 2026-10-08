@@ -36,10 +36,13 @@ describe('词表封闭（双向）', () => {
     expect(() => UiEventSchema.parse({ type: 'nope', threadId: 't1' })).toThrow();
   });
 
-  test('retrying 缺 attempt 坐标被拒绝（错轮/错步的迟到帧不得降级成合法事件）', () => {
+  test('retrying 缺坐标/负坐标/零序号被拒绝（词表只收真实 attempt 坐标）', () => {
     expect(() => UiEventSchema.parse({ type: 'retrying', threadId: 't1', turn: 3, attempt: 1, code: null, message: null })).toThrow();
     expect(() => UiEventSchema.parse({ type: 'retrying', threadId: 't1', step: 0, attempt: 1, code: null, message: null })).toThrow();
     expect(() => UiEventSchema.parse({ type: 'retrying', threadId: 't1', turn: 3, step: 0, code: null, message: null })).toThrow();
+    expect(() => UiEventSchema.parse({ type: 'retrying', threadId: 't1', turn: -1, step: 0, attempt: 1, code: null, message: null })).toThrow();
+    expect(() => UiEventSchema.parse({ type: 'retrying', threadId: 't1', turn: 3, step: -1, attempt: 1, code: null, message: null })).toThrow();
+    expect(() => UiEventSchema.parse({ type: 'retrying', threadId: 't1', turn: 3, step: 0, attempt: 0, code: null, message: null })).toThrow();
   });
 
   test('hub 帧词表 == 七类（x-harness host-hub 协议帧全集）', () => {
@@ -129,7 +132,7 @@ describe('Settings zod：round-trip 与拒绝表', () => {
     expect(s.hubDev).toEqual({ bunPath: null, hubEntry: null, gatewayEntry: null });
     expect(s.defaultModel).toBeNull();
     expect(s.onboarded).toBe(false);
-    expect(s.relay).toEqual({ relayUrl: '', relayKeyFingerprint: '' });
+    expect(s.relay).toEqual({ remoteEnabled: true, relayUrl: '', relayKeyFingerprint: '' });
   });
 
   test('全量字段 round-trip', () => {
@@ -144,7 +147,7 @@ describe('Settings zod：round-trip 与拒绝表', () => {
       hiddenProjects: ['/w/gone'],
       idleRecycleMinutes: 15,
       archivedSessions: ['/b.jsonl'],
-      relay: { relayUrl: 'wss://relay.example.com', relayKeyFingerprint: 'fp-1' },
+      relay: { remoteEnabled: false, relayUrl: 'wss://relay.example.com', relayKeyFingerprint: 'fp-1' },
     };
     expect(SettingsSchema.parse(input)).toEqual(input);
   });
@@ -220,9 +223,9 @@ describe('API schema：每方法合法/非法样本', () => {
   /** T59：relay 是全局统一配置（settings.json 唯一真相），偏好面可读可写。 */
   test('app/setPreference 接受 relay 配置；空 patch 拒绝', () => {
     expect(ApiSchemas['app/setPreference'].params.parse({ relay: { relayUrl: 'wss://relay.example.com', relayKeyFingerprint: 'fp-1' } })).toEqual({
-      relay: { relayUrl: 'wss://relay.example.com', relayKeyFingerprint: 'fp-1' },
+      relay: { remoteEnabled: true, relayUrl: 'wss://relay.example.com', relayKeyFingerprint: 'fp-1' },
     });
-    expect(ApiSchemas['app/setPreference'].params.parse({ relay: {} })).toEqual({ relay: { relayUrl: '', relayKeyFingerprint: '' } });
+    expect(ApiSchemas['app/setPreference'].params.parse({ relay: {} })).toEqual({ relay: { remoteEnabled: true, relayUrl: '', relayKeyFingerprint: '' } });
     expect(() => ApiSchemas['app/setPreference'].params.parse({})).toThrow();
     expect(() => ApiSchemas['app/setPreference'].params.parse({ relay: { relayUrl: 42 } })).toThrow();
   });
@@ -237,7 +240,7 @@ describe('API schema：每方法合法/非法样本', () => {
       hiddenProjects: [],
       idleRecycleMinutes: 5,
       archivedSessions: [],
-      relay: { relayUrl: 'wss://relay.example.com', relayKeyFingerprint: 'fp-1' },
+      relay: { remoteEnabled: true, relayUrl: 'wss://relay.example.com', relayKeyFingerprint: 'fp-1' },
     };
     expect(PreferencesViewSchema.parse(view)).toEqual(view);
     const { relay: _omit, ...withoutRelay } = view;
