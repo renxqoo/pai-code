@@ -1,12 +1,12 @@
 /**
- * ⌘N/⌘K/⌘P 热键门控矩阵（T32 §3.1-11 规格的单一真相）：
- * ⌘N/⌘K 在任一整页覆盖开着时整体失效；⌘P 独立门控——整页覆盖（设置/用量/新建
- * 任务）开着不唤起，但不受项目文件面板影响（面板打开时仍可唤起，T30 审查 高-3
- * 的裁决语义）。hub confirm 待答为输入区内联条（非模态），不参与门控。
+ * ⌘N/⌘K/⌘⇧D/⌘⇧A 热键门控矩阵（单一真相）：
+ * ⌘N/⌘⇧D/⌘⇧A 在任一整页覆盖开着时整体失效；⌘K 独立门控——整页覆盖（设置/用量/
+ * 新建任务）开着不唤起，但不受项目文件面板影响，也不受面板自身开着影响（面板开着
+ * 再按 ⌘K 要能关掉）。hub confirm 待答为输入区内联条（非模态），不参与门控。
  */
 
 export type HotkeyOverlays = {
-  paletteOpen: boolean;
+  commandPanelOpen: boolean;
   newTaskOpen: boolean;
   usageOpen: boolean;
   settingsOpen: boolean;
@@ -14,16 +14,16 @@ export type HotkeyOverlays = {
 };
 
 export type HotkeyGating = {
-  /** ⌘N/⌘K 是否可劫持。 */
+  /** ⌘N/⌘⇧D/⌘⇧A 是否可劫持（面板开着时停用，避免焦点穿到遮罩后方）。 */
   hotkeysEnabled: boolean;
-  /** ⌘P 是否可唤起（面板开着也要能再按关掉）。 */
-  paletteHotkeyEnabled: boolean;
+  /** ⌘K 是否可唤起（面板开着也要能再按关掉）。 */
+  panelHotkeyEnabled: boolean;
 };
 
 export function hotkeyGating(overlays: HotkeyOverlays): HotkeyGating {
   const fullPageCovered = overlays.newTaskOpen || overlays.usageOpen || overlays.settingsOpen;
   return {
-    hotkeysEnabled: !overlays.paletteOpen && !fullPageCovered && !overlays.projectFilesOpen,
-    paletteHotkeyEnabled: !fullPageCovered,
+    hotkeysEnabled: !overlays.commandPanelOpen && !fullPageCovered && !overlays.projectFilesOpen,
+    panelHotkeyEnabled: !fullPageCovered,
   };
 }

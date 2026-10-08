@@ -19,7 +19,7 @@ import type { SettingsSectionId } from '@/settings/settings-sections';
 /**
  * 渲染层 UI 态 store（zustand vanilla + 组件经 useStore 选择器订阅）。
  * 与 live store 的分界按「写权 + 生命周期」：这里只放本地交互真相
- * （侧栏几何/视图/搜索/开合/草稿/项目文件面板），跟随应用存活、
+ * （侧栏几何/视图/开合/草稿/项目文件面板），跟随应用存活、
  * 跨语言切换根重挂载保持；服务端事件镜像一律不进本 store。
  * 动作全部纯 set 零 IO——副作用居留订阅点的 effect 或控制器模块
  * （项目文件面板的异步建树在 sidebar/project-files 控制器）。
@@ -52,15 +52,13 @@ export type UiState = {
   sidebarWidth: number;
   sidebarCollapsed: boolean;
   sidebarView: SidebarView;
-  sidebarSearchOpen: boolean;
-  sidebarQuery: string;
-  /** 聚焦信号：每次 ⌘K/快捷行触发递增，驱动已展开的搜索框重新聚焦。 */
-  searchFocusToken: number;
   sidebarGroupFold: GroupFold;
   settingsOpen: boolean;
   /** 命令面板跳设置分区的一次性入口（关闭即清，普通打开不受影响）。 */
   settingsEntry: SettingsSectionId | null;
   usageOpen: boolean;
+  /** 命令面板（⌘K）开合：侧栏入口行与 ⌘K toggle 共用同一真相。 */
+  commandPanelOpen: boolean;
   newTaskOpen: boolean;
   /** 进入新建任务页的预填目录；'' = 跟随当前会话目录。 */
   newTaskCwd: string;
@@ -96,11 +94,6 @@ export type UiActions = {
   toggleSidebarCollapsed: () => void;
   collapseSidebar: () => void;
   setSidebarView: (view: SidebarView) => void;
-  /** ⌘K/快捷行入口：收起态先展开（焦点不得劫进零宽容器），已展开重新聚焦。 */
-  openSidebarSearch: () => void;
-  /** Esc 收起搜索：清空过滤词（侧栏收起时保留过滤词走 collapse 路径，不经此动作）。 */
-  closeSidebarSearch: () => void;
-  setSidebarQuery: (value: string) => void;
   toggleGroupFoldKey: (key: string) => void;
   expandGroupKey: (key: string) => void;
   openSettings: () => void;
@@ -108,6 +101,10 @@ export type UiActions = {
   closeSettings: () => void;
   openUsage: () => void;
   closeUsage: () => void;
+  openCommandPanel: () => void;
+  closeCommandPanel: () => void;
+  /** ⌘K 专用：面板开着再按关闭（走独立门控，不受面板开着时其余热键停用的门控影响）。 */
+  toggleCommandPanel: () => void;
   /** 进入新建任务页（cwd 空 = 跟随当前会话目录）；重复进入即重挂载，重置页内状态。
    *  sourceThreadId：来源会话定格（从会话打开时传——建树通告的投递目标，非 cwd 反查）。 */
   openNewTask: (cwd: string, sourceThreadId?: string | null) => void;
@@ -151,13 +148,11 @@ function initialUiState(): UiState {
     sidebarWidth: SIDEBAR_WIDTH,
     sidebarCollapsed: false,
     sidebarView: 'grouped',
-    sidebarSearchOpen: false,
-    sidebarQuery: '',
-    searchFocusToken: 0,
     sidebarGroupFold: INITIAL_GROUP_FOLD,
     settingsOpen: false,
     settingsEntry: null,
     usageOpen: false,
+    commandPanelOpen: false,
     newTaskOpen: false,
     newTaskCwd: '',
     newTaskSourceThreadId: null,
@@ -188,10 +183,6 @@ export function createUiStore() {
     toggleSidebarCollapsed: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
     collapseSidebar: () => set({ sidebarCollapsed: true }),
     setSidebarView: (view) => set({ sidebarView: view }),
-    openSidebarSearch: () =>
-      set((state) => ({ sidebarCollapsed: false, sidebarSearchOpen: true, searchFocusToken: state.searchFocusToken + 1 })),
-    closeSidebarSearch: () => set({ sidebarSearchOpen: false, sidebarQuery: '' }),
-    setSidebarQuery: (value) => set({ sidebarQuery: value }),
     toggleGroupFoldKey: (key) => set((state) => ({ sidebarGroupFold: toggleGroupFold(state.sidebarGroupFold, key) })),
     expandGroupKey: (key) => set((state) => ({ sidebarGroupFold: expandGroup(state.sidebarGroupFold, key) })),
     openSettings: () => set({ settingsOpen: true }),
@@ -199,6 +190,9 @@ export function createUiStore() {
     closeSettings: () => set({ settingsOpen: false, settingsEntry: null }),
     openUsage: () => set({ usageOpen: true }),
     closeUsage: () => set({ usageOpen: false }),
+    openCommandPanel: () => set({ commandPanelOpen: true }),
+    closeCommandPanel: () => set({ commandPanelOpen: false }),
+    toggleCommandPanel: () => set((state) => ({ commandPanelOpen: !state.commandPanelOpen })),
     openNewTask: (cwd, sourceThreadId) =>
       set((state) => ({ newTaskOpen: true, newTaskCwd: cwd, newTaskKey: state.newTaskKey + 1, newTaskDialogOpen: false, newTaskSourceThreadId: sourceThreadId ?? null })),
     closeNewTask: () => set({ newTaskOpen: false, newTaskSourceThreadId: null }),

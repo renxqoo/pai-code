@@ -5,6 +5,7 @@ import type { KnownPermMode } from '@paiapp/contracts';
 
 export const enSettings = {
     title: 'Settings',
+    clearSearch: 'Clear search',
     navGroupBasics: 'Basics',
     navGroupAgent: 'Capabilities',
     navGroupData: 'Data',

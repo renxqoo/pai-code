@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, jest, test } from 'bun:test';
 import * as React from 'react';
 
-import { useCommandPalette, usePaletteItems } from '../use-command-palette';
+import { useCommandPanel, useCommandItems } from '../use-command-panel';
 import { initialThreadState } from '@/live/live-thread-state';
 import { store as liveStore, workspaceActions } from '@/live/workspace-runtime';
 import { uiStore } from '@/ui/ui-store';
@@ -26,17 +26,17 @@ function seedSession(): void {
 }
 
 /** 测试宿主（hook 消费）：装配面与条目面双 hook，状态外置给断言。 */
-let api: ReturnType<typeof useCommandPalette> | null = null;
+let api: ReturnType<typeof useCommandPanel> | null = null;
 let items: readonly unknown[] = [];
 function PaletteHarness(): React.JSX.Element {
-  api = useCommandPalette({
+  api = useCommandPanel({
     openNewTask: () => uiStore.getState().openNewTask(''),
     openSettings: () => uiStore.getState().openSettings(),
     openSettingsAt: (section) => uiStore.getState().openSettingsAt(section),
     openUsage: () => uiStore.getState().openUsage(),
     navigateSession: () => undefined,
   });
-  items = usePaletteItems(true);
+  items = useCommandItems(true);
   return <span data-testid="palette" />;
 }
 
@@ -51,19 +51,36 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-describe('useCommandPalette', () => {
-  test('开合：toggle 翻转、close 关闭', () => {
+describe('useCommandPanel', () => {
+  test('开合：setOpen 幂等折算到 open/close，开态真相在 ui store', () => {
     seedSession();
     const view = render(<PaletteHarness />);
     expect(api?.open).toBe(false);
     React.act(() => {
-      api?.toggle();
+      api?.setOpen(true);
+    });
+    expect(api?.open).toBe(true);
+    expect(uiStore.getState().commandPanelOpen).toBe(true);
+    // 幂等：重复置同一态不得产生额外动作
+    React.act(() => {
+      api?.setOpen(true);
     });
     expect(api?.open).toBe(true);
     React.act(() => {
-      api?.close();
+      api?.setOpen(false);
     });
     expect(api?.open).toBe(false);
+    expect(uiStore.getState().commandPanelOpen).toBe(false);
+    view.unmount();
+  });
+
+  test('侧栏入口行改指面板：openCommandPanel 后 hook 的 open 跟随（跨区开合同一真相）', () => {
+    seedSession();
+    const view = render(<PaletteHarness />);
+    React.act(() => {
+      uiStore.getState().openCommandPanel();
+    });
+    expect(api?.open).toBe(true);
     view.unmount();
   });
 
@@ -101,7 +118,7 @@ describe('useCommandPalette', () => {
   });
 });
 
-describe('usePaletteItems', () => {
+describe('useCommandItems', () => {
   test('数据面：有会话/有 cwd 时操作组含会话级动作；会话组渲染种子标题', () => {
     seedSession();
     const view = render(<PaletteHarness />);

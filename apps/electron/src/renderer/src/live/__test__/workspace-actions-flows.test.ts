@@ -54,7 +54,7 @@ describe('workspace-actions 失败路', () => {
   test('renameSession 失败报 renameFailed 且返回 false', async () => {
     jest.spyOn(controller, 'renameSession').mockResolvedValue(false);
     expect(await workspaceActions.renameSession('t1', '新名字')).toBe(false);
-    expect(store.getState().notices.map((n) => n.text)).toEqual([copy.sidebar.renameFailed]);
+    expect(store.getState().notices.map((n) => n.text)).toEqual([copy.notices.renameFailed]);
   });
 
   test('copyText 失败报 copyFailed（剪贴板不可写如实报）', async () => {

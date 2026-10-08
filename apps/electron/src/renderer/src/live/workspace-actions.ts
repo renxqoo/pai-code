@@ -583,7 +583,7 @@ export function createWorkspaceActions(): WorkspaceActions {
     removeProvider: (name) => controller.removeProvider(name),
     renameSession: async (threadId, name) => {
       const ok = await controller.renameSession(threadId, name);
-      if (!ok) pushNotice(copy.sidebar.renameFailed);
+      if (!ok) pushNotice(copy.notices.renameFailed);
       return ok;
     },
     openInSystem: async (cwd, target) => {

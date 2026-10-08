@@ -13,7 +13,7 @@ import { useSessionAges } from '@/hooks/use-session-ages';
 import { uiStore } from '@/ui/ui-store';
 
 /**
- * 会话列表区域：live store（会话注册表/偏好/活跃线程）与 ui store（查询/视图/
+ * 会话列表区域：live store（会话注册表/偏好/活跃线程）与 ui store（视图/
  * 显示更多展开）的自订阅组装点——视图模型经 buildSidebarViewModel 单一真相派生，
  * 相对时间 tick（30s）收敛在本区域内，不外溢工作区树。空态文案直读 copy。
  */
@@ -21,7 +21,6 @@ function SessionListRegion(): React.JSX.Element {
   const sessionViews = useStore(liveStore, (s) => s.sessions);
   const preferences = useStore(liveStore, (s) => s.preferences);
   const activeThreadId = useStore(liveStore, (s) => s.activeThreadId) ?? '';
-  const query = useStore(uiStore, (s) => s.sidebarQuery);
   const view = useStore(uiStore, (s) => s.sidebarView);
   const expanded = useStore(uiStore, (s) => s.sidebarGroupFold.expanded);
 
@@ -31,19 +30,12 @@ function SessionListRegion(): React.JSX.Element {
   const hiddenProjects = React.useMemo(() => new Set(preferences.hiddenProjects), [preferences.hiddenProjects]);
   const archivedSessions = React.useMemo(() => new Set(preferences.archivedSessions), [preferences.archivedSessions]);
   const lists = React.useMemo(
-    () => buildSidebarViewModel(sessions, hiddenProjects, pinnedPaths, archivedSessions, query, expanded),
-    [sessions, hiddenProjects, pinnedPaths, archivedSessions, query, expanded],
+    () => buildSidebarViewModel(sessions, hiddenProjects, pinnedPaths, archivedSessions, expanded),
+    [sessions, hiddenProjects, pinnedPaths, archivedSessions, expanded],
   );
   const { pinned, timeList, projectGroups, emptyState } = lists;
   const ages = useSessionAges(sessions);
 
-  if (emptyState === 'filtered') {
-    return (
-      <p className="px-2 pt-6 text-center text-[11.5px] leading-[16px] text-muted-foreground/80">
-        {copy.sidebar.noMatches}
-      </p>
-    );
-  }
   if (emptyState === 'none') {
     return (
       <p className="px-2 pt-6 text-center text-[11.5px] leading-[16px] text-muted-foreground/80">

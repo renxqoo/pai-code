@@ -5,13 +5,16 @@ import { copy } from '@/strings';
 type NoticeStripProps = {
   notices: readonly { id: string; text: string }[];
   onDismiss: (id: string) => void;
+  /** 模态覆盖层（命令面板）打开期间压制：通知条 z 高于遮罩，浮在模态之上
+   * 会形成键盘不可达而鼠标可点的分裂交互面，矮窗口下压进面板输入区。 */
+  suppressed: boolean;
 };
 
 /** 瞬时通知条（notify 对话框/发送失败等），自动堆叠上限 5 条。 */
-function NoticeStrip({ notices, onDismiss }: NoticeStripProps) {
-  if (notices.length === 0) return null;
+function NoticeStrip({ notices, onDismiss, suppressed }: NoticeStripProps) {
+  if (suppressed || notices.length === 0) return null;
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-[46px] z-[60] flex flex-col items-center gap-[6px]">
+    <div data-slot="notice-strip" className="pointer-events-none fixed inset-x-0 top-[46px] z-[60] flex flex-col items-center gap-[6px]">
       {notices.map((notice) => (
         <div
           key={notice.id}
