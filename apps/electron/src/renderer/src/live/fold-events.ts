@@ -140,7 +140,7 @@ function foldOne(state: LiveThreadState, event: UiEvent, now: number): LiveThrea
           );
           // retry 块 transient：终态轮一律不随历史留存（成功的重试不该留疤；
           // 失败耗尽也已被下方 turnFailure 呈现）
-          const settledBlocks = stripTransientBlocks(blocks);
+          const settledBlocks: TurnBlock[] = [...stripTransientBlocks(blocks)];
           // ok=false 的异常终态提示（与转写重建 failureOf 同一展示面）：用户主动停止
           // 不算失败（stopping 分支已呈现 stopped），只有真实失败才挂错误块
           if (!event.ok && !stopped) {
@@ -165,7 +165,7 @@ function foldOne(state: LiveThreadState, event: UiEvent, now: number): LiveThrea
       const liveTurnId = state.liveTurnId;
       if (liveTurnId === null) return state;
       const turn = findTurn(state, liveTurnId);
-      if (turn === null || turn.status !== 'running') return state;
+      if (turn?.status !== 'running') return state;
       const block: Extract<TurnBlock, { kind: 'retry' }> = {
         kind: 'retry',
         id: `retry-${event.turn}-${event.step}`,
@@ -401,7 +401,7 @@ function appendDelta(state: LiveThreadState, messageId: string, kind: 'text' | '
  *  由这里派生，不另设标量：同一事实两处写，清除面漂移即不一致态）。 */
 export function hasRetryInFlight(state: LiveThreadState): boolean {
   const turn = findTurn(state, state.liveTurnId);
-  return turn !== null && turn.status === 'running' && turn.blocks.some((block) => block.kind === 'retry');
+  return turn?.status === 'running' && turn.blocks.some((block) => block.kind === 'retry');
 }
 
 /** 重试在途归位（剥 live 轮的 retry 块）；无块时返回原引用（真 no-op）——

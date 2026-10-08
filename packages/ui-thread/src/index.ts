@@ -34,3 +34,5 @@ export { groupEditsByFile } from './edit-file-groups';
 export { objectName } from './file-object-name';
 export { autoOpenForCall, autoOpenForGroup, callExpandable, detailOutput } from './tool-call-detail';
 export { changedFileCount } from './changed-file-count';
+export type { RetryCopy } from './retry-copy';
+export { retryLineOf, retryReasonLabel } from './retry-copy';

@@ -26,7 +26,7 @@ describe('session-sync 事件归并', () => {
     const during = s.snapshot().messages;
     const retryRow = during.find((m) => m.id.startsWith('retry-'));
     expect(retryRow).toMatchObject({ kind: 'status', status: 'running' });
-    expect(retryRow?.text).toBe('重试中（第 1 次）· 请求过于频繁');
+    expect(retryRow?.text).toBe('重试中（第 1 次） · 请求过于频繁');
     expect(during.map((m) => m.id)).toEqual(['live-m-assistant', 'retry-1-0-1']);
 
     s.handleEvent({ type: 'textDelta', threadId: 't', messageId: 'm', delta: '题」，开始分析。' });
@@ -40,7 +40,7 @@ describe('session-sync 事件归并', () => {
     s.handleEvent({ type: 'retrying', threadId: 't', turn: 1, step: 0, attempt: 2, code: 'http-429', message: 'x' });
     const rows = s.snapshot().messages.filter((m) => m.id.startsWith('retry-'));
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.text).toBe('重试中（第 2 次）· 请求过于频繁');
+    expect(rows[0]?.text).toBe('重试中（第 2 次） · 请求过于频繁');
   });
 
   it('未知错误码落兜底文案，不把裸报文顶到列表里', () => {
@@ -48,7 +48,7 @@ describe('session-sync 事件归并', () => {
     s.handleEvent({ type: 'turnStarted', threadId: 't', at: 1 });
     s.handleEvent({ type: 'retrying', threadId: 't', turn: 1, step: 0, attempt: 1, code: null, message: 'ECONNRESET at 10.0.0.4' });
     const row = s.snapshot().messages.find((m) => m.id.startsWith('retry-'));
-    expect(row?.text).toBe('重试中（第 1 次）· 暂时不可用');
+    expect(row?.text).toBe('重试中（第 1 次） · 暂时不可用');
     expect(row?.summary).toBe('ECONNRESET at 10.0.0.4');
   });
 

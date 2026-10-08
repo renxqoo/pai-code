@@ -1,4 +1,6 @@
 /** 对话流文案（英文；key 结构 = 唯一真相，zh 表按同形状翻译）。 */
+import type { RetryCopy } from '@paiapp/ui-thread';
+import { retryLineOf } from '@paiapp/ui-thread';
 import {
   bashImagesRejectedCopy,
   imagesDeniedCopy,
@@ -7,16 +9,15 @@ import {
   resumeFailedCopy,
 } from './en-error-copy';
 
-/** 重试序号词面（retryLine 与 retrying 共用一份，措辞不同处只有一处可改）。 */
-const retryingLabel = (attempt: number): string => `Retrying (attempt ${attempt})`;
-
-/** 重试原因（hub 错误码 → 人话）。未知码落兜底文案——裸报文由界面悬浮，不进对话列正文。 */
-const retryReasonLabel = (code: string | null): string => {
-  if (code === 'http-429') return 'Rate limited';
-  if (code === 'http-408') return 'Request timed out';
-  if (code === 'network') return 'Network interrupted';
-  if (code?.startsWith('http-5')) return 'Upstream service unavailable';
-  return 'Temporarily unavailable';
+/** 重试行词面（共享拼装入 @paiapp/ui-thread，两端同一句）：hub 错误码 → 原因短语。 */
+export const enRetryCopy: RetryCopy = {
+  reasonHttp429: 'Rate limited',
+  reasonHttp408: 'Request timed out',
+  reasonHttp5xx: 'Upstream service unavailable',
+  reasonNetwork: 'Network interrupted',
+  reasonRepetition: 'Repetitive output detected, retrying differently',
+  reasonFallback: 'Temporarily unavailable',
+  retryingLabel: (attempt: number): string => `Retrying (attempt ${attempt})`,
 };
 
 export const enFlow = {
@@ -106,11 +107,8 @@ export const enFlow = {
   /** 历史轮锚点带（无障碍名） */
   turnAnchorRailAria: 'Turn history navigation',
   thinking: 'Thinking',
-  retrying: (attempt: number): string => retryingLabel(attempt),
-  /** 重试原因（hub 错误码 → 人话）。未知码落兜底文案——裸报文由界面悬浮，不进对话列正文。 */
-  retryReason: (code: string | null): string => retryReasonLabel(code),
-  /** 重试行整句（序号 + 原因），单一真相：分隔符与措辞都住在文案目录，调用方不自己拼。 */
-  retryLine: (attempt: number, code: string | null): string => `${retryingLabel(attempt)}· ${retryReasonLabel(code)}`,
+  /** 重试行整句：拼装单点在 @paiapp/ui-thread/retry-copy（词面注入，两端同句）。 */
+  retryLine: (attempt: number, code: string | null): string => retryLineOf(attempt, code, enRetryCopy),
   crashedBanner: 'This conversation\'s worker has exited. Sending a message resumes the session.',
   hydrateFailedTitle: 'Failed to load history',
   hydrateFailedHint: 'Could not read this conversation\'s history. You can retry.',
