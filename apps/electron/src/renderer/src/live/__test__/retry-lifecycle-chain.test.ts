@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { createEventMapper } from '@paiapp/api';
-import { foldThreadEvent } from '../fold-events';
+import { foldThreadEvent, hasRetryInFlight } from '../fold-events';
 import { initialThreadState } from '../live-thread-state';
 import type { TurnBlock } from '@/thread/thread-model';
 import type { UiEvent } from '@paiapp/contracts';
@@ -20,23 +20,29 @@ const T = 's1';
 const NOW = 1_000;
 
 type Frame = { threadId: string; name: string; payload: Record<string, unknown> };
-type LiveRetry = { attempt: number; code: string | null; message: string | null } | null;
 type RetryBlock = Extract<TurnBlock, { kind: 'retry' }>;
 
-function chain(): { apply: (frame: Frame) => void; retrying: () => LiveRetry; retryBlocks: () => readonly RetryBlock[] } {
+function chain(): { apply: (frame: Frame) => void; fold: (event: UiEvent) => void; retrying: () => boolean; retryBlocks: () => readonly RetryBlock[]; liveBlocks: () => readonly TurnBlock[] } {
   const mapper = createEventMapper({ now: () => NOW });
   let state = initialThreadState;
+  const applyEvent = (event: UiEvent): void => {
+    state = foldThreadEvent(state, event, NOW);
+  };
   return {
     apply: (frame: Frame): void => {
-      for (const event of mapper.mapEvent(frame as never) as UiEvent[]) {
-        state = foldThreadEvent(state, event, NOW);
-      }
+      for (const event of mapper.mapEvent(frame as never) as UiEvent[]) applyEvent(event);
     },
-    retrying: () => (state as { retrying: LiveRetry }).retrying,
+    fold: applyEvent,
+    retrying: () => hasRetryInFlight(state),
     retryBlocks: () => {
       const items = (state as { items: ReadonlyArray<{ kind: string; turn?: { blocks: readonly TurnBlock[] } }> }).items;
       const turn = items.findLast((item) => item.kind === 'turn');
       return (turn?.turn?.blocks ?? []).filter((block): block is RetryBlock => block.kind === 'retry');
+    },
+    liveBlocks: () => {
+      const items = (state as { items: ReadonlyArray<{ kind: string; turn?: { blocks: readonly TurnBlock[] } }> }).items;
+      const turn = items.findLast((item) => item.kind === 'turn');
+      return turn?.turn?.blocks ?? [];
     },
   };
 }
@@ -82,12 +88,12 @@ describe('重试横幅生命周期（mapper × fold）', () => {
     c.apply(chunk(1, 0, 'text-delta', '收到「'));
     c.apply(stream(1, 0, 'end', { kind: 'attempt' }));
     c.apply(llmRetry(1, 0, 1));
-    expect(c.retrying()?.attempt).toBe(1);
+    expect(c.retrying()).toBe(true);
 
     c.apply(stream(1, 0, 'start'));
     c.apply(chunk(1, 0, 'text-delta', '收到「分析一下这个」，开始分析。'));
 
-    expect(c.retrying()).toBeNull();
+    expect(c.retrying()).toBe(false);
   });
 
   test('重试再次失败：序号推进且横幅不提前熄灭（start 帧不是成功信号）', () => {
@@ -97,12 +103,19 @@ describe('重试横幅生命周期（mapper × fold）', () => {
     c.apply(chunk(2, 0, 'text-delta', '收到'));
     c.apply(stream(2, 0, 'end', { kind: 'attempt' }));
     c.apply(llmRetry(2, 0, 1));
+    expect(c.retrying()).toBe(true);
 
     c.apply(stream(2, 0, 'start'));
+    // start 帧到达的瞬间横幅不得熄灭：它每次重派都发（含紧接着又要失败的那次），
+    // 不携带成败信息——此处断言是本用例的判别核心，缺失时清除面回归到 streamRestarted
+    // 全套件仍绿
+    expect(c.retrying()).toBe(true);
     c.apply(stream(2, 0, 'end', { kind: 'attempt' }));
     c.apply(llmRetry(2, 0, 2));
 
-    expect(c.retrying()?.attempt).toBe(2);
+    const blocks = c.retryBlocks();
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]?.attempt).toBe(2);
   });
 
   test('重试成功但只出工具调用（无文本增量）：工具调用即撤下横幅', () => {
@@ -116,7 +129,7 @@ describe('重试横幅生命周期（mapper × fold）', () => {
     c.apply(stream(3, 0, 'start'));
     c.apply(toolCall(3, 0, 'c1', 'read'));
 
-    expect(c.retrying()).toBeNull();
+    expect(c.retrying()).toBe(false);
   });
 
   test('重试成功但整条消息无正文：权威 message 定形即撤下横幅', () => {
@@ -130,7 +143,7 @@ describe('重试横幅生命周期（mapper × fold）', () => {
     c.apply(stream(4, 0, 'start'));
     c.apply(assistantMessage(4, 0, ''));
 
-    expect(c.retrying()).toBeNull();
+    expect(c.retrying()).toBe(false);
   });
 
   test('失败 attempt 零 token（缓冲未开）：重试首个增量开新消息，横照常撤下', () => {
@@ -143,24 +156,38 @@ describe('重试横幅生命周期（mapper × fold）', () => {
     c.apply(stream(5, 0, 'start'));
     c.apply(chunk(5, 0, 'text-delta', '好了'));
 
-    expect(c.retrying()).toBeNull();
+    expect(c.retrying()).toBe(false);
   });
 });
 
 describe('重试行块（对话列内联展示）', () => {
-  test('重试发生时 live 轮追加 retry 块，位置在到达序末尾', () => {
+  test('重试发生时 live 轮落 retry 块：位置在失败正文之后、diff 尾块之前', () => {
     const c = chain();
     c.apply(turnStart(1));
     c.apply(chunk(1, 0, 'text-delta', '收到'));
+    c.apply(toolCall(1, 0, 'c1', 'write'));
+    // diff 尾块：fold 层在 toolEnded 消费变更视图（mapper 结果侧无 patch 面，
+    // 直接注 UiEvent 验证块序不变式）
+    c.fold({ type: 'toolEnded', threadId: T, callId: 'c1', output: 'ok', isError: false, durationMs: 0, diff: [{ path: 'a.ts', additions: 2, deletions: 0 }] });
     c.apply(stream(1, 0, 'end', { kind: 'attempt' }));
     c.apply(llmRetry(1, 0, 1));
 
     const blocks = c.retryBlocks();
     expect(blocks).toHaveLength(1);
     expect(blocks[0]).toMatchObject({ attempt: 1, code: 'http-429', message: 'http-429: rate limited' });
+    const all = c.liveBlocks();
+    const retryAt = all.findIndex((block) => block.kind === 'retry');
+    const diffAt = all.findIndex((block) => block.kind === 'diff');
+    const textAt = all.findIndex((block) => block.kind === 'text');
+    expect(textAt).toBeGreaterThanOrEqual(0);
+    expect(diffAt).toBeGreaterThanOrEqual(0);
+    expect(retryAt).toBeGreaterThan(textAt);
+    expect(retryAt).toBeLessThan(diffAt);
+    // 轮末仍是 diff（尾部不变式未被 retry 插入破坏）
+    expect(all[all.length - 1]?.kind).toBe('diff');
   });
 
-  test('同一 attempt 连���重试：块原地更新序号与文案，不叠第二块', () => {
+  test('同一 attempt 连续重试：块原地更新序号与文案，不叠第二块', () => {
     const c = chain();
     c.apply(turnStart(1));
     c.apply(chunk(1, 0, 'text-delta', '收到'));
@@ -183,7 +210,7 @@ describe('重试行块（对话列内联展示）', () => {
     c.apply(chunk(1, 0, 'text-delta', '，继续'));
 
     expect(c.retryBlocks()).toHaveLength(0);
-    expect(c.retrying()).toBeNull();
+    expect(c.retrying()).toBe(false);
   });
 
   test('轮结算后 retry 块不残留（transient：成功的历史轮不带重试行）', () => {
@@ -205,6 +232,31 @@ describe('重试行块（对话列内联展示）', () => {
     c.apply({ threadId: T, name: 'settled', payload: { ok: false, reason: 'gave up' } });
 
     expect(c.retryBlocks()).toHaveLength(0);
-    expect(c.retrying()).toBeNull();
+    expect(c.retrying()).toBe(false);
+  });
+
+  test('worker 死亡冻结轮次：retry 块不残留（死轮不得钉住旋转的重试行）', () => {
+    const c = chain();
+    c.apply(turnStart(1));
+    c.apply(chunk(1, 0, 'text-delta', '收到'));
+    c.apply(llmRetry(1, 0, 1));
+    expect(c.retryBlocks()).toHaveLength(1);
+
+    // sessionDied 由主进程从 thread_died 帧合成（mapper 不产）——直接折 UiEvent
+    c.fold({ type: 'sessionDied', threadId: T, reason: 'worker_crash' });
+
+    expect(c.retryBlocks()).toHaveLength(0);
+    expect(c.retrying()).toBe(false);
+  });
+
+  test('结算后迟到的重试帧不点亮已冻结轮（错序泄漏帧不残留）', () => {
+    const c = chain();
+    c.apply(turnStart(1));
+    c.apply(chunk(1, 0, 'text-delta', '收到'));
+    c.apply({ threadId: T, name: 'settled', payload: { ok: true } });
+    c.apply(llmRetry(1, 0, 1));
+
+    expect(c.retryBlocks()).toHaveLength(0);
+    expect(c.retrying()).toBe(false);
   });
 });

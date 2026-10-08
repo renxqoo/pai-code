@@ -1,4 +1,5 @@
 import type { LiveThreadState } from '@/live/live-thread-state';
+import { hasRetryInFlight } from '@/live/fold-events';
 import { summarizeAgents } from '@/thread/panel-summary';
 
 /** 线程占用判定输入（结构性最小面，纯函数可测）：会话按线程 id 键索引 cwd。 */
@@ -11,7 +12,7 @@ function threadBusy(thread: LiveThreadState): boolean {
     thread.streaming ||
     summarizeAgents(thread.agents).busyCount > 0 ||
     thread.bashRunning ||
-    thread.retrying !== null
+    hasRetryInFlight(thread)
   );
 }
 

@@ -4,7 +4,7 @@ import type { ThreadItem, ToolCallModel, TurnBlock } from '@/thread/thread-model
 import { onSubagentEvent } from './fold-subagents';
 import { mergeDiffFile } from './hydrate-items';
 import { capSeenIds, mergeTodo, noteCallStart, noteMessageTurn, omitCallStart, type LiveThreadState } from './live-thread-state';
-import { beginLiveTurn, claimAnonymousBlocks, clip, ensureLiveTurn, findTurn, insertBeforeLiveTurn, updateTurn } from './turn-ops';
+import { beginLiveTurn, claimAnonymousBlocks, clip, ensureLiveTurn, findTurn, insertBeforeLiveTurn, stripTransientBlocks, updateTurn } from './turn-ops';
 
 
 /**
@@ -68,8 +68,8 @@ function foldOne(state: LiveThreadState, event: UiEvent, now: number): LiveThrea
       };
     }
     case 'messageStarted': {
-      // 重试成功后模型继续出消息：清除重试提示；新消息开始即旧思考段让位
-      const started = ensureLiveTurn({ ...state, liveMessageId: event.messageId, retrying: null }, now);
+      // 新消息开始即旧思考段让位
+      const started = ensureLiveTurn({ ...state, liveMessageId: event.messageId }, now);
       // 登记消息归属轮：迟到的 messageFinal（错序/重放）不得把旧轮权威内容补进新轮
       // （ensureLiveTurn 后必有 live 轮；null 分支仅类型层防御——无轮即无归属可登记）
       const ownerTurnId = started.liveTurnId;
@@ -122,13 +122,12 @@ function foldOne(state: LiveThreadState, event: UiEvent, now: number): LiveThrea
         state.stopping && state.agents.some((agent) => agent.status !== 'stopped')
           ? state.agents.map((agent) => (agent.status === 'stopped' ? agent : { ...agent, status: 'stopped' as const, endedAt: now }))
           : state.agents;
-      if (state.liveTurnId === null) return { ...state, streaming: false, retrying: null, stopping: false, agents };
+      if (state.liveTurnId === null) return { ...state, streaming: false, stopping: false, agents };
       const stopped = state.stopping;
       return {
         ...state,
         streaming: false,
         stopping: false,
-        retrying: null,
         agents,
         liveMessageId: null,
         items: state.items.map((item) => {
@@ -139,9 +138,9 @@ function foldOne(state: LiveThreadState, event: UiEvent, now: number): LiveThrea
               ? { ...block, calls: block.calls.map((call) => (call.status === 'running' ? { ...call, status: 'stopped' as const } : call)) }
               : block,
           );
-          // retry 块 transient：轮结算一律不随历史留存（成功的重试不该留疤；
+          // retry 块 transient：终态轮一律不随历史留存（成功的重试不该留疤；
           // 失败耗尽也已被下方 turnFailure 呈现）
-          const settledBlocks = blocks.filter((block) => block.kind !== 'retry');
+          const settledBlocks = stripTransientBlocks(blocks);
           // ok=false 的异常终态提示（与转写重建 failureOf 同一展示面）：用户主动停止
           // 不算失败（stopping 分支已呈现 stopped），只有真实失败才挂错误块
           if (!event.ok && !stopped) {
@@ -161,20 +160,20 @@ function foldOne(state: LiveThreadState, event: UiEvent, now: number): LiveThrea
       // （水化侧 surfaceOp replace 折叠已在 entries-mapper 落地）
       return { ...state, compacting: false };
     case 'retrying': {
-      // 无 live 轮 = 该轮已结算：重试帧迟到（退避中用户停止 / 轮已收尾），不得凭空开轮挂块
+      // 无 live 轮或轮已非 running：重试帧迟到（退避中用户停止/进程消亡后的泄漏帧），
+      // 不得凭空开轮或点亮已冻结轮（缺坐标与结算水位以下的迟到帧已在 mapper 丢弃）
       const liveTurnId = state.liveTurnId;
       if (liveTurnId === null) return state;
+      const turn = findTurn(state, liveTurnId);
+      if (turn === null || turn.status !== 'running') return state;
       const block: Extract<TurnBlock, { kind: 'retry' }> = {
         kind: 'retry',
         id: `retry-${event.turn}-${event.step}`,
-        turn: event.turn,
-        step: event.step,
         attempt: event.attempt,
         code: event.code,
         message: event.message,
       };
-      const next: LiveThreadState = { ...state, retrying: { attempt: event.attempt, code: event.code, message: event.message } };
-      return updateTurn(next, liveTurnId, (current) => ({ ...current, blocks: noteRetryBlock(current.blocks, block) }));
+      return updateTurn(state, liveTurnId, (current) => ({ ...current, blocks: noteRetryBlock(current.blocks, block) }));
     }
     case 'subagentStarted':
     case 'subagentDelta':
@@ -224,7 +223,7 @@ export function foldDeath(state: LiveThreadState, now: number, frozenStatus: 'co
       ? state.items
       : state.items.map((item): ThreadItem =>
           item.kind === 'turn' && item.turn.id === state.liveTurnId && item.turn.status === 'running'
-            ? { kind: 'turn', turn: { ...item.turn, status: frozenStatus, endedAt: now, streamingThinkingBlockId: null } }
+            ? { kind: 'turn', turn: { ...item.turn, status: frozenStatus, endedAt: now, blocks: stripTransientBlocks(item.turn.blocks), streamingThinkingBlockId: null } }
             : item,
         );
   return {
@@ -234,7 +233,6 @@ export function foldDeath(state: LiveThreadState, now: number, frozenStatus: 'co
     queue: { steering: [], followUp: [] },
     streaming: false,
     compacting: false,
-    retrying: null,
     stopping: false,
     bashRunning: false,
     bashTail: '',
@@ -243,7 +241,7 @@ export function foldDeath(state: LiveThreadState, now: number, frozenStatus: 'co
 }
 
 function onTurnStarted(state: LiveThreadState, at: number): LiveThreadState {
-  return { ...beginLiveTurn(state, at), streaming: true, retrying: null, crashed: false };
+  return { ...beginLiveTurn(state, at), streaming: true, crashed: false };
 }
 
 function onToolEnded(
@@ -399,17 +397,23 @@ function appendDelta(state: LiveThreadState, messageId: string, kind: 'text' | '
   });
 }
 
-/** 重试在途态归位（标量 + 对话列的 retry 块同归）；本就为空时返回原引用（真 no-op）——
- *  渲染层 memo 以引用为键，正文增量这类高频路径的无谓重建会拖垮整轮重渲。 */
-function clearRetry(state: LiveThreadState): LiveThreadState {
-  const next = state.retrying === null ? state : { ...state, retrying: null };
-  const turn = findTurn(next, next.liveTurnId);
-  if (turn === null || !turn.blocks.some((block) => block.kind === 'retry')) return next;
-  return updateTurn(next, turn.id, (current) => ({ ...current, blocks: current.blocks.filter((block) => block.kind !== 'retry') }));
+/** 重试在途的单一表示：live 轮的 retry 块（非对话列消费方——切分支锁等——
+ *  由这里派生，不另设标量：同一事实两处写，清除面漂移即不一致态）。 */
+export function hasRetryInFlight(state: LiveThreadState): boolean {
+  const turn = findTurn(state, state.liveTurnId);
+  return turn !== null && turn.status === 'running' && turn.blocks.some((block) => block.kind === 'retry');
 }
 
-/** retry 块落位：同一 (turn, step) 原地换序号（连续重试不叠块）；否则按到达序追加到轮末——
- *  块序即到达序，重试行正好落在失败正文与重试正文之间。 */
+/** 重试在途归位（剥 live 轮的 retry 块）；无块时返回原引用（真 no-op）——
+ *  渲染层 memo 以引用为键，正文增量这类高频路径的无谓重建会拖垮整轮重渲。 */
+function clearRetry(state: LiveThreadState): LiveThreadState {
+  const turn = findTurn(state, state.liveTurnId);
+  if (turn === null || !turn.blocks.some((block) => block.kind === 'retry')) return state;
+  return updateTurn(state, turn.id, (current) => ({ ...current, blocks: current.blocks.filter((block) => block.kind !== 'retry') }));
+}
+
+/** retry 块落位：同一 (turn, step) 原地换序号（连续重试不叠块）；否则按到达序
+ *  插入（diff 尾部不变式之前）——块序即到达序，重试行落在失败正文与重试正文之间。 */
 function noteRetryBlock(blocks: readonly TurnBlock[], block: Extract<TurnBlock, { kind: 'retry' }>): readonly TurnBlock[] {
   const index = blocks.findIndex((existing) => existing.kind === 'retry' && existing.id === block.id);
   if (index !== -1) {
@@ -417,7 +421,9 @@ function noteRetryBlock(blocks: readonly TurnBlock[], block: Extract<TurnBlock, 
     next[index] = block;
     return next;
   }
-  return [...blocks, block];
+  const at = blocks.findIndex((existing) => existing.kind === 'diff');
+  if (at === -1) return [...blocks, block];
+  return [...blocks.slice(0, at), block, ...blocks.slice(at)];
 }
 
 /** 清 live 轮的思考流式态（新消息开始等让位点）；无 live 轮原样返回。 */

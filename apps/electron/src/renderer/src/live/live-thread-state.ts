@@ -4,13 +4,11 @@ import type { ThreadItem, SubagentModel } from '@/thread/thread-model';
 /**
  * 单线程折叠状态：转写条目（真相）+ 至多一个进行中的 live 轮次（流式装饰）。
  * 轮次边界以 turnStarted/turnSettled 对账：settle 后条目对账替换 live 轮次。
+ * 重试在途不设独立标量：事实住在 live 轮的 retry 块（hasRetryInFlight 派生），
+ * 单一表示避免清除点双轨漂移。
  */
 
 export type QueueState = { steering: readonly QueueEntry[]; followUp: readonly QueueEntry[] };
-
-/** 自动重试进行中（attempt 为重试序号；hub 不暴露上限）。与对话列的 retry 块同源同生命周期——
- *  这里供非对话列消费方（切分支锁等）读同一事实，界面读的是块。 */
-export type RetryState = { attempt: number; code: string | null; message: string | null };
 
 export type LiveThreadState = {
   items: readonly ThreadItem[];
@@ -41,7 +39,6 @@ export type LiveThreadState = {
   queue: QueueState;
   streaming: boolean;
   compacting: boolean;
-  retrying: RetryState | null;
   /** 用户停止意图：settle 时把 live 轮标 stopped。 */
   stopping: boolean;
   /** worker 异常死亡横幅（下条命令自动恢复，收到 turnStarted 清除）。 */
@@ -80,7 +77,6 @@ export const initialThreadState: LiveThreadState = {
   queue: { steering: [], followUp: [] },
   streaming: false,
   compacting: false,
-  retrying: null,
   stopping: false,
   crashed: false,
   parked: false,

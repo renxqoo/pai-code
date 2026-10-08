@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { foldDeath, foldStopIntent, foldThreadEvent } from '../fold-events';
+import { foldDeath, foldStopIntent, foldThreadEvent, hasRetryInFlight } from '../fold-events';
 import { foldHydrate } from '../fold-hydrate';
 import { initialThreadState } from '../live-thread-state';
 import type { HistoryItem, UiEvent } from '@paiapp/contracts';
@@ -84,12 +84,12 @@ describe('foldEvents · 轮次生命周期', () => {
   test('多段消息期间不终态；settle 恰好一次', () => {
     let s = initialThreadState;
     s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(0) }), tick(0));
-    // auto-retry 进行中仍 running，retrying 状态可见
-    s = foldThreadEvent(s, ev({ type: 'retrying', threadId: 't', attempt: 1, errorMessage: 'e' }), tick(1));
-    expect(s.retrying).not.toBeNull();
+    // auto-retry 进行中仍 running，retry 块可见（重试在途的单一表示）
+    s = foldThreadEvent(s, ev({ type: 'retrying', threadId: 't', turn: 0, step: 0, attempt: 1, code: 'http-429', message: 'e' }), tick(1));
+    expect(hasRetryInFlight(s)).toBe(true);
     expect(s.streaming).toBe(true);
     s = foldThreadEvent(s, ev({ type: 'messageStarted', threadId: 't', messageId: 'm', at: tick(2) }), tick(2));
-    expect(s.retrying).toBeNull();
+    expect(hasRetryInFlight(s)).toBe(false);
     s = foldThreadEvent(s, ev({ type: 'turnSettled', threadId: 't', ok: true, usage: null }), tick(3));
     expect(s.streaming).toBe(false);
     // 重复 settle 不再改变
@@ -355,7 +355,6 @@ describe('foldEvents · 队列/压缩/崩溃', () => {
       streaming: true,
       stopping: true,
       compacting: true,
-      retrying: { attempt: 1, errorMessage: 'x' },
       bashRunning: true,
       bashTail: 'partial',
       queue: { steering: [{ id: 'q1', text: '插入' }], followUp: [{ id: 'q2', text: '下一条' }] },
@@ -366,7 +365,7 @@ describe('foldEvents · 队列/压缩/崩溃', () => {
     expect(s.streaming).toBe(false);
     expect(s.stopping).toBe(false);
     expect(s.compacting).toBe(false);
-    expect(s.retrying).toBeNull();
+    expect(hasRetryInFlight(s)).toBe(false);
     expect(s.bashRunning).toBe(false);
     expect(s.bashTail).toBe('');
     expect(s.queue).toEqual({ steering: [], followUp: [] });

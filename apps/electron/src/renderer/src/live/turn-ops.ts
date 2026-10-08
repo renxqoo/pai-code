@@ -9,6 +9,12 @@ const LIVE_TURN_PREFIX = 'live-turn-';
 
 const MAX_TURN_CHARS = 4 * 1024 * 1024;
 
+/** 终态轮不含 transient 块：轮结算与进程消亡（死亡/收编）其用同一滤面——
+ *  retry 块只描述在途重试，轮冻结后不再有事件驱动清除，残留即永久钉在死轮上。 */
+export function stripTransientBlocks(blocks: readonly TurnBlock[]): readonly TurnBlock[] {
+  return blocks.some((block) => block.kind === 'retry') ? blocks.filter((block) => block.kind !== 'retry') : blocks;
+}
+
 /** 从尾向前找轮（live 轮恒在尾部附近，避免长会话每次从头扫）。 */
 export function findTurn(state: LiveThreadState, turnId: string | null): TurnModel | null {
   if (turnId === null) return null;
@@ -40,7 +46,7 @@ export function beginLiveTurn(state: LiveThreadState, at: number): LiveThreadSta
   if (state.liveTurnId !== null) {
     items = items.map((item) =>
       item.kind === 'turn' && item.turn.id === state.liveTurnId && item.turn.status === 'running'
-        ? { kind: 'turn', turn: { ...item.turn, status: 'completed' as const, endedAt: at } }
+        ? { kind: 'turn', turn: { ...item.turn, status: 'completed' as const, endedAt: at, blocks: stripTransientBlocks(item.turn.blocks) } }
         : item,
     );
   }
