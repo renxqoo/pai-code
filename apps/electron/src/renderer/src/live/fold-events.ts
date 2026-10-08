@@ -15,12 +15,31 @@ import { beginLiveTurn, claimAnonymousBlocks, clip, ensureLiveTurn, findTurn, in
  *   diff 恒挂轮末（转写重建 buildTurnBlocks 同一尾部语义）——
  *   settle 替换前后块序同构，视觉不重排；
  * - 用户停止意图（stopping）让 settle 后的轮次呈现 stopped；
- * - 条目（真相）与 live 轮次（装饰）共存：settle 后对账以 dropLiveTurn 替换。
+ * - 条目（真相）与 live 轮次（装饰）共存：settle 后对账以 dropLiveTurn 替换；
+ * - retrying（重试在途）由 MODEL_PRODUCED 单点归位：模型重新产出即视为重试已恢复。
  */
 
 const MAX_LIVE_CHARS = 4 * 1024 * 1024;
 
+/** 模型产出面（retrying 的清除面，与 llm/retry 的设置面成对）：
+ *  正文/思考增量、工具调用、消息开始与权威定形——被重试的 attempt 产出其一，
+ *  重试即已恢复。清除面必须覆盖全部产出面而非只挂 messageStarted：内核判定重试后
+ *  原地重发同一个 (turn, step)，线上唯一的新 attempt 信号是该重开（映射为
+ *  streamRestarted），而失败 attempt 已流出正文时重试成功永不到达 messageStarted。
+ *  重开帧每次重派都发（含紧接着又要失败的那次），不携带成败，故不能充当清除面。 */
+const MODEL_PRODUCED: ReadonlySet<UiEvent['type']> = new Set<UiEvent['type']>([
+  'messageStarted',
+  'textDelta',
+  'thinkingDelta',
+  'toolCallAdded',
+  'messageFinal',
+]);
+
 export function foldThreadEvent(state: LiveThreadState, event: UiEvent, now: number): LiveThreadState {
+  return foldOne(MODEL_PRODUCED.has(event.type) ? clearRetry(state) : state, event, now);
+}
+
+function foldOne(state: LiveThreadState, event: UiEvent, now: number): LiveThreadState {
   switch (event.type) {
     case 'turnStarted':
       return onTurnStarted(state, event.at);
@@ -364,6 +383,12 @@ function appendDelta(state: LiveThreadState, messageId: string, kind: 'text' | '
     // 思考激活态跟实际流走：thinking 增量亮、同消息正文开始（thinking 段已结束）灭
     return { ...current, blocks, streamingThinkingBlockId: kind === 'thinking' ? blockId : null };
   });
+}
+
+/** 重试在途态归位；本就为空时返回原引用（真 no-op）——渲染层 memo 以引用为键，
+ *  正文增量这类高频路径的无谓重建会拖垮整轮重渲。 */
+function clearRetry(state: LiveThreadState): LiveThreadState {
+  return state.retrying === null ? state : { ...state, retrying: null };
 }
 
 /** 清 live 轮的思考流式态（新消息开始等让位点）；无 live 轮原样返回。 */
