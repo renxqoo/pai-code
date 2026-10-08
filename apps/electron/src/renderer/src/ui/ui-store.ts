@@ -25,8 +25,11 @@ import type { SettingsSectionId } from '@/settings/settings-sections';
  * （项目文件面板的异步建树在 sidebar/project-files 控制器）。
  */
 
-/** 侧栏宽度默认值与钳制上下限（装配层单一真相，resize hook 经参数注入限位）。 */
-export const SIDEBAR_WIDTH = 264;
+/** 侧栏宽度默认值与钳制上下限（装配层单一真相，resize hook 经参数注入限位）。
+ *  默认值取 224：会话标题/项目名仍完整可读，且离下限留出 24px 拖拽余量
+ *  （默认值贴住下限会让「往窄拖」几乎没手感）。宽度只在内存态，
+ *  重启回落到本值——改这里对老用户同样生效。 */
+export const SIDEBAR_WIDTH = 224;
 export const SIDEBAR_MIN_WIDTH = 208;
 export const SIDEBAR_MAX_WIDTH = 400;
 

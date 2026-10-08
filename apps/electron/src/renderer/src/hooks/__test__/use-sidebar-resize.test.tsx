@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import * as React from 'react';
 
 import { useSidebarResize } from '../use-sidebar-resize';
-import { SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH, uiStore } from '@/ui/ui-store';
+import { SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH, SIDEBAR_WIDTH, uiStore } from '@/ui/ui-store';
 import { render } from '@/testing/render';
 
 /** 拖拽状态机纯函数已有单测；此处测 React 绑定层——事件进、宽度写回 ui store、钳制生效。 */
@@ -40,11 +40,11 @@ describe('useSidebarResize 绑定层', () => {
     React.act(() => {
       fire(sep, 'pointermove', { pointerId: 1, clientX: 260 });
     });
-    expect(uiStore.getState().sidebarWidth).toBe(264 + 60);
+    expect(uiStore.getState().sidebarWidth).toBe(SIDEBAR_WIDTH + 60);
     React.act(() => {
       fire(sep, 'pointerup', { pointerId: 1 });
     });
-    expect(uiStore.getState().sidebarWidth).toBe(324);
+    expect(uiStore.getState().sidebarWidth).toBe(SIDEBAR_WIDTH + 60);
     expect(state.at(-1)?.dragging).toBe(false);
     view.unmount();
   });
@@ -79,7 +79,7 @@ describe('useSidebarResize 绑定层', () => {
     React.act(() => {
       fire(sep, 'pointermove', { pointerId: 1, clientX: 9999 });
     });
-    expect(uiStore.getState().sidebarWidth).toBe(264);
+    expect(uiStore.getState().sidebarWidth).toBe(SIDEBAR_WIDTH);
     view.unmount();
   });
 
@@ -89,11 +89,12 @@ describe('useSidebarResize 绑定层', () => {
     React.act(() => {
       sep.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
     });
-    expect(uiStore.getState().sidebarWidth).toBe(272);
+    expect(uiStore.getState().sidebarWidth).toBe(SIDEBAR_WIDTH + 8);
     React.act(() => {
       sep.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', shiftKey: true, bubbles: true }));
     });
-    expect(uiStore.getState().sidebarWidth).toBe(240);
+    // +8 后再粗调 -32 得 SIDEBAR_WIDTH-24 = 200，低于下限 208 → 钳到下限
+    expect(uiStore.getState().sidebarWidth).toBe(SIDEBAR_MIN_WIDTH);
     view.unmount();
   });
 });

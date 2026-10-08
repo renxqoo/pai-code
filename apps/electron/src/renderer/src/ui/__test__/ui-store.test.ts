@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 
-import { createUiStore, type UiStore } from '../ui-store';
+import { createUiStore, SIDEBAR_WIDTH, type UiStore } from '../ui-store';
 
 /** 每用例独立实例（生产单例不复位参与，避免用例间串扰）。 */
 
@@ -13,7 +13,7 @@ describe('ui store', () => {
 
   test('初始态：全部字段为空形态/缺省几何', () => {
     const s = store.getState();
-    expect(s.sidebarWidth).toBe(264);
+    expect(s.sidebarWidth).toBe(SIDEBAR_WIDTH);
     expect(s.sidebarCollapsed).toBe(false);
     expect(s.sidebarView).toBe('grouped');
     expect(s.settingsOpen).toBe(false);
