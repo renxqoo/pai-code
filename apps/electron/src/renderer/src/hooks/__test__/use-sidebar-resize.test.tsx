@@ -49,7 +49,7 @@ describe('useSidebarResize 绑定层', () => {
     view.unmount();
   });
 
-  test('钳制：拖出上限不越界（MIN 208 / MAX 400）', () => {
+  test('钳制：拖出上下限不越界（限位取自 ui-store 常量）', () => {
     const view = render(<SeparatorHarness onState={() => {}} />);
     const sep = view.container.querySelector('[role="separator"]') as HTMLElement;
     // down 与 move 分属两次 act：同一批内 transientRef 尚未随重渲刷新（与真实事件环一致）
@@ -93,7 +93,7 @@ describe('useSidebarResize 绑定层', () => {
     React.act(() => {
       sep.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', shiftKey: true, bubbles: true }));
     });
-    // +8 后再粗调 -32 得 SIDEBAR_WIDTH-24 = 200，低于下限 208 → 钳到下限
+    // +8 后再粗调 -32 得 SIDEBAR_WIDTH-24 = 176，低于下限 180 → 钳到下限
     expect(uiStore.getState().sidebarWidth).toBe(SIDEBAR_MIN_WIDTH);
     view.unmount();
   });

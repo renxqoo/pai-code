@@ -26,11 +26,13 @@ import type { SettingsSectionId } from '@/settings/settings-sections';
  */
 
 /** 侧栏宽度默认值与钳制上下限（装配层单一真相，resize hook 经参数注入限位）。
- *  默认值取 224：会话标题/项目名仍完整可读，且离下限留出 24px 拖拽余量
- *  （默认值贴住下限会让「往窄拖」几乎没手感）。宽度只在内存态，
- *  重启回落到本值——改这里对老用户同样生效。 */
-export const SIDEBAR_WIDTH = 224;
-export const SIDEBAR_MIN_WIDTH = 208;
+ *  默认值取 200：会话名/项目名仍完整（更长的截断交给 hover title），主区因此
+ *  比 224 多得 24px。**下限随默认一同下调到 180**——默认值必须高于下限，
+ *  否则启动即落在限位之外、首次拖拽会被立刻钳回去（等于把默认值改不动）。
+ *  默认值与下限留 20px 差：默认值贴住下限会让「往窄拖」几乎没手感。
+ *  宽度只在内存态，重启回落到本值——改这里对老用户同样生效。 */
+export const SIDEBAR_WIDTH = 200;
+export const SIDEBAR_MIN_WIDTH = 180;
 export const SIDEBAR_MAX_WIDTH = 400;
 
 const INITIAL_GROUP_FOLD: GroupFold = { collapsed: new Set<string>(), expanded: new Set<string>() };
