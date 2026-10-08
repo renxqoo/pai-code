@@ -69,7 +69,7 @@ function ProcessGroup({ run, streamingThinkingBlockId, subagentBusy }: ProcessGr
             block.kind === 'thinking' ? (
               <ThinkingBlock key={block.id} text={block.text} running={streamingThinkingBlockId === block.id} />
             ) : (
-              <ToolsBlock key={block.id} calls={block.calls} />
+              <ToolsBlock key={block.id} calls={block.calls} insideProcessGroup />
             ),
           )}
         </div>

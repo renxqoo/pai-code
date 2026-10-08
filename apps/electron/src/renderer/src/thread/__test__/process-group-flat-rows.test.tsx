@@ -1,0 +1,94 @@
+import { describe, expect, test } from 'bun:test';
+import { renderToStaticMarkup } from 'react-dom/server';
+
+import { ProcessGroup } from '../process-group';
+import { ToolsBlock } from '../tools-block';
+import type { ToolCallModel, TurnRun } from '../process-runs';
+
+/**
+ * 真机走查暴露的缺陷（症状）：过程组展开后，并行批次**又套了一层自己的组头**——
+ * 外层是计数式「编辑 3 个文件, 运行 4 条命令」，内层是动宾流水「编辑了文件运行了命令」。
+ * 两个问题：
+ * 1. 双层折叠头，两种标题形态并存；
+ * 2. 内层 `ToolGroup` 默认只认失败自动展开，**在途调用的行被挡在里面看不见**——
+ *    外层 ProcessGroup 因 running 自动展开了，实际仍看不到在跑的那一条。
+ *
+ * 本文件钉的是**展开后行真的在 DOM 里**（渲染行为），不是判据函数本身。
+ */
+
+function call(name: string, overrides: Partial<ToolCallModel> = {}): ToolCallModel {
+  return {
+    id: `${name}-1`,
+    name,
+    argsPreview: `${name} 参数`,
+    subagents: [],
+    editHunks: [],
+    output: '',
+    exitCode: 0,
+    durationMs: 10,
+    status: 'ok',
+    ...overrides,
+  };
+}
+
+const batch: readonly ToolCallModel[] = [
+  call('edit', { id: 'e1' }),
+  call('edit', { id: 'e2' }),
+  call('bash', { id: 'b1', status: 'running' }),
+  call('bash', { id: 'b2' }),
+];
+
+const runOf = (calls: readonly ToolCallModel[]): TurnRun => ({
+  kind: 'process',
+  blocks: [{ kind: 'tools', id: 'c1', calls: [...calls] }],
+});
+
+describe('过程组内不套第二层组头', () => {
+  test('ToolsBlock 在过程组内：并行批次直接铺成执行行，无内层组头', () => {
+    const html = renderToStaticMarkup(<ToolsBlock calls={[...batch]} insideProcessGroup />);
+    // 四个调用都在（执行行渲染参数摘要，不渲染 call id；title 属性与文本各出现一次）
+    expect(html.match(/title="edit 参数"/g)).toHaveLength(2);
+    expect(html.match(/title="bash 参数"/g)).toHaveLength(2);
+    // 但没有动宾流水那个内层组头，也没有第二个折叠开关
+    expect(html).not.toContain('编辑了文件');
+    expect(html).not.toContain('aria-expanded="false"');
+  });
+
+  test('ToolsBlock 在过程组外（消息级）：仍走 ToolGroup 组头（既有行为不变）', () => {
+    const html = renderToStaticMarkup(<ToolsBlock calls={[...batch]} />);
+    expect(html).toContain('编辑了文件');
+    expect(html).toContain('aria-expanded="false"');
+  });
+
+  test('真机症状回归：过程组因在途调用自动展开时，在跑的那一行真的可见', () => {
+    const html = renderToStaticMarkup(<ProcessGroup run={runOf(batch)} streamingThinkingBlockId={null} subagentBusy={false} />);
+    // 外层自动展开（有 running 调用）
+    expect(html).toContain('aria-expanded="true"');
+    // 在途调用不被内层组头挡住
+    expect(html).toContain('正在运行');
+    expect(html).toContain('bash 参数');
+    // 计数式标题在，且不与动宾流水标题并存
+    expect(html).toContain('条命令');
+    expect(html).not.toContain('编辑了文件');
+  });
+
+  test('默认收起态：只渲染计数式标题，行不进 DOM', () => {
+    const settled: readonly ToolCallModel[] = [
+      call('edit', { id: 'e1' }),
+      call('edit', { id: 'e2' }),
+      call('bash', { id: 'b1' }),
+    ];
+    const html = renderToStaticMarkup(<ProcessGroup run={runOf(settled)} streamingThinkingBlockId={null} subagentBusy={false} />);
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain('编辑 2 个文件');
+    expect(html).toContain('运行 1 条命令');
+    expect(html).not.toContain('e1 参数');
+  });
+
+  test('展开区限高：min(100px, 28vh) + 滚动（真机实测口径）', () => {
+    const html = renderToStaticMarkup(<ProcessGroup run={runOf(batch)} streamingThinkingBlockId={null} subagentBusy={false} />);
+    expect(html).toContain('overflow-y-auto');
+    expect(html).toContain('max-height:min(100px, 28vh)');
+  });
+});
+
