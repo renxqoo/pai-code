@@ -299,8 +299,24 @@ export function createEventMapper(deps: EventMapDeps): EventMapper {
             { type: 'compacting', threadId, active: false },
             { type: 'compacted', threadId, replacedCount: num(payload.replacedNodes, 0) },
           ];
-        case 'llm/retry':
-          return [{ type: 'retrying', threadId, attempt: num(payload.retry, 0), errorMessage: failureMessage(payload.failure) }];
+        case 'llm/retry': {
+          const failure = recordOf(payload.failure);
+          const code = str(failure['code']);
+          const message = str(failure['message']);
+          return [
+            {
+              type: 'retrying',
+              threadId,
+              // 轮步坐标缺失落 -1 哨兵（≠ 任何真实 attempt）：折叠层按 attempt 归属拒收，
+              // 错轮迟到的帧不会点亮当前轮——比降级成 0 冒充第一轮安全
+              turn: num(payload.turn, -1),
+              step: num(payload.step, -1),
+              attempt: num(payload.retry, 0),
+              code: code.length > 0 ? code : null,
+              message: message.length > 0 ? message : null,
+            },
+          ];
+        }
         case 'bash_execution_update':
           return [
             {
@@ -492,14 +508,6 @@ function contentBlocks(content: unknown, type: string): string {
     }
   }
   return parts.join('\n');
-}
-
-function failureMessage(failure: unknown): string {
-  const f = recordOf(failure);
-  const message = str(f.message);
-  const code = str(f.code);
-  if (message.length > 0 && code.length > 0) return `${message} (${code})`;
-  return message.length > 0 ? message : code;
 }
 
 function toolResultText(content: unknown): string {

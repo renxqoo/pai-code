@@ -139,12 +139,15 @@ function foldOne(state: LiveThreadState, event: UiEvent, now: number): LiveThrea
               ? { ...block, calls: block.calls.map((call) => (call.status === 'running' ? { ...call, status: 'stopped' as const } : call)) }
               : block,
           );
+          // retry 块 transient：轮结算一律不随历史留存（成功的重试不该留疤；
+          // 失败耗尽也已被下方 turnFailure 呈现）
+          const settledBlocks = blocks.filter((block) => block.kind !== 'retry');
           // ok=false 的异常终态提示（与转写重建 failureOf 同一展示面）：用户主动停止
           // 不算失败（stopping 分支已呈现 stopped），只有真实失败才挂错误块
           if (!event.ok && !stopped) {
-            blocks.push({ kind: 'turnFailure', id: `fail-${item.turn.id}`, stopReason: 'error', message: event.reason ?? null });
+            settledBlocks.push({ kind: 'turnFailure', id: `fail-${item.turn.id}`, stopReason: 'error', message: event.reason ?? null });
           }
-          return { kind: 'turn', turn: { ...item.turn, status: stopped ? ('stopped' as const) : ('completed' as const), endedAt: now, blocks, streamingThinkingBlockId: null } };
+          return { kind: 'turn', turn: { ...item.turn, status: stopped ? ('stopped' as const) : ('completed' as const), endedAt: now, blocks: settledBlocks, streamingThinkingBlockId: null } };
         }),
       };
     }
@@ -157,11 +160,22 @@ function foldOne(state: LiveThreadState, event: UiEvent, now: number): LiveThrea
       // 区间裁剪挂账——compaction/landed 无区间载荷，视图由下次 entries 水化对齐
       // （水化侧 surfaceOp replace 折叠已在 entries-mapper 落地）
       return { ...state, compacting: false };
-    case 'retrying':
-      return {
-        ...state,
-        retrying: { attempt: event.attempt, errorMessage: event.errorMessage },
+    case 'retrying': {
+      // 无 live 轮 = 该轮已结算：重试帧迟到（退避中用户停止 / 轮已收尾），不得凭空开轮挂块
+      const liveTurnId = state.liveTurnId;
+      if (liveTurnId === null) return state;
+      const block: Extract<TurnBlock, { kind: 'retry' }> = {
+        kind: 'retry',
+        id: `retry-${event.turn}-${event.step}`,
+        turn: event.turn,
+        step: event.step,
+        attempt: event.attempt,
+        code: event.code,
+        message: event.message,
       };
+      const next: LiveThreadState = { ...state, retrying: { attempt: event.attempt, code: event.code, message: event.message } };
+      return updateTurn(next, liveTurnId, (current) => ({ ...current, blocks: noteRetryBlock(current.blocks, block) }));
+    }
     case 'subagentStarted':
     case 'subagentDelta':
     case 'subagentTool':
@@ -385,10 +399,25 @@ function appendDelta(state: LiveThreadState, messageId: string, kind: 'text' | '
   });
 }
 
-/** 重试在途态归位；本就为空时返回原引用（真 no-op）——渲染层 memo 以引用为键，
- *  正文增量这类高频路径的无谓重建会拖垮整轮重渲。 */
+/** 重试在途态归位（标量 + 对话列的 retry 块同归）；本就为空时返回原引用（真 no-op）——
+ *  渲染层 memo 以引用为键，正文增量这类高频路径的无谓重建会拖垮整轮重渲。 */
 function clearRetry(state: LiveThreadState): LiveThreadState {
-  return state.retrying === null ? state : { ...state, retrying: null };
+  const next = state.retrying === null ? state : { ...state, retrying: null };
+  const turn = findTurn(next, next.liveTurnId);
+  if (turn === null || !turn.blocks.some((block) => block.kind === 'retry')) return next;
+  return updateTurn(next, turn.id, (current) => ({ ...current, blocks: current.blocks.filter((block) => block.kind !== 'retry') }));
+}
+
+/** retry 块落位：同一 (turn, step) 原地换序号（连续重试不叠块）；否则按到达序追加到轮末——
+ *  块序即到达序，重试行正好落在失败正文与重试正文之间。 */
+function noteRetryBlock(blocks: readonly TurnBlock[], block: Extract<TurnBlock, { kind: 'retry' }>): readonly TurnBlock[] {
+  const index = blocks.findIndex((existing) => existing.kind === 'retry' && existing.id === block.id);
+  if (index !== -1) {
+    const next = [...blocks];
+    next[index] = block;
+    return next;
+  }
+  return [...blocks, block];
 }
 
 /** 清 live 轮的思考流式态（新消息开始等让位点）；无 live 轮原样返回。 */

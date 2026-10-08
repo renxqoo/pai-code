@@ -7,6 +7,18 @@ import {
   resumeFailedCopy,
 } from './en-error-copy';
 
+/** 重试序号词面（retryLine 与 retrying 共用一份，措辞不同处只有一处可改）。 */
+const retryingLabel = (attempt: number): string => `Retrying (attempt ${attempt})`;
+
+/** 重试原因（hub 错误码 → 人话）。未知码落兜底文案——裸报文由界面悬浮，不进对话列正文。 */
+const retryReasonLabel = (code: string | null): string => {
+  if (code === 'http-429') return 'Rate limited';
+  if (code === 'http-408') return 'Request timed out';
+  if (code === 'network') return 'Network interrupted';
+  if (code?.startsWith('http-5')) return 'Upstream service unavailable';
+  return 'Temporarily unavailable';
+};
+
 export const enFlow = {
   openDiff: 'Open Diff',
   steerPlaceholder: 'Steer this agent…',
@@ -94,7 +106,11 @@ export const enFlow = {
   /** 历史轮锚点带（无障碍名） */
   turnAnchorRailAria: 'Turn history navigation',
   thinking: 'Thinking',
-  retrying: (attempt: number): string => `Retrying (attempt ${attempt})`,
+  retrying: (attempt: number): string => retryingLabel(attempt),
+  /** 重试原因（hub 错误码 → 人话）。未知码落兜底文案——裸报文由界面悬浮，不进对话列正文。 */
+  retryReason: (code: string | null): string => retryReasonLabel(code),
+  /** 重试行整句（序号 + 原因），单一真相：分隔符与措辞都住在文案目录，调用方不自己拼。 */
+  retryLine: (attempt: number, code: string | null): string => `${retryingLabel(attempt)}· ${retryReasonLabel(code)}`,
   crashedBanner: 'This conversation\'s worker has exited. Sending a message resumes the session.',
   hydrateFailedTitle: 'Failed to load history',
   hydrateFailedHint: 'Could not read this conversation\'s history. You can retry.',

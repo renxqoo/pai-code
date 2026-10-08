@@ -1,5 +1,17 @@
 import type { ToolCopy } from '@paiapp/ui-thread';
 
+/** 重试序号词面（retryLine 与 retrying 共用一份，措辞不同处只有一处可改）。 */
+const retryingLabel = (attempt: number): string => `重试中（第 ${attempt} 次）`;
+
+/** 重试原因（hub 错误码 → 人话）。未知码落兜底文案——裸报文由界面悬浮，不进对话列正文。 */
+const retryReasonLabel = (code: string | null): string => {
+  if (code === 'http-429') return '请求过于频繁';
+  if (code === 'http-408') return '请求超时';
+  if (code === 'network') return '网络中断';
+  if (code?.startsWith('http-5')) return '上游服务暂时不可用';
+  return '暂时不可用';
+};
+
 export const copy = {
   appName: 'Pai Code',
   tagline: '把想法交给代码，把工作留在掌控中。',
@@ -94,6 +106,14 @@ export const copy = {
   collapseThinking: '收起思考详情',
   workingFor: (label: string) => `已工作 ${label}`,
   workedFor: (label: string) => `共工作 ${label}`,
+  retrying: (attempt: number) => retryingLabel(attempt),
+  /**
+   * 重试行整句（序号 + 原因），单一真相：分隔符与措辞都住在文案目录，调用方不自己拼——
+   * 两端（PC / 移动端）同一句话，避免出现「重试中（第 1 次） · X」这类空格漂移。
+   */
+  retryLine: (attempt: number, code: string | null) => `${retryingLabel(attempt)}· ${retryReasonLabel(code)}`,
+  /** 重试原因（hub 错误码 → 人话）。未知码落兜底文案——裸报文由界面悬浮，不进对话列正文。 */
+  retryReason: (code: string | null): string => retryReasonLabel(code),
 } as const;
 
 /** 执行过程共享派生层（@paiapp/ui-thread）的中文文案注入面（词面与 PC 端同源）。 */

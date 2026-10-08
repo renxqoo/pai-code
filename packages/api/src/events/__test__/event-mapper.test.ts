@@ -386,15 +386,20 @@ describe('createEventMapper · 主线程事件', () => {
     ]);
   });
 
-  test('llm/retry → retrying（retry 序号；failure {message, code?} 拼接文案）', () => {
-    expect(createEventMapper(deps).mapEvent(frame('llm/retry', { retry: 2, failure: { message: 'rate limited', code: 'E429' } }))).toEqual([
-      { type: 'retrying', threadId: 't', attempt: 2, errorMessage: 'rate limited (E429)' },
+  test('llm/retry → retrying（attempt 序号 + turn/step 归属 + code/message 分开传）', () => {
+    expect(createEventMapper(deps).mapEvent(frame('llm/retry', { turn: 3, step: 0, retry: 2, failure: { message: 'rate limited', code: 'http-429' } }))).toEqual([
+      { type: 'retrying', threadId: 't', turn: 3, step: 0, attempt: 2, code: 'http-429', message: 'rate limited' },
     ]);
-    expect(createEventMapper(deps).mapEvent(frame('llm/retry', { retry: 1, failure: { code: 'E500' } }))).toEqual([
-      { type: 'retrying', threadId: 't', attempt: 1, errorMessage: 'E500' },
+    expect(createEventMapper(deps).mapEvent(frame('llm/retry', { turn: 3, step: 0, retry: 1, failure: { code: 'network' } }))).toEqual([
+      { type: 'retrying', threadId: 't', turn: 3, step: 0, attempt: 1, code: 'network', message: null },
     ]);
-    expect(createEventMapper(deps).mapEvent(frame('llm/retry', {}))).toEqual([
-      { type: 'retrying', threadId: 't', attempt: 0, errorMessage: '' },
+    // 空 failure / 缺字段：code 与 message 各自落 null，不拼出半个串（界面按 code 出人话，缺失即兜底文案）
+    expect(createEventMapper(deps).mapEvent(frame('llm/retry', { turn: 0, step: 0, retry: 1 }))).toEqual([
+      { type: 'retrying', threadId: 't', turn: 0, step: 0, attempt: 1, code: null, message: null },
+    ]);
+    // 帧缺轮步坐标（垃圾帧）：落 -1 哨兵——不等于任何真实 attempt，折叠层据此拒收，不会误画
+    expect(createEventMapper(deps).mapEvent(frame('llm/retry', { retry: 1, failure: { message: 'x' } }))).toEqual([
+      { type: 'retrying', threadId: 't', turn: -1, step: -1, attempt: 1, code: null, message: 'x' },
     ]);
   });
 

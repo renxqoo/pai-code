@@ -16,6 +16,7 @@
  * - dialogSettled{requestId} → 清权限卡片
  * - 其余（sessionUpdated/sessionRemoved/host/…）→ onSessionEvent 外置（history-sync 消费）
  */
+import { copy } from '@/strings/zh';
 import type { ChatMessage } from '@/types/domain';
 
 export interface SessionSyncState {
@@ -44,6 +45,11 @@ export function createSessionSync(callbacks: SessionSyncCallbacks) {
   const liveIndex = new Map<string, { assistant: number; thinking: number }>();
   /** callId → 工具行索引（messageFinal 展开时复用） */
   const toolIndex = new Map<string, number>();
+  /** (turn,step) → 重试行（连续重试原地换序号；模型重新产出即摘除——transient，与 PC 端同生命周期）。
+   *  值带行 id：摘除按 id 标记（视图出口过滤），不按下标——下标会随其它行增删位移。 */
+  const retryIndex = new Map<string, { index: number; id: string }>();
+  /** 已摘除的重试行 id（视图出口过滤，索引域不动） */
+  const droppedRetryIds = new Set<string>();
 
   const append = (message: ChatMessage): number => {
     messages = [...messages, message];
@@ -55,6 +61,16 @@ export function createSessionSync(callbacks: SessionSyncCallbacks) {
     const next = [...messages];
     next[index] = patchFn(next[index] as ChatMessage);
     messages = next;
+  };
+
+  /**
+ * 摘除重试行（模型重新产出 / 轮结算）：标记而非就地删除——liveIndex/toolIndex 存的是
+ * 数组下标，就地 splice 会让其后所有行的下标位移、索引表整体错指他行。视图在 snapshot
+ * 出口过滤，索引域保持稳定。
+ */
+  const dropRetry = (): void => {
+    for (const entry of retryIndex.values()) droppedRetryIds.add(entry.id);
+    retryIndex.clear();
   };
 
   const ofLive = (messageId: string): { assistant: number; thinking: number } => {
@@ -71,10 +87,12 @@ export function createSessionSync(callbacks: SessionSyncCallbacks) {
 
     if (type === 'turnStarted') {
       streaming = true;
+      dropRetry();
       return;
     }
     if (type === 'turnSettled') {
       streaming = false;
+      dropRetry();
       const ok = event['ok'] === true;
       // 残余 running 态收敛（流中断的 thinking/工具行）
       messages = messages.map((message) => (message.status === 'running' ? { ...message, status: ok ? 'ok' : 'stopped' } : message));
@@ -104,7 +122,27 @@ export function createSessionSync(callbacks: SessionSyncCallbacks) {
       }
       return;
     }
+    if (type === 'retrying') {
+      const turn = typeof event['turn'] === 'number' ? event['turn'] : -1;
+      const step = typeof event['step'] === 'number' ? event['step'] : -1;
+      const attempt = typeof event['attempt'] === 'number' ? event['attempt'] : 0;
+      const code = typeof event['code'] === 'string' ? event['code'] : null;
+      const key = `${turn}-${step}`;
+      const line = copy.retryLine(attempt, code);
+      const raw = textOf(event['message']);
+      const existing = retryIndex.get(key);
+      if (existing !== undefined && existing.index >= 0 && existing.index < messages.length) {
+        // 同一 attempt 连续重试：原地换序号与文案（不叠行）
+        patch(existing.index, (previous) => ({ ...previous, text: line, summary: raw }));
+        return;
+      }
+      const id = `retry-${key}-${attempt}`;
+      retryIndex.set(key, { index: append({ id, kind: 'status', text: line, createdAt: new Date().toISOString(), status: 'running', summary: raw }), id });
+      return;
+    }
     if (type === 'textDelta' || type === 'thinkingDelta') {
+      // 模型重新产出 = 重试已恢复（与 PC 端 MODEL_PRODUCED 清除面同一条规则）
+      dropRetry();
       const messageId = textOf(event['messageId']);
       const delta = textOf(event['delta']);
       if (messageId.length === 0 || delta.length === 0) return;
@@ -125,6 +163,7 @@ export function createSessionSync(callbacks: SessionSyncCallbacks) {
       return;
     }
     if (type === 'messageFinal') {
+      dropRetry();
       const message = event['message'] as { id?: string; text?: string; thinking?: string; toolCalls?: Array<{ id: string; name: string; argsPreview: string; output?: string; isError?: boolean }> } | undefined;
       if (message === undefined) return;
       const messageId = message.id ?? '';
@@ -143,6 +182,7 @@ export function createSessionSync(callbacks: SessionSyncCallbacks) {
       return;
     }
     if (type === 'toolCallAdded') {
+      dropRetry();
       const call = event['call'] as { id?: string; name?: string; argsPreview?: string; subagents?: unknown[]; editHunks?: unknown[] } | undefined;
       const callId = call?.id ?? '';
       if (callId.length === 0) return;
@@ -204,6 +244,8 @@ export function createSessionSync(callbacks: SessionSyncCallbacks) {
       streaming = false;
       liveIndex.clear();
       toolIndex.clear();
+      retryIndex.clear();
+      droppedRetryIds.clear();
     },
     /** 历史水化（session/entries 映射产物整体替换）。 */
     seed(items: ChatMessage[]): void {
@@ -211,9 +253,11 @@ export function createSessionSync(callbacks: SessionSyncCallbacks) {
       streaming = false;
       liveIndex.clear();
       toolIndex.clear();
+      retryIndex.clear();
+      droppedRetryIds.clear();
     },
     snapshot(): SessionSyncState {
-      return { messages, streaming };
+      return { messages: droppedRetryIds.size === 0 ? messages : messages.filter((message) => !droppedRetryIds.has(message.id)), streaming };
     },
   };
 }

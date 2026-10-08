@@ -36,6 +36,12 @@ describe('词表封闭（双向）', () => {
     expect(() => UiEventSchema.parse({ type: 'nope', threadId: 't1' })).toThrow();
   });
 
+  test('retrying 缺 attempt 坐标被拒绝（错轮/错步的迟到帧不得降级成合法事件）', () => {
+    expect(() => UiEventSchema.parse({ type: 'retrying', threadId: 't1', turn: 3, attempt: 1, code: null, message: null })).toThrow();
+    expect(() => UiEventSchema.parse({ type: 'retrying', threadId: 't1', step: 0, attempt: 1, code: null, message: null })).toThrow();
+    expect(() => UiEventSchema.parse({ type: 'retrying', threadId: 't1', turn: 3, step: 0, code: null, message: null })).toThrow();
+  });
+
   test('hub 帧词表 == 七类（x-harness host-hub 协议帧全集）', () => {
     expect([...HUB_FRAME_TYPES].sort(byStr)).toEqual(
       ['event', 'heartbeat', 'hub_error', 'response', 'thread_died', 'thread_parked', 'ui_request'].sort(byStr),
@@ -486,7 +492,8 @@ function samplePerUiEvent(): UiEvent[] {
     { type: 'queueChanged', threadId: t, steering: [{ id: 'e1', text: 'a' }], followUp: [] },
     { type: 'compacting', threadId: t, active: true },
     { type: 'compacted', threadId: t, replacedCount: 12 },
-    { type: 'retrying', threadId: t, attempt: 1, errorMessage: 'x' },
+    { type: 'retrying', threadId: t, turn: 3, step: 0, attempt: 1, code: 'http-429', message: 'rate limited' },
+    { type: 'retrying', threadId: t, turn: 3, step: 0, attempt: 2, code: null, message: null },
     { type: 'subagentStarted', threadId: t, agentId: 'ag1', agentName: 'general-purpose', task: 'explore' },
     { type: 'subagentDelta', threadId: t, agentId: 'ag1', delta: 'found' },
     { type: 'subagentTool', threadId: t, agentId: 'ag1', call: { id: 'tc2', name: 'read_file', argsPreview: 'a.ts' }, phase: 'start' },

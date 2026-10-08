@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { createEventMapper } from '@paiapp/api';
 import { foldThreadEvent } from '../fold-events';
 import { initialThreadState } from '../live-thread-state';
+import type { TurnBlock } from '@/thread/thread-model';
 import type { UiEvent } from '@paiapp/contracts';
 
 /**
@@ -19,9 +20,10 @@ const T = 's1';
 const NOW = 1_000;
 
 type Frame = { threadId: string; name: string; payload: Record<string, unknown> };
-type LiveRetry = { attempt: number; errorMessage: string } | null;
+type LiveRetry = { attempt: number; code: string | null; message: string | null } | null;
+type RetryBlock = Extract<TurnBlock, { kind: 'retry' }>;
 
-function chain(): { apply: (frame: Frame) => void; retrying: () => LiveRetry } {
+function chain(): { apply: (frame: Frame) => void; retrying: () => LiveRetry; retryBlocks: () => readonly RetryBlock[] } {
   const mapper = createEventMapper({ now: () => NOW });
   let state = initialThreadState;
   return {
@@ -31,6 +33,11 @@ function chain(): { apply: (frame: Frame) => void; retrying: () => LiveRetry } {
       }
     },
     retrying: () => (state as { retrying: LiveRetry }).retrying,
+    retryBlocks: () => {
+      const items = (state as { items: ReadonlyArray<{ kind: string; turn?: { blocks: readonly TurnBlock[] } }> }).items;
+      const turn = items.findLast((item) => item.kind === 'turn');
+      return (turn?.turn?.blocks ?? []).filter((block): block is RetryBlock => block.kind === 'retry');
+    },
   };
 }
 
@@ -51,7 +58,7 @@ const chunk = (turn: number, step: number, type: 'text-delta' | 'thinking-delta'
 const llmRetry = (turn: number, step: number, attempt: number): Frame => ({
   threadId: T,
   name: 'llm/retry',
-  payload: { turn, step, retry: attempt, failure: { message: 'http-429: rate limited' } },
+  payload: { turn, step, retry: attempt, failure: { message: 'http-429: rate limited', code: 'http-429' } },
 });
 
 const toolCall = (turn: number, step: number, callId: string, name: string): Frame => ({
@@ -136,6 +143,68 @@ describe('重试横幅生命周期（mapper × fold）', () => {
     c.apply(stream(5, 0, 'start'));
     c.apply(chunk(5, 0, 'text-delta', '好了'));
 
+    expect(c.retrying()).toBeNull();
+  });
+});
+
+describe('重试行块（对话列内联展示）', () => {
+  test('重试发生时 live 轮追加 retry 块，位置在到达序末尾', () => {
+    const c = chain();
+    c.apply(turnStart(1));
+    c.apply(chunk(1, 0, 'text-delta', '收到'));
+    c.apply(stream(1, 0, 'end', { kind: 'attempt' }));
+    c.apply(llmRetry(1, 0, 1));
+
+    const blocks = c.retryBlocks();
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]).toMatchObject({ attempt: 1, code: 'http-429', message: 'http-429: rate limited' });
+  });
+
+  test('同一 attempt 连���重试：块原地更新序号与文案，不叠第二块', () => {
+    const c = chain();
+    c.apply(turnStart(1));
+    c.apply(chunk(1, 0, 'text-delta', '收到'));
+    c.apply(llmRetry(1, 0, 1));
+    c.apply(llmRetry(1, 0, 2));
+    c.apply(llmRetry(1, 0, 3));
+
+    const blocks = c.retryBlocks();
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]?.attempt).toBe(3);
+  });
+
+  test('重试恢复（模型产出）后 retry 块消失', () => {
+    const c = chain();
+    c.apply(turnStart(1));
+    c.apply(chunk(1, 0, 'text-delta', '收到'));
+    c.apply(llmRetry(1, 0, 1));
+    expect(c.retryBlocks()).toHaveLength(1);
+
+    c.apply(chunk(1, 0, 'text-delta', '，继续'));
+
+    expect(c.retryBlocks()).toHaveLength(0);
+    expect(c.retrying()).toBeNull();
+  });
+
+  test('轮结算后 retry 块不残留（transient：成功的历史轮不带重试行）', () => {
+    const c = chain();
+    c.apply(turnStart(1));
+    c.apply(chunk(1, 0, 'text-delta', '收到'));
+    c.apply(llmRetry(1, 0, 1));
+    c.apply(chunk(1, 0, 'text-delta', '，继续'));
+    c.apply({ threadId: T, name: 'settled', payload: { ok: true } });
+
+    expect(c.retryBlocks()).toHaveLength(0);
+  });
+
+  test('重试失败到底（重试耗尽直接结算）：结算后不留 retry 块', () => {
+    const c = chain();
+    c.apply(turnStart(1));
+    c.apply(chunk(1, 0, 'text-delta', '收到'));
+    c.apply(llmRetry(1, 0, 1));
+    c.apply({ threadId: T, name: 'settled', payload: { ok: false, reason: 'gave up' } });
+
+    expect(c.retryBlocks()).toHaveLength(0);
     expect(c.retrying()).toBeNull();
   });
 });

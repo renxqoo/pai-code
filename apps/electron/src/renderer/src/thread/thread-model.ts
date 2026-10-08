@@ -91,7 +91,11 @@ export type TurnBlock =
   | { kind: 'tools'; id: string; calls: readonly ToolCallModel[] }
   | { kind: 'diff'; id: string; diff: DiffSummaryModel }
   /** 轮次异常终态（上游报错/中止）：收起态也保持可见的一行提示。 */
-  | { kind: 'turnFailure'; id: string; stopReason: 'error' | 'aborted'; message: string | null };
+  | { kind: 'turnFailure'; id: string; stopReason: 'error' | 'aborted'; message: string | null }
+  /** 自动重试在途（llm/retry）：落在失败正文与重试正文之间的到达序位置。
+   *  transient——模型重新产出即消失，轮结算后不留痕（同 attempt 连续重试原地换序号，
+   *  不叠块）。id 携带 turn/step：错轮的迟到帧不认领当前轮的块。 */
+  | { kind: 'retry'; id: string; turn: number; step: number; attempt: number; code: string | null; message: string | null };
 
 export type TurnModel = {
   id: string;

@@ -8,8 +8,9 @@ import type { ThreadItem, SubagentModel } from '@/thread/thread-model';
 
 export type QueueState = { steering: readonly QueueEntry[]; followUp: readonly QueueEntry[] };
 
-/** 自动重试进行中（attempt 为重试序号；hub 不暴露上限）。 */
-export type RetryState = { attempt: number; errorMessage: string };
+/** 自动重试进行中（attempt 为重试序号；hub 不暴露上限）。与对话列的 retry 块同源同生命周期——
+ *  这里供非对话列消费方（切分支锁等）读同一事实，界面读的是块。 */
+export type RetryState = { attempt: number; code: string | null; message: string | null };
 
 export type LiveThreadState = {
   items: readonly ThreadItem[];

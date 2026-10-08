@@ -18,6 +18,48 @@ describe('session-sync 事件归并', () => {
     expect(s.snapshot().messages.map((m) => m.text)).toEqual(['继续', '继续']);
   });
 
+  it('重试行（retrying）：status/running 行落在对话列，模型重新产出即消失', () => {
+    const s = sync();
+    s.handleEvent({ type: 'turnStarted', threadId: 't', at: 1 });
+    s.handleEvent({ type: 'textDelta', threadId: 't', messageId: 'm', delta: '收到「问' });
+    s.handleEvent({ type: 'retrying', threadId: 't', turn: 1, step: 0, attempt: 1, code: 'http-429', message: 'rate limited' });
+    const during = s.snapshot().messages;
+    const retryRow = during.find((m) => m.id.startsWith('retry-'));
+    expect(retryRow).toMatchObject({ kind: 'status', status: 'running' });
+    expect(retryRow?.text).toBe('重试中（第 1 次）· 请求过于频繁');
+    expect(during.map((m) => m.id)).toEqual(['live-m-assistant', 'retry-1-0-1']);
+
+    s.handleEvent({ type: 'textDelta', threadId: 't', messageId: 'm', delta: '题」，开始分析。' });
+    expect(s.snapshot().messages.some((m) => m.id.startsWith('retry-'))).toBe(false);
+  });
+
+  it('同一 attempt 连续重试：行原地换序号，不叠行', () => {
+    const s = sync();
+    s.handleEvent({ type: 'turnStarted', threadId: 't', at: 1 });
+    s.handleEvent({ type: 'retrying', threadId: 't', turn: 1, step: 0, attempt: 1, code: 'http-429', message: 'x' });
+    s.handleEvent({ type: 'retrying', threadId: 't', turn: 1, step: 0, attempt: 2, code: 'http-429', message: 'x' });
+    const rows = s.snapshot().messages.filter((m) => m.id.startsWith('retry-'));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.text).toBe('重试中（第 2 次）· 请求过于频繁');
+  });
+
+  it('未知错误码落兜底文案，不把裸报文顶到列表里', () => {
+    const s = sync();
+    s.handleEvent({ type: 'turnStarted', threadId: 't', at: 1 });
+    s.handleEvent({ type: 'retrying', threadId: 't', turn: 1, step: 0, attempt: 1, code: null, message: 'ECONNRESET at 10.0.0.4' });
+    const row = s.snapshot().messages.find((m) => m.id.startsWith('retry-'));
+    expect(row?.text).toBe('重试中（第 1 次）· 暂时不可用');
+    expect(row?.summary).toBe('ECONNRESET at 10.0.0.4');
+  });
+
+  it('轮结算不残留重试行', () => {
+    const s = sync();
+    s.handleEvent({ type: 'turnStarted', threadId: 't', at: 1 });
+    s.handleEvent({ type: 'retrying', threadId: 't', turn: 1, step: 0, attempt: 1, code: 'http-429', message: 'x' });
+    s.handleEvent({ type: 'turnSettled', threadId: 't', ok: true });
+    expect(s.snapshot().messages.some((m) => m.id.startsWith('retry-'))).toBe(false);
+  });
+
   let dialogRequests: Array<{ requestId: string; title: string; command: string } | null>;
   let sessionEvents: Array<Record<string, unknown>>;
 
