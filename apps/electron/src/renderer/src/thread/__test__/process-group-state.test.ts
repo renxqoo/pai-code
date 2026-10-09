@@ -51,17 +51,25 @@ describe('autoOpenForProcessGroup 逐组开合判据', () => {
     expect(openOf(blocks, 0)).toBe(false);
   });
 
-  test('组内有运行中的调用 → 自动展开（在途的那一条必须看得见）', () => {
-    const blocks: readonly TurnBlock[] = [
+  test('症状回归「批次逐条结算引发开合对」：组内有 running 调用也**不**自动展开', () => {
+    // 真机实测：按 running 状态自动展开会得到 开→关→开→关（9.6s–20.7s 翻转 4 次，
+    // 肉眼即一次闪现）。批次逐条结算，每结算一条就整组收起一次。
+    const running: readonly TurnBlock[] = [
       { kind: 'tools', id: 'c1', calls: [call('a', 'bash', 'running')] },
       { kind: 'text', id: 'x1', text: '结论' },
     ];
-    expect(openOf(blocks, 0)).toBe(true);
+    expect(openOf(running, 0)).toBe(false);
+    // 结算后同样收——前后一致，不产生状态跳变
+    const settled: readonly TurnBlock[] = [
+      { kind: 'tools', id: 'c1', calls: [call('a', 'bash')] },
+      { kind: 'text', id: 'x1', text: '结论' },
+    ];
+    expect(openOf(settled, 0)).toBe(false);
   });
 
   test('有子代理在跑 → 自动展开（进度无别处可看，收起即信息丢失）', () => {
     const blocks: readonly TurnBlock[] = [
-      { kind: 'tools', id: 'c1', calls: [call('a', 'task')] },
+      { kind: 'tools', id: 'c1', calls: [call('a', 'task', 'running')] },
       { kind: 'text', id: 'x1', text: '结论' },
     ];
     expect(openOf(blocks, 0, true)).toBe(true);

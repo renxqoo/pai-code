@@ -25,12 +25,15 @@ export type ProcessGroupInput = {
   readonly subagentBusy?: boolean;
 };
 
-/** 该过程组内是否有运行中的工具调用。 */
-function hasRunningCall(run: TurnRun): boolean {
-  if (run.kind !== 'process') return false;
-  return run.blocks.some((block) => block.kind === 'tools' && block.calls.some((call) => call.status === 'running'));
-}
-
+/**
+ * 自动展开的唯一例外是**子代理在跑**（进度没有别处可看，收起即信息丢失）。
+ *
+ * 明确**不**因「组内有运行中的调用」而自动展开：批次是逐条结算的，若按当前 running
+ * 状态重算，就会得到 开→关→开→关 的开合对（真机实测 9.6s–20.7s 间翻转 4 次，
+ * 肉眼即一次闪现）——展开窗口只有几帧，比不展开更难读。与
+ * `autoOpenForCall` / `autoOpenForGroup` 同一裁决：自动开合只认终态，手动意图管实时。
+ * 想看在跑什么，点标题即可；标题的计数已经说明了规模。
+ */
 export function autoOpenForProcessGroup(input: ProcessGroupInput): boolean {
-  return input.subagentBusy === true || hasRunningCall(input.run);
+  return input.subagentBusy === true;
 }
