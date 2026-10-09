@@ -7,8 +7,13 @@
  */
 import { decodeEnvelope } from '../../packages/relay-protocol/src/index';
 
+import { existsSync } from 'node:fs';
+import { mkdtemp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { connectOwner } from './owner-driver';
-import { startPcStack, sleep, waitFor, type PcStack } from './stack';
+import { PERMISSION_PROBE_FILE, startPcStack, sleep, waitFor, type PcStack } from './stack';
 import { dialWebSocket } from '../../apps/mobile/src/mobile/relay/ws-dial';
 import { createPairingSession, generateDeviceIdentity, type PairingWire } from '../../apps/mobile/src/mobile/relay/pairing';
 import { relayCredentialsStore, type RelayCredentials } from '../../apps/mobile/src/mobile/relay/credentials';
@@ -325,6 +330,47 @@ async function main(): Promise<void> {
       const callIds = new Set(toolRows.map((message) => message.id));
       if (callIds.size !== toolRows.length) throw new Error(`同一次工具调用渲染了多行：${toolRows.map((message) => message.id).join(',')}`);
       return `[${messages().map((message) => message.kind).join(',')}] 工具行 ${toolRows.length} 张 status=${toolRows.map((message) => message.status).join('/')} name=${toolRows[0]?.toolName ?? '-'}`;
+    });
+
+    await step('权限确认往返（edit-confirm 档 write → ui_request → 授权卡 → ui_response → 真落盘）', async () => {
+      const runtime = getRelayRuntime();
+      if (runtime === null) throw new Error('runtime missing');
+      // cwd 落临时目录：确认放行后 write 会真写，绝不能指向仓库
+      const probeCwd = await mkdtemp(join(tmpdir(), 'pai-relay-e2e-probe-'));
+      const started = (await runtime.client.invoke('session/start', { cwd: probeCwd, trusted: true })) as {
+        ok: boolean;
+        data?: { threadId?: string };
+        error?: { message?: string };
+      };
+      if (!started.ok || typeof started.data?.threadId !== 'string') throw new Error(`session/start 失败: ${started.error?.message ?? 'unknown'}`);
+      const threadId = started.data.threadId;
+      const setMode = (await runtime.client.invoke('permission/setMode', { threadId, mode: 'edit-confirm' })) as { ok: boolean; error?: { message?: string } };
+      if (!setMode.ok) throw new Error(`setMode 失败: ${setMode.error?.message ?? 'unknown'}`);
+      useConversationStore.getState().openSession({ ...useConversationStore.getState().session, id: threadId });
+      attachThread(threadId);
+      await hydrateThread(threadId);
+      const prompt = async (message: string): Promise<void> => {
+        const prompted = (await runtime.client.invoke('session/prompt', { threadId, message })) as { ok: boolean; error?: { message?: string } };
+        if (!prompted.ok) throw new Error(`prompt 失败: ${prompted.error?.message ?? 'unknown'}`);
+      };
+      // 脚本游标按线程从头消费：前两轮吃掉回话与 bash，第 3 轮才是 write（in-root Write 必问）
+      await prompt('热身');
+      await waitFor('热身轮收尾', () => messages().some((message) => message.kind === 'assistant' && message.text.includes('hello from scripted llm')), 45_000);
+      await prompt('跑一个命令');
+      await waitFor('bash 轮收尾', () => messages().some((message) => message.kind === 'assistant' && message.text.includes('tool finished')), 60_000);
+      await prompt('写一个文件');
+      const card = await waitFor('授权卡出现', () => useConversationStore.getState().permissionRequest, 60_000);
+      if (card.id.length === 0) throw new Error('授权卡无 requestId');
+      // 载荷完整性：工具名与理由必须真的到设备（网关漏收 ui_request 平铺载荷 → 卡片退化成空壳）
+      if (!card.command.includes('write')) throw new Error(`授权卡载荷丢失: command=${JSON.stringify(card.command)}`);
+      // 应答走 L2 ui_response 帧（非 host 命令）——与授权卡「允许一次」同一路径
+      await runtime.transport.sendFrame({ kind: 'ui_response', streamId: `ui:${card.id}`, seq: 1, body: { requestId: card.id, threadId, method: 'confirm', payload: { confirmed: true } } });
+      useConversationStore.getState().resolvePermission(true);
+      useConversationStore.getState().clearPermission();
+      // 真落盘 = host 确实收到了这次应答并解除了对话框（不只是卡片自己清了）
+      const written = await waitFor('放行后文件落盘', () => existsSync(join(probeCwd, PERMISSION_PROBE_FILE)), 60_000);
+      await waitFor('授权卡清除', () => useConversationStore.getState().permissionRequest === null, 15_000);
+      return `requestId=${card.id} 工具=${card.command.split('\n')[0]} 放行后落盘 ${written}`;
     });
 
     await step('脱离宿主表的会话：列表可见但标注不可用', () => {

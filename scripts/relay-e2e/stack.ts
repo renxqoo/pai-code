@@ -8,6 +8,13 @@ import { join } from 'node:path';
 
 const X_HARNESS_ROOT = process.env['PAI_X_HARNESS_ROOT'] ?? new URL('../../../x-harness', import.meta.url).pathname;
 
+/**
+ * 权限确认往返探针的落盘文件名（相对线程 cwd）。
+ *
+ * 线程 cwd 必须是临时目录：确认放行后 write 会真的落盘，落进仓库就写坏了。
+ */
+export const PERMISSION_PROBE_FILE = 'permission-probe.txt';
+
 export interface PcStack {
   relayPort: number;
   /** 内嵌形态下网关自起 relay 并提供 6 位码发现；外部形态需装置自备 relay。 */
@@ -59,11 +66,15 @@ export async function startPcStack(options: { relayKeyFingerprint?: string; rela
       args: [hostEntry],
       env: {
         HUB_WORKER_PROVIDER: 'script',
-        // 第 2 轮起发一个 bash 工具调用：覆盖工具行渲染 + 权限对话框往返（edit-confirm 档）
+        // 脚本游标按 worker 实例独立（每个新线程从头消费）。同一线程三轮：
+        // ① 回话 ② bash 工具调用（edit-confirm 档不触发确认——bash 只在沙箱失败升级时问）
+        // ③ write 工具调用（in-root Write 在 edit-confirm 档必问 → 覆盖 ui_request 往返）
         HUB_WORKER_SCRIPT: JSON.stringify([
           { reply: 'hello from scripted llm' },
           { toolCalls: [{ name: 'bash', input: JSON.stringify({ command: 'echo pai-relay-e2e' }) }] },
           { reply: 'tool finished' },
+          { toolCalls: [{ name: 'write', input: JSON.stringify({ path: PERMISSION_PROBE_FILE, content: 'granted by device\n' }) }] },
+          { reply: 'write finished' },
         ]),
         HUB_SKILLS_MIGRATION: '0',
         HUB_AGENTS_MIGRATION: '0',
