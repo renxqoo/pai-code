@@ -2,6 +2,8 @@
  * 症状：手机端发送失败只显示「发送失败：transient」——reason 位被 ApiError 的
  * kind（transient/permanent 分级）顶掉了，真因（unknown_thread / scope-denied /
  * model_unavailable…）全程不可见，用户无从判断该重试、该开电脑还是该换模型。
+ *
+ * 投递前唤活会先问宿主表（reviveThread），故各用例都要一并应答 session/liveThreads。
  */
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
@@ -14,11 +16,18 @@ import { useDemoModeStore } from '@/store/demo-mode-store';
 
 const invoke = jest.fn();
 
+const LIVE_T1 = { ok: true, data: { sessions: [{ threadId: 't1', state: 'live', streaming: false, sessionPath: '/s/t1.jsonl' }] } };
+
 /** 连接就绪的 bridge，invoke 由用例指定应答。 */
 function readyBridge(): void {
   const runtime = initializeRelayRuntime();
   runtime.status = 'ready';
   (runtime.client as unknown as { invoke: unknown }).invoke = invoke;
+}
+
+/** 会话在宿主表里是活的（投递目标现成），但 prompt 被宿主拒绝，原因由用例给。 */
+function answerPromptFailure(message: string): void {
+  invoke.mockImplementation((method: string) => Promise.resolve(method === 'session/liveThreads' ? LIVE_T1 : { ok: false, error: { kind: 'transient', message } }));
 }
 
 async function send(text: string): Promise<void> {
@@ -41,6 +50,7 @@ function failTexts(): string[] {
 describe('发送失败原因可见性（症状：只显示 transient）', () => {
   beforeEach(() => {
     invoke.mockReset();
+    invoke.mockImplementation((method: string) => Promise.resolve(method === 'session/liveThreads' ? LIVE_T1 : { ok: false, error: { kind: 'transient', message: 'unknown_thread' } }));
     useDemoModeStore.getState().setEnabled(false);
     useComposerStore.setState({ draft: '', sending: false, generating: false });
     useConversationStore.setState({ permissionRequest: null, activeSessionId: 't1', session: { ...useConversationStore.getState().session, id: 't1', messages: [], detached: false } });
@@ -48,33 +58,46 @@ describe('发送失败原因可见性（症状：只显示 transient）', () => 
   });
 
   it('prompt 失败：显示 host 错误码对应文案，不显示 kind', async () => {
-    invoke.mockResolvedValue({ ok: false, error: { kind: 'transient', message: 'unknown_thread' } });
+    answerPromptFailure('unknown_thread');
     await send('你好');
     expect(failTexts()).toEqual(['发送失败：会话已在桌面端关闭']);
     expect(failTexts().join()).not.toContain('transient');
   });
 
   it('权限不足与模型不可用各自给出可行动文案', async () => {
-    invoke.mockResolvedValue({ ok: false, error: { kind: 'transient', message: 'scope-denied' } });
+    answerPromptFailure('scope-denied');
     await send('a');
     expect(failTexts().at(-1)).toContain('设备权限不足');
 
-    invoke.mockResolvedValue({ ok: false, error: { kind: 'transient', message: 'model_unavailable' } });
+    answerPromptFailure('model_unavailable');
     await send('b');
     expect(failTexts().at(-1)).toContain('模型不可用');
   });
 
   it('host 没给原因：显式提示缺因，而不是回落成 kind', async () => {
-    invoke.mockResolvedValue({ ok: false, error: { kind: 'transient', message: 'no_reason' } });
+    answerPromptFailure('no_reason');
     await send('你好');
     expect(failTexts()).toEqual(['发送失败：桌面端未返回失败原因，请重试']);
   });
 
-  it('detached 会话：不吞草稿，明确告知需在电脑端打开', async () => {
-    useConversationStore.setState({ session: { ...useConversationStore.getState().session, id: 'tOld', messages: [], detached: true } });
+  it('唤活拿不到归档路径：报「无法恢复」而不是把 unknown_thread 说成会话被关', async () => {
+    // 症状回归：会话已移出宿主表、设备也没有它的归档路径时，继续 prompt 只会拿到
+    // unknown_thread，用户会误以为会话在电脑端被删了，实际是设备侧没有恢复入口。
+    // 用一个本文件内从未记过路径的 id（路径索引是模块级单例，别让前序用例污染它）。
+    useConversationStore.setState({ activeSessionId: 't-gone', session: { ...useConversationStore.getState().session, id: 't-gone', messages: [] } });
+    invoke.mockImplementation((method: string) => Promise.resolve(method === 'session/liveThreads' ? { ok: true, data: { sessions: [] } } : { ok: false, error: { kind: 'transient', message: 'unknown_thread' } }));
     await send('你好');
-    expect(invoke).not.toHaveBeenCalled();
-    expect(failTexts()).toEqual(['发送失败：需在电脑端打开']);
-    expect(useComposerStore.getState().draft).toBe('你好');
+    expect(invoke.mock.calls.map((call) => call[0])).not.toContain('session/prompt');
+    expect(failTexts().at(-1)).toContain('无法恢复这条会话');
+    expect(failTexts().at(-1)).not.toContain('会话已在桌面端关闭');
+  });
+
+  it('会话已在桌面端重开过：设备没记路径也能直接投递（先问宿主表，不靠本地路径索引）', async () => {
+    // 症状回归：设备面的路径索引是启动时快照，桌面端之后重开过的会话本地没路径，
+    // 旧实现直接判 no_session_path 拒绝发送——宿主明明有活线程。
+    invoke.mockImplementation((method: string) => Promise.resolve(method === 'session/liveThreads' ? LIVE_T1 : { ok: true, data: null }));
+    await send('你好');
+    expect(invoke.mock.calls.map((call) => call[0])).toContain('session/prompt');
+    expect(failTexts()).toEqual([]);
   });
 });

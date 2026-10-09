@@ -319,17 +319,37 @@ function applyHydrated(threadId: string, rawItems: unknown): void {
 }
 
 /**
- * parked/dead 会话唤活（thread/resume），语义与 PC 端 resolveTarget 同款：
- * 表内已有该会话文件占位（parked/live）时原 id 即投递目标，无需 resume；
- * 表内没有才按 sessionPath resume（可能换发新 threadId）。
+ * parked/dead 会话唤活，语义与 PC 端 resolveTarget 同款。
+ *
+ * 顺序要紧：**先问宿主表，再看本地路径**。设备面的路径索引是启动时快照，
+ * 桌面端之后重开过的会话（另一台设备/桌面自己唤的）本地可能没记到路径，
+ * 但它在宿主表里就是活的、原 id 即投递目标。没有路径就放弃会把「宿主明明
+ * 有活线程」误判成不可用——这正是手机端对 PC 侧会话发不出消息的成因。
+ * 路径只作兜底：表内没有才按 sessionPath resume（可能换发新 threadId）。
  */
 export async function reviveThread(threadId: string): Promise<{ ok: true; threadId: string } | { ok: false; reason: string }> {
   const rt = getRelayRuntime();
   if (rt === null) return { ok: false, reason: 'runtime_missing' };
   const sessionPath = threadPathOf(threadId);
+  const rows = await liveThreadRows();
+  // ① 原 id 仍在表：它就是投递目标（同时补记路径，供后续按路径收养）
+  const byId = rows.find((row) => textOf(row['threadId']) === threadId);
+  if (byId !== undefined) {
+    const path = rowSessionPath(byId);
+    if (path !== null) noteThreadPaths([byId]);
+    return { ok: true, threadId };
+  }
   if (sessionPath === null || sessionPath.length === 0) return { ok: false, reason: 'no_session_path' };
-  const holder = await holderOfPath(sessionPath);
-  if (holder !== null) return { ok: true, threadId: holder };
+  // ② 同路径被桌面端换发过新 id：收养既有表项，不重复 resume
+  const holder = rows.find((row) => rowSessionPath(row) === sessionPath);
+  if (holder !== undefined) {
+    const id = textOf(holder['threadId']);
+    if (id.length > 0) {
+      noteThreadPaths([holder]);
+      return { ok: true, threadId: id };
+    }
+  }
+  // ③ 表内没有：按路径 resume（可能换发新 threadId）
   const outcome = (await rt.client.invoke('session/resume', { sessionPath })) as {
     ok: boolean;
     data?: { threadId?: string };
@@ -342,23 +362,18 @@ export async function reviveThread(threadId: string): Promise<{ ok: true; thread
   return { ok: false, reason: outcome.error?.message ?? 'resume_failed' };
 }
 
-/** thread/list 按 sessionPath 反查占位表项（收养既有表项——PC 端 adoptExistingThread 同语义）。 */
-async function holderOfPath(sessionPath: string): Promise<string | null> {
+/** thread/list 原始行（失败按空表降级——调用方据此走 resume 兜底）。 */
+async function liveThreadRows(): Promise<Array<Record<string, unknown>>> {
   const rt = getRelayRuntime();
-  if (rt === null) return null;
+  if (rt === null) return [];
   const outcome = (await rt.client.invoke('session/liveThreads', {})) as { ok: boolean; data?: { sessions?: unknown } };
-  if (!outcome.ok || !Array.isArray(outcome.data?.sessions)) return null;
-  for (const raw of outcome.data.sessions) {
-    if (typeof raw !== 'object' || raw === null) continue;
-    const row = raw as Record<string, unknown>;
-    const id = textOf(row['threadId']);
-    const path = typeof row['sessionPath'] === 'string' ? (row['sessionPath'] as string) : '';
-    if (id.length > 0 && path === sessionPath) {
-      noteThreadPaths([row]);
-      return id;
-    }
-  }
-  return null;
+  if (!outcome.ok || !Array.isArray(outcome.data?.sessions)) return [];
+  return outcome.data.sessions.filter((raw): raw is Record<string, unknown> => typeof raw === 'object' && raw !== null);
+}
+
+function rowSessionPath(row: Record<string, unknown>): string | null {
+  const path = row['sessionPath'];
+  return typeof path === 'string' && path.length > 0 ? path : null;
 }
 
 function switchActiveThread(threadId: string): void {

@@ -143,7 +143,7 @@ const REASON_COPY: Readonly<Record<string, string>> = {
   session_unreadable: '会话文件不可读，可能已被清理',
   resume_failed: '会话恢复失败',
   model_unavailable: '模型不可用',
-  no_session_path: '会话文件不可达',
+  no_session_path: '无法恢复这条会话：桌面端没有它的归档入口，请更新桌面端或在电脑端打开一次',
   no_reason: copy.noReason,
 };
 

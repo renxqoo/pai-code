@@ -20,12 +20,6 @@ export function useComposerSubmit(): () => void {
   return () => {
     const text = draft.trim();
     if (text.length === 0) return;
-    // 归档路径都拿不到的会话（宿主无投递目标）：不吞草稿、直接说明，
-    // 否则只会得到一条「发送失败：unknown_thread」，用户无从下手。
-    if (useConversationStore.getState().session.detached === true) {
-      useConversationStore.getState().appendMessage({ id: `send-fail-${Date.now()}`, kind: 'status', text: copy.sendFailed(copy.detached), createdAt: new Date().toISOString(), status: 'failed', summary: copy.notDelivered });
-      return;
-    }
     if (!submitDraft()) return;
     const attachments = items.map((item) => ({ ...item }));
     const demo = useDemoModeStore.getState().enabled;
@@ -56,9 +50,14 @@ export function useComposerSubmit(): () => void {
       }
       failNote(reason);
     };
-    /** PC 侧闲置 park 过的会话在手机端发消息前先唤活（否则 host 无投递目标）。 */
+    /**
+     * 投递前唤活：先问宿主表（reviveThread 内部已做），表内没有才按 sessionPath 恢复。
+     * 唤活因「拿不到归档路径」失败时直接报这个原因——继续 prompt 只会拿到
+     * unknown_thread，把「设备没路径」说成「会话被关了」，误导用户去电脑端找。
+     */
     const promptLive = async (target: string): Promise<{ ok: boolean; switched?: true; error?: { message?: string } }> => {
       const revived = await reviveThread(target);
+      if (!revived.ok && revived.reason === 'no_session_path') return { ok: false, error: { message: 'no_session_path' } };
       const threadForSend = revived.ok ? revived.threadId : target;
       if (revived.ok && revived.threadId !== target) {
         if (useConversationStore.getState().activeSessionId !== null && useConversationStore.getState().activeSessionId !== target) return { ok: false, switched: true };
