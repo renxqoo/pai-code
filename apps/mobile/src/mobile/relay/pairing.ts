@@ -51,6 +51,8 @@ export interface PairingSessionLike {
   /** ack 下发的 relay 连接 token / 注册 deviceId（未到 ack 时 null）。 */
   readonly relayToken: string | null;
   readonly registeredDeviceId: string | null;
+  /** relay 节点 id（token 续期签名挑战的转录域；ack 未带则 null）。 */
+  readonly relayNodeId: string | null;
   /** SAS 6 位（目视比对——桌面 owner 端输入确认）。 */
   readonly sas: string | null;
   /** 步进回调（UI 驱动面）；返回退订。 */
@@ -98,6 +100,8 @@ export function createPairingSession(spec: {
   /** ack 帧下发的连接凭据（WIRE 设备注册收尾）。 */
   let ackRelayToken: string | null = null;
   let ackDeviceIdValue: string | null = null;
+  /** relay 节点 id（refresh 挑战转录域——随 ack 下发，免一次探测往返）。 */
+  let ackRelayNodeId: string | null = null;
   let lastDeviceKeys: DeviceIdentityLike | null = null;
   let resendTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -182,6 +186,8 @@ export function createPairingSession(spec: {
       // ack 带 relayToken = owner 已 confirm 且注册落账（WIRE 设备注册收尾）
       const relayToken = typeof message['relayToken'] === 'string' ? (message['relayToken'] as string) : null;
       const ackDeviceId = typeof message['deviceId'] === 'string' ? (message['deviceId'] as string) : null;
+      const ackNodeId = typeof message['nodeId'] === 'string' ? (message['nodeId'] as string) : null;
+      if (ackNodeId !== null) ackRelayNodeId = ackNodeId;
       if (relayToken === null || relayToken.length === 0) {
         // 裸 ack：owner 尚未 confirm——等待窗口内重呈 device-keys（confirm 后 ack 携 token）
         scheduleDeviceKeysResend();
@@ -233,6 +239,9 @@ export function createPairingSession(spec: {
     },
     get registeredDeviceId() {
       return ackDeviceIdValue;
+    },
+    get relayNodeId() {
+      return ackRelayNodeId;
     },
     get sas() {
       return sas;

@@ -3,6 +3,7 @@
  * （UI/共享包零改动消费）；实现走 RelayTransport（relay 链路）。
  */
 import { UiEventSchema, type ApiMethod, type Client, type ClientCapabilities, type UiEvent, type Unsubscribe } from '@paiapp/contracts';
+import { readCommandError, type CommandError } from '@paiapp/relay-protocol';
 import { mapResponseData, translateCommand } from '../relay/command-map';
 
 type Subscriber = (event: UiEvent) => void;
@@ -10,7 +11,7 @@ type Subscriber = (event: UiEvent) => void;
 /** invoke 面（RelayTransport 的子集——注入式，测试内存桩）。 */
 export interface ClientTransportFace {
   sendCommand(spec: { command: string; id: string; args?: Record<string, unknown> }): Promise<boolean>;
-  waitResponse(id: string, timeoutMs?: number): Promise<{ id: string; command: string; success: boolean; data?: unknown; error?: string }>;
+  waitResponse(id: string, timeoutMs?: number): Promise<{ id: string; command: string; success: boolean; data?: unknown; error?: CommandError }>;
 }
 
 export interface BridgeClientDeps {
@@ -38,11 +39,15 @@ export function createBridgeClient(deps: BridgeClientDeps): BridgeClient {
       const id = `c${bootId}.${invokeCounter++}`;
       // 词表翻译（H2）：ApiMethod → gateway host 命令 + 参数名
       const { command, args } = translateCommand(method, (params ?? {}) as Record<string, unknown>);
-      const transportAtSend = deps.transport; // L-4：在途响应归旧 transport 认领（换绑不丢）
+      const transportAtSend = deps.transport; // 在途响应归旧 transport 认领（换绑不丢）
       const sent = await transportAtSend.sendCommand({ command, id, args });
       if (!sent) return { ok: false, error: { kind: 'transient', message: 'host_unavailable' } };
       const response = await transportAtSend.waitResponse(id);
-      return response.success ? { ok: true, data: mapResponseData(command, response.data) } : { ok: false, error: { kind: 'transient', message: response.error } };
+      if (response.success) return { ok: true, data: mapResponseData(command, response.data) };
+      // 失败原因取 CommandError.code；线上形状缺失或不成形时给显式缺因标记，
+      // 展示层据此提示重试而非「未知错误」。
+      const reason = readCommandError(response.error)?.code ?? 'no_reason';
+      return { ok: false, error: { kind: 'transient', message: reason } };
     },
     subscribe(onEvent: (event: UiEvent) => void): Unsubscribe {
       subscribers.add(onEvent);

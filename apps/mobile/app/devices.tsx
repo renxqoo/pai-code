@@ -132,6 +132,7 @@ export default function DevicesRoute() {
         installationId,
         relayUrl,
         relayToken: session.relayToken ?? '',
+        ...(session.relayNodeId !== null ? { relayNodeId: session.relayNodeId } : {}),
       });
       if (!saved) setPairError('凭证保存失败（本会话可用，重启后需重新配对）');
       setHasCredentials(true);

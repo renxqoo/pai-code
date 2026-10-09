@@ -40,6 +40,7 @@ const stateOf = (raw: SessionLike): ConversationSession['state'] => {
 };
 
 const timeLabelOf = (lastActivityAt: number): string => {
+  if (lastActivityAt <= 0) return '';
   const diff = Date.now() - lastActivityAt;
   if (diff < 60_000) return '刚刚';
   if (diff < 3600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
@@ -97,7 +98,8 @@ export function createHistorySync(callbacks: HistorySyncCallbacks) {
         const { pinned, archived } = applyPreference(raw, pinnedPaths, archivedPaths);
         sessions.set(id, toConversationSession(raw, pinned, archived));
       }
-      // saved（已落盘不在册会话）并入去重（live 优先）
+      // saved（已落盘不在册会话）并入去重（live 优先）。不在册 = 宿主表无表项，
+      // 设备面既无 sessionPath 也唤不活 → 标 detached（UI 显式告知，不假装可用）。
       const liveIds = new Set([...sessions.keys()].values());
       for (const item of saved) {
         const sid = item.sessionId ?? '';
@@ -107,7 +109,9 @@ export function createHistorySync(callbacks: HistorySyncCallbacks) {
         if (item.title !== undefined) row.title = item.title;
         if (item.cwd !== undefined) row.cwd = item.cwd;
         if (item.lastActivityAt !== undefined) row.lastActivityAt = item.lastActivityAt;
-        sessions.set(sid, toConversationSession(row, false, archived));
+        const derived = toConversationSession(row, false, archived);
+        derived.detached = true;
+        sessions.set(sid, derived);
       }
       emit();
     },

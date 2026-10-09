@@ -11,11 +11,12 @@ import { useConversationStore } from '@/store/conversation-store';
 import { useHistoryStore } from '@/store/history-store';
 import { useNavigationStore } from '@/store/navigation-store';
 import { useDemoModeStore } from '@/store/demo-mode-store';
-import { attachThread, getBridge, preferenceToggle } from '@/mobile/relay/runtime';
+import { attachThread, getBridge } from '@/mobile/relay/runtime';
 
 /**
  * 会话操作：本地 store 即时反馈 + 连接模式同步 hub（改名 session/setName、
- * 删除 session/stop remove=true；置顶/归档是 app 偏好——桌面端偏好集，一期本地）。
+ * 删除 session/stop remove=true）。置顶/归档是设备本地视图偏好——PC 的偏好集
+ * 住在桌面端主进程 settings.json，网关命令面无对应命令，不做注定失败的远程写。
  */
 export function SessionSheet() {
   const { colors } = useAppTheme();
@@ -38,20 +39,11 @@ export function SessionSheet() {
     return bridge?.status === 'ready';
   };
 
-  /** 偏好写回（置顶/归档）：app/setPreference 与 PC 同源（pinnedSessions/archivedSessions
-   *  键域 sessionPath）——本地乐观更新 + 服务端真相回填。 */
+  /** 置顶/归档：纯本地视图偏好。 */
   const togglePreference = (kind: 'pinned' | 'archived'): void => {
     if (session === undefined) return;
-    if (!bridgeReady() || id === null) {
-      // 演示/断连：仅本地
-      if (kind === 'pinned') togglePin(session.id);
-      else archive(session.id);
-      return;
-    }
-    void preferenceToggle(id, kind).then(() => {
-      if (kind === 'pinned') togglePin(session.id);
-      else archive(session.id);
-    });
+    if (kind === 'pinned') togglePin(session.id);
+    else archive(session.id);
   };
 
   const renameRemote = (): void => {

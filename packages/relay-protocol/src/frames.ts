@@ -1,3 +1,5 @@
+import type { CommandError } from "./command-error.ts";
+
 // L2 帧 kind 词表与 body 形状（DESIGN §1.2）。词表封闭：未知 kind 接收方忽略+计数
 // （minor 兼容规则 §1.6）；本文件是 kind 判别联合的单一真相。
 export const FRAME_KINDS = [
@@ -29,7 +31,7 @@ export interface ResponseBody {
   command: string;
   success: boolean;
   data?: unknown;
-  error?: string;
+  error?: CommandError;
 }
 
 /** 事件帧（gateway→客户端；host 事件词表透传 + gateway 合成域） */

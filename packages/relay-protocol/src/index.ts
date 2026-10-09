@@ -8,6 +8,7 @@
 export * from "./hex.ts";
 export * from "./crypto.ts";
 export * from "./frames.ts";
+export * from "./command-error.ts";
 export * from "./envelope.ts";
 export * from "./vocab.ts";
 export * from "./limits.ts";

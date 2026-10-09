@@ -7,7 +7,7 @@ import { useComposerStore } from '@/store/composer-store';
 import { useNavigationStore } from '@/store/navigation-store';
 import { useAppTheme } from '@/theme/theme-context';
 import { radius, spacing } from '@/theme/tokens';
-import { models as demoModels, permissionModes, thinkingLevels } from '@/strings/zh';
+import { models as demoModels, permissionModes, thinkingLevels, copy } from '@/strings/zh';
 import { useDemoModeStore } from '@/store/demo-mode-store';
 import { useConversationStore } from '@/store/conversation-store';
 import { getBridge } from '@/mobile/relay/runtime';
@@ -18,8 +18,9 @@ export function TaskConfigSheet() {
   const close = useNavigationStore((state) => state.closeSheet);
   const store = useComposerStore();
   const [query, setQuery] = React.useState('');
-  // 真模型目录（R3 M5：连接态消费 get_models——静态数据仅演示模式兜底）
+  // 真模型目录（连接态消费 get_models——静态数据仅演示模式兜底）
   const [catalog, setCatalog] = React.useState<Array<{ name: string; provider: string }>>([]);
+  const [liveThread, setLiveThread] = React.useState<string | null>(null);
   const bridgeReady = getBridge()?.status === 'ready' || getBridge()?.status === 'connected';
   React.useEffect(() => {
     if (!visible || !bridgeReady) return;
@@ -31,15 +32,31 @@ export function TaskConfigSheet() {
       }
     });
   }, [visible, bridgeReady]);
+  // 写档类命令（set_model/set_thinking/permission）要求 host 侧有活线程；
+  // 新会话尚未开线程时把它们显式关掉，避免点了没反应。
+  React.useEffect(() => {
+    if (!visible || !bridgeReady) return;
+    void getBridge()?.client.invoke('session/liveThreads', {}).then((raw) => {
+      const outcome = raw as { ok: boolean; data?: { sessions?: Array<{ threadId?: string; state?: string }> } };
+      if (!outcome.ok || !Array.isArray(outcome.data?.sessions)) {
+        setLiveThread(null);
+        return;
+      }
+      const active = useConversationStore.getState().activeSessionId;
+      const row = outcome.data.sessions.find((item) => item.threadId === active && item.state === 'live');
+      setLiveThread(row?.threadId ?? null);
+    });
+  }, [visible, bridgeReady]);
   const modelSource: Array<{ id?: string; name: string; provider: string; description?: string }> = bridgeReady && catalog.length > 0 ? catalog : [...demoModels];
   const filteredModels = modelSource
     .map((item) => ({ id: item.id ?? item.name, name: item.name, provider: item.provider, description: item.description ?? '' }))
     .filter((item) => `${item.name}${item.provider}`.toLowerCase().includes(query.toLowerCase()));
-  // 连接模式：写档即时同步 hub（下一 turn 生效——setModel/setThinking/setMode）
+  // 连接模式：写档即时同步 hub（下一 turn 生效——setModel/setThinking/setMode）；
+// 无活线程时仅本地留存（host 侧无投递目标，发命令恒失败）
   const syncRemote = (kind: 'model' | 'thinking' | 'permission', value: string): void => {
     if (useDemoModeStore.getState().enabled) return;
     const bridge = getBridge();
-    const threadId = useConversationStore.getState().activeSessionId;
+    const threadId = liveThread;
     if (bridge?.status !== 'ready' || threadId === null) return;
     if (kind === 'model') {
       const [provider, ...rest] = value.split('/');
@@ -63,7 +80,7 @@ export function TaskConfigSheet() {
         {permissionModes.map((item) => <PickerRow detail={item.detail} key={item.id} label={item.label} selected={store.permission === item.id} onPress={() => { store.selectPermission(item.id); syncRemote('permission', item.id); }} />)}
         <View style={{ alignItems: 'center', flexDirection: 'row', marginBottom: spacing.sm, marginTop: spacing.xs3 }}><Gauge color={colors.textMuted} size={16} /><Text style={{ color: colors.text, fontSize: 13, fontWeight: '700', marginLeft: 7 }}>上下文 · {store.contextPercent}%</Text></View>
         <View style={{ backgroundColor: colors.surfaceSubtle, borderRadius: radius.pill, height: 10, overflow: 'hidden' }}><View style={{ backgroundColor: store.contextPercent >= 90 ? colors.destructive : colors.text, borderRadius: radius.pill, height: 10, width: `${store.contextPercent}%` }} /></View>
-        <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 19, marginTop: spacing.sm }}>配置应用于当前对话；默认配置可在个人设置中调整。</Text>
+        <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 19, marginTop: spacing.sm }}>{liveThread === null && bridgeReady ? copy.taskConfigPending : copy.taskConfigHint}</Text>
       </ScrollView>
     </Sheet>
   );

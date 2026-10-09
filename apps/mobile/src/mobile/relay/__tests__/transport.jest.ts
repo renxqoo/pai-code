@@ -206,6 +206,21 @@ describe('R1 修复回归', () => {
     expect(t3.args).toEqual({ a: 1 });
   });
 
+  it('症状「用量页永远空」：session/tokenAnalytics 未映射时被网关判 unknown-command', () => {
+    // 回归锁定：tokenAnalytics 必须译到 host 词表命令 get_token_analytics
+    expect(translateCommand('session/tokenAnalytics', { threadId: 't1' })).toEqual({
+      command: 'get_token_analytics',
+      args: { threadId: 't1' },
+    });
+  });
+
+  it('症状「手机端发不了消息」：parked 会话唤活走 thread/resume（sessionPath 键域）', () => {
+    expect(translateCommand('session/resume', { sessionPath: '/s/a.jsonl', trusted: true })).toEqual({
+      command: 'thread/resume',
+      args: { sessionPath: '/s/a.jsonl', trusted: true },
+    });
+  });
+
   it('心跳不自杀：空闲连接不被强拆（H7——传输层保活）', async () => {
     const { transport, socketOf } = makeTransport();
     transport.connect();

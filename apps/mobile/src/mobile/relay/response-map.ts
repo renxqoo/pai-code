@@ -102,7 +102,11 @@ export function mapEntriesResponse(data: unknown): { items: ChatMessage[]; curso
   return { items, cursor: typeof res.leafSeq === 'number' ? res.leafSeq : null, hasMore: res.hasMore === true };
 }
 
-/** thread/list 行 → history-sync SessionLike。 */
+/**
+ * thread/list 行 → history-sync SessionLike。
+ * host 的 thread/list 只有运行态字段（threadId/cwd/state/sessionPath/isStreaming）——
+ * 标题与最后活动时间不在该命令面，故这两项缺省缺席（history-sync 逐字段保留语义）。
+ */
 export function mapThreadRows(data: unknown): Array<{ threadId: string; cwd: string; state: string; streaming: boolean; sessionPath: string | null; lastActivityAt?: number }> {
   if (!Array.isArray(data)) return [];
   return (data as HostThreadRow[]).filter((row) => typeof row?.threadId === 'string').map((row) => ({

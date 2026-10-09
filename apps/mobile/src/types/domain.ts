@@ -68,6 +68,11 @@ export type ConversationSession = {
   pinned: boolean;
   archived: boolean;
   unread: boolean;
+  /**
+   * 会话文件已落盘但桌面端宿主未在册（thread/list 无表项）。手机端无会话文件路径，
+   * 既读不到历史也唤不活——UI 显式标注，避免用户对着空会话反复发送。
+   */
+  detached?: boolean;
   startedAtMs?: number;
   endedAtMs?: number;
   messages: readonly ChatMessage[];

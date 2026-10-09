@@ -68,6 +68,7 @@ const COMMAND_MAP: Record<string, CommandMapping> = {
   'session/thinkingLevel': { host: 'get_thinking_level', args: { threadId: 'threadId' } },
   'session/stats': { host: 'get_session_stats', args: { threadId: 'threadId' } },
   'session/state': { host: 'get_state', args: { threadId: 'threadId' } },
+  'session/tokenAnalytics': { host: 'get_token_analytics', args: { threadId: 'threadId' } },
   'session/inflight': { host: 'get_inflight', args: { threadId: 'threadId' } },
   'session/fork': { host: 'fork', args: { threadId: 'threadId', seq: 'seq' } },
   'model/list': { host: 'get_models' },

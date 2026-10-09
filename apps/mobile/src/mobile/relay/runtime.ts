@@ -14,6 +14,8 @@ import { createRelayRatchetCodec } from './ratchet-codec';
 import { dialWebSocket } from './ws-dial';
 import { refreshDeviceToken } from './token-refresh';
 import { createKvRatchetStore, preloadRelayCredentials, relayCredentialsStore, type RelayCredentials } from './credentials';
+import { noteThreadPath, noteThreadPaths, threadPathOf } from './thread-paths';
+import { withSavedMeta } from './with-saved-meta';
 import { createSessionSync } from '../state/session-sync';
 import { createEventMapper, type EventMapper } from '@paiapp/api/events/event-mapper';
 import { createHistorySync } from '../state/history-sync';
@@ -208,11 +210,16 @@ export function initializeRelayRuntime(): RelayRuntime {
       try {
         try {
       // 重建传输（真 codec + RN socket）
-      // token 续期（M12）：凭证 token 可能已过 15min TTL——签名挑战换新（失败回落旧值）
-      const freshToken = (await refreshDeviceToken(credentials)) ?? credentials.relayToken;
-      if (freshToken !== credentials.relayToken) {
-        // 续期成功：落盘（否则每次连接都重新续期——R3 H2）
-        void relayCredentialsStore.save({ ...credentials, relayToken: freshToken });
+      // token 续期：凭证 token 15min TTL 到期后凭签名挑战换新（失败回落旧值）
+      const refreshed = await refreshDeviceToken(credentials);
+      const freshToken = refreshed?.token ?? credentials.relayToken;
+      const freshNodeId = refreshed?.relayNodeId ?? credentials.relayNodeId;
+      if (freshToken !== credentials.relayToken || freshNodeId !== credentials.relayNodeId) {
+        void relayCredentialsStore.save({
+          ...credentials,
+          relayToken: freshToken,
+          ...(freshNodeId !== undefined ? { relayNodeId: freshNodeId } : {}),
+        });
       }
       const codec = await createRelayRatchetCodec({
         deviceId: credentials.deviceId,
@@ -280,19 +287,84 @@ export function attachThread(threadId: string | null): void {
 }
 
 let sessionSyncRef: ReturnType<typeof createSessionSync> | null = null;
-/** 历史水化（session/entries；staleGuard：await 期间切会话弃用迟到载荷）。 */
+/**
+ * 历史水化（session/entries；staleGuard：await 期间切会话弃用迟到载荷）。
+ * 会话在 PC 侧闲置 park 后，worker 已收编——get_entries 只在 host 直接读档面可用，
+ * 事件流则按 thread 订阅投递；水化失败时先尝试 resume 唤活再读一次。
+ */
 export async function hydrateThread(threadId: string): Promise<void> {
   const rt = getRelayRuntime();
   if (rt === null) return;
   const outcome = (await rt.client.invoke('session/entries', { threadId })) as { ok: boolean; data?: { items?: unknown[] } };
   if (activeThreadId !== threadId) return;
-  if (!outcome.ok) return;
-  // data.items 经 mapResponseData 已是 ChatMessage[]（WAL→HistoryItem 折叠在 response-map）
-  const items = Array.isArray(outcome.data?.items) ? (outcome.data.items as ChatMessage[]) : []; 
+  if (outcome.ok) {
+    applyHydrated(threadId, outcome.data?.items);
+    return;
+  }
+  const revived = await reviveThread(threadId);
+  if (!revived.ok || activeThreadId !== threadId) return;
+  const retry = (await rt.client.invoke('session/entries', { threadId: revived.threadId })) as { ok: boolean; data?: { items?: unknown[] } };
+  if (!retry.ok) return;
+  switchActiveThread(revived.threadId);
+  applyHydrated(revived.threadId, retry.data?.items);
+}
+
+function applyHydrated(threadId: string, rawItems: unknown): void {
   const sync = sessionSyncRef;
   if (sync === null) return;
-  sync.seed(items);
+  // data.items 经 mapResponseData 已是 ChatMessage[]（WAL→HistoryItem 折叠在 response-map）
+  sync.seed(Array.isArray(rawItems) ? (rawItems as ChatMessage[]) : []);
   useConversationStore.getState().appendMessages(sync.snapshot().messages);
+  void threadId;
+}
+
+/**
+ * parked/dead 会话唤活（thread/resume），语义与 PC 端 resolveTarget 同款：
+ * 表内已有该会话文件占位（parked/live）时原 id 即投递目标，无需 resume；
+ * 表内没有才按 sessionPath resume（可能换发新 threadId）。
+ */
+export async function reviveThread(threadId: string): Promise<{ ok: true; threadId: string } | { ok: false; reason: string }> {
+  const rt = getRelayRuntime();
+  if (rt === null) return { ok: false, reason: 'runtime_missing' };
+  const sessionPath = threadPathOf(threadId);
+  if (sessionPath === null || sessionPath.length === 0) return { ok: false, reason: 'no_session_path' };
+  const holder = await holderOfPath(sessionPath);
+  if (holder !== null) return { ok: true, threadId: holder };
+  const outcome = (await rt.client.invoke('session/resume', { sessionPath })) as {
+    ok: boolean;
+    data?: { threadId?: string };
+    error?: { message?: string };
+  };
+  if (outcome.ok && typeof outcome.data?.threadId === 'string') {
+    noteThreadPath(outcome.data.threadId, sessionPath);
+    return { ok: true, threadId: outcome.data.threadId };
+  }
+  return { ok: false, reason: outcome.error?.message ?? 'resume_failed' };
+}
+
+/** thread/list 按 sessionPath 反查占位表项（收养既有表项——PC 端 adoptExistingThread 同语义）。 */
+async function holderOfPath(sessionPath: string): Promise<string | null> {
+  const rt = getRelayRuntime();
+  if (rt === null) return null;
+  const outcome = (await rt.client.invoke('session/liveThreads', {})) as { ok: boolean; data?: { sessions?: unknown } };
+  if (!outcome.ok || !Array.isArray(outcome.data?.sessions)) return null;
+  for (const raw of outcome.data.sessions) {
+    if (typeof raw !== 'object' || raw === null) continue;
+    const row = raw as Record<string, unknown>;
+    const id = textOf(row['threadId']);
+    const path = typeof row['sessionPath'] === 'string' ? (row['sessionPath'] as string) : '';
+    if (id.length > 0 && path === sessionPath) {
+      noteThreadPaths([row]);
+      return id;
+    }
+  }
+  return null;
+}
+
+function switchActiveThread(threadId: string): void {
+  activeThreadId = threadId;
+  const session = useConversationStore.getState().session;
+  if (session.id !== threadId) useConversationStore.getState().openSession({ ...session, id: threadId });
 }
 
 async function reconcileThread(threadId: string): Promise<void> {
@@ -446,15 +518,12 @@ export function loadBootstrap(client: Client): Promise<void> {
       const savedOut = results[1];
       if (threadsOut === undefined || !threadsOut.ok) return;
       const sessionsData = (threadsOut.data ?? {}) as { sessions?: unknown };
-      const sessions = Array.isArray(sessionsData.sessions) ? (sessionsData.sessions as Array<Record<string, unknown>>) : [];
+      const live = Array.isArray(sessionsData.sessions) ? (sessionsData.sessions as Array<Record<string, unknown>>) : [];
       const saved = savedOut?.ok === true && Array.isArray(savedOut.data) ? (savedOut.data as Array<Record<string, unknown>>) : [];
-      const preferences = {} as Record<string, unknown>;
-      currentPreferences = {
-        pinnedSessions: Array.isArray(preferences['pinnedSessions']) ? (preferences['pinnedSessions'] as string[]) : [],
-        archivedSessions: Array.isArray(preferences['archivedSessions']) ? (preferences['archivedSessions'] as string[]) : [],
-      };
-      noteThreadPaths(sessions);
-      historySyncRef?.seedBootstrap(sessions, saved, currentPreferences);
+      noteThreadPaths(live);
+      // 置顶/归档：设备本地视图偏好。PC 的偏好集在桌面端主进程 settings.json，
+      // 网关命令面无对应 host 命令——设备侧发起远程写恒为 unknown-command，故不上送。
+      historySyncRef?.seedBootstrap(withSavedMeta(live, saved), saved, { pinnedSessions: [], archivedSessions: [] });
     } finally {
       bootstrapInFlight = null;
     }
@@ -501,30 +570,3 @@ export type { Unsubscribe, ApiMethod, ApiOutcome };
 export const initializeBridge = initializeRelayRuntime;
 export const getBridge = getRelayRuntime;
 export { useRelayStatus as useBridgeStatus };
-
-/** 偏好切换（app/setPreference 与 PC 同源；sessionPath 键域）。 */
-const threadPaths = new Map<string, string>();
-let currentPreferences: { pinnedSessions?: string[]; archivedSessions?: string[] } = {};
-
-export async function preferenceToggle(threadId: string, kind: 'pinned' | 'archived'): Promise<boolean> {
-  const rt = getRelayRuntime();
-  if (rt === null) return false;
-  const path = threadPaths.get(threadId);
-  if (path === undefined) return false;
-  const key = kind === 'pinned' ? 'pinnedSessions' : 'archivedSessions';
-  const current = new Set(currentPreferences[key] ?? []);
-  if (current.has(path)) current.delete(path);
-  else current.add(path);
-  const next = [...current];
-  const outcome = (await rt.client.invoke('app/setPreference', { [key]: next })) as { ok: boolean };
-  if (outcome.ok) currentPreferences = { ...currentPreferences, [key]: next };
-  return outcome.ok;
-}
-
-function noteThreadPaths(sessions: Array<Record<string, unknown>>): void {
-  for (const raw of sessions) {
-    const threadId = textOf(raw['threadId']);
-    const sessionPath = raw['sessionPath'];
-    if (threadId.length > 0 && typeof sessionPath === 'string') threadPaths.set(threadId, sessionPath);
-  }
-}

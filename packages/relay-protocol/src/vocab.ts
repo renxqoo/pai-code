@@ -1,7 +1,7 @@
 // scope 执法矩阵（DESIGN §3.1/§3.2 表 = 单一真相；测试从本表生成）。
 export type AccessTier = "read" | "interact" | "full" | "owner";
 
-/** host 命令 → 各档可达性（60 命令全量，DESIGN §3.1） */
+/** host 命令 → 各档可达性（82 命令全量，DESIGN §3.1） */
 export const HOST_COMMAND_MATRIX: Readonly<Record<string, { read: boolean; interact: boolean; full: boolean; ownerOnly: boolean }>> = {
   "thread/start": { read: false, interact: true, full: true, ownerOnly: false },
   "thread/resume": { read: false, interact: true, full: true, ownerOnly: false },
@@ -12,6 +12,7 @@ export const HOST_COMMAND_MATRIX: Readonly<Record<string, { read: boolean; inter
   "thread/delete": { read: false, interact: false, full: false, ownerOnly: true },
   "thread/list": { read: true, interact: true, full: true, ownerOnly: false },
   "thread/list_saved": { read: true, interact: true, full: true, ownerOnly: false },
+  "thread/notify": { read: true, interact: true, full: true, ownerOnly: false },
   prompt: { read: false, interact: true, full: true, ownerOnly: false },
   steer: { read: false, interact: true, full: true, ownerOnly: false },
   follow_up: { read: false, interact: true, full: true, ownerOnly: false },
@@ -26,6 +27,7 @@ export const HOST_COMMAND_MATRIX: Readonly<Record<string, { read: boolean; inter
   get_entries: { read: true, interact: true, full: true, ownerOnly: false },
   get_tree: { read: true, interact: true, full: true, ownerOnly: false },
   get_session_stats: { read: true, interact: true, full: true, ownerOnly: false },
+  get_token_analytics: { read: true, interact: true, full: true, ownerOnly: false },
   get_commands: { read: true, interact: true, full: true, ownerOnly: false },
   get_fork_messages: { read: true, interact: true, full: true, ownerOnly: false },
   set_session_name: { read: false, interact: true, full: true, ownerOnly: false },
@@ -34,11 +36,11 @@ export const HOST_COMMAND_MATRIX: Readonly<Record<string, { read: boolean; inter
   fork: { read: false, interact: true, full: true, ownerOnly: false },
   clone: { read: false, interact: true, full: true, ownerOnly: false },
   get_models: { read: true, interact: true, full: true, ownerOnly: false },
+  "models/reload": { read: false, interact: false, full: true, ownerOnly: false },
   set_model: { read: false, interact: true, full: true, ownerOnly: false },
   set_model_override: { read: false, interact: true, full: true, ownerOnly: false },
   "models/add": { read: false, interact: false, full: false, ownerOnly: true },
   "models/remove": { read: false, interact: false, full: false, ownerOnly: true },
-  "models/reload": { read: false, interact: false, full: false, ownerOnly: true },
   "auth/list": { read: false, interact: false, full: false, ownerOnly: true },
   "auth/set_api_key": { read: false, interact: false, full: false, ownerOnly: true },
   "auth/remove_key": { read: false, interact: false, full: false, ownerOnly: true },
@@ -49,6 +51,9 @@ export const HOST_COMMAND_MATRIX: Readonly<Record<string, { read: boolean; inter
   "agents/create": { read: false, interact: false, full: true, ownerOnly: false },
   "agents/remove": { read: false, interact: false, full: true, ownerOnly: false },
   "subagent/steer": { read: false, interact: true, full: true, ownerOnly: false },
+  "workflow/list": { read: true, interact: true, full: true, ownerOnly: false },
+  "workflow/submit": { read: false, interact: true, full: true, ownerOnly: false },
+  "workflow/stop": { read: false, interact: true, full: true, ownerOnly: false },
   "skills/list": { read: true, interact: true, full: true, ownerOnly: false },
   "skills/set_enabled": { read: false, interact: false, full: true, ownerOnly: false },
   "skills/remove": { read: false, interact: false, full: true, ownerOnly: false },
@@ -60,10 +65,26 @@ export const HOST_COMMAND_MATRIX: Readonly<Record<string, { read: boolean; inter
   get_thinking_level: { read: true, interact: true, full: true, ownerOnly: false },
   "permission/set_mode": { read: false, interact: true, full: true, ownerOnly: false },
   "permission/get_mode": { read: true, interact: true, full: true, ownerOnly: false },
-  get_host_info: { read: false, interact: false, full: true, ownerOnly: false },
+  "permission/grant": { read: false, interact: true, full: true, ownerOnly: false },
+  "permission/list_rules": { read: true, interact: true, full: true, ownerOnly: false },
+  "permission/remove_rule": { read: false, interact: true, full: true, ownerOnly: false },
+  "get_host_info": { read: false, interact: false, full: true, ownerOnly: false },
   set_idle_retire_ms: { read: false, interact: false, full: true, ownerOnly: false },
   set_rss_retire_bytes: { read: false, interact: false, full: true, ownerOnly: false },
   "workspace/trust": { read: false, interact: false, full: false, ownerOnly: true },
+  "catalog/reload": { read: false, interact: false, full: true, ownerOnly: false },
+  get_plugins: { read: true, interact: true, full: true, ownerOnly: false },
+  "plugins/list": { read: true, interact: true, full: true, ownerOnly: false },
+  "plugins/inspect": { read: false, interact: false, full: true, ownerOnly: false },
+  "plugins/install": { read: false, interact: false, full: true, ownerOnly: false },
+  "plugins/uninstall": { read: false, interact: false, full: true, ownerOnly: false },
+  "plugins/set_enabled": { read: false, interact: false, full: true, ownerOnly: false },
+  "plugins/remove": { read: false, interact: false, full: true, ownerOnly: false },
+  "plugins/hot_install": { read: false, interact: true, full: true, ownerOnly: false },
+  "plugins/hot_uninstall": { read: false, interact: true, full: true, ownerOnly: false },
+  "plugins/trusted_source/list": { read: true, interact: true, full: true, ownerOnly: false },
+  "plugins/trusted_source/confirm": { read: false, interact: false, full: false, ownerOnly: true },
+  "plugins/trusted_source/reject": { read: false, interact: false, full: true, ownerOnly: false },
 };
 
 export const HOST_COMMANDS = Object.keys(HOST_COMMAND_MATRIX);

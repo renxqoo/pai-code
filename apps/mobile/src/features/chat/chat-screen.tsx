@@ -47,7 +47,7 @@ export function ChatScreen() {
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ backgroundColor: colors.background, flex: 1 }}>
       <View style={{ paddingTop: insets.top }}><ChatHeader /></View>
       <View style={{ flex: 1 }}>
-        {session.messages.length === 0 ? <EmptyChat onDemo={demoEnabled ? onDemo : () => {}} onPrompt={setDraft} onWorkspace={() => openSheet('workspace')} /> : <ScrollView ref={scrollRef} testID="conversation-scroll" contentContainerStyle={{ alignSelf: 'center', maxWidth: 760, paddingBottom: bottomPadding, paddingHorizontal: spacing.xs3, width: '100%' }} keyboardShouldPersistTaps="handled" onContentSizeChange={onContentSizeChange} onScroll={onScroll} scrollEventThrottle={16}><TimelineList elapsedMs={elapsedMs} generating={generating} messages={session.messages} /><PermissionCard /></ScrollView>}
+        {session.messages.length === 0 ? <EmptyChat detached={session.detached === true} onDemo={demoEnabled ? onDemo : () => {}} onPrompt={setDraft} onWorkspace={() => openSheet('workspace')} /> : <ScrollView ref={scrollRef} testID="conversation-scroll" contentContainerStyle={{ alignSelf: 'center', maxWidth: 760, paddingBottom: bottomPadding, paddingHorizontal: spacing.xs3, width: '100%' }} keyboardShouldPersistTaps="handled" onContentSizeChange={onContentSizeChange} onScroll={onScroll} scrollEventThrottle={16}><TimelineList elapsedMs={elapsedMs} generating={generating} messages={session.messages} /><PermissionCard /></ScrollView>}
       </View>
       <View
         onLayout={(event) => setDockHeight(event.nativeEvent.layout.height)}

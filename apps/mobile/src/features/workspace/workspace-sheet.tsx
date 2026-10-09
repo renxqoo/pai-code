@@ -9,11 +9,17 @@ import { useNavigationStore } from '@/store/navigation-store';
 import { useConversationStore } from '@/store/conversation-store';
 import { useDemoModeStore } from '@/store/demo-mode-store';
 import { workspaces } from '@/fixtures/demo-data';
-import { getBridge } from '@/mobile/relay/runtime';
+import { useHistoryStore } from '@/store/history-store';
+import { copy } from '@/strings/zh';
 
 interface ProjectHit {
   path: string;
   name: string;
+}
+
+/** PC 侧会话已用工作区（会话列表 project 字段即 cwd 真值）。 */
+function knownCwds(): readonly string[] {
+  return [...new Set(useHistoryStore.getState().sessions.map((session) => session.project).filter((path) => path.length > 0))];
 }
 
 export function WorkspaceSheet() {
@@ -28,46 +34,30 @@ export function WorkspaceSheet() {
   const [searching, setSearching] = React.useState(false);
   const [searched, setSearched] = React.useState(false);
 
+  /**
+   * 工作空间候选 = PC 侧会话已用过的 cwd（thread/list 真值面）。
+   * 手机端不发目录搜索/选择器请求：file/search 与 dialog/pickDirectory 是桌面端
+   * 本地能力（electron main 端口），设备面不可达——留按钮只会永远失败。
+   */
   const runSearch = React.useCallback(() => {
-    const bridge = getBridge();
-    const query = search.trim();
-    if (bridge?.status !== 'ready' || query.length === 0) {
+    const query = search.trim().toLowerCase();
+    setSearching(false);
+    setSearched(true);
+    if (query.length === 0) {
       setHits([]);
-      setSearched(true);
       return;
     }
-    setSearching(true);
-    setSearched(true);
-    void bridge.client
-      .invoke('file/search', { cwd: query, query: '' })
-      .then((outcome: unknown) => {
-        const data = outcome as { ok: boolean; data?: unknown };
-        if (!data.ok || !Array.isArray(data.data)) {
-          setHits([]);
-          return;
-        }
-        const paths = data.data as string[];
-        setHits(paths.slice(0, 20).map((path) => ({ path, name: path.split('/').filter(Boolean).pop() ?? path })));
-      })
-      .finally(() => setSearching(false));
+    setHits(
+      knownCwds()
+        .filter((path) => path.toLowerCase().includes(query))
+        .slice(0, 20)
+        .map((path) => ({ path, name: path.split('/').filter(Boolean).pop() ?? path })),
+    );
   }, [search]);
-
-  const pickOnDesktop = (): void => {
-    const bridge = getBridge();
-    if (bridge?.status !== 'ready') return;
-    void bridge.client.invoke('dialog/pickDirectory', {}).then((outcome: unknown) => {
-      const data = outcome as { ok: boolean; data?: unknown };
-      if (data.ok && typeof data.data === 'string' && data.data.length > 0) {
-        const name = data.data.split('/').filter(Boolean).pop() ?? data.data;
-        chooseWorkspace(data.data, name);
-        closeSheet();
-      }
-    });
-  };
 
   return (
     <Sheet onClose={closeSheet} title="选择工作空间" visible={open}>
-      <Text style={{ color: colors.textMuted, fontSize: 12, paddingBottom: spacing.sm, paddingHorizontal: 3 }}>选择 Pai Code 可以访问的代码目录</Text>
+      <Text style={{ color: colors.textMuted, fontSize: 12, paddingBottom: spacing.sm, paddingHorizontal: 3 }}>{copy.workspaceHintText}</Text>
       {demo ? (
         <ScrollView contentContainerStyle={{ paddingBottom: spacing.xs3 }}>
           <ContentCard items={workspaces.map((workspace) => ({ detail: workspace.path, icon: Folder, label: workspace.name, onPress: () => { chooseWorkspace(workspace.id, workspace.name, workspace.path); closeSheet(); }, selected: workspaceId === workspace.id }))} />
@@ -80,7 +70,7 @@ export function WorkspaceSheet() {
               autoCapitalize="none"
               onChangeText={setSearch}
               onSubmitEditing={runSearch}
-              placeholder="输入项目路径（如 ~/work）"
+              placeholder="输入项目路径或关键词"
               placeholderTextColor={colors.textFaint}
               returnKeyType="search"
               style={{ color: colors.text, flex: 1, fontSize: 14, minHeight: 44, padding: 10 }}
@@ -90,12 +80,11 @@ export function WorkspaceSheet() {
           </View>
           <ContentCard
             items={[
-              { detail: '在电脑上打开目录选择器', icon: Folder, label: '浏览电脑目录', onPress: pickOnDesktop },
-              ...(search.trim().length > 0 ? [{ detail: '', icon: Folder, label: `使用 ${search.trim()}`, onPress: () => { chooseWorkspace(search.trim(), search.trim().split('/').filter(Boolean).pop() ?? search.trim()); closeSheet(); } }] : []),
+              ...(search.trim().length > 0 ? [{ detail: '', icon: Folder, label: `${copy.use} ${search.trim()}`, onPress: () => { chooseWorkspace(search.trim(), search.trim().split('/').filter(Boolean).pop() ?? search.trim()); closeSheet(); } }] : []),
               ...hits.map((hit) => ({ detail: hit.path, icon: Folder, label: hit.name, onPress: () => { chooseWorkspace(hit.path, hit.name, hit.path); closeSheet(); }, selected: workspaceId === hit.path })),
             ]}
           />
-          {searched && hits.length === 0 && !searching ? <Text style={{ color: colors.textFaint, fontSize: 12, paddingHorizontal: 3, paddingTop: spacing.sm }}>没有匹配的目录——试试「浏览电脑目录」或完整路径。</Text> : null}
+          {searched && hits.length === 0 && !searching ? <Text style={{ color: colors.textFaint, fontSize: 12, paddingHorizontal: 3, paddingTop: spacing.sm }}>{copy.workspaceNoMatch}</Text> : null}
         </View>
       )}
     </Sheet>

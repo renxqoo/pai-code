@@ -111,7 +111,7 @@ export async function preloadRelayCredentials(): Promise<RelayCredentials | null
     ]);
     if (device === null || shared === null) return null;
     const identity = JSON.parse(device) as { deviceId: string; signingSecret: string; signingPub: string; installationId: string; relayToken?: string };
-    const endpointParsed = endpoint === null ? null : (JSON.parse(endpoint) as { relayUrl: string });
+    const endpointParsed = endpoint === null ? null : (JSON.parse(endpoint) as { relayUrl?: string; relayNodeId?: string });
     const credentials: RelayCredentials = {
       deviceId: identity.deviceId,
       signingSecret: identity.signingSecret,
@@ -120,6 +120,7 @@ export async function preloadRelayCredentials(): Promise<RelayCredentials | null
       installationId: identity.installationId,
       relayUrl: endpointParsed?.relayUrl ?? '',
       relayToken: identity.relayToken ?? '',
+      ...(endpointParsed?.relayNodeId !== undefined ? { relayNodeId: endpointParsed.relayNodeId } : {}),
     };
     cached = credentials;
     return credentials;
@@ -137,7 +138,7 @@ export const relayCredentialsStore = {
   async save(next: RelayCredentials): Promise<boolean> {
     cached = next;
     try {
-      await AsyncStorage.setItem(KEY_ENDPOINT, JSON.stringify({ relayUrl: next.relayUrl }));
+      await AsyncStorage.setItem(KEY_ENDPOINT, JSON.stringify({ relayUrl: next.relayUrl, ...(next.relayNodeId !== undefined ? { relayNodeId: next.relayNodeId } : {}) }));
       await Promise.all([
         secureSet(KEY_DEVICE, JSON.stringify({ deviceId: next.deviceId, signingSecret: next.signingSecret, signingPub: next.signingPub, installationId: next.installationId, relayToken: next.relayToken })),
         secureSet(KEY_SHARED, next.sharedSecretHex),

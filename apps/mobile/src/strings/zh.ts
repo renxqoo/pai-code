@@ -15,6 +15,8 @@ export const retryCopy: RetryCopy = {
 export const copy = {
   appName: 'Pai Code',
   tagline: '把想法交给代码，把工作留在掌控中。',
+  emptyTitle: '今天想完成什么？',
+  emptyWorkspace: '选择工作空间',
   home: '对话',
   history: '对话历史',
   newChat: '新建对话',
@@ -54,6 +56,10 @@ export const copy = {
   planOnly: '仅规划',
   tokenUsage: '上下文',
   noProject: '无项目',
+  workspaceNoMatch: '没有匹配的工作区——可直接输入桌面端会话使用的目录路径。',
+  workspaceHintText: '选择 Pai Code 可以访问的代码目录',
+  taskConfigHint: '配置应用于当前对话；默认配置可在个人设置中调整。',
+  taskConfigPending: '当前对话尚未在桌面端启动——先发送一条消息，配置即会同步过去。',
   settingsTitle: '个人设置',
   profile: '个人资料',
   appearance: '外观',
@@ -81,6 +87,9 @@ export const copy = {
   activityRunning: '正在执行',
   running: '进行中',
   paused: '需要处理',
+  detached: '需在电脑端打开',
+  detachedEmptyChat: '这条对话已归档在电脑端，打开它后才能在这里继续。',
+  demoConversation: '查看示例对话',
   unread: '未读',
   codeDefaultTitle: '代码',
   codeDefaultLanguage: 'text',
@@ -108,7 +117,37 @@ export const copy = {
   workedFor: (label: string) => `共工作 ${label}`,
   /** 重试行整句：拼装单点在 @paiapp/ui-thread/retry-copy（词面注入，两端同句）。 */
   retryLine: (attempt: number, code: string | null) => retryLineOf(attempt, code, retryCopy),
+  notDelivered: '未送达',
+  sendFailed: (reason: string) => `发送失败：${reason}`,
+  sessionCreateFailed: '会话创建失败',
+  hostUnavailable: '桌面端不可用',
+  noReason: '桌面端未返回失败原因，请重试',
 } as const;
+
+/**
+ * host/gateway 错误码 → 手机端原因短语。未知码走原样（可诊断性优先——
+ * 吞成「未知错误」会让真机问题无从定位）。
+ */
+const REASON_COPY: Readonly<Record<string, string>> = {
+  host_unavailable: copy.hostUnavailable,
+  disconnected: '连接已断开',
+  timeout: '响应超时',
+  'scope-denied': '设备权限不足，请在桌面端调整设备作用域',
+  'owner-only': '该操作仅桌面端可用',
+  'unknown-command': '桌面端网关版本过旧，暂不支持该操作',
+  'connect-exhausted': '无法连接桌面端，请确认其正在运行',
+  no_active_session: '会话已失效',
+  unknown_thread: '会话已在桌面端关闭',
+  resume_failed: '会话恢复失败',
+  model_unavailable: '模型不可用',
+  no_session_path: '会话文件不可达',
+  no_reason: copy.noReason,
+};
+
+export function copyReason(code: string | null | undefined): string {
+  if (code === null || code === undefined || code.length === 0) return '未知错误';
+  return REASON_COPY[code] ?? code;
+}
 
 /** 执行过程共享派生层（@paiapp/ui-thread）的中文文案注入面（词面与 PC 端同源）。 */
 export const toolCopy: ToolCopy = {

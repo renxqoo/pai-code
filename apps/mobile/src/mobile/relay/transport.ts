@@ -12,6 +12,7 @@
  */
 import {
   ChunkReassemblerPool,
+  commandError,
   decodeEnvelope,
   encodeEnvelope,
   parseFrame,
@@ -187,7 +188,7 @@ export function createRelayTransport(options: RelayTransportOptions): RelayTrans
   const failAllWaiters = (): void => {
     for (const waiter of responseWaiters.values()) {
       clearTimeout(waiter.timer);
-      waiter.resolve({ id: '', command: '', success: false, error: 'disconnected' });
+      waiter.resolve({ id: '', command: '', success: false, error: commandError('disconnected') });
     }
     responseWaiters.clear();
   };
@@ -331,7 +332,7 @@ export function createRelayTransport(options: RelayTransportOptions): RelayTrans
         }
         const timer = setTimeout(() => {
           responseWaiters.delete(id);
-          resolve({ id, command: '', success: false, error: 'timeout' });
+          resolve({ id, command: '', success: false, error: commandError('timeout') });
           // 半开恢复（R2 H-5）：连续超时 = 连接死而未察——强制断开触发 onClose→重连
           consecutiveTimeouts += 1;
           if (consecutiveTimeouts >= 2) {

@@ -33,6 +33,8 @@ export function HistoryDrawer() {
   const openRemoteSession = (session: Parameters<typeof openSession>[0]) => {
     openSession(session);
     if (useDemoModeStore.getState().enabled) return;
+    // 脱离宿主表的归档会话：桌面端未在册，手机端无路径可唤活——不发起注定失败的水化
+    if (session.detached === true) return;
     attachThread(session.id);
     void hydrateThread(session.id);
   };
