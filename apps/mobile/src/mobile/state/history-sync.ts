@@ -98,19 +98,21 @@ export function createHistorySync(callbacks: HistorySyncCallbacks) {
         const { pinned, archived } = applyPreference(raw, pinnedPaths, archivedPaths);
         sessions.set(id, toConversationSession(raw, pinned, archived));
       }
-      // saved（已落盘不在册会话）并入去重（live 优先）。不在册 = 宿主表无表项，
-      // 设备面既无 sessionPath 也唤不活 → 标 detached（UI 显式告知，不假装可用）。
+      // saved（已落盘不在册会话）并入去重（live 优先）。不在册但带 sessionPath 的
+      // 会话可按路径唤活（thread/resume），故仍可用；只有连路径都没有（归档不可读）
+      // 才标 detached——UI 显式告知，不假装可用。
       const liveIds = new Set([...sessions.keys()].values());
       for (const item of saved) {
         const sid = item.sessionId ?? '';
         if (sid.length === 0 || liveIds.has(sid)) continue;
         const archived = item.sessionPath !== undefined && archivedPaths.has(item.sessionPath);
         const row: SessionLike = { threadId: sid, state: 'parked' };
+        if (item.sessionPath !== undefined) row.sessionPath = item.sessionPath;
         if (item.title !== undefined) row.title = item.title;
         if (item.cwd !== undefined) row.cwd = item.cwd;
         if (item.lastActivityAt !== undefined) row.lastActivityAt = item.lastActivityAt;
         const derived = toConversationSession(row, false, archived);
-        derived.detached = true;
+        derived.detached = item.sessionPath === undefined;
         sessions.set(sid, derived);
       }
       emit();

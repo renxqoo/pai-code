@@ -1,0 +1,80 @@
+/**
+ * 症状：手机端发送失败只显示「发送失败：transient」——reason 位被 ApiError 的
+ * kind（transient/permanent 分级）顶掉了，真因（unknown_thread / scope-denied /
+ * model_unavailable…）全程不可见，用户无从判断该重试、该开电脑还是该换模型。
+ */
+import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+
+import { initializeRelayRuntime } from '@/mobile/relay/runtime';
+import { renderHook } from '@testing-library/react-native';
+import { useComposerSubmit } from '@/features/composer/use-composer-submit';
+import { useComposerStore } from '@/store/composer-store';
+import { useConversationStore } from '@/store/conversation-store';
+import { useDemoModeStore } from '@/store/demo-mode-store';
+
+const invoke = jest.fn();
+
+/** 连接就绪的 bridge，invoke 由用例指定应答。 */
+function readyBridge(): void {
+  const runtime = initializeRelayRuntime();
+  runtime.status = 'ready';
+  (runtime.client as unknown as { invoke: unknown }).invoke = invoke;
+}
+
+async function send(text: string): Promise<void> {
+  // 草稿必须在挂载前入 store：hook 返回值捕获的是渲染那一刻的 draft
+  useComposerStore.getState().setDraft(text);
+  const view = await renderHook(() => useComposerSubmit());
+  view.result.current();
+  // 发送是悬空 async（内部先 await reviveThread 再 invoke），冲干净微任务链再断言
+  for (let i = 0; i < 10; i++) {
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+  }
+}
+
+function failTexts(): string[] {
+  return useConversationStore.getState().session.messages.filter((message) => message.kind === 'status').map((message) => message.text);
+}
+
+describe('发送失败原因可见性（症状：只显示 transient）', () => {
+  beforeEach(() => {
+    invoke.mockReset();
+    useDemoModeStore.getState().setEnabled(false);
+    useComposerStore.setState({ draft: '', sending: false, generating: false });
+    useConversationStore.setState({ permissionRequest: null, activeSessionId: 't1', session: { ...useConversationStore.getState().session, id: 't1', messages: [], detached: false } });
+    readyBridge();
+  });
+
+  it('prompt 失败：显示 host 错误码对应文案，不显示 kind', async () => {
+    invoke.mockResolvedValue({ ok: false, error: { kind: 'transient', message: 'unknown_thread' } });
+    await send('你好');
+    expect(failTexts()).toEqual(['发送失败：会话已在桌面端关闭']);
+    expect(failTexts().join()).not.toContain('transient');
+  });
+
+  it('权限不足与模型不可用各自给出可行动文案', async () => {
+    invoke.mockResolvedValue({ ok: false, error: { kind: 'transient', message: 'scope-denied' } });
+    await send('a');
+    expect(failTexts().at(-1)).toContain('设备权限不足');
+
+    invoke.mockResolvedValue({ ok: false, error: { kind: 'transient', message: 'model_unavailable' } });
+    await send('b');
+    expect(failTexts().at(-1)).toContain('模型不可用');
+  });
+
+  it('host 没给原因：显式提示缺因，而不是回落成 kind', async () => {
+    invoke.mockResolvedValue({ ok: false, error: { kind: 'transient', message: 'no_reason' } });
+    await send('你好');
+    expect(failTexts()).toEqual(['发送失败：桌面端未返回失败原因，请重试']);
+  });
+
+  it('detached 会话：不吞草稿，明确告知需在电脑端打开', async () => {
+    useConversationStore.setState({ session: { ...useConversationStore.getState().session, id: 'tOld', messages: [], detached: true } });
+    await send('你好');
+    expect(invoke).not.toHaveBeenCalled();
+    expect(failTexts()).toEqual(['发送失败：需在电脑端打开']);
+    expect(useComposerStore.getState().draft).toBe('你好');
+  });
+});

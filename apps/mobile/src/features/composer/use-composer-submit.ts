@@ -19,7 +19,14 @@ export function useComposerSubmit(): () => void {
   const clearAttachments = useAttachmentStore((state) => state.clearAttachments);
   return () => {
     const text = draft.trim();
-    if (!submitDraft() || text.length === 0) return;
+    if (text.length === 0) return;
+    // 归档路径都拿不到的会话（宿主无投递目标）：不吞草稿、直接说明，
+    // 否则只会得到一条「发送失败：unknown_thread」，用户无从下手。
+    if (useConversationStore.getState().session.detached === true) {
+      useConversationStore.getState().appendMessage({ id: `send-fail-${Date.now()}`, kind: 'status', text: copy.sendFailed(copy.detached), createdAt: new Date().toISOString(), status: 'failed', summary: copy.notDelivered });
+      return;
+    }
+    if (!submitDraft()) return;
     const attachments = items.map((item) => ({ ...item }));
     const demo = useDemoModeStore.getState().enabled;
     const bridge = getBridge();
@@ -37,16 +44,28 @@ export function useComposerSubmit(): () => void {
       useConversationStore.getState().appendMessage({ id: `send-fail-${Date.now()}`, kind: 'status', text: copy.sendFailed(reason), createdAt: new Date().toISOString(), status: 'failed', summary: copy.notDelivered });
       useComposerStore.getState().setGenerating(false);
     };
+    /**
+     * 失败原因取 error.message（host 错误码），不是 error.kind——
+     * kind 只是 transient/permanent 分级，把它当原因会让所有失败都显示「transient」。
+     * 用户已切走时不报错：消息留在原会话，错误行不该出现在无关的当前视图里。
+     */
+    const reportFailure = (target: string | null, reason: string): void => {
+      if (target !== null && useConversationStore.getState().activeSessionId !== target) {
+        useComposerStore.getState().setGenerating(false);
+        return;
+      }
+      failNote(reason);
+    };
     /** PC 侧闲置 park 过的会话在手机端发消息前先唤活（否则 host 无投递目标）。 */
-    const promptLive = async (target: string): Promise<{ ok: boolean; error?: { kind?: string } }> => {
+    const promptLive = async (target: string): Promise<{ ok: boolean; switched?: true; error?: { message?: string } }> => {
       const revived = await reviveThread(target);
       const threadForSend = revived.ok ? revived.threadId : target;
       if (revived.ok && revived.threadId !== target) {
-        if (useConversationStore.getState().activeSessionId !== null && useConversationStore.getState().activeSessionId !== target) return { ok: false };
+        if (useConversationStore.getState().activeSessionId !== null && useConversationStore.getState().activeSessionId !== target) return { ok: false, switched: true };
         useConversationStore.getState().openSession({ ...useConversationStore.getState().session, id: revived.threadId });
         attachThread(revived.threadId);
       }
-      return (await bridge.client.invoke('session/prompt', { threadId: threadForSend, message: text })) as { ok: boolean; error?: { kind?: string } };
+      return (await bridge.client.invoke('session/prompt', { threadId: threadForSend, message: text })) as { ok: boolean; error?: { message?: string } };
     };
     void (async () => {
       if (threadId === null) {
@@ -60,11 +79,11 @@ export function useComposerSubmit(): () => void {
         useConversationStore.getState().openSession({ ...store.session, id: newThreadId });
         attachThread(newThreadId);
         const prompted = await promptLive(newThreadId);
-        if (!prompted.ok) failNote(copyReason(prompted.error?.kind));
+        if (!prompted.ok && prompted.switched !== true) reportFailure(newThreadId, copyReason(prompted.error?.message));
         return;
       }
       const prompted = await promptLive(threadId);
-      if (!prompted.ok) failNote(copyReason(prompted.error?.kind));
+      if (!prompted.ok && prompted.switched !== true) reportFailure(threadId, copyReason(prompted.error?.message));
     })();
     appendMessage({ id: `user-${Date.now()}`, kind: 'user', text, createdAt: new Date().toISOString(), ...(attachments.length > 0 ? { attachments } : {}) } as ChatMessage);
     clearAttachments();

@@ -520,7 +520,9 @@ export function loadBootstrap(client: Client): Promise<void> {
       const sessionsData = (threadsOut.data ?? {}) as { sessions?: unknown };
       const live = Array.isArray(sessionsData.sessions) ? (sessionsData.sessions as Array<Record<string, unknown>>) : [];
       const saved = savedOut?.ok === true && Array.isArray(savedOut.data) ? (savedOut.data as Array<Record<string, unknown>>) : [];
+      // 归档行也记路径：不在宿主表的会话靠它唤活（thread/resume 按路径投递）
       noteThreadPaths(live);
+      noteThreadPaths(saved);
       // 置顶/归档：设备本地视图偏好。PC 的偏好集在桌面端主进程 settings.json，
       // 网关命令面无对应 host 命令——设备侧发起远程写恒为 unknown-command，故不上送。
       historySyncRef?.seedBootstrap(withSavedMeta(live, saved), saved, { pinnedSessions: [], archivedSessions: [] });

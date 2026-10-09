@@ -70,4 +70,19 @@ describe('列表元数据归并（症状：未命名对话 + 20734 天前）', (
     expect(sessions.find((session) => session.id === 'tOld')?.detached).toBe(true);
     expect(sessions.find((session) => session.id === 't1')?.detached).toBeUndefined();
   });
+
+  it('带 sessionPath 的归档会话不再 detached：可按路径唤活，状态为待处理', () => {
+    // 症状：PC 回收过 worker 的会话在手机端一律标「需在电脑端打开」，发消息必然失败——
+    // 而 host 只要拿到 sessionPath 就能 resume，该会话其实完全可用。
+    createHistorySync({ onSessions: (sessions) => emitted.push(sessions) }).seedBootstrap(
+      liveRows as never,
+      [{ sessionId: 'tOld', sessionPath: '/s/tOld.jsonl', title: '归档会话', cwd: '/w', lastActivityAt: Date.now() }] as never,
+      {},
+    );
+    const sessions = emitted[emitted.length - 1] ?? [];
+    const row = sessions.find((session) => session.id === 'tOld');
+    expect(row?.detached).toBe(false);
+    expect(row?.state).toBe('paused');
+    expect(row?.title).toBe('归档会话');
+  });
 });

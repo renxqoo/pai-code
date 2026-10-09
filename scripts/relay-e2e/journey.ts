@@ -293,6 +293,28 @@ async function main(): Promise<void> {
       return `${sessions.length} 行\n    ${rows.join('\n    ')}`;
     });
 
+    await step('PC 侧已移出表的会话：按归档路径唤活并续聊（症状：这种会话在手机端永远发不出去）', async () => {
+      const runtime = getRelayRuntime();
+      if (runtime === null) throw new Error('runtime missing');
+      // 宿主表里已无表项（thread/retire 过），只有归档文件——thread/list 不再返回它，
+      // 唤活依据只能是 thread/list_saved 的 sessionPath
+      const target = useHistoryStore.getState().sessions.find((session) => session.title === 'PC 会话 甲');
+      if (target === undefined) throw new Error('历史列表里没有 PC 会话 甲');
+      if (target.detached === true) throw new Error('归档会话被标 detached：设备面拿不到 sessionPath');
+      const listed = (await runtime.client.invoke('session/liveThreads', {})) as { ok: boolean; data?: { sessions?: unknown } };
+      const inTable = (Array.isArray(listed.data?.sessions) ? listed.data.sessions : []).some((row) => (row as { threadId?: string }).threadId === target.id);
+      if (inTable) throw new Error('前置条件不成立：该会话仍在宿主表里，本 step 测的是已移出表形态');
+      useConversationStore.getState().startNewSession();
+      attachThread(target.id);
+      await hydrateThread(target.id);
+      const hydrated = messages();
+      if (hydrated.length === 0) throw new Error('按归档路径唤活后历史仍为空');
+      const prompted = (await runtime.client.invoke('session/prompt', { threadId: target.id, message: '手机端追问' })) as { ok: boolean; error?: { message?: string } };
+      if (!prompted.ok) throw new Error(`已移出表的会话 prompt 失败: ${prompted.error?.message ?? 'unknown'}`);
+      await waitFor('手机端追问的回复', () => messages().filter((message) => message.kind === 'assistant').length > hydrated.filter((message) => message.kind === 'assistant').length, 45_000);
+      return `唤活 ${hydrated.length} 行 → 发送后 ${messages().length} 行`;
+    });
+
     await step('手机端打开 PC 侧 parked 会话并续聊（唤活链）', async () => {
       const runtime = getRelayRuntime();
       if (runtime === null) throw new Error('runtime missing');
