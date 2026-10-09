@@ -27,7 +27,7 @@ function UserMessageRow({ message, onEdit, onEditRerun, onRetry }: UserMessageRo
   const editSource = invocation === null ? message.text : toSkillInvocationInput(invocation);
   const editImages = message.images;
   return (
-    <div className="group flex flex-col items-end">
+    <div className="group relative flex flex-col items-end">
       {message.images.length > 0 ? (
         <div className="flex max-w-full flex-wrap justify-end gap-[6px] pb-[6px]">
           {message.images.map((image, index) => (
@@ -45,7 +45,9 @@ function UserMessageRow({ message, onEdit, onEditRerun, onRetry }: UserMessageRo
       ) : message.text.length > 0 ? (
         <ChatBubble>{message.text}</ChatBubble>
       ) : null}
-      <div className="flex items-center gap-[6px] pt-[4px] opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100 motion-reduce:transition-none">
+      {/* 绝对定位：不占常态布局高度（原先 opacity-0 仍恒占 ~26px，把气泡与本轮状态行
+          撑开）。hover 时浮在气泡下方的空隙里；按钮自身命中仍算 hover 祖先，交互不变。 */}
+      <div className="pointer-events-none absolute top-full right-0 mt-[2px] flex items-center gap-[6px] opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100 motion-reduce:transition-none">
         <CopyButton
           label={copy.flow.copyMessage}
           copiedLabel={copy.flow.copied}

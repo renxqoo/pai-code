@@ -34,9 +34,13 @@ function entryIdOf(messageId: string): string | null {
   return messageId.startsWith('msg-') ? messageId.slice('msg-'.length) : null;
 }
 
-function itemTopMargin(index: number, item: ThreadItem): string {
+export function itemTopMargin(index: number, item: ThreadItem, previous: ThreadItem | null): string {
   if (index === 0) return '';
-  return item.kind === 'turn' ? 'pt-[48px]' : 'pt-[20px]';
+  if (item.kind !== 'turn') return 'pt-[20px]';
+  // 紧跟用户提问的轮：气泡是「本轮的提问」，状态行是「本轮的回答」，同属一轮 → 收紧。
+  // 两轮之间（上一项是轮，或系统注入消息）才需要大间距让断层可见。
+  const afterUserPrompt = previous?.kind === 'message' && previous.message.role === 'user';
+  return afterUserPrompt ? 'pt-[16px]' : 'pt-[48px]';
 }
 
 /** 消息内容列：用户气泡右对齐、轮次组左对齐，轮与轮之间落时间戳行；滚动与贴底跟随由页面滚动容器负责。
@@ -51,7 +55,10 @@ function MessageList({ thread, now, loading, bottomInset, emptyTitle, emptyHint,
       ) : (
         <>
           {thread.items.map((item, index) => (
-            <div key={item.kind === 'message' ? item.message.id : item.turn.id} className={cn(itemTopMargin(index, item))}>
+            <div
+              key={item.kind === 'message' ? item.message.id : item.turn.id}
+              className={cn(itemTopMargin(index, item, thread.items[index - 1] ?? null))}
+            >
               {item.kind === 'message' ? (
                 item.message.role === 'user' ? (
                   <UserMessageRow
