@@ -10,6 +10,10 @@ const X_HARNESS_ROOT = process.env['PAI_X_HARNESS_ROOT'] ?? new URL('../../../x-
 
 export interface PcStack {
   relayPort: number;
+  /** 内嵌形态下网关自起 relay 并提供 6 位码发现；外部形态需装置自备 relay。 */
+  relayMode: 'embedded' | 'external';
+  /** 发现端点的可达 origin（内嵌 relay 绑 0.0.0.0，须用其实际绑定地址而非 loopback）。 */
+  relayOrigin: string;
   agentDir: string;
   ownerSocketPath: string;
   relayShutdown(): Promise<void>;
@@ -17,12 +21,13 @@ export interface PcStack {
   gatewayLog: string[];
 }
 
-export async function startPcStack(options: { relayKeyFingerprint?: string; relayUrl?: (port: number) => string } = {}): Promise<PcStack> {
+export async function startPcStack(options: { relayKeyFingerprint?: string; relayUrl?: (port: number) => string; embedded?: boolean } = {}): Promise<PcStack> {
+  const embedded = options.embedded === true;
   const { startRelay } = (await import(`${X_HARNESS_ROOT}/apps/hub-relay/src/main.ts`)) as {
     startRelay: (spec: { port: number; host: string; tokenSecret: string; singleInstance: boolean }) => Promise<{ server: { address(): { port: number } }; close(): Promise<void> }>;
   };
-  const relay = await startRelay({ port: 0, host: '127.0.0.1', tokenSecret: 'pai-relay-e2e-secret-32b!!', singleInstance: true });
-  const relayPort = (relay.server.address() as { port: number }).port;
+  const relay = embedded ? null : await startRelay({ port: 0, host: '127.0.0.1', tokenSecret: 'pai-relay-e2e-secret-32b!!', singleInstance: true });
+  const relayPort = relay === null ? 0 : (relay.server.address() as { port: number }).port;
 
   const agentDir = await mkdtemp(join(tmpdir(), 'pai-relay-e2e-'));
   await mkdir(join(agentDir, 'devices'), { recursive: true });
@@ -30,7 +35,8 @@ export async function startPcStack(options: { relayKeyFingerprint?: string; rela
     join(agentDir, 'gateway.json'),
     JSON.stringify({
       remoteEnabled: true,
-      relayUrl: options.relayUrl?.(relayPort) ?? `ws://127.0.0.1:${relayPort}`,
+      // 内嵌形态不下发 relayUrl：网关自起 relay 并挂 6 位码发现回调（外部 relay 无从按码反查网关）
+      ...(embedded ? {} : { relayUrl: options.relayUrl?.(relayPort) ?? `ws://127.0.0.1:${relayPort}` }),
       relayKeyFingerprint: options.relayKeyFingerprint ?? 'fp-pai-relay-e2e',
     }),
     'utf8',
@@ -40,6 +46,7 @@ export async function startPcStack(options: { relayKeyFingerprint?: string; rela
   const { startGateway } = (await import(`${X_HARNESS_ROOT}/apps/hub-gateway/src/main.ts`)) as {
     startGateway: (spec: { agentDir: string; hostOverride: { command: string; args: string[]; env: Record<string, string> }; log?: (message: string) => void }) => Promise<{
       ownerServer: { socketPath: string };
+      relayBinding: { mode: 'embedded' | 'external'; relayUrl: string; port: number | null };
       relayLink: { connected(): boolean } | null;
       stop(): Promise<void>;
     }>;
@@ -76,10 +83,12 @@ export async function startPcStack(options: { relayKeyFingerprint?: string; rela
 
   return {
     relayPort,
+    relayMode: embedded ? 'embedded' : 'external',
+    relayOrigin: new URL(gateway.relayBinding.relayUrl.replace(/^ws/, 'http')).origin,
     agentDir,
     ownerSocketPath: gateway.ownerServer.socketPath,
     gatewayLog,
-    relayShutdown: () => relay.close(),
+    relayShutdown: () => relay?.close() ?? Promise.resolve(),
     gatewayShutdown: () => gateway.stop(),
   };
 }
