@@ -9,6 +9,7 @@
  */
 import type { ChatMessage } from '@/types/domain';
 import { isSnapshotFrame } from '@paiapp/api/views/snapshot-frame';
+import { foldToolRows, toolRowId } from './tool-rows';
 
 interface WalLine {
   seq: number;
@@ -82,10 +83,10 @@ function walToMessages(line: WalLine): ChatMessage[] {
     return messages;
   }
   if (type === 'tool/call') {
-    return [{ id: `tc-${line.seq}`, kind: 'tool', text: '', createdAt: at, status: 'running' as never, toolName: textOf(ev['name']), argsPreview: textOf(ev['arguments']).slice(0, 120) }];
+    return [{ id: toolRowId(textOf(ev['callId'])), kind: 'tool', text: '', createdAt: at, status: 'running', toolName: textOf(ev['name']), argsPreview: textOf(ev['arguments']).slice(0, 120) }];
   }
   if (type === 'tool/result') {
-    return [{ id: `tr-${textOf(ev['callId'])}-${line.seq}`, kind: 'tool', text: textOf(ev['content']), createdAt: at, status: ev['isError'] === true ? 'failed' : 'ok', toolName: textOf(ev['name']) }];
+    return [{ id: toolRowId(textOf(ev['callId'])), kind: 'tool', text: textOf(ev['content']), createdAt: at, status: ev['isError'] === true ? 'failed' : 'ok', toolName: textOf(ev['name']) }];
   }
   return []; // turn/step、agent/status、system/message 等过程事件不进历史
 }
@@ -99,7 +100,7 @@ export function mapEntriesResponse(data: unknown): { items: ChatMessage[]; curso
     if (typeof line !== 'object' || line === null) continue;
     items.push(...walToMessages(line as WalLine));
   }
-  return { items, cursor: typeof res.leafSeq === 'number' ? res.leafSeq : null, hasMore: res.hasMore === true };
+  return { items: foldToolRows(items), cursor: typeof res.leafSeq === 'number' ? res.leafSeq : null, hasMore: res.hasMore === true };
 }
 
 /**

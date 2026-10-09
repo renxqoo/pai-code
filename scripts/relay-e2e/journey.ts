@@ -320,8 +320,11 @@ async function main(): Promise<void> {
       if (!prompted.ok) throw new Error(`prompt 失败: ${prompted.error?.message ?? 'unknown'}`);
       await waitFor('工具行上屏', () => messages().some((message) => message.kind === 'tool'), 60_000);
       await waitFor('工具轮收尾', () => messages().some((message) => message.kind === 'assistant' && message.text.includes('tool finished')), 60_000);
-      const toolRow = messages().find((message) => message.kind === 'tool');
-      return `[${messages().map((message) => message.kind).join(',')}] 工具行 status=${toolRow?.status ?? '-'} name=${toolRow?.toolName ?? '-'}`;
+      await waitFor('工具行落终态', () => messages().filter((message) => message.kind === 'tool').every((message) => message.status !== 'running'), 30_000);
+      const toolRows = messages().filter((message) => message.kind === 'tool');
+      const callIds = new Set(toolRows.map((message) => message.id));
+      if (callIds.size !== toolRows.length) throw new Error(`同一次工具调用渲染了多行：${toolRows.map((message) => message.id).join(',')}`);
+      return `[${messages().map((message) => message.kind).join(',')}] 工具行 ${toolRows.length} 张 status=${toolRows.map((message) => message.status).join('/')} name=${toolRows[0]?.toolName ?? '-'}`;
     });
 
     await step('脱离宿主表的会话：列表可见但标注不可用', () => {

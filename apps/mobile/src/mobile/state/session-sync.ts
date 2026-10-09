@@ -18,6 +18,7 @@
  */
 import { copy } from '@/strings/zh';
 import type { ChatMessage } from '@/types/domain';
+import { toolRowId } from '../relay/tool-rows';
 
 export interface SessionSyncState {
   messages: ChatMessage[];
@@ -71,6 +72,22 @@ export function createSessionSync(callbacks: SessionSyncCallbacks) {
   const dropRetry = (): void => {
     for (const entry of retryIndex.values()) droppedRetryIds.add(entry.id);
     retryIndex.clear();
+  };
+
+  /**
+   * 工具行下标解析：运行期建的行走 callId 索引；水化出来的历史行走 id 域
+   * （`tool-<callId>`，与 WAL 投影同一拼法）——否则重放/补投的 toolEnded
+   * 找不到水化行，运行态永远收敛不掉。
+   */
+  const toolRowOf = (callId: string): number | undefined => {
+    const indexed = toolIndex.get(callId);
+    if (indexed !== undefined) return indexed;
+    if (callId.length === 0) return undefined;
+    const rowId = toolRowId(callId);
+    for (let position = 0; position < messages.length; position += 1) {
+      if (messages[position]?.id === rowId) return position;
+    }
+    return undefined;
   };
 
   const ofLive = (messageId: string): { assistant: number; thinking: number } => {
@@ -202,12 +219,13 @@ export function createSessionSync(callbacks: SessionSyncCallbacks) {
       return;
     }
     if (type === 'toolUpdated') {
-      const index = toolIndex.get(textOf(event['callId']));
+      const index = toolRowOf(textOf(event['callId']));
       if (index !== undefined) patch(index, (previous) => ({ ...previous, text: typeof event['output'] === 'string' ? event['output'] : previous.text }));
       return;
     }
     if (type === 'toolEnded') {
-      const index = toolIndex.get(textOf(event['callId']));
+      const callId = textOf(event['callId']);
+      const index = toolRowOf(callId);
       if (index === undefined) return;
       const isError = event['isError'] === true;
       const durationMs = typeof event['durationMs'] === 'number' ? event['durationMs'] : undefined;
@@ -217,7 +235,7 @@ export function createSessionSync(callbacks: SessionSyncCallbacks) {
         text: typeof event['output'] === 'string' ? event['output'] : previous.text,
         ...(durationMs !== undefined ? { durationMs } : {}),
       }));
-      toolIndex.delete(textOf(event['callId']));
+      toolIndex.delete(callId);
       return;
     }
     if (type === 'dialogRequest') {
