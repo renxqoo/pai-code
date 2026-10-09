@@ -4,7 +4,8 @@ import { itemTopMargin } from '../message-list';
 import type { ThreadItem } from '../thread-model';
 
 /**
- * 真机实测：用户气泡底 → 轮状态行「共工作 xx」顶 = 74px，太松。
+ * 真机实测：用户气泡底 → 轮状态行「共工作 xx」顶，原为 74px（太松）。
+ * 收到「收」的第一版 16px 又太紧——提问与回答被读成同一个块。
  * 两个来源都要治：轮次顶距 48px，以及气泡下方那条 hover 才显形的操作栏
  * （opacity-0 但始终占位 ≈26px）。
  *
@@ -35,8 +36,8 @@ const turn = (id: string): ThreadItem => ({
 });
 
 describe('itemTopMargin：按归属给间距（用户提问与本轮状态行同属一轮，收）', () => {
-  test('紧跟用户提问的轮：收紧（这是本轮的回答，不是新一轮的开始）', () => {
-    expect(itemTopMargin(1, turn('t1'), userMessage('m1'))).toBe('pt-[16px]');
+  test('紧跟用户提问的轮：收紧但保留呼吸（16px 实测贴太紧，读成同一个块）', () => {
+    expect(itemTopMargin(1, turn('t1'), userMessage('m1'))).toBe('pt-[28px]');
   });
 
   test('紧跟另一轮的轮：保持大间距（两轮之间要能看出断层）', () => {

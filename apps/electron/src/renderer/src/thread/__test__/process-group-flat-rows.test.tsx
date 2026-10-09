@@ -1,9 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
+import * as React from 'react';
 
 import { ProcessGroup } from '../process-group';
 import { ToolsBlock } from '../tools-block';
 import type { ToolCallModel, TurnRun } from '../process-runs';
+import { installDom } from '@/testing/dom';
+import { render } from '@/testing/render';
 
 /**
  * 真机走查暴露的缺陷（症状）：过程组展开后，并行批次**又套了一层自己的组头**——
@@ -60,16 +63,23 @@ describe('过程组内不套第二层组头', () => {
     expect(html).toContain('aria-expanded="false"');
   });
 
-  test('真机症状回归：过程组因在途调用自动展开时，在跑的那一行真的可见', () => {
-    const html = renderToStaticMarkup(<ProcessGroup run={runOf(batch)} streamingThinkingBlockId={null} subagentBusy={false} />);
-    // 外层自动展开（有 running 调用）
-    expect(html).toContain('aria-expanded="true"');
-    // 在途调用不被内层组头挡住
-    expect(html).toContain('正在运行');
-    expect(html).toContain('bash 参数');
-    // 计数式标题在，且不与动宾流水标题并存
-    expect(html).toContain('条命令');
-    expect(html).not.toContain('编辑了文件');
+  test('真机症状回归「批次逐条结算引发开合对」：默认收，点开后行真的可见且无内层组头', () => {
+    installDom();
+    const view = render(<ProcessGroup run={runOf(batch)} streamingThinkingBlockId={null} subagentBusy={false} />);
+    const head = view.container.querySelector('button[aria-expanded]');
+    if (head === null) throw new Error('组头未渲染');
+    // 批次在跑（组内有 running 调用）也**不**自动展开——那正是闪现的成因
+    expect(head.getAttribute('aria-expanded')).toBe('false');
+
+    // 用户点开后：行真的进 DOM，且没有第二层动宾流水组头挡着
+    React.act(() => {
+      head.click();
+    });
+    expect(head.getAttribute('aria-expanded')).toBe('true');
+    expect(view.container.innerHTML).toContain('正在运行');
+    expect(view.container.innerHTML).toContain('bash 参数');
+    expect(view.container.innerHTML).not.toContain('编辑了文件');
+    view.unmount();
   });
 
   test('默认收起态：只渲染计数式标题，行不进 DOM', () => {
@@ -86,9 +96,18 @@ describe('过程组内不套第二层组头', () => {
   });
 
   test('展开区限高 248px + 滚动（纯像素值：窗口最小高度 560 下 vh 护栏从未生效）', () => {
-    const html = renderToStaticMarkup(<ProcessGroup run={runOf(batch)} streamingThinkingBlockId={null} subagentBusy={false} />);
-    expect(html).toContain('overflow-y-auto');
-    expect(html).toContain('max-height:248px');
+    installDom();
+    const view = render(<ProcessGroup run={runOf(batch)} streamingThinkingBlockId={null} subagentBusy={false} />);
+    const head = view.container.querySelector('button[aria-expanded]');
+    if (head === null) throw new Error('组头未渲染');
+    React.act(() => {
+      head.click();
+    });
+    // jsdom 不解析 Tailwind 类，getComputedStyle 查不到 overflow-y——按 class + 内联样式断言
+    const scroller = [...view.container.querySelectorAll('div')].find((d) => d.className.includes('overflow-y-auto'));
+    expect(scroller).toBeDefined();
+    expect(scroller?.getAttribute('style')).toContain('max-height: 248px');
+    view.unmount();
   });
 });
 

@@ -37,10 +37,11 @@ function entryIdOf(messageId: string): string | null {
 export function itemTopMargin(index: number, item: ThreadItem, previous: ThreadItem | null): string {
   if (index === 0) return '';
   if (item.kind !== 'turn') return 'pt-[20px]';
-  // 紧跟用户提问的轮：气泡是「本轮的提问」，状态行是「本轮的回答」，同属一轮 → 收紧。
-  // 两轮之间（上一项是轮，或系统注入消息）才需要大间距让断层可见。
+  // 紧跟用户提问的轮：气泡是「本轮的提问」，状态行是「本轮的回答」，同属一轮 → 收，
+  // 但仍留 28px：提问与回答是两句独立的话，压到贴一起会读成同一个块（16px 实测偏紧）。
+  // 两轮之间（上一项是轮，或系统注入消息）才需要 48px 让断层可见。
   const afterUserPrompt = previous?.kind === 'message' && previous.message.role === 'user';
-  return afterUserPrompt ? 'pt-[16px]' : 'pt-[48px]';
+  return afterUserPrompt ? 'pt-[28px]' : 'pt-[48px]';
 }
 
 /** 消息内容列：用户气泡右对齐、轮次组左对齐，轮与轮之间落时间戳行；滚动与贴底跟随由页面滚动容器负责。
