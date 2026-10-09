@@ -1,5 +1,10 @@
 /**
  * 会话主列宽度节奏（单一真相）：消息流、Composer、横幅/队列/确认条共用同一自适应列——
  * 窗口宽时封顶不超读宽，窄时随主区收缩；实际最小值由主进程窗口 minWidth 兜底。
+ *
+ * 上限 820px：14.5px 正文在 796px 内容宽下约每行 55 个汉字，正好落在舒适阅读上沿。
+ * 原 960px 是给代码块与 diff 留的余量，但正文用不满——真机 1200px 窗口下它实际
+ * 渲染 872px（受可用空间所限并未顶到上限），说明多数人根本看不到 960，宽窗口下
+ * 才暴露成长过长的行。代码块在 796px 下仍够用。
  */
-export const CONVERSATION_COLUMN_CLASS = 'mx-auto w-full max-w-[960px]';
+export const CONVERSATION_COLUMN_CLASS = 'mx-auto w-full max-w-[820px]';
