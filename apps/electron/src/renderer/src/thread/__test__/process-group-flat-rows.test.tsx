@@ -85,10 +85,10 @@ describe('过程组内不套第二层组头', () => {
     expect(html).not.toContain('e1 参数');
   });
 
-  test('展开区限高：min(100px, 28vh) + 滚动（真机实测口径）', () => {
+  test('展开区限高 248px + 滚动（纯像素值：窗口最小高度 560 下 vh 护栏从未生效）', () => {
     const html = renderToStaticMarkup(<ProcessGroup run={runOf(batch)} streamingThinkingBlockId={null} subagentBusy={false} />);
     expect(html).toContain('overflow-y-auto');
-    expect(html).toContain('max-height:min(100px, 28vh)');
+    expect(html).toContain('max-height:248px');
   });
 });
 

@@ -11,10 +11,10 @@ import { ToolsBlock } from './tools-block';
 import { chevronRevealClass, resolveOpen, type CollapsePref } from './collapse-state';
 import type { ProcessTurnBlock, TurnRun } from './process-runs';
 
-/** 展开区限高（≈5 行）：再高就失去「折叠」的意义——那正是十几行流水的形态。
- *  窄窗取 min(100px, 28vh)：矮窗不该被过程占满。 */
-const EXPANDED_MAX_PX = 100;
-const EXPANDED_MAX_VH = 28;
+/** 展开区限高（≈12 行）：超过就滚动。
+ *  原先的 `min(100px, 28vh)` 在窗口最小高度 560 下 vh 项只有 157px，从未真正生效
+ *  （100px 恒小于它），是条失效的护栏——改为纯像素值，含义与实际渲染一致。 */
+const EXPANDED_MAX_PX = 248;
 
 type ProcessGroupProps = {
   run: TurnRun
@@ -63,7 +63,7 @@ function ProcessGroup({ run, streamingThinkingBlockId, subagentBusy }: ProcessGr
       {open ? (
         <div
           className="scroll-thin flex flex-col gap-[4px] overflow-y-auto"
-          style={{ maxHeight: `min(${EXPANDED_MAX_PX}px, ${EXPANDED_MAX_VH}vh)` }}
+          style={{ maxHeight: EXPANDED_MAX_PX }}
         >
           {blocks.map((block) =>
             block.kind === 'thinking' ? (
