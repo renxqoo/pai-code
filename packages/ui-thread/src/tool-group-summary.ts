@@ -141,14 +141,14 @@ export function toolGroupSummary(input: GroupSummaryInput, copy: ToolCopy): stri
   if (ordered.length <= MAX_PHRASES) return copy.groupCountJoin(ordered.map((entry) => countedPhrase(entry, input.calls, copy)));
 
   const shown = ordered.slice(0, MAX_PHRASES);
-  const restCount = ordered.length - shown.length;
   const hasBash = ordered.some((entry) => entry.kind === 'bash');
   if (hasBash && !shown.some((entry) => entry.kind === 'bash')) {
     const bashEntry = ordered.find((entry) => entry.kind === 'bash');
     if (bashEntry !== undefined) shown[MAX_PHRASES - 1] = bashEntry;
   }
-  const phrases = shown.map((entry) => countedPhrase(entry, input.calls, copy));
-  return copy.groupCountJoin(restCount > 0 ? [...phrases, copy.groupMorePhrase] : phrases);
+  // 不追加「等」：计数标题的读者要的是规模，收口词是纯噪音（动宾流水版 toolGroupLabel
+  // 仍保留「等」——那里它替代的是「还有别的类别」这层语义，本行用计数已经说清了）。
+  return copy.groupCountJoin(shown.map((entry) => countedPhrase(entry, input.calls, copy)));
 }
 
 /** 单桶 → 计数短语。未知桶取首个工具名点名（超过列举上限的语义由调用方按「等」收口承担）。 */

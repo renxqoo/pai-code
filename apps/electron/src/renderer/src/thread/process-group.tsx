@@ -4,7 +4,6 @@ import { ChevronToggle } from '@paiapp/ui';
 import { toolGroupSummary } from '@paiapp/ui-thread';
 
 import { toolCopy } from '@/strings/tool-copy';
-import { cn } from '@/lib/utils';
 import { autoOpenForProcessGroup } from './process-group-state';
 import { ThinkingBlock } from './thinking-block';
 import { ToolsBlock } from './tools-block';
@@ -43,7 +42,6 @@ function ProcessGroup({ run, streamingThinkingBlockId, subagentBusy }: ProcessGr
   const calls = blocks.flatMap((block) => (block.kind === 'tools' ? block.calls : []));
   const thinkingCount = blocks.filter((block) => block.kind === 'thinking').length;
   const title = toolGroupSummary({ calls, thinkingCount }, toolCopy());
-  const failed = calls.some((call) => call.status === 'failed');
 
   return (
     <div className="group flex flex-col gap-[4px]">
@@ -54,7 +52,9 @@ function ProcessGroup({ run, streamingThinkingBlockId, subagentBusy }: ProcessGr
           aria-expanded={open}
           className="flex min-w-0 cursor-pointer items-center gap-[6px] rounded-md px-[2px] py-[1px] text-left outline-none select-none hover:bg-accent/60 focus-visible:ring-3 focus-visible:ring-ring/50"
         >
-          <span className={cn('min-w-0 truncate text-[12.5px] leading-[20px] font-medium', failed ? 'text-diff-del' : 'text-muted-foreground')}>
+          {/* 标题恒为弱化灰：失败态由展开区里的失败行整句成红承担，标题染色会让人
+              误以为整组都出错——组里失败一条不代表其余调用有问题。 */}
+          <span className="min-w-0 truncate text-[12.5px] leading-[20px] font-medium text-muted-foreground">
             {title}
           </span>
           <ChevronToggle open={open} className={chevronRevealClass(open)} />
