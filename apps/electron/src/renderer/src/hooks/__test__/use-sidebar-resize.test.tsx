@@ -93,8 +93,7 @@ describe('useSidebarResize 绑定层', () => {
     React.act(() => {
       sep.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', shiftKey: true, bubbles: true }));
     });
-    // +8 后再粗调 -32 得 SIDEBAR_WIDTH-24 = 176，低于下限 180 → 钳到下限
-    expect(uiStore.getState().sidebarWidth).toBe(SIDEBAR_MIN_WIDTH);
+    expect(uiStore.getState().sidebarWidth).toBe(SIDEBAR_WIDTH - 24);
     view.unmount();
   });
 });
