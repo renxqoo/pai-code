@@ -26,11 +26,11 @@ import type { SettingsSectionId } from '@/settings/settings-sections';
  */
 
 /** 侧栏宽度默认值与钳制上下限（装配层单一真相，resize hook 经参数注入限位）。
- *  默认值取 224：会话名/项目名完整可读，主区不显得空。下限 180 比默认值低 44px，
+ *  默认值取 248：会话名/项目名完整可读，主区不显得空。下限 180 比默认值低 68px，
  *  往窄拖有足够余量（默认值贴住下限会让拖拽几乎没手感）；上限 400 不动。
  *  **默认值必须高于下限**，否则启动即落在限位之外、首次拖拽会被立刻钳回去。
  *  宽度只在内存态，重启回落到本值——改这里对老用户同样生效。 */
-export const SIDEBAR_WIDTH = 224;
+export const SIDEBAR_WIDTH = 248;
 export const SIDEBAR_MIN_WIDTH = 180;
 export const SIDEBAR_MAX_WIDTH = 400;
 
