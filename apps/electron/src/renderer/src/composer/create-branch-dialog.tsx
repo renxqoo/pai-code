@@ -20,7 +20,7 @@ type CreateBranchDialogProps = {
 
 /**
  * 「创建并检出新分支」弹窗：建分支并检出到当前工作区。
- * 轻量自管开合（与 conflict-files-dialog 同形态——ui Dialog 是 Portal 壳不进单测，
+ * 轻量自管开合（ui Dialog 是 Portal 壳不进单测，
  * 本弹窗的表单行为必须可回归）；verb 失败内联呈现，改名重试不关窗；
  * Esc 自行消费关闭。
  */

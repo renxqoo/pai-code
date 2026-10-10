@@ -140,19 +140,3 @@ describe('BranchPanel 锁因与占用（GIT-INTERACTION-REDESIGN D6/A5）', () =
   });
 });
 
-describe('ConflictFilesDialog（D2\' 冲突确认弹窗）', () => {
-  test('文件清单渲染 + 提示文案 + 关闭回调', async () => {
-    const { ConflictFilesDialog } = await import('../conflict-files-dialog');
-    let closed = false;
-    const page = render(<ConflictFilesDialog files={['src/a.ts', 'lib/b.ts']} onClose={() => { closed = true; }} />);
-    const text = page.container.textContent ?? '';
-    expect(text).toContain(copy.branch.conflictTitle);
-    expect(text).toContain('src/a.ts');
-    expect(text).toContain('lib/b.ts');
-    expect(text).toContain(copy.branch.conflictHint);
-    const closeBtn = [...page.container.querySelectorAll('button')].find((b) => (b.textContent ?? '').includes(copy.gitGraph.close));
-    closeBtn?.click();
-    expect(closed).toBe(true);
-  });
-});
-

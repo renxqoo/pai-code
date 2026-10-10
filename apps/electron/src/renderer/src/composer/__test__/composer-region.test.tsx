@@ -348,89 +348,16 @@ describe('ComposerRegion 交互', () => {
     }
   });
 
-  test('分支段：cwd 非空渲染项目/分支上下文条', () => {
+  test('症状回归：线程页输入卡不渲染项目/分支上下文条（git 上下文收口速览面板 Git 区）', () => {
     seedLive({});
     const view = render(<ComposerRegion />);
-    expect(view.container.textContent).toContain('t38');
+    const segments = [...view.container.querySelectorAll('[aria-label]')].filter((el) =>
+      el.getAttribute('aria-label') === copy.composer.projectSegment || el.getAttribute('aria-label') === copy.composer.branchSegment,
+    );
+    expect(segments).toHaveLength(0);
+    expect(view.container.querySelector('form')).not.toBeNull(); // 输入卡本体仍在
     view.unmount();
   });
-});
-
-describe('ComposerRegion 分支面板接线（T36）', () => {
-  async function flushAsync(): Promise<void> {
-    await React.act(async () => {
-      for (let i = 0; i < 6; i += 1) await Promise.resolve();
-    });
-  }
-
-  function branchTrigger(view: ReturnType<typeof render>): HTMLButtonElement | undefined {
-    return [...view.container.querySelectorAll('button')].find((b) => b.getAttribute('aria-label') === copy.composer.branchSegment);
-  }
-
-  test('空闲会话 + 仓库目录：分支段升级为锚定面板触发器（aria-expanded）；图谱钩子未开弹窗不预拉', async () => {
-    seedLive({});
-    jest.spyOn(workspaceActions, 'listGitBranches').mockResolvedValue({
-      ok: true,
-      data: { isRepo: true, current: 'main', branches: ['dev', 'main'], dirtyFiles: 2 },
-    });
-    const listGraph = jest.spyOn(workspaceActions, 'listGitGraph').mockResolvedValue({
-      ok: true,
-      data: { isRepo: true, commits: [], truncated: false },
-    });
-    const view = render(<ComposerRegion />);
-    await flushAsync();
-    const trigger = branchTrigger(view);
-    expect(trigger).toBeDefined();
-    expect(trigger?.getAttribute('aria-expanded')).toBe('false');
-    expect(listGraph).not.toHaveBeenCalled();
-    view.unmount();
-  });
-
-  test('症状回归：面板打开即重拉分支视图——脏计数随工作区实时变化，缓存快照会过期', async () => {
-    seedLive({});
-    const listBranches = jest.spyOn(workspaceActions, 'listGitBranches').mockResolvedValue({
-      ok: true,
-      data: { isRepo: true, current: 'main', branches: ['dev', 'main'], dirtyFiles: 0 },
-    });
-    const view = render(<ComposerRegion />);
-    await flushAsync();
-    expect(listBranches).toHaveBeenCalledTimes(1); // cwd 就绪首拉
-    React.act(() => {
-      branchTrigger(view)?.click();
-    });
-    await flushAsync();
-    expect(listBranches).toHaveBeenCalledTimes(2); // 打开面板刷新脏计数
-    view.unmount();
-  });
-
-  test('运行中线程（streaming）：锁时触发器仍在（锁不再是摘除条件——D6 锁因入面板）', async () => {
-    seedLive({ threads: { t1: { streaming: true } } });
-    jest.spyOn(workspaceActions, 'listGitBranches').mockResolvedValue({
-      ok: true,
-      data: { isRepo: true, current: 'main', branches: ['dev', 'main'], dirtyFiles: 0 },
-    });
-    const view = render(<ComposerRegion />);
-    await flushAsync();
-    // 旧语义：锁=触发器摘除（undefined）。新语义（D6）：触发器保留——锁因行在面板内
-    // 呈现（BranchPanel 单测钉住锁因行/行禁用/create 放行），此处钉接线形态
-    expect(branchTrigger(view)).toBeDefined();
-    expect(view.container.textContent).toContain('main'); // 分支名照常展示
-    view.unmount();
-  });
-
-  test('非仓库目录：分支段弱化且无面板入口', async () => {
-    seedLive({});
-    jest.spyOn(workspaceActions, 'listGitBranches').mockResolvedValue({
-      ok: true,
-      data: { isRepo: false, current: null, branches: [], dirtyFiles: 0 },
-    });
-    const view = render(<ComposerRegion />);
-    await flushAsync();
-    expect(branchTrigger(view)).toBeUndefined();
-    expect(view.container.textContent).toContain(copy.composer.notARepo);
-    view.unmount();
-  });
-
 });
 
 type RegionProbeHostProps = {

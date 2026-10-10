@@ -30,18 +30,24 @@
 
 - 主进程：`git log` 拓扑数据（topo-order + parents + 本地分支装饰 + 截断上限）；分支列表附带脏文件计数；
 - 渲染层：泳道几何纯函数（commits → 每条提交的 lane 与连边）、refs token → pill 纯函数、日期列格式化；
-- 装配：线程页上下文条分支段开放锚定面板（搜索/切换/创建入口/图谱入口）；Git 图谱弹窗；新建分支弹窗视觉对齐图三；新建任务页统一到同一面板。
+- 装配：新建任务页上下文条分支段开放锚定面板（搜索/切换/创建入口/图谱入口）；Git 图谱弹窗；新建分支弹窗视觉对齐图三。线程页不承载分支面板（见 1.3 职责划分）。
 
 不处理（写清归属）：
 
-- **运行中线程的分支切换**：引用 T23 裁决——工作目录上任一线程在跑（streaming / agents working）时，线程页分支段保持只读（无 chevron 无面板）。归属：`composer-region` 装配层据 live store 判定；
+- **运行中线程的分支切换**：引用 T23 裁决——工作目录上任一线程在跑（streaming / agents working）时，锁住切换防拆台运行中 agent（锁因行在面板内呈现，不静默禁用）。归属：`branch-switch-lock` + `switchBlockedReason`，新建任务页与速览面板共用；
 - 远程分支 / tag 装饰 / push / pull / fetch：归属未来任务（图谱 refs 只取本地分支）；
 - 图谱行点击（检出某个提交 / 回滚 / cherry-pick）：本版图谱只读；
 - 新建分支的基准选择：仅当前 HEAD（弹窗辅助文案明示；契约 `create` 语义不变）；
 - 图谱虚拟滚动：500 行上限内直接渲染 DOM，不做虚拟化；
 - 线程页工作区（目录）段切换：维持只读，非本任务范围。
 
-### 1.3 并发与一致性预算（违反 = 缺陷）
+### 1.3 git 上下文入口的职责划分
+
+- **新建任务页**：上下文条承载项目段（选工作区）与分支段（锚定面板切换/创建/图谱）——此处是「开一局前挑基线」的场景，cwd 与分支都在创建前定。
+- **线程页**：输入卡上方不渲染项目/分支上下文条。会话已定基线，分支展示与切换统一收口到速览面板 Git 区（`pulse-panel/git-section` → `branch-menu` → BranchPanel + CreateBranchDialog + GitGraphDialog）；工作目录名由会话头部标题承担。
+- 切换守卫、锁语义、图谱读口单飞与失效在两页共用同一套（`branch-switch-lock` / `switchBlockedReason` / `branchRevision`），故入口位置不同不产生第二份实现。
+
+### 1.4 并发与一致性预算（违反 = 缺陷）
 
 - git 子进程沿用 T23 隔离：无 shell、5s 超时、1MB 输出上限、`core.hooksPath=/dev/null` + `core.fsmonitor=false`；
 - `git/graph` 同 cwd 在途单飞（与 `git/branches` list 同机制）；checkout 成功后失效 graph 单飞缓存（否则刷新读到切换前快照）；
@@ -49,7 +55,7 @@
 - 图谱行数硬上限 500（主进程截断，渲染层不设守卫）；渲染层图谱视图无定时器；
 - `git/branches` list 多跑一条 status：探测 1 + refs 1 + head 1 + status 1 = 4 次 execFile，均在 5s 超时预算内。
 
-### 1.4 用户裁决落档
+### 1.5 用户裁决落档
 
 - **用户裁决**：三张设计图 1:1 还原；UI 由 3 个并行 UI agent 实现（主会话不指定组件选型，只给标准：shadcn 风格 / 项目既有组件、主题 token、文案走 strings、props 数据契约、不写业务逻辑），逻辑由主会话在 UI 产物上接线。
 - **用户裁决（延伸）**：同一「切换分支」能力在新建任务页与线程页统一为锚定面板，收口时删除模态 `BranchPickerDialog` 与旧 `newTask.branch*` 文案 key（单轨）。
@@ -116,8 +122,8 @@
 - [x] 外部契约：dirtyFiles 口径 = 切换守卫；git/graph strict 词表 + truncated 按原始记录数；reason 字典封闭
 - [x] 边界：非仓库 / 空仓库（locale 无关判定）/ detached HEAD（脏计数置顶提示）/ 脏树拒绝 / 选项形 ref 拦截 / 501 截断 / cwd 门禁 / 负值时间戳退化
 - [x] 并发预算：graph 单飞 + checkout 后缓存失效 / checkout 串行不变 / 渲染层无定时器 / list 4 次 execFile
-- [x] 不处理清单落位：运行中只读（两页同锁）/ 图谱只读 / 仅本地分支装饰 / 线程页工作区段维持只读
-- [x] 单轨：BranchPickerDialog 删除、旧 newTask.branch* key 删除、from prop 退役、无双轨字段
+- [x] 不处理清单落位：运行中锁切换（两页同锁）/ 图谱只读 / 仅本地分支装饰 / 线程页无上下文条
+- [x] 单轨：BranchPickerDialog 删除、旧 newTask.branch* key 删除、from prop 退役、无双轨字段；线程页分支能力单点在速览面板 Git 区
 - [x] 四门全绿（lint 0-0 / typecheck / build / test 1620 全过）+ 对抗审查 12 条清零（9 修 1 正 2 挂账）+ 数字如实报告
 
 ## 7. 遗留挂账

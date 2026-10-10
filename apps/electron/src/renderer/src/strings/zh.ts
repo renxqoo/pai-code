@@ -209,10 +209,6 @@ export const zh: typeof en = {
     /** 锁因行（D6：锁因可见 + 三出路——行可点，点击时检查并反馈；静默禁用是人机交互反模式） */
     lockReason: (count: number): string => `${count} 个会话运行中——切分支会改写它们的工作基线`,
     lockHintCreate: '可先「创建并检出新分支」（不改工作树，安全）；或停止会话后再切换',
-    /** 冲突确认弹窗（D2' 试探式：git 自身拒绝的覆盖清单——知情裁决） */
-    conflictTitle: '切换会被未提交改动阻止',
-    conflictFilesTitle: (count: number): string => `以下 ${count} 个文件的未提交改动会被覆盖：`,
-    conflictHint: '先提交或暂存这些文件后再切换（可让会话中的 agent 代办）。',
     createBranch: '创建并检出新分支…',
     openGraph: 'Git 图谱',
     createTitle: '创建并检出新分支',
