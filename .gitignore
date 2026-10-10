@@ -11,7 +11,11 @@ resources/
 .claude/
 .expo/
 .idea/
+.mavis/
 .env
 .env.*
+
+# 本地设计稿（工作区参考物，不入库）
+x3code-ui-design.html
 
 # 日志
