@@ -10,6 +10,10 @@ Pai 是一个 macOS 上的 AI 干活助手：你用一句话说清要什么，�
 
 想知道它内部怎么运转（引擎、进程、协议、代码分层），往下看「架构」。
 
+## 界面预览
+
+![Pai 桌面端界面：左侧会话侧栏，右侧对话舞台与工具执行过程](image.png)
+
 ## 架构
 
 - monorepo：bun workspaces，scope `@paiapp/*`，包源码直出（业务包零构建耦合，`bun test` 零 mock 可测）
