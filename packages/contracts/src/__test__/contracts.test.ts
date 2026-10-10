@@ -173,6 +173,7 @@ describe('SessionView / HistoryItem schema', () => {
       model: null,
       thinkingLevel: null,
       lastActivityAt: 1,
+      createdAt: 1,
     };
     expect(SessionViewSchema.parse(view)).toEqual(view);
   });
@@ -534,5 +535,6 @@ function sampleSession(threadId: string): Parameters<typeof SessionViewSchema.pa
     model: 'glm/glm-5.3',
     thinkingLevel: 'high',
     lastActivityAt: 1,
+    createdAt: 1,
   };
 }

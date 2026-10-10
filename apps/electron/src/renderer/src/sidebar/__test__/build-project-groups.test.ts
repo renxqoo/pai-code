@@ -3,18 +3,18 @@ import { expect, test } from 'bun:test';
 import { buildProjectGroups, SHOW_MORE_LIMIT } from '../build-project-groups';
 import type { SessionCardModel } from '../session-card-model';
 
-function card(id: string, projectName: string, lastActivityAt: number): SessionCardModel {
-  return { id, projectName, title: id, version: 'm', cwd: `/w/${projectName}`, sessionPath: `/s/${id}.jsonl`, state: 'live', streaming: false, lastActivityAt };
+function card(id: string, projectName: string, lastActivityAt: number, createdAt: number = lastActivityAt): SessionCardModel {
+  return { id, projectName, title: id, version: 'm', cwd: `/w/${projectName}`, sessionPath: `/s/${id}.jsonl`, state: 'live', streaming: false, lastActivityAt, createdAt };
 }
 
-test('按 cwd 分组，组内最近活跃倒序', () => {
+test('按 cwd 分组，组内按创建时间倒序', () => {
   const sessions = [
     card('a2', 'app', 20),
     card('w1', 'web', 30),
     card('a1', 'app', 10),
   ];
   const groups = buildProjectGroups(sessions, new Set(), new Set());
-  // web 组最近活跃(30) > app 组(20)，组间 web 在前
+  // web 组最近创建(30) > app 组(20)，组间 web 在前
   expect(groups.map((g) => g.projectName)).toEqual(['web', 'app']);
   expect(groups[0].visible.map((s) => s.id)).toEqual(['w1']);
   expect(groups[1].visible.map((s) => s.id)).toEqual(['a2', 'a1']);
@@ -44,7 +44,7 @@ test('组内超 limit 且未展开时截断为前 limit 条', () => {
   const [group] = buildProjectGroups(sessions, new Set(), new Set());
   expect(group.total).toBe(SHOW_MORE_LIMIT + 3);
   expect(group.visible).toHaveLength(SHOW_MORE_LIMIT);
-  // 截断保留的是最近活跃的前 limit 条
+  // 截断保留的是最近创建的前 limit 条
   expect(group.visible.map((s) => s.id)).toEqual(['s7', 's6', 's5', 's4', 's3']);
 });
 
@@ -85,15 +85,16 @@ test('负数 limit 钳制为 0（不得静默去掉末尾条目）', () => {
   expect(group.total).toBe(2);
 });
 
-test('组间按各组最近活跃倒序（输入顺序不构成前提）', () => {
-  // web 组最近一条(100)比 app 组最近一条(50)新，组间 web 在前
+test('组间按各组最近创建时间倒序（输入顺序不构成前提；活动时间不参与排序）', () => {
+  // web 组最近创建(100)比 app 组最近创建(50)新，组间 web 在前；app-new 活跃最晚但创建较早
   const sessions = [
-    card('app-old', 'app', 10),
-    card('web-new', 'web', 100),
-    card('app-new', 'app', 50),
+    card('app-old', 'app', 10, 10),
+    card('web-new', 'web', 5, 100),
+    card('app-new', 'app', 99, 50),
   ];
   const groups = buildProjectGroups(sessions, new Set(), new Set());
   expect(groups.map((g) => g.projectName)).toEqual(['web', 'app']);
+  expect(groups[1].visible.map((s) => s.id)).toEqual(['app-new', 'app-old']);
 });
 
 test('空输入返回空数组', () => {

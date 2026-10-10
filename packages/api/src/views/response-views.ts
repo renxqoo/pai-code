@@ -35,9 +35,11 @@ export interface SessionViewInput {
   model?: string | null;
   thinkingLevel?: string | null;
   lastActivityAt?: number;
+  createdAt?: number;
 }
 
 export function toSessionView(input: SessionViewInput): SessionView {
+  const lastActivityAt = input.lastActivityAt ?? 0;
   return {
     threadId: input.threadId,
     cwd: input.cwd,
@@ -47,7 +49,8 @@ export function toSessionView(input: SessionViewInput): SessionView {
     streaming: input.streaming ?? false,
     model: input.model ?? null,
     thinkingLevel: input.thinkingLevel ?? null,
-    lastActivityAt: input.lastActivityAt ?? 0,
+    lastActivityAt,
+    createdAt: input.createdAt ?? lastActivityAt,
   };
 }
 

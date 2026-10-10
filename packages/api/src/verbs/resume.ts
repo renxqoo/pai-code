@@ -24,13 +24,12 @@ export function resumeRoutes(deps: {
   audit: (message: string) => void;
   insideSessionsRoot: (sessionPath: string) => boolean;
   findRegistryRowByPath: (sessionPath: string) => SessionRow | null;
-  fileMtimeMs: (path: string) => number | null;
   fillSessionMeta: (threadId: string) => void;
 }): {
   'session/resume': Handler<'session/resume'>;
   'session/register': Handler<'session/register'>;
 } {
-  const { fail, runtime, audit, insideSessionsRoot, findRegistryRowByPath, fileMtimeMs, fillSessionMeta } = deps;
+  const { fail, runtime, audit, insideSessionsRoot, findRegistryRowByPath, fillSessionMeta } = deps;
 
   /** thread/list 按 sessionPath 收养既有表项（resume 撞 already open 的回落路径）。 */
   const adoptExistingThread = async (
@@ -56,12 +55,13 @@ export function resumeRoutes(deps: {
     sessionPath: string,
     known: ReturnType<typeof findRegistryRowByPath>,
   ): { ok: true; data: SessionView } => {
-    // threadId 只信响应；标题沿用注册表行（占位视图/既有命名的延续，不回退默认标题）
-    // 恢复不是会话活动：活动时间 = max(注册表行, 会话文件 mtime)——await 窗口内到达的
-    // turn 事件可能已推进行/文件（帧同步派发先于本续体），不得用过期快照写回旧值；
-    // 双源皆不可得（无行且 stat 失败）降级当前时刻
-    const rowAtWrite = findRegistryRowByPath(sessionPath);
-    const lastActivityAt = Math.max(rowAtWrite?.updatedAt ?? 0, fileMtimeMs(sessionPath) ?? 0) || Date.now();
+    // threadId 只信响应；标题沿用注册表行（占位视图/既有命名的延续，不回退默认标题）。
+    // 恢复不是会话活动：活动时间只认注册表行，且在 await 之后重读——帧同步派发先于
+    // 本续体，await 窗口内到达的 turn 事件已推进过行，不得用过期快照写回旧值；
+    // 无行（外部会话首次纳管）取 0，由后续 turn 事件推进。禁止 mtime/now 参与——
+    // 打开会话本身会写入 seed/清算事件刷新文件 mtime，_mtime/now 口径会把「点开」
+    // 冒充成「对话」
+    const lastActivityAt = findRegistryRowByPath(sessionPath)?.updatedAt ?? 0;
     const view = runtime.applyStartOutcome(threadId, cwd, sessionPath, known?.title ?? runtime.defaultTitle, lastActivityAt, known?.trusted ?? false);
     if (known !== null && known.threadId !== threadId) {
       // 换 id 整行替换：旧行删除 + 旧 id 视图同步清出（与对账/启动链路同一不变量）；

@@ -1,4 +1,4 @@
-import { realpathSync, statSync } from 'node:fs';
+import { realpathSync } from 'node:fs';
 import { basename as baseName, dirname as dirnamePath, isAbsolute, join as joinPaths, resolve, resolve as resolvePath, sep as pathSep } from 'node:path';
 
 import {
@@ -170,15 +170,6 @@ export function createApiRoutes(deps: ApiRouteDeps) {
 
   /** 按会话文件路径找注册表行（resume 缺省 trusted 的补全源）。 */
   const findRegistryRowByPath = (sessionPath: string) => runtime.registry.list().find((row) => row.sessionPath === sessionPath) ?? null;
-
-  /** 会话文件最后写入时刻（≈ 最后活动轮次）；不可读返回 null。 */
-  const fileMtimeMs = (path: string): number | null => {
-    try {
-      return statSync(path).mtimeMs;
-    } catch {
-      return null;
-    }
-  };
 
   /** 已知工作目录集合：活跃会话 + 注册表（list_saved 按目录过滤，需逐目录聚合）。 */
   const knownCwds = (): string[] => {
@@ -376,7 +367,6 @@ export function createApiRoutes(deps: ApiRouteDeps) {
     audit: deps.audit,
     insideSessionsRoot,
     findRegistryRowByPath,
-    fileMtimeMs,
     fillSessionMeta,
   });
   // 挂载在表字面量之后：resume 组依赖 fillSessionMeta，而它引用本表（调用期解引用，安全）

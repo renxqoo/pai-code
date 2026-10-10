@@ -85,7 +85,7 @@ export interface PaiRuntime {
   defaultTitle: string;
   /** 启动/重启后的注册表对账（占位渲染，不 resume；懒恢复由渲染层发起）。 */
   reconcileSessions(): Promise<void>;
-  /** 落会话视图与注册表行；lastActivityAt 由调用方裁决（start/fork = now；resume = 保留既有活动时间）。 */
+  /** 落会话视图与注册表行；lastActivityAt/createdAt 由调用方裁决（start/fork = now；resume = 保留既有活动时间）。 */
   applyStartOutcome(threadId: string, cwd: string, sessionPath: string | null, title: string, lastActivityAt: number, trusted?: boolean): SessionView;
   removeSession(threadId: string): void;
   /** 仅摘内存视图（sessionRemoved）：内部重开链（trusted 重载/技能开关）的中间步骤，注册表行保留。 */
@@ -284,6 +284,7 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
     if (host === null || api === null) return;
     const rows = registry.list();
     const onDisk = new Set<string>();
+    const conversationAt = new Map<string, number>();
     const listedCwds = new Set<string>();
     for (const cwd of new Set(rows.map((row) => row.cwd).filter((value) => value.length > 0))) {
       const outcome = await api.thread.listSaved({ cwd });
@@ -293,7 +294,10 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
         continue;
       }
       listedCwds.add(cwd);
-      for (const session of savedSessions(outcome.data, sessionsRoot)) onDisk.add(session.sessionPath);
+      for (const session of savedSessions(outcome.data, sessionsRoot)) {
+        onDisk.add(session.sessionPath);
+        conversationAt.set(session.sessionPath, session.modifiedAt);
+      }
     }
     for (const row of rows) {
       if (row.sessionPath === null) {
@@ -322,6 +326,12 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
       // 重读 registry 与快照比对（内存 live 是旧世代残留，不能作判据——重启对账
       // 仍须把它回落 parked；只有「新写入」才不被覆写，否则后续发消息撞双开守卫）
       if ((registry.get(row.threadId)?.updatedAt ?? 0) > row.updatedAt) continue;
+      // 活动时间自愈：hub 的对话时间口径（最后一条真实消息；打开/清算事件不计数）
+      // 是真相——历史污染值（曾把「点开会话」当成活动）在对账时纠正回对话时间；
+      // 并发 turn 推进过的行已往上面 continue，不会把更新的活动时间写回旧值
+      const healedAt = conversationAt.get(row.sessionPath);
+      const activityAt = healedAt !== undefined && healedAt < row.updatedAt ? healedAt : row.updatedAt;
+      if (activityAt !== row.updatedAt) registry.upsert({ ...row, updatedAt: activityAt });
       upsertSession(
         toSessionView({
           threadId: row.threadId,
@@ -329,7 +339,8 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
           sessionPath: row.sessionPath,
           state: 'parked',
           title: row.title,
-          lastActivityAt: row.updatedAt,
+          lastActivityAt: activityAt,
+          createdAt: row.createdAt,
         }),
       );
     }
@@ -424,7 +435,7 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
       return host?.diagnostics().stderrTail ?? '';
     },
     sessions(): SessionView[] {
-      return [...sessions.values()].sort((a, b) => b.lastActivityAt - a.lastActivityAt);
+      return [...sessions.values()].sort((a, b) => b.createdAt - a.createdAt);
     },
     emitBuffered(): void {
       // 重放逐条经 emit 直发渲染层（IPC 直发口径）；EVENT_BUFFER_LIMIT 即冷启动放大界限
@@ -435,7 +446,8 @@ export function createPaiRuntime(deps: PaiRuntimeDeps): PaiRuntime {
     },
     reconcileSessions,
     applyStartOutcome(threadId: string, cwd: string, sessionPath: string | null, title: string, lastActivityAt: number, trusted?: boolean): SessionView {
-      const view = toSessionView({ threadId, cwd, sessionPath, title, lastActivityAt });
+      const existing = registry.get(threadId);
+      const view = toSessionView({ threadId, cwd, sessionPath, title, lastActivityAt, createdAt: existing?.createdAt });
       upsertSession(view);
       persistSession(view, trusted);
       // 会话 live 化后把注册表常驻标志同步进 hub 表项（hub 不持久化该标志）

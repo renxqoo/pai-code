@@ -8,8 +8,9 @@ function card(
   projectName: string,
   sessionPath: string | null,
   lastActivityAt: number,
+  createdAt: number = lastActivityAt,
 ): SessionCardModel {
-  return { id, projectName, title: id, version: 'm', cwd: `/w/${projectName}`, sessionPath, state: 'live', streaming: false, lastActivityAt };
+  return { id, projectName, title: id, version: 'm', cwd: `/w/${projectName}`, sessionPath, state: 'live', streaming: false, lastActivityAt, createdAt };
 }
 
 test('置顶交集：仅 sessionPath 命中置顶集合的会话进入', () => {
@@ -22,11 +23,11 @@ test('置顶交集：仅 sessionPath 命中置顶集合的会话进入', () => {
   expect(buildPinnedList(sessions, pinned).map((s) => s.id)).toEqual(['a', 'c']);
 });
 
-test('置顶区按最近活跃倒序（输入乱序不构成前提）', () => {
+test('置顶区按创建时间倒序（输入乱序不构成前提；活动时间不参与排序）', () => {
   const sessions = [
-    card('old', 'app', '/s/old.jsonl', 10),
-    card('new', 'app', '/s/new.jsonl', 99),
-    card('mid', 'web', '/s/mid.jsonl', 50),
+    card('old', 'app', '/s/old.jsonl', 10, 10),
+    card('new', 'app', '/s/new.jsonl', 5, 99),
+    card('mid', 'web', '/s/mid.jsonl', 50, 50),
   ];
   const pinned = new Set(['/s/old.jsonl', '/s/new.jsonl', '/s/mid.jsonl']);
   expect(buildPinnedList(sessions, pinned).map((s) => s.id)).toEqual(['new', 'mid', 'old']);

@@ -3,15 +3,15 @@ import { expect, test } from 'bun:test';
 import { buildTimeList } from '../build-time-list';
 import type { SessionCardModel } from '../session-card-model';
 
-function card(id: string, sessionPath: string | null, lastActivityAt: number): SessionCardModel {
-  return { id, projectName: 'app', title: id, version: 'm', cwd: '/w/app', sessionPath, state: 'live', streaming: false, lastActivityAt };
+function card(id: string, sessionPath: string | null, lastActivityAt: number, createdAt: number = lastActivityAt): SessionCardModel {
+  return { id, projectName: 'app', title: id, version: 'm', cwd: '/w/app', sessionPath, state: 'live', streaming: false, lastActivityAt, createdAt };
 }
 
-test('排除置顶会话后按最近活跃倒序', () => {
+test('排除置顶会话后按创建时间倒序（活动时间不参与排序）', () => {
   const sessions = [
     card('pinned', '/s/p.jsonl', 99),
-    card('old', '/s/o.jsonl', 10),
-    card('new', '/s/n.jsonl', 50),
+    card('old', '/s/o.jsonl', 10, 10),
+    card('new', '/s/n.jsonl', 5, 50),
   ];
   const pinned = new Set(['/s/p.jsonl']);
   expect(buildTimeList(sessions, pinned).map((s) => s.id)).toEqual(['new', 'old']);

@@ -11,7 +11,7 @@ export type ProjectGroup = {
   /** 组内全量会话数（total > visible.length 时显示「显示更多」）。 */
   total: number;
   expanded: boolean;
-  /** 组内最近活跃时间（组间排序依据，与截断无关）。 */
+  /** 组内最近创建时间（组间排序依据，与截断无关）。 */
   latestActivityAt: number;
 };
 
@@ -20,7 +20,7 @@ export const SHOW_MORE_LIMIT = 5;
 
 /**
  * 项目视图分组：排除置顶会话后按 cwd 分组（同名异目录不并组，显示名取 basename）；
- * 组内最近活跃倒序，组间按各组最近活跃倒序（输入顺序不构成前提）。超 limit 且未展开的组
+ * 组内按创建时间倒序，组间按各组最近创建时间倒序（输入顺序不构成前提）。超 limit 且未展开的组
  * 截断为前 limit 条；limit 钳制为非负（负数等价全折叠不可见）。
  */
 export function buildProjectGroups(
@@ -40,7 +40,7 @@ export function buildProjectGroups(
   }
   const groups: ProjectGroup[] = [];
   for (const [cwd, list] of byCwd) {
-    list.sort((a, b) => b.lastActivityAt - a.lastActivityAt);
+    list.sort((a, b) => b.createdAt - a.createdAt);
     const isExpanded = expanded.has(cwd);
     groups.push({
       key: cwd,
@@ -48,10 +48,10 @@ export function buildProjectGroups(
       visible: isExpanded || list.length <= cappedLimit ? list : list.slice(0, cappedLimit),
       total: list.length,
       expanded: isExpanded,
-      latestActivityAt: list[0]?.lastActivityAt ?? 0,
+      latestActivityAt: list[0]?.createdAt ?? 0,
     });
   }
-  // 组间按各组最近活跃倒序
+  // 组间按各组最近创建时间倒序
   groups.sort((a, b) => b.latestActivityAt - a.latestActivityAt);
   return groups;
 }

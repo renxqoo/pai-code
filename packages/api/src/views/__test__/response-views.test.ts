@@ -29,6 +29,7 @@ describe('toSessionView · 缺省兜底', () => {
       model: null,
       thinkingLevel: null,
       lastActivityAt: 0,
+      createdAt: 0,
     });
   });
 
@@ -44,6 +45,7 @@ describe('toSessionView · 缺省兜底', () => {
         model: 'glm/glm-5.3',
         thinkingLevel: 'high',
         lastActivityAt: 42,
+        createdAt: 7,
       }),
     ).toEqual({
       threadId: 't',
@@ -55,7 +57,12 @@ describe('toSessionView · 缺省兜底', () => {
       model: 'glm/glm-5.3',
       thinkingLevel: 'high',
       lastActivityAt: 42,
+      createdAt: 7,
     });
+  });
+
+  test('createdAt 缺省回退 lastActivityAt（旧调用点零改动兼容面）', () => {
+    expect(toSessionView({ threadId: 't', cwd: '/w', sessionPath: null, lastActivityAt: 42 }).createdAt).toBe(42);
   });
 });
 

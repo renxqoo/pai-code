@@ -75,8 +75,10 @@ export const SessionViewSchema = z.object({
   /** 展示名（provider/modelId）；null = 未知。 */
   model: z.string().nullable(),
   thinkingLevel: z.string().nullable(),
-  /** 会话最后活动时间（新建/fork/turn 推进；选中/恢复/改名不推进）——侧栏排序与相对时间标签的唯一依据。 */
+  /** 会话最后活动时间（新建/fork/turn 推进；选中/恢复/改名不推进）——相对时间标签的依据。 */
   lastActivityAt: z.number(),
+  /** 会话创建时刻（注册表行 createdAt；无行回退 lastActivityAt）——侧栏排序的唯一依据。 */
+  createdAt: z.number(),
 });
 export type SessionView = z.infer<typeof SessionViewSchema>;
 

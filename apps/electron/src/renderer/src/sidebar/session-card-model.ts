@@ -15,5 +15,8 @@ export type SessionCardModel = {
   state: SessionView['state'];
   /** 流式进行中（侧栏行内活动指示的数据源）。 */
   streaming: boolean;
+  /** 会话最后活动时间——相对时间标签（「刚刚」）的依据。 */
   lastActivityAt: number;
+  /** 会话创建时刻——列表排序的依据（最近创建在前）。 */
+  createdAt: number;
 };
