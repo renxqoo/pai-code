@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { ProviderModel } from "@paiapp/contracts";
+import type { ProviderModel } from "@x3code/contracts";
 
 import { copy } from "@/strings";
 

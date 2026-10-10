@@ -3,7 +3,7 @@
  * 会话真相在 hub；由状态机把事件流折叠成这些形状，组件不感知数据来源。
  */
 
-import type { EditHunkView, SubagentSpawnView, ToolCallStatus } from '@paiapp/contracts';
+import type { EditHunkView, SubagentSpawnView, ToolCallStatus } from '@x3code/contracts';
 
 /** system = 后台任务通知/子代理上报等以用户角色注入的系统信封消息（api.md §7.5）。 */
 export type SessionMessage = {

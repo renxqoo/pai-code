@@ -1,4 +1,4 @@
-import type { RuntimeEventView } from '@paiapp/contracts';
+import type { RuntimeEventView } from '@x3code/contracts';
 
 import { copy } from '@/strings';
 import { cn } from '@/lib/utils';

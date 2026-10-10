@@ -4,7 +4,7 @@
  * 15min TTL 到期后的可持续续期。返回换发结果（新 token + relay 节点 id，
  * 节点 id 随本次应答落盘，下次续期免一次探测往返）；失败返回 null（调用方回落旧 token）。
  */
-import { signBytes } from '@paiapp/relay-protocol';
+import { signBytes } from '@x3code/relay-protocol';
 import type { RelayCredentials } from './credentials';
 
 export interface RefreshedToken {

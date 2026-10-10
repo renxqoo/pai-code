@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { ResourceSampleView, RuntimeSnapshotView } from '@paiapp/contracts';
+import type { ResourceSampleView, RuntimeSnapshotView } from '@x3code/contracts';
 
 import { copy } from '@/strings';
 

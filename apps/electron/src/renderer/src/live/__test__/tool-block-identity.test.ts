@@ -4,7 +4,7 @@ import { foldThreadEvent } from '../fold-events';
 import { foldHydrate } from '../fold-hydrate';
 import { initialThreadState, type LiveThreadState } from '../live-thread-state';
 import { mergeSpanBlocks } from '../merge-turn-blocks';
-import type { InflightView, UiEvent } from '@paiapp/contracts';
+import type { InflightView, UiEvent } from '@x3code/contracts';
 import type { TurnBlock } from '@/thread/thread-model';
 
 const ev = (event: UiEvent): Parameters<typeof foldThreadEvent>[1] =>

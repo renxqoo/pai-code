@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import type { PluginCandidateView } from '@paiapp/contracts';
+import type { PluginCandidateView } from '@x3code/contracts';
 import { copy } from '@/strings';
 
 import { PluginImportDialog } from '../plugin-import-dialog';

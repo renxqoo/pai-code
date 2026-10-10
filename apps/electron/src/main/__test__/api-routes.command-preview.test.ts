@@ -3,13 +3,13 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { HostCommandOutcome, HostPhase, HostProcessPort, HubFrame, PaiCommand } from '@paiapp/contracts';
+import type { HostCommandOutcome, HostPhase, HostProcessPort, HubFrame, X3codeCommand } from '@x3code/contracts';
 
 import { createApiRoutes } from '../api-routes';
 import { createAgentDefinitionsStore } from '../agent-definitions-store';
 import { createFileSettings, type ProviderKeyStore } from '../file-settings';
-import { createPaiRuntime } from '../pai-runtime';
-import { createRuntimeMonitor } from '@paiapp/infra';
+import { createPaiRuntime } from '../x3code-runtime';
+import { createRuntimeMonitor } from '@x3code/infra';
 
 /**
  * command/preview 路由回归：新建任务页（无会话）`/` 补全的预构目录——
@@ -32,7 +32,7 @@ function fakeHost(skills: Array<Record<string, unknown>>): HostProcessPort {
     get phase(): HostPhase {
       return 'ready';
     },
-    request: (command: PaiCommand): Promise<HostCommandOutcome> => {
+    request: (command: X3codeCommand): Promise<HostCommandOutcome> => {
       if (command.type === 'skills/list') return Promise.resolve({ ok: true, data: { skills } });
       return Promise.resolve({ ok: true, data: {} });
     },

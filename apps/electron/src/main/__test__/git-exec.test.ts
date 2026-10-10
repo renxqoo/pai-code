@@ -4,14 +4,14 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { createGitBranches } from '@paiapp/api';
+import { createGitBranches } from '@x3code/api';
 
 import { runGit } from '../git-exec';
 
 /**
  * git 执行器（GitExec 的 execFile 默认实现）：真子进程集成——工作目录不存在的
  * 归类、仓库自带可执行面（hooks/fsmonitor）的隔离。纯逻辑与 fake 执行器用例
- * 在 @paiapp/api verbs/__test__/git-branches.test.ts。
+ * 在 @x3code/api verbs/__test__/git-branches.test.ts。
  */
 
 describe('runGit 执行器（真子进程）', () => {

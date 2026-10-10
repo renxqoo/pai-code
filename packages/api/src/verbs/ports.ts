@@ -3,7 +3,7 @@
  * 以结构化端口注入，electron 层实现端口；端口形状按动词实际使用面抽取，宿主
  * 服务结构满足即可（PaiRuntime 等无需改写）。api 包不 import 任何 electron 模块。
  */
-import type { AgentDefinition, ApiData, ApiError, SessionRow, SessionView } from '@paiapp/contracts';
+import type { AgentDefinition, ApiData, ApiError, SessionRow, SessionView } from '@x3code/contracts';
 
 /** 运行时面（会话视图/注册表/相位/宿主重启） */
 export interface RuntimePort {

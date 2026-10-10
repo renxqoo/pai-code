@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { CheckCircle2, Circle, CircleDot } from 'lucide-react';
 
-import type { TodoSnapshotTask } from '@paiapp/contracts';
+import type { TodoSnapshotTask } from '@x3code/contracts';
 
-import { ChevronToggle, TypePill } from '@paiapp/ui';
+import { ChevronToggle, TypePill } from '@x3code/ui';
 import { cn } from '@/lib/utils';
 import { copy } from '@/strings';
 

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { groupEditsByFile, type FileDiffGroup } from '@paiapp/ui-thread';
+import { groupEditsByFile, type FileDiffGroup } from '@x3code/ui-thread';
 
 import type { ChatMessage } from '@/types/domain';
 import { toolViewOf } from '@/features/chat/tool-message';

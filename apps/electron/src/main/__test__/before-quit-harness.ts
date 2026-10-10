@@ -160,7 +160,7 @@ async function driveIndexOnce(probe: QuitProbe, caseTag: string): Promise<{ quit
   state.handlers = new Map();
   state.readyResolve = null;
   FakeBrowserWindow.reset();
-  process.env['PAI_USER_DATA_DIR'] = userDataDir;
+  process.env['X3CODE_USER_DATA_DIR'] = userDataDir;
 
   // 不同 query 触发独立模块求值（bun 以完整 specifier 为缓存键）
   await import(`${INDEX_TS}?case=${caseTag}`);
@@ -210,7 +210,7 @@ describe('退出兜底：信号与窗口生命周期', () => {
     expect(win).toBeDefined();
     win?.fire('ready-to-show');
     expect(win?.shown).toBe(true);
-    // 壳层状态推送（最大化/全屏）：caption 图标切换与全屏态标题块共用 pai:event 单发
+    // 壳层状态推送（最大化/全屏）：caption 图标切换与全屏态标题块共用 x3code:event 单发
     win?.fire('maximize');
     win?.fire('unmaximize');
     win?.fire('enter-full-screen');

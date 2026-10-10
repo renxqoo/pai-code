@@ -2,9 +2,9 @@ import * as React from 'react';
 import { useStore } from 'zustand';
 import { Minimize2 } from 'lucide-react';
 
-import type { TodoSnapshotTask } from '@paiapp/contracts';
+import type { TodoSnapshotTask } from '@x3code/contracts';
 
-import { FloatingPanel, IconButton } from '@paiapp/ui';
+import { FloatingPanel, IconButton } from '@x3code/ui';
 import { branchSwitchLockState } from '@/composer/branch-switch-lock';
 import { useGitBranches } from '@/hooks/use-git-branches';
 import { useGitStatus } from '@/hooks/use-git-status';

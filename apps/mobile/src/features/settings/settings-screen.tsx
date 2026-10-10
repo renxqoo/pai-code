@@ -23,7 +23,7 @@ const workspaceItems: readonly SettingsItem[] = [
 const supportItems: readonly SettingsItem[] = [
   { label: '隐私与安全', detail: '数据使用、权限与凭据', icon: ShieldCheck, href: '/privacy' },
   { label: '帮助与反馈', detail: '使用帮助与问题反馈', icon: HelpCircle, href: '/help' },
-  { label: '关于 Pai Code', detail: '版本、许可与开源信息', icon: Info, href: '/about' },
+  { label: '关于 X3code', detail: '版本、许可与开源信息', icon: Info, href: '/about' },
 ];
 
 export function SettingsScreen() {
@@ -36,7 +36,7 @@ export function SettingsScreen() {
       <SectionHeader title="账户" /><SettingsCard items={accountItems} />
       <SectionHeader title="工作区" /><SettingsCard items={workspaceItems} />
       <SectionHeader title="支持" /><SettingsCard items={supportItems} />
-      <Text style={{ color: colors.textFaint, fontSize: 11, marginTop: spacing.xs5, textAlign: 'center' }}>Pai Code 0.1.0 · 本地优先的 AI 编程工作台</Text>
+      <Text style={{ color: colors.textFaint, fontSize: 11, marginTop: spacing.xs5, textAlign: 'center' }}>X3code 0.1.0 · 本地优先的 AI 编程工作台</Text>
     </ScrollView>
   );
 }

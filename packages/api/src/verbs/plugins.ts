@@ -5,7 +5,7 @@
  * P2 审批语义：import 的 UI 面必须明示「确认安装 = 授予插件全部平台能力」——
  * 文案层职责（M4 strings），此处错误/数据形状不弱化该语义。
  */
-import type { ApiError, ApiMethod, ApiOutcome, ApiParams, PluginCandidateView, PluginProposalRow, PluginView } from '@paiapp/contracts';
+import type { ApiError, ApiMethod, ApiOutcome, ApiParams, PluginCandidateView, PluginProposalRow, PluginView } from '@x3code/contracts';
 
 import type { SettingsCommands } from '../commands/settings';
 import { appError } from '../errors';

@@ -3,7 +3,7 @@ import { Check } from 'lucide-react';
 
 import { copy } from '@/strings';
 import { ProviderEditor, type ProviderUpsertInput } from '@/settings/provider-editor';
-import type { ProviderConfigView } from '@paiapp/contracts';
+import type { ProviderConfigView } from '@x3code/contracts';
 
 export type OnboardingScreenProps = {
   providers: readonly ProviderConfigView[]

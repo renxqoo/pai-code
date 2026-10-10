@@ -1,8 +1,8 @@
 import * as React from 'react';
 
 import { cn } from '@/lib/utils';
-import { allHunkLines } from '@paiapp/ui-thread';
-import type { EditHunkView } from '@paiapp/contracts';
+import { allHunkLines } from '@x3code/ui-thread';
+import type { EditHunkView } from '@x3code/contracts';
 
 type EditHunkListProps = {
   hunks: readonly EditHunkView[]

@@ -1,8 +1,8 @@
 import * as React from "react";
 import { Brain, Eye, Pencil, X, Zap } from "lucide-react";
 
-import type { ProviderModel } from "@paiapp/contracts";
-import { Spinner } from "@paiapp/ui";
+import type { ProviderModel } from "@x3code/contracts";
+import { Spinner } from "@x3code/ui";
 
 import { cn } from "@/lib/utils";
 import { copy } from "@/strings";

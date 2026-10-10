@@ -1,13 +1,13 @@
 import * as React from 'react';
 import { Pencil } from 'lucide-react';
 
-import { ChevronToggle } from '@paiapp/ui';
+import { ChevronToggle } from '@x3code/ui';
 
 import { copy } from '@/strings';
 import { EditHunkList } from './edit-hunk-list';
-import { objectName } from '@paiapp/ui-thread';
+import { objectName } from '@x3code/ui-thread';
 import { chevronRevealClass, resolveOpen, type CollapsePref } from './collapse-state';
-import type { FileDiffGroup } from '@paiapp/ui-thread';
+import type { FileDiffGroup } from '@x3code/ui-thread';
 
 type FileDiffRowProps = {
   path: string

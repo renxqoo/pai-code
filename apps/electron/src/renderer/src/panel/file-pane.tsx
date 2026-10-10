@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { RotateCw } from 'lucide-react';
 
-import type { ApiData, ApiError, ApiOutcome } from '@paiapp/contracts';
-import { IconButton, SegmentedControl } from '@paiapp/ui';
+import type { ApiData, ApiError, ApiOutcome } from '@x3code/contracts';
+import { IconButton, SegmentedControl } from '@x3code/ui';
 
 import { copy } from '@/strings';
 import { MarkdownText } from '@/thread/markdown-text';

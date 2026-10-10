@@ -16,7 +16,7 @@ function WindowCaptionButtons() {
       key: 'minimize',
       label: copy.flow.captionMinimize,
       icon: <Minus strokeWidth={2} className="size-[12px]" />,
-      onClick: () => void window.pai?.window.minimize(),
+      onClick: () => void window.x3code?.window.minimize(),
       danger: false,
     },
     {
@@ -27,14 +27,14 @@ function WindowCaptionButtons() {
       ) : (
         <Square strokeWidth={2} className="size-[10px]" />
       ),
-      onClick: () => void window.pai?.window.toggleMaximize(),
+      onClick: () => void window.x3code?.window.toggleMaximize(),
       danger: false,
     },
     {
       key: 'close',
       label: copy.flow.captionClose,
       icon: <X strokeWidth={2} className="size-[13px]" />,
-      onClick: () => void window.pai?.window.close(),
+      onClick: () => void window.x3code?.window.close(),
       danger: true,
     },
   ];

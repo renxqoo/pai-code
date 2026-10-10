@@ -1,4 +1,4 @@
-import type { ApiMethod, Client, ClientCapabilities, UiEvent, Unsubscribe } from '@paiapp/contracts';
+import type { ApiMethod, Client, ClientCapabilities, UiEvent, Unsubscribe } from '@x3code/contracts';
 
 type Handler = (params: unknown) => unknown;
 

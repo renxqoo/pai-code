@@ -3,13 +3,13 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { HostCommandOutcome, HostPhase, HostProcessPort, HubFrame, PaiCommand, UiEvent } from '@paiapp/contracts';
+import type { HostCommandOutcome, HostPhase, HostProcessPort, HubFrame, X3codeCommand, UiEvent } from '@x3code/contracts';
 
 import { createApiRoutes } from '../api-routes';
 import { createAgentDefinitionsStore } from '../agent-definitions-store';
 import { createFileSettings, type ProviderKeyStore } from '../file-settings';
-import { createPaiRuntime, type PaiRuntime } from '../pai-runtime';
-import { createRuntimeMonitor } from '@paiapp/infra';
+import { createPaiRuntime, type PaiRuntime } from '../x3code-runtime';
+import { createRuntimeMonitor } from '@x3code/infra';
 
 /**
  * resume 撞 already open 的收养回落回归：hub 表内已有该会话的表项（retire 后
@@ -35,7 +35,7 @@ function sessionFileOf(work: string, id: string): string {
   return join(dir, 'transcript.jsonl');
 }
 
-function makeRoutes(work: string, reply: (cmd: PaiCommand) => Reply) {
+function makeRoutes(work: string, reply: (cmd: X3codeCommand) => Reply) {
   const agentDir = join(work, 'agent');
   mkdirSync(join(agentDir, 'sessions'), { recursive: true });
   writeFileSync(join(work, 'cli.js'), '');
@@ -44,7 +44,7 @@ function makeRoutes(work: string, reply: (cmd: PaiCommand) => Reply) {
     get phase(): HostPhase {
       return 'ready';
     },
-    request: (command: PaiCommand) => {
+    request: (command: X3codeCommand) => {
       sent.push(command);
       return Promise.resolve(reply(command));
     },
@@ -54,7 +54,7 @@ function makeRoutes(work: string, reply: (cmd: PaiCommand) => Reply) {
     dispose: () => Promise.resolve(undefined),
     diagnostics: () => ({ stderrTail: '', restartCount: 0, lastRestartCause: null, lastRestartAt: null }),
   };
-  const sent: PaiCommand[] = [];
+  const sent: X3codeCommand[] = [];
   const runtime = createPaiRuntime({
     paths: {
       userDataDir: work,

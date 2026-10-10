@@ -1,4 +1,4 @@
-import type { ApiOutcome } from '@paiapp/contracts';
+import type { ApiOutcome } from '@x3code/contracts';
 
 import { readProjectFile } from '@/live/file-actions';
 import { bridgeClient, store as liveStore } from '@/live/workspace-runtime';

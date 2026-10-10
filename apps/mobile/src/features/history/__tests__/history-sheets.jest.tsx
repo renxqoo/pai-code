@@ -37,7 +37,7 @@ describe('history sheets', () => {
   it('opens search results when the drawer query is submitted', async () => {
     await act(() => Promise.resolve(useNavigationStore.getState().setDrawerOpen(true)));
     const view = await render(<TestWrapper><HistoryDrawer /></TestWrapper>);
-    await fireEvent.changeText(view.getByLabelText('搜索对话'), 'Pai Mobile');
+    await fireEvent.changeText(view.getByLabelText('搜索对话'), 'X3code Mobile');
     await fireEvent(view.getByLabelText('搜索对话'), 'submitEditing');
     expect(mockPush).toHaveBeenCalledWith('/search');
   });
@@ -60,7 +60,7 @@ describe('history sheets', () => {
   it('opens a session action sheet from drawer', async () => {
     await act(() => Promise.resolve(useNavigationStore.getState().setDrawerOpen(true)));
     const view = await render(<TestWrapper><HistoryDrawer /></TestWrapper>);
-    await fireEvent.press(view.getByLabelText('Pai Mobile 视觉走查 更多操作'));
+    await fireEvent.press(view.getByLabelText('X3code Mobile 视觉走查 更多操作'));
     expect(useNavigationStore.getState().sheet).toBe('session-actions');
   });
 

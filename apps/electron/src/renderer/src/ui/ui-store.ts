@@ -13,7 +13,6 @@ import {
   type PanelState,
 } from '@/panel/panel-state';
 import { expandGroup, toggleGroupFold, type GroupFold } from '@/sidebar/group-collapse';
-import type { SidebarView } from '@/sidebar/sidebar-view';
 import type { SettingsSectionId } from '@/settings/settings-sections';
 
 /**
@@ -55,7 +54,6 @@ export type PulseState = {
 export type UiState = {
   sidebarWidth: number;
   sidebarCollapsed: boolean;
-  sidebarView: SidebarView;
   sidebarGroupFold: GroupFold;
   settingsOpen: boolean;
   /** 命令面板跳设置分区的一次性入口（关闭即清，普通打开不受影响）。 */
@@ -97,7 +95,6 @@ export type UiActions = {
   setSidebarWidth: (width: number) => void;
   toggleSidebarCollapsed: () => void;
   collapseSidebar: () => void;
-  setSidebarView: (view: SidebarView) => void;
   toggleGroupFoldKey: (key: string) => void;
   expandGroupKey: (key: string) => void;
   openSettings: () => void;
@@ -151,7 +148,6 @@ function initialUiState(): UiState {
   return {
     sidebarWidth: SIDEBAR_WIDTH,
     sidebarCollapsed: false,
-    sidebarView: 'grouped',
     sidebarGroupFold: INITIAL_GROUP_FOLD,
     settingsOpen: false,
     settingsEntry: null,
@@ -186,7 +182,6 @@ export function createUiStore() {
     setSidebarWidth: (width) => set({ sidebarWidth: width }),
     toggleSidebarCollapsed: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
     collapseSidebar: () => set({ sidebarCollapsed: true }),
-    setSidebarView: (view) => set({ sidebarView: view }),
     toggleGroupFoldKey: (key) => set((state) => ({ sidebarGroupFold: toggleGroupFold(state.sidebarGroupFold, key) })),
     expandGroupKey: (key) => set((state) => ({ sidebarGroupFold: expandGroup(state.sidebarGroupFold, key) })),
     openSettings: () => set({ settingsOpen: true }),

@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { FolderInput, RefreshCw, Sparkles } from 'lucide-react';
 
-import type { SkillCandidateView, SkillView } from '@paiapp/contracts';
-import { ActionButton, IconButton, ToggleSwitch } from '@paiapp/ui';
+import type { SkillCandidateView, SkillView } from '@x3code/contracts';
+import { ActionButton, IconButton, ToggleSwitch } from '@x3code/ui';
 
 import { copy } from '@/strings';
 import type { SkillImportRequest, SkillImportSummary } from '@/live/live-controller-types';

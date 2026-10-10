@@ -8,7 +8,7 @@ import { store as liveStore } from '@/live/workspace-runtime';
 import { uiStore } from '@/ui/ui-store';
 import { render } from '@/testing/render';
 import { installDom } from '@/testing/dom';
-import type { SessionView } from '@paiapp/contracts';
+import type { SessionView } from '@x3code/contracts';
 
 /**
  * 症状回归「消息被输入浮层遮挡（滚动到底仍被切）」：浮层避让高度必须始终反映

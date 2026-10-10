@@ -1,6 +1,6 @@
-import { createApiClient } from '@paiapp/api/client';
-import type { CommandView, ImagePayload, PreferencesView, ProviderModel, RelayConfig, UiEvent } from '@paiapp/contracts';
-import { isSettableThinkingLevel } from '@paiapp/contracts';
+import { createApiClient } from '@x3code/api/client';
+import type { CommandView, ImagePayload, PreferencesView, ProviderModel, RelayConfig, UiEvent } from '@x3code/contracts';
+import { isSettableThinkingLevel } from '@x3code/contracts';
 
 import { copy } from '@/strings';
 import { uiStore } from '@/ui/ui-store';
@@ -58,7 +58,7 @@ export function createLiveController(client: BridgeClient, store: LiveStore): Li
   });
 
   /** 懒恢复机制（在途去重/乐观登记）独立模块。 */
-  // UI→api 直调门面：transport = 既有桥（IPC 方法字符串只存在于 @paiapp/api client.ts）
+  // UI→api 直调门面：transport = 既有桥（IPC 方法字符串只存在于 @x3code/api client.ts）
   const api = createApiClient(client);
   const lazy = createLazyResume(client, store);
   const { resumeByPath, ensureLiveSession, activate } = lazy;

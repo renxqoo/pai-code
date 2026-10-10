@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { groupEditsByFile } from '../edit-file-groups';
-import type { EditHunkView } from '@paiapp/contracts';
+import type { EditHunkView } from '@x3code/contracts';
 import type { EditCallRef } from '../tool-refs';
 
 function call(hunks: readonly EditHunkView[]): EditCallRef {

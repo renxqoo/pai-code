@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import type { GitGraphCommit } from '@paiapp/contracts';
+import type { GitGraphCommit } from '@x3code/contracts';
 
 import { GitGraphBodyStatus } from '../git-graph-status';
 import { GitGraphDialog } from '../git-graph-dialog';

@@ -7,7 +7,7 @@ import { initialThreadState, type LiveThreadState } from '@/live/live-thread-sta
 import { store as liveStore, workspaceActions } from '@/live/workspace-runtime';
 import { uiStore } from '@/ui/ui-store';
 import { render } from '@/testing/render';
-import type { SessionView } from '@paiapp/contracts';
+import type { SessionView } from '@x3code/contracts';
 
 /** 输入卡编排模块：通道（插入/替换/聚焦）、停止三态——全部读 store 真相。
  *  （提交链已主进程化：submit-composer-draft/queued-drafts 模块随 T41 R1 删除，

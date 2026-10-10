@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import * as React from 'react';
 
-import type { ProviderConfigView, SessionView } from '@paiapp/contracts';
+import type { ProviderConfigView, SessionView } from '@x3code/contracts';
 
 import { ThemeProvider } from '@/components/theme-provider';
 import { dispatchSectionEnter, pinnedSetOf, savedProjectsOf, useSettingsScreen } from '../use-settings-screen';

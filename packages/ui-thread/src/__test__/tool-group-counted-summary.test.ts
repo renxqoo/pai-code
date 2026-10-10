@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { toolGroupSummary } from '../tool-group-summary';
-import type { ToolCallStatus } from '@paiapp/contracts';
+import type { ToolCallStatus } from '@x3code/contracts';
 import type { ToolCallRef } from '../tool-refs';
 import { zhToolCopy } from './zh-tool-copy';
 

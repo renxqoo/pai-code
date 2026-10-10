@@ -1,4 +1,4 @@
-import type { ApiError, ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
+import type { ApiError, ApiMethod, ApiOutcome, ApiParams } from '@x3code/contracts';
 import { appError } from '../errors';
 import type { GitBranches } from './git-branches';
 import type { GitGraph } from './git-graph';

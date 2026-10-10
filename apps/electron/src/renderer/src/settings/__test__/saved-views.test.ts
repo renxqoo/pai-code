@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { savedSessionEntries } from '../saved-views';
-import type { SavedSessionView } from '@paiapp/contracts';
+import type { SavedSessionView } from '@x3code/contracts';
 
 /** saved 视图映射：无名回落首条消息截 40（title 兜底单一真相）。 */
 

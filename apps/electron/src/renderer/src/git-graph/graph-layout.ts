@@ -1,4 +1,4 @@
-import type { GitGraphCommit } from '@paiapp/contracts';
+import type { GitGraphCommit } from '@x3code/contracts';
 
 import type { GraphLaneEdge, GraphRowLayout } from './graph-model';
 

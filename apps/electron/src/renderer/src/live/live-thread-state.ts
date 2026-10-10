@@ -1,4 +1,4 @@
-import type { HistoryItem, InflightToolView, InflightView, QueueEntry, TodoSnapshotEventData, Usage } from '@paiapp/contracts';
+import type { HistoryItem, InflightToolView, InflightView, QueueEntry, TodoSnapshotEventData, Usage } from '@x3code/contracts';
 import type { ThreadItem, SubagentModel } from '@/thread/thread-model';
 
 /**

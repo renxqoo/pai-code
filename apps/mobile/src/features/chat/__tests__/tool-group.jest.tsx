@@ -8,7 +8,7 @@ import { FileDiffSection } from '@/features/chat/file-diff-section';
 import { FileDiffSheet } from '@/features/chat/file-diff-sheet';
 import { DiffLines } from '@/features/chat/diff-lines';
 import type { ChatMessage } from '@/types/domain';
-import type { FileDiffGroup } from '@paiapp/ui-thread';
+import type { FileDiffGroup } from '@x3code/ui-thread';
 import { lightColors } from '@/theme/colors';
 import { useNavigationStore } from '@/store/navigation-store';
 import { TestWrapper } from '@/test/test-wrapper';

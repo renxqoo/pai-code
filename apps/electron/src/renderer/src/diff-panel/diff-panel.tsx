@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { DiffFileList } from '@/thread/diff-file-list';
-import { formatDiffDelta } from '@paiapp/ui';
+import { formatDiffDelta } from '@x3code/ui';
 import { copy } from '@/strings';
 import type { DiffSummaryModel } from '@/thread/thread-model';
 

@@ -29,7 +29,7 @@ describe('buildSidebarViewModel emptyState', () => {
   test('有会话 = null（正常列表）', () => {
     const vm = buildSidebarViewModel([card('a')], new Set(), new Set(), new Set(), new Set());
     expect(vm.emptyState).toBe(null);
-    expect(vm.timeList).toHaveLength(1);
+    expect(vm.projectGroups).toHaveLength(1);
   });
 
   test('全部会话被隐藏/归档清空 = none', () => {

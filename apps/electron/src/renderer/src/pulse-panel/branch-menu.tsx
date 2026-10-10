@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { ChevronDown, GitBranch } from 'lucide-react';
 
-import type { GitBranchesView } from '@paiapp/contracts';
+import type { GitBranchesView } from '@x3code/contracts';
 
-import { AnchoredPanel } from '@paiapp/ui';
+import { AnchoredPanel } from '@x3code/ui';
 import { BranchPanel } from '@/composer/branch-panel';
 import { CreateBranchDialog } from '@/composer/create-branch-dialog';
 import { switchBlockedReason } from '@/composer/branch-switch-guard';

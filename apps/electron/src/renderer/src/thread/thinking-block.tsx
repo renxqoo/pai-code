@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Brain } from 'lucide-react';
 
-import { ChevronToggle, TypewriterText } from '@paiapp/ui';
+import { ChevronToggle, TypewriterText } from '@x3code/ui';
 
 import { copy } from '@/strings';
 import { cn } from '@/lib/utils';

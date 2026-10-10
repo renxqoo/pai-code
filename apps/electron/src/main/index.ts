@@ -5,8 +5,8 @@ import { join } from 'node:path';
 import { existsSync, statSync } from 'node:fs';
 import { seedBundledRg } from './rg-seed';
 
-import { EMPTY_RELAY_CONFIG, ApiSchemas, type UiEvent } from '@paiapp/contracts';
-import { appError } from '@paiapp/api';
+import { EMPTY_RELAY_CONFIG, ApiSchemas, type UiEvent } from '@x3code/contracts';
+import { appError } from '@x3code/api';
 
 import { createApiRoutes } from './api-routes';
 import { createSkillImporter } from './skill-import';
@@ -16,16 +16,16 @@ import { createFileLogger, createFileSettings } from './file-settings';
 import { packagedGatewayEntry, packagedHubCandidates, resolveGatewayEntry, resolveHubPaths } from './hub-paths';
 import { writeGatewayConfig } from './gateway-config';
 import { resolveAppPaths, resolveUserDataDir } from './paths';
-import { createPaiRuntime } from './pai-runtime';
+import { createPaiRuntime } from './x3code-runtime';
 import { staleGateway, startGatewayProcess, type GatewayProcess } from './gateway-process';
 import { createProviderKeyStore } from './provider-key-store';
-import { createRuntimeMonitor } from '@paiapp/infra';
+import { createRuntimeMonitor } from '@x3code/infra';
 import { writeDiagnosticsBundle } from './export-diagnostics';
 
 // 开启 Web 内容可访问性树（辅助技术 + 自动化验证都依赖它）
 app.commandLine.appendSwitch('force-renderer-accessibility');
 
-// 数据根缺省 ~/.pai（PAI_USER_DATA_DIR 覆盖用于 worktree 并行隔离）；必须在
+// 数据根缺省 ~/.pai（X3CODE_USER_DATA_DIR 覆盖用于 worktree 并行隔离）；必须在
 // 单实例锁之前重定向——锁文件随 userData 走，重定向即获得独立锁与数据区
 app.setPath('userData', resolveUserDataDir(process.env, app.getPath('home')));
 
@@ -49,6 +49,11 @@ void app.whenReady().then(async () => {
   const paths = resolveAppPaths(app.getPath('userData'));
   const logger = createFileLogger(paths.logFile);
 
+  // 开发态 dock 用仓库内图标（打包态由 electron-builder 的 mac.icon 写入 .app 束）
+  if (process.platform === 'darwin' && !app.isPackaged) {
+    app.dock?.setIcon(join(__dirname, '..', '..', 'build', 'icon.png'));
+  }
+
   let settingsRef: ReturnType<typeof createFileSettings> | null = null;
 
   /** 宿主路径解析：设置覆盖 > 环境变量（开发）> dev 同级探测 > 打包产物缺省（链在 hub-paths.ts）。 */
@@ -65,8 +70,8 @@ void app.whenReady().then(async () => {
       }
     })();
     const fromEnv =
-      process.env['PAI_HUB_ENTRY'] !== undefined
-        ? { bunPath: process.env['PAI_BUN_PATH'] ?? 'bun', hubEntry: process.env['PAI_HUB_ENTRY'] }
+      process.env['X3CODE_HUB_ENTRY'] !== undefined
+        ? { bunPath: process.env['X3CODE_BUN_PATH'] ?? 'bun', hubEntry: process.env['X3CODE_HUB_ENTRY'] }
         : null;
     const resources = process.resourcesPath ?? paths.userDataDir;
     // 插件宿主形态优先（dist 多文件 + node_modules 子集——线程隔离插件可用）；
@@ -94,7 +99,7 @@ void app.whenReady().then(async () => {
     notifyIfBlurred(event);
     const target = mainWindow;
     if (target === null || target.isDestroyed()) return;
-    target.webContents.send('pai:event', event);
+    target.webContents.send('x3code:event', event);
   };
 
     /** K1 系统通知：窗口失焦时的权限弹窗（confirm）与 host 失败。
@@ -116,7 +121,7 @@ void app.whenReady().then(async () => {
     if (!Notification.isSupported()) return false;
     const win = mainWindow;
     if (win !== null && !win.isDestroyed() && win.isFocused()) return false;
-    new Notification({ title: 'pai', body }).show();
+    new Notification({ title: 'x3code', body }).show();
     return true;
   };
 
@@ -185,7 +190,7 @@ void app.whenReady().then(async () => {
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     win.webContents.on('will-navigate', (e) => e.preventDefault());
 
-    // 壳层窗口控制：渲染层经 preload 桥触发，与业务通道 pai:invoke 分离
+    // 壳层窗口控制：渲染层经 preload 桥触发，与业务通道 x3code:invoke 分离
     const windowActions: Record<string, () => void> = {
       minimize: () => win.minimize(),
       'toggle-maximize': () => {
@@ -199,24 +204,24 @@ void app.whenReady().then(async () => {
     };
     registerIpcWindowActions(ipcMain, windowActions);
     // 外链出口：仅放行 http(s)，其余协议一律拒绝（渲染层解析已过滤，这里纵深防御）
-    ipcMain.removeHandler('pai:window-open-external');
-    ipcMain.handle('pai:window-open-external', (_event, url) => {
+    ipcMain.removeHandler('x3code:window-open-external');
+    ipcMain.handle('x3code:window-open-external', (_event, url) => {
       if (typeof url !== 'string' || !/^https?:\/\//.test(url)) return;
       void shell.openExternal(url);
     });
 
     // 壳层状态初值：渲染层挂载时拉取一次（全屏恢复启动等无状态变更事件的场景也能对齐）
-    ipcMain.removeHandler('pai:window-get-state');
-    ipcMain.handle('pai:window-get-state', () => ({
+    ipcMain.removeHandler('x3code:window-get-state');
+    ipcMain.handle('x3code:window-get-state', () => ({
       maximized: win.isMaximized(),
       fullscreen: win.isFullScreen(),
     }));
 
     // 壳层状态推送（最大化/全屏）：caption 图标切换与 macOS 全屏态标题块收窄共用；
-    // 经既有 pai:event 通道即时单发
+    // 经既有 x3code:event 通道即时单发
     const publishWindowState = () => {
       if (win.isDestroyed()) return;
-      win.webContents.send('pai:event', {
+      win.webContents.send('x3code:event', {
         kind: 'window-state',
         maximized: win.isMaximized(),
         fullscreen: win.isFullScreen(),
@@ -323,7 +328,7 @@ void app.whenReady().then(async () => {
             return null;
           }
         })(),
-        fromEnv: process.env['PAI_GATEWAY_ENTRY'] ?? null,
+        fromEnv: process.env['X3CODE_GATEWAY_ENTRY'] ?? null,
         packagedEntry: app.isPackaged ? packagedGatewayEntry(process.resourcesPath ?? paths.userDataDir) : null,
         devRepoRoot: app.isPackaged ? null : join(__dirname, '..', '..', '..', '..'),
         packaged: app.isPackaged,
@@ -422,13 +427,13 @@ void app.whenReady().then(async () => {
       },
     });
   // ── 网关 IPC 面（进程定义在 routes 装配前：restartGateway 由设置路由回调）──
-  ipcMain.handle('pai:gateway-command', (_event, payload: unknown) => {
+  ipcMain.handle('x3code:gateway-command', (_event, payload: unknown) => {
     if (typeof payload !== 'object' || payload === null) return { ok: false as const, reason: 'bad_payload' };
     const record = payload as { command?: unknown; args?: unknown };
     if (typeof record.command !== 'string') return { ok: false as const, reason: 'bad_command' };
     return getGateway().command({ command: record.command, args: (record.args ?? {}) as Record<string, unknown> }).then((body) => ({ ok: true as const, body }));
   });
-  ipcMain.handle('pai:gateway-status', () => {
+  ipcMain.handle('x3code:gateway-status', () => {
     const stale = staleGateway(paths.agentDir);
     return { process: gatewayProcess?.status() ?? 'stopped', connected: gatewayProcess?.connected() ?? false, staleSocket: stale.stale };
   });
@@ -436,7 +441,7 @@ void app.whenReady().then(async () => {
     void gatewayProcess?.stop();
   });
 
-  ipcMain.handle('pai:invoke', (_event, payload: unknown) => {
+  ipcMain.handle('x3code:invoke', (_event, payload: unknown) => {
     if (typeof payload !== 'object' || payload === null) {
       return { ok: false, error: appError('invalid_payload') };
     }

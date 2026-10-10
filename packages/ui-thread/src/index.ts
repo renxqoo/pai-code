@@ -2,7 +2,7 @@
  * 对话流执行过程的共享派生层：PC 与移动端的工具执行展示（类别判定、命令摘要、
  * 状态前缀、并行批次聚合、文件级 diff 归并、开合策略）共用这一套纯函数，
  * 行为与文案口径只在这里定义一次。React 无关，文案经 ToolCopy 注入。
- * 类型真相在 @paiapp/contracts（ToolCallView / EditHunkView / ToolCallStatus）。
+ * 类型真相在 @x3code/contracts（ToolCallView / EditHunkView / ToolCallStatus）。
  */
 
 export type {

@@ -1,11 +1,11 @@
 /** settings 域命令（hub 级设置 + 技能面 + 运行档位）。 */
-import type { PaiCommand } from '@paiapp/contracts';
+import type { X3codeCommand } from '@x3code/contracts';
 
 import type { HubResult } from '../errors';
 import type { Transport } from '../transport';
 import { TIMEOUTS } from '../timeouts';
 
-type Input<C extends PaiCommand['type']> = Omit<Extract<PaiCommand, { type: C }>, 'type'>;
+type Input<C extends X3codeCommand['type']> = Omit<Extract<X3codeCommand, { type: C }>, 'type'>;
 
 export interface SettingsCommands {
   get(input: Input<'settings/get'>): Promise<HubResult<unknown>>;

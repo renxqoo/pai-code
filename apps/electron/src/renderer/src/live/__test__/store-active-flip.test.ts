@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 
 import { store } from '@/live/workspace-runtime';
-import type { SessionView, UiEvent } from '@paiapp/contracts';
+import type { SessionView, UiEvent } from '@x3code/contracts';
 
 /**
  * 活跃线程翻转的会话级视图失效（T33 M1 审查 #2 回归）：sessionPermissionMode/

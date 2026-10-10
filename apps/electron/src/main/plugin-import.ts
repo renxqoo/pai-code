@@ -7,9 +7,9 @@
  */
 import { readdir, realpath, stat } from 'node:fs/promises';
 
-import { appError, isPathInside } from '@paiapp/api';
-import type { PluginCandidateView } from '@paiapp/contracts';
-import type { PluginSourcePort } from '@paiapp/api';
+import { appError, isPathInside } from '@x3code/api';
+import type { PluginCandidateView } from '@x3code/contracts';
+import type { PluginSourcePort } from '@x3code/api';
 
 export interface PluginImporterFs {
   readdir(path: string, options: { withFileTypes: true }): Promise<Array<{ name: string; isDirectory(): boolean }>>;

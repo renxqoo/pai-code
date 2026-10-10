@@ -1,7 +1,7 @@
 import { Pin } from 'lucide-react';
 
-import { Spinner } from '@paiapp/ui';
-import type { WorkerRowView } from '@paiapp/contracts';
+import { Spinner } from '@x3code/ui';
+import type { WorkerRowView } from '@x3code/contracts';
 
 import { cn } from '@/lib/utils';
 import { copy } from '@/strings';

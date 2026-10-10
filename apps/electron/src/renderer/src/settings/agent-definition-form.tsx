@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { ChevronDown } from 'lucide-react';
 
-import type { AgentDefinition } from '@paiapp/contracts';
-import { isValidAgentName } from '@paiapp/contracts';
-import { ActionButton, MenuButton, PickerDialog, SegmentedControl, selectTriggerClassName, type SegmentedControlOption } from '@paiapp/ui';
+import type { AgentDefinition } from '@x3code/contracts';
+import { isValidAgentName } from '@x3code/contracts';
+import { ActionButton, MenuButton, PickerDialog, SegmentedControl, selectTriggerClassName, type SegmentedControlOption } from '@x3code/ui';
 
 import { cn } from '@/lib/utils';
 import { groupModelOptions } from '@/components/group-model-options';

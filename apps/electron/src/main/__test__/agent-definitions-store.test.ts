@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { createAgentDefinitionsStore } from '../agent-definitions-store';
-import type { AgentDefinition } from '@paiapp/contracts';
+import type { AgentDefinition } from '@x3code/contracts';
 
 /**
  * 定义文件面回归（x-harness 规则）：门禁（name 非空无 `/` 无换行——无 kebab/保留名；

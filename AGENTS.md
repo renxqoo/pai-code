@@ -1,11 +1,11 @@
-# AGENTS.md — Pai（Electron + host-hub 多 Agent 桌面应用）
+# AGENTS.md — X3code（Electron + host-hub 多 Agent 桌面应用）
 
-**pai**：monorepo（bun workspaces，scope `@paiapp/*`）。两个应用壳共用同一套业务包：
+**X3code**：monorepo（bun workspaces，scope `@x3code/*`）。两个应用壳共用同一套业务包：
 
 - **apps/electron**：macOS 桌面端。Electron 应用通过**单个 host-hub 宿主进程**承载多对话 × 多 thread 的 AI Agent：host 进程管线程表与模型目录，每活跃会话一个 worker 子进程（内裹 Agent 内核 + WAL 会话）。
 - **apps/mobile**：React Native 手机端（Expo + expo-router）。经 relay 加密协议连桌面端的 hub-gateway，复用同一批 host-hub 线程，不另起一套 Agent 内核。
 
-Pai 与 host-hub 的全部交互只有 JSONL stdio 协议（心跳 1Hz、confirm 对话框 ui_request/ui_response、settled 终态信号）；协议规格真相源 = x-harness 仓库 `apps/host-hub/src/protocol/` 代码，本仓 `packages/contracts` 维护类型镜像。
+X3code 与 host-hub 的全部交互只有 JSONL stdio 协议（心跳 1Hz、confirm 对话框 ui_request/ui_response、settled 终态信号）；协议规格真相源 = x-harness 仓库 `apps/host-hub/src/protocol/` 代码，本仓 `packages/contracts` 维护类型镜像。
 
 两种 hub 执行形态：脚本形态（bunPath=bun + hubEntry=入口路径，dev 与打包 dist 形态）与直执行形态（hubEntry=null、bunPath = 自包含可执行，`bun build --compile` 单文件；此形态 worker 自举装载在引擎层拒收）。
 
@@ -16,7 +16,7 @@ Pai 与 host-hub 的全部交互只有 JSONL stdio 协议（心跳 1Hz、confirm
 本仓是驱动端，Agent 内核与网关在**旁级私有检出** `../x-harness`：
 
 ```
-/Users/wrr/work/agent-app     ← 本仓（Pai 驱动端）
+/Users/wrr/work/agent-app     ← 本仓（X3code 驱动端）
 /Users/wrr/work/x-harness     ← 旁级检出（hub 内核，本仓不修改其代码）
   apps/host-hub               ← 宿主进程 + worker（协议真相源）
   apps/hub-gateway            ← 远程接入门（桌面 = gateway 的 owner）
@@ -24,7 +24,7 @@ Pai 与 host-hub 的全部交互只有 JSONL stdio 协议（心跳 1Hz、confirm
   apps/cli
 ```
 
-`apps/electron/src/main/hub-paths.ts` 是宿主/gateway 路径解析链的单一真相：设置覆盖 > 环境变量（`PAI_HUB_ENTRY` / `PAI_BUN_PATH` / `PAI_GATEWAY_ENTRY` / `PAI_HARNESS_ROOT`）> dev 同级探测（`../x-harness/apps/*`，源码入口优先、dist 兜底）> 打包产物候选。
+`apps/electron/src/main/hub-paths.ts` 是宿主/gateway 路径解析链的单一真相：设置覆盖 > 环境变量（`X3CODE_HUB_ENTRY` / `X3CODE_BUN_PATH` / `X3CODE_GATEWAY_ENTRY` / `X3CODE_HARNESS_ROOT`）> dev 同级探测（`../x-harness/apps/*`，源码入口优先、dist 兜底）> 打包产物候选。
 
 ### 目录清单
 
@@ -46,7 +46,7 @@ Pai 与 host-hub 的全部交互只有 JSONL stdio 协议（心跳 1Hz、confirm
 | `packages/ui-thread` | PC 与移动端共用的工具执行派生层（类别判定、摘要、并行分组、diff 归并、开合策略） |
 | `packages/relay-protocol` | relay 线协议栈（帧、信封、ratchet、PAKE 配对、分块重传）：x-harness remote-protocol 的逐字 fork，crypto 换 @noble 纯 JS |
 | `packages/testkit` | 公共测试资产：MockClient、帧回放器 |
-| `oxlint-plugins/pai` | 架构宪法插件：electron 宿主面、包间依赖矩阵、浏览器码禁 node 内建 |
+| `oxlint-plugins/x3code` | 架构宪法插件：electron 宿主面、包间依赖矩阵、浏览器码禁 node 内建 |
 | `oxlint-plugins/ui` | UI 纪律插件：一个 .tsx 一个组件/hook |
 | `rule/` | 组件域规范：拆分粒度（component-split）与区域重构方法论（component-refactor） |
 | `tasks/` | 任务文档与实施顺序（T0–T59，含 relay 迁移与插件运行时规划） |
@@ -60,7 +60,7 @@ Pai 与 host-hub 的全部交互只有 JSONL stdio 协议（心跳 1Hz、confirm
 ```
 渲染层 ──invoke/subscribe──▶ preload ──IPC──▶ main/api-routes（ApiSchemas 校验）
                                                     │
-                                          main/pai-runtime（装配根：唯一 HubApi 实例 + 注册表 + 内存会话表）
+                                          main/x3code-runtime（装配根：唯一 HubApi 实例 + 注册表 + 内存会话表）
                                                     │
                                     infra/host-process（监督状态机 + 增量 env 注入）
                                                     │
@@ -103,7 +103,7 @@ bun run ci        # lint → typecheck → build → test
 - 能不用 class 就不用：一切优先写成 function；仅当 class 写法在所有方面都优于 function 实现时才允许 class，非必要不使用 class
 - function 保持单一职责；一个文件不要堆太多 function——围绕一件事组织，多了就拆文件
 - UI 纪律：一个 .tsx 只放一个组件或 hook，嵌套定义组件/hook 禁止（每次渲染重建）——由 `ui/no-multi-component` 插件强制
-- 业务包不 `import 'electron'`（Electron API 只出现在 apps/electron），保证 `bun test` 零 mock 可测；依赖白名单与环境面纪律由 oxlint 插件 `pai/*` 强制（`oxlint-plugins/pai/`，宪法见 `.oxlintrc.json`：改规则 = 修宪法，就近同步插件测试）
+- 业务包不 `import 'electron'`（Electron API 只出现在 apps/electron），保证 `bun test` 零 mock 可测；依赖白名单与环境面纪律由 oxlint 插件 `x3code/*` 强制（`oxlint-plugins/x3code/`，宪法见 `.oxlintrc.json`：改规则 = 修宪法，就近同步插件测试）
 - 注释只说明当前代码的作用与用途，以及代码表达不了的约束（协议事实、事件时序约定、平台坑）；禁止版本叙事（某版本改了什么/修复了什么），那是 log 文档的职责
 - 格式化用 oxfmt（非门禁）；命名与注释密度跟随所在模块现状
 - 禁止写代码注释
@@ -120,8 +120,8 @@ bun run ci        # lint → typecheck → build → test
 
 渲染层交互改动在四门之外补真机走查：bw CLI 驱动真实 Electron 窗口（skill `~/.pai/agent/skills/bw`），断言实际渲染文本而非组件快照。测试装置全放 /tmp，不进仓库。
 
-1. **构建 + 隔离启动**：`apps/electron` 下 `bun run build` 产 `out/`，再 `PAI_USER_DATA_DIR=/tmp/pai-ui-test bw s create --electron node_modules/electron/dist/Electron.app/Contents/MacOS/Electron --electron-arg . --allow-eval`（cwd = apps/electron）。`PAI_USER_DATA_DIR` 重定向拿独立单实例锁与数据区——同 userData 双开即第二实例静默退出（exit 0）；`bw s close` 连带收走 `--electron` 拉起的 app。
-2. **隔离数据预置**（均落 `$PAI_USER_DATA_DIR`）：
+1. **构建 + 隔离启动**：`apps/electron` 下 `bun run build` 产 `out/`，再 `X3CODE_USER_DATA_DIR=/tmp/pai-ui-test bw s create --electron node_modules/electron/dist/Electron.app/Contents/MacOS/Electron --electron-arg . --allow-eval`（cwd = apps/electron）。`X3CODE_USER_DATA_DIR` 重定向拿独立单实例锁与数据区——同 userData 双开即第二实例静默退出（exit 0）；`bw s close` 连带收走 `--electron` 拉起的 app。
+2. **隔离数据预置**（均落 `$X3CODE_USER_DATA_DIR`）：
    - `settings.json`：providers（渠道 + `api` 协议 + models）、`defaultModel`/`projectModels` 钉住测试模型、`onboarded: true` 跳引导。
    - `agent/credentials.json`（0600）：hub 凭据（优先序 credentials > providers.json 字面 > apiKeyEnv）。app keyStore 走 safeStorage 不可预置，shell env 注入会被 hub spawn 白名单剥掉，这里是唯一不碰真凭据的注入点。
    - `agent/sessions/<id>/{header.json,events.jsonl}` + `registry.sqlite` 行 = 预置历史会话（侧栏 parked 懒恢复）；档案先过 x-harness 自己的 `validateSessionEvents` + 归档读取器再落盘。注意 parked 会话读不唤醒：stats/上下文分析要发一条消息唤醒线程后才拉得到。

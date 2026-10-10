@@ -1,4 +1,4 @@
-import type { HistoryItem } from '@paiapp/contracts';
+import type { HistoryItem } from '@x3code/contracts';
 import type { ThreadItem, TurnModel, TurnBlock, ToolCallModel } from '@/thread/thread-model';
 
 /**

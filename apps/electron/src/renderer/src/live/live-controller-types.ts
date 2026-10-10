@@ -10,7 +10,7 @@ import type {
   RelayConfig,
   SkillCandidateView,
   SkillView,
-} from '@paiapp/contracts';
+} from '@x3code/contracts';
 
 import type { RuntimeController } from './runtime-controller';
 import type { HubSettingsView, SessionPermissionModeView, ThinkingLevelStateView } from './store';

@@ -1,9 +1,9 @@
-import type { ToolCopy } from '@paiapp/ui-thread';
+import type { ToolCopy } from '@x3code/ui-thread';
 
 import { copy } from './index';
 
 /**
- * 共享派生层（@paiapp/ui-thread）的文案注入面：执行行前缀、组头短语的
+ * 共享派生层（@x3code/ui-thread）的文案注入面：执行行前缀、组头短语的
  * 词表从 `copy.flow` 按当前 locale 取值（copy 属性访问即解析，切换语言后
  * 下一次渲染生效）。共享包不 import 任何一端的 strings，词表由这里喂入。
  */

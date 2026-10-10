@@ -167,8 +167,7 @@ function WorkspaceMain(): React.JSX.Element {
       />
       <PanelLayer />
       <TitleBarLeft
-        titleName={copy.appTitle.name}
-        titleSuffix={copy.appTitle.suffix}
+        titleName={copy.appTitle}
         toggleLabel={sidebarCollapsed ? copy.sidebar.expandSidebarHint : copy.sidebar.collapseSidebarHint}
         collapsed={sidebarCollapsed}
         sidebarWidth={sidebarWidth}

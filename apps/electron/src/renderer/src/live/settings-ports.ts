@@ -1,7 +1,7 @@
-import { isSettableThinkingLevel } from '@paiapp/contracts';
+import { isSettableThinkingLevel } from '@x3code/contracts';
 
 import { copyOfError } from '@/lib/error-text';
-import type { ApiClient } from '@paiapp/api/client';
+import type { ApiClient } from '@x3code/api/client';
 import type { HubSettingsView, LiveStore, SessionPermissionModeView } from './store';
 
 /**

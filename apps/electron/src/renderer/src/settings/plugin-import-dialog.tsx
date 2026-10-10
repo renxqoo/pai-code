@@ -3,11 +3,11 @@
  *  内容件在 plugin-import-content（一组件一文件纪律）。 */
 import * as React from 'react';
 
-import type { PluginCandidateView } from '@paiapp/contracts';
+import type { PluginCandidateView } from '@x3code/contracts';
 
 import { copy } from '@/strings';
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@paiapp/ui';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@x3code/ui';
 
 import type { PluginImportRequest, PluginImportSummary } from '@/live/live-controller-types';
 

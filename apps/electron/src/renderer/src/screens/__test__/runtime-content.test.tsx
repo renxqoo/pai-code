@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import type { RuntimeSnapshotView } from '@paiapp/contracts';
+import type { RuntimeSnapshotView } from '@x3code/contracts';
 
 import { copy } from '@/strings';
 

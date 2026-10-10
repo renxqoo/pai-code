@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { toolRowLabel, toolRowLabelOf } from '../tool-row-label';
-import type { ToolCallStatus } from '@paiapp/contracts';
+import type { ToolCallStatus } from '@x3code/contracts';
 import { zhToolCopy } from './zh-tool-copy';
 
 const label = (name: string, status: ToolCallStatus): string => toolRowLabel(name, status, zhToolCopy);

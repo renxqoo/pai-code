@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { copy } from '@/strings';
 import { FilePane, fileLanguageOf, filePaneErrorText, isMarkdownPath } from '../file-pane';
-import type { ApiOutcome } from '@paiapp/contracts';
+import type { ApiOutcome } from '@x3code/contracts';
 
 describe('isMarkdownPath / fileLanguageOf', () => {
   test.each([

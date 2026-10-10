@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as fs from "node:fs/promises";
 
-import type { ApiError, SkillCandidateView, SkillInspectedCandidate, SkillView } from "@paiapp/contracts";
+import type { ApiError, SkillCandidateView, SkillInspectedCandidate, SkillView } from "@x3code/contracts";
 
 import {
   combineCandidate,

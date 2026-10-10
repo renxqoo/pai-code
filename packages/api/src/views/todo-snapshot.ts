@@ -1,4 +1,4 @@
-import { TodoSnapshotEventDataSchema, type TodoSnapshotEventData } from '@paiapp/contracts';
+import { TodoSnapshotEventDataSchema, type TodoSnapshotEventData } from '@x3code/contracts';
 
 /**
  * todo/snapshot 载荷 → 快照视图（实时帧与 WAL 事件同一展平形状，外层壳字段

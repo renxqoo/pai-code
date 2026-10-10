@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { X } from 'lucide-react';
 
-import { IconButton } from '@paiapp/ui';
+import { IconButton } from '@x3code/ui';
 
 import { WINDOWS_CAPTION_WIDTH } from '@/lib/platform';
 

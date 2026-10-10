@@ -1,11 +1,11 @@
-# T10 · pai-cli 对接与真实数据通路 方案
+# T10 · x3code-cli 对接与真实数据通路 方案
 > 状态：已核销
-> 级别：大（新子系统：真实协议客户端跨 main/preload/renderer 三层；借 feature-dev-v2 大级纪律，规格基线 = pai-cli `docs/api.md`（v0.5，36 命令 / 8 输出帧），本仓库不重复其规格，只定义本仓库侧的契约与折叠语义）
+> 级别：大（新子系统：真实协议客户端跨 main/preload/renderer 三层；借 feature-dev-v2 大级纪律，规格基线 = x3code-cli `docs/api.md`（v0.5，36 命令 / 8 输出帧），本仓库不重复其规格，只定义本仓库侧的契约与折叠语义）
 > 前置：T0（contracts/mock）已实施；T8 渲染层 UI 已按 demo 数据模型交付（`apps/electron/src/renderer`，视图模型 `thread-model.ts`）。
 
 ## 契约
 
-### 外部契约（对 pai-cli，真相在 hub 仓库 docs/api.md，不在此复述规格）
+### 外部契约（对 x3code-cli，真相在 hub 仓库 docs/api.md，不在此复述规格）
 
 本仓库侧镜像：`packages/contracts/src/hub-protocol.ts` 同步到 v0.5——36 命令词表、8 帧词表（`response`/`event`/`ui_request`/`heartbeat{subagents?}`/`hub_error`/`thread_died`/`subagent_event`/`subagent_message`）、`ThreadListEntry`。镜像只做形状收窄与判别联合，不做行为。
 
@@ -53,12 +53,12 @@
 
 ## 问题域
 
-- 处理：spawn/监督 pai-cli host（心跳 1Hz、>10s 挂死 → SIGKILL 进程组 → 重启 → 按注册表 resume）；命令往返（id 关联、16MiB 行上限、LF 唯一分隔且 U+2028/2029 不断行）；帧→事件映射；历史水化（`get_messages`）；渲染层折叠状态机与全部交互（对话/队列/停止/模型/思考档/压缩/对话框/子代理/认证/会话管理/崩溃横幅）；注册表持久化（窗口重开恢复会话）；models.json 生成与 key 注入。
+- 处理：spawn/监督 x3code-cli host（心跳 1Hz、>10s 挂死 → SIGKILL 进程组 → 重启 → 按注册表 resume）；命令往返（id 关联、16MiB 行上限、LF 唯一分隔且 U+2028/2029 不断行）；帧→事件映射；历史水化（`get_messages`）；渲染层折叠状态机与全部交互（对话/队列/停止/模型/思考档/压缩/对话框/子代理/认证/会话管理/崩溃横幅）；注册表持久化（窗口重开恢复会话）；models.json 生成与 key 注入。
 - 不处理（归属写清）：
   - 权限规则编辑 UI —— hub 默认规则 + confirm 对话框已构成可用闭环；rules 文件归用户/hub 侧维护（本版 `get/set_permission_rules` 不进 API 面）。
   - fork/clone/navigate_tree 的 UI 入口 —— 「编辑重发」v1 = 回填草稿重发（不改历史）；分叉 UI 归后续任务（协议面已具备）。
   - 直执行 bash（`!` 前缀）UI 入口 —— 归后续任务；`bashOutput` 事件已保留通路。
-  - 线程并发限流与预算熔断（T4）—— 本版不限流；pai-cli worker 按对话隔离且闲置自动回收。
+  - 线程并发限流与预算熔断（T4）—— 本版不限流；x3code-cli worker 按对话隔离且闲置自动回收。
   - 子 agent 的 `subagent/steer` UI —— API 面已含方法，面板交互归后续任务。
   - 多窗口 —— 单窗口多会话切换。
   - 会话内搜索/斜杠命令补全（`get_commands`）—— 归后续任务。
@@ -88,14 +88,14 @@
 4. **B4 main 装配**：api 服务 + 配置生成 + IPC 接线。验收：主进程模块单测绿 + dev 启动可达 bootstrap。
 5. **B5 渲染层状态层**：reducer + store + 水化 + 单测（时序全表）。验收：折叠语义测试全绿。
 6. **B6 UI 接线**：live workspace 替换 demo 装配（demo 保留用于组件测试）、对话框层、系统消息、thinking、设置页、会话管理。验收：dev 全流程可用。
-7. **B7 集成/e2e**：真 pai-cli（bun + dist/cli.js）集成测试（命令往返/流式折叠/对话框/恢复）+ 覆盖率核点。
+7. **B7 集成/e2e**：真 x3code-cli（bun + dist/cli.js）集成测试（命令往返/流式折叠/对话框/恢复）+ 覆盖率核点。
 8. **B8 对抗审查 + 收口**：独立会话审 diff；四门 + 覆盖率数字 + 真 app 人工验证记录。
 
 过渡态：B6 前渲染层仍挂 demo（联调点在 `app.tsx` 一处装配）；B6 收口后 demo 仅存于组件测试夹具（生产装配单轨走 live）。
 
 ## 裁决
 
-- 用户裁决（任务指令）：pai-cli 承担协议与进程管理（worker/会话/权限判定/沙箱/凭据落盘）；本仓库只做 UI 渲染与协议客户端；交付必须真实验证 app 可用，不接受「差不多」。
+- 用户裁决（任务指令）：x3code-cli 承担协议与进程管理（worker/会话/权限判定/沙箱/凭据落盘）；本仓库只做 UI 渲染与协议客户端；交付必须真实验证 app 可用，不接受「差不多」。
 - 默认裁决（否决窗口随实施提交）：单窗口单 host；会话恢复 = 启动时按注册表逐个 resume（worker 闲置自动回收，无需手动 parked 管理）；自定义 provider 的 key 用 safeStorage 加密存 app settings、spawn 时 env 注入、UI 永不回显；`Esc` = 清队列 + 停止（对齐 api.md）；自动标题 = 首条用户消息前 40 字符经 `set_session_name`。
 - 默认裁决：v1 不做的面见「问题域·不处理」，均已在协议/事件层预留通路（无死路）。
 
@@ -107,7 +107,7 @@
 - 折叠状态机时序：prompt 回显→流式→工具→权威替换→settle（恰好一次终态）；abort→stopped；auto_retry 期间不终态；queue 变化；双消息交错（同线程顺序）；晚订阅/重水化幂等（history 重放不重复）。
 - 历史映射：user(string|数组) 双形态扁平化；assistant text/thinking/toolCall 分组；toolResult 配对（isError、exitCode 推导）；bashExecution 条目；edit/write diff 提取（patch 解析 ± 行数与路径）。
 - host 集成（fake-host 脚本）：命令 id 关联回包；心跳超时触发重启+resume 序列；stdin EOF 优雅退出；exit 非 0 处理。
-- e2e（真 pai-cli + 真 bun，opt-in env）：start→prompt→（脚本化 provider 替身或 GLM env）流式折叠→对话框应答→stats→stop→resume。
+- e2e（真 x3code-cli + 真 bun，opt-in env）：start→prompt→（脚本化 provider 替身或 GLM env）流式折叠→对话框应答→stats→stop→resume。
 - 越权/安全面：dialog/respond 只认未见/已见 requestId 的幂等；key 不出现在任何日志/事件/IPC 回显；preload 面最小（invoke/subscribe/window）。
 
 ## 验收清单（已核销）
@@ -131,12 +131,12 @@
 - 排队：流式中 Enter → followUp 队列 + 徽标（1 queued message）→ settle 后自动消化为下一轮
 - 历史会话：设置页按 cwd 聚合列出 → 点击 resume → 全量水化（含中止轮 thinking）
 - 会话关闭（dispose 保留文件）、侧栏模型/标题自动命名（首条消息 48 字符）
-- e2e（opt-in real 门）：PAI_E2E=1 实跑通过（bootstrap→start→prompt→事件流→entries→stats→stop）
+- e2e（opt-in real 门）：X3CODE_E2E=1 实跑通过（bootstrap→start→prompt→事件流→entries→stats→stop）
 
 ## 对抗审查处置（独立会话，20 项）
 
 - P0×3 全修：message_end 角色过滤（user/toolResult 不再渲染为正文）；
-  message_update 剥离形态（partial/message 被 pai-cli toWireEvent 剥掉）→ fold 以
+  message_update 剥离形态（partial/message 被 x3code-cli toWireEvent 剥掉）→ fold 以
   liveMessageId 兜底 + 权威替换不双份；dialogSettled 客户端自治（应答即结算 + 5min 兜底）。
 - P1 修复：首心跳缺失判挂死；stdin/stdout 流错误兜底（EPIPE 不击穿主进程）；
   settle 对账改全量重建（根治批次切割丢 toolResult）；bootstrap 合并在途线程状态；
@@ -148,12 +148,12 @@
 - P2 记录不修（依据）：心跳 subagents 计数未透传（子代理面板以 subagent 事件为源，
   徽标数据 v1 未消费）；exitCode=虚拟值/durationMs=客户端观测（展示语义，注释已明）；
   select 应答回 label（options 双形态窄化丢 value，扩展按 value 匹配场景 v1 无入口）；
-  list_saved 仅覆盖已知 cwd（pai-cli 按目录过滤所致，新装首启历史为空属预期）；
+  list_saved 仅覆盖已知 cwd（x3code-cli 按目录过滤所致，新装首启历史为空属预期）；
   api.md auth/list 形状与实现漂移 → 应修 hub 仓库文档（本仓库实现与 host 一致）。
 
 ## 第二轮对抗审查（四路独立红测，2026-09-08）
 
-四个独立子代理（协议 A / 状态机 B / 安全 C / 性能 D）只读仓库、红测落 /tmp/pai-red/，
+四个独立子代理（协议 A / 状态机 B / 安全 C / 性能 D）只读仓库、红测落 /tmp/x3code-red/，
 共 30 项发现；全部由本仓裁决：**22 项确认为真并修复**（每项带仓库内回归测试或红测翻转验证）、
 5 项驳回（含 B-P4 的「settle 终结全部子代理」——会破坏后台任务跨轮语义，仅采纳 sessionDied/abort 路径）、
 3 项记录边界。修复要点：子代理 message_end 角色过滤（A-1）；帧事件载荷防线（A-2，event:null 不再击穿主进程）；

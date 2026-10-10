@@ -1,4 +1,4 @@
-import type { RuntimeSnapshotView } from '@paiapp/contracts';
+import type { RuntimeSnapshotView } from '@x3code/contracts';
 
 import { formatClockTime } from '@/thread/format-clock-time';
 import { copy } from '@/strings';

@@ -11,16 +11,16 @@ import {
   savedSessions,
   toSessionView,
   type HubApi,
-} from '@paiapp/api';
+} from '@x3code/api';
 
-import { errorLogToken, slowCallTrace } from '@paiapp/api';
+import { errorLogToken, slowCallTrace } from '@x3code/api';
 
 import { createQueueMirror } from './queue-mirror';
 import {
   openRegistryStore,
   createHostProcess,
   type HostProcessDeps,
-} from '@paiapp/infra';
+} from '@x3code/infra';
 import type {
   HostPhase,
   HostProcessPort,
@@ -29,7 +29,7 @@ import type {
   RegistryStorePort,
   SessionView,
   UiEvent,
-} from '@paiapp/contracts';
+} from '@x3code/contracts';
 
 import type { AppPaths } from './paths';
 import type { ProviderKeyStore } from './file-settings';
@@ -37,7 +37,7 @@ import { writeModelsConfig } from './models-config';
 
 /**
  * 主进程运行时：host 进程 + 注册表 + 会话表（SessionView 单一内存真相）。
- * 职责：帧 → UiEvent（协议语义只经 @paiapp/api 的 events/views）；注册表与内存表同步；
+ * 职责：帧 → UiEvent（协议语义只经 @x3code/api 的 events/views）；注册表与内存表同步；
  * 启动/重启后只对账（注册表 vs 盘上会话，parked 占位渲染），会话恢复是
  * 渲染层按需发起的 session/resume（懒恢复）；渲染层事件在 bootstrap 前
  * 缓冲（上限 1000，先到先丢弃）。

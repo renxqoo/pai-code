@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { classifyFrame, createFrameDecoder } from '../frame-decoder';
-import type { HubFrame } from '@paiapp/contracts';
+import type { HubFrame } from '@x3code/contracts';
 
 function collect(): { frames: HubFrame[]; dropped: string[]; onFrame: (f: HubFrame) => void } {
   const frames: HubFrame[] = [];

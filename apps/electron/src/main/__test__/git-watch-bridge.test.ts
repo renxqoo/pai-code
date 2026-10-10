@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { createGitWatchBridge } from '../git-watch-bridge';
-import type { UiEvent } from '@paiapp/contracts';
+import type { UiEvent } from '@x3code/contracts';
 
 const exec = promisify(execFile);
 

@@ -1,4 +1,4 @@
-import type { SubagentSpawnView } from '@paiapp/contracts';
+import type { SubagentSpawnView } from '@x3code/contracts';
 
 import { clipOneLine } from './args-preview';
 

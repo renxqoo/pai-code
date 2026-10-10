@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { MockClient } from '../index';
-import type { UiEvent } from '@paiapp/contracts';
+import type { UiEvent } from '@x3code/contracts';
 
 function ev(n: number): UiEvent {
   return { type: 'chunk', threadId: 't1', text: `m${n}` };

@@ -10,7 +10,7 @@ import { uiStore } from '@/ui/ui-store';
 import { openFileTab as openFileTabForTest } from '@/panel/panel-controller';
 import { render, renderProbe } from '@/testing/render';
 import { copy } from '@/strings';
-import type { SessionView } from '@paiapp/contracts';
+import type { SessionView } from '@x3code/contracts';
 
 /**
  * 舞台/面板/横幅区域回归（T34 M2）：自订阅面 + 流式增量重渲半径（B-batch

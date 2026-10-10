@@ -1,4 +1,4 @@
-import { type ProviderConfig } from '@paiapp/contracts';
+import { type ProviderConfig } from '@x3code/contracts';
 
 import { envVarNameForProvider } from './env-name';
 
@@ -7,7 +7,7 @@ import { envVarNameForProvider } from './env-name';
  * 每档案 = {name, protocol, baseUrl, apiKeyEnv, models[]}）。
  * name = x-harness 目录 providerId（分组键 + set_model 寻址键），撞 hub 预设键
  * 是整档覆盖语义（预设视图被遮蔽）——写前校验在 provider/upsert 路由；key 以
- * PAI_KEY_<NAME> env 引用注入（hub 装配快照解析 apiKeyEnv），不落 providers.json。
+ * X3CODE_KEY_<NAME> env 引用注入（hub 装配快照解析 apiKeyEnv），不落 providers.json。
  * 模型级 reasoning/input 显式写（x-harness 缺省 reasoning=true、缺 input 拒图——
  * 省略即语义翻转，omit-when-false 惯例在此不适用）。
  */

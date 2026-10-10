@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { RuntimeSnapshotView } from '@paiapp/contracts';
+import type { RuntimeSnapshotView } from '@x3code/contracts';
 
 import { writeDiagnosticsBundle } from '../export-diagnostics';
 

@@ -3,11 +3,11 @@
  *  与 Dialog 外壳分离 = 可 SSR 测试（Base UI Portal 纪律——skill-import-content 同款）。 */
 import * as React from 'react';
 
-import type { PluginCandidateView } from '@paiapp/contracts';
+import type { PluginCandidateView } from '@x3code/contracts';
 
 import { copy } from '@/strings';
 
-import { ActionButton } from '@paiapp/ui';
+import { ActionButton } from '@x3code/ui';
 
 import type { PluginImportRequest, PluginImportSummary } from '@/live/live-controller-types';
 

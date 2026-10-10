@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 
 import { lintTree, MINI_TREE, ruleCount } from '../test/utils.ts'
 
-describe('pai/no-node-in-browser-code', () => {
+describe('x3code/no-node-in-browser-code', () => {
   test.each([
     ['contracts 引 node:path', 'packages/contracts/src/n.ts', "import { join } from 'node:path';\nexport const j = join;\n"],
     ['contracts 引 bun:sqlite', 'packages/contracts/src/b.ts', "import {} from 'bun:sqlite';\nexport {};\n"],

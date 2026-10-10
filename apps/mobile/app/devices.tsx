@@ -9,6 +9,7 @@ import { useAppTheme } from '@/theme/theme-context';
 import { radius, spacing } from '@/theme/tokens';
 import { Button } from '@/components/ui/button';
 import { initializeRelayRuntime, useRelayStatus } from '@/mobile/relay/runtime';
+import { copy } from '@/strings/zh';
 import { Platform } from 'react-native';
 import { createPairingSession, generateDeviceIdentity, type PairingStep } from '@/mobile/relay/pairing';
 import { dialWebSocket } from '@/mobile/relay/ws-dial';
@@ -120,7 +121,7 @@ export default function DevicesRoute() {
       await session.submitDeviceKeys(identity);
       const registered = await session.waitRegistered();
       if (!registered.ok) {
-        setPairError(`配对未完成：${registered.reason}`);
+        setPairError(copy.pairIncomplete(registered.reason));
         session.close();
         return;
       }
@@ -134,13 +135,13 @@ export default function DevicesRoute() {
         relayToken: session.relayToken ?? '',
         ...(session.relayNodeId !== null ? { relayNodeId: session.relayNodeId } : {}),
       });
-      if (!saved) setPairError('凭证保存失败（本会话可用，重启后需重新配对）');
+      if (!saved) setPairError(copy.pairCredentialsSaveFailed);
       setHasCredentials(true);
       session.close();
       void initializeRelayRuntime().connectWithCredentials(session.relayToken ?? '');
     } catch (error) {
       wire?.close();
-      setPairError(error instanceof Error ? error.message : '配对失败');
+      setPairError(copy.pairFailed(error instanceof Error ? error.message : '未知错误'));
     } finally {
       setPairing(false);
       pairingInFlightRef.current = false;
@@ -220,7 +221,7 @@ export default function DevicesRoute() {
               setPairError(null);
               const hit = await discoverGateway(pairCode);
               if (hit === null) {
-                setPairError('未找到配对码——确认桌面端已发起配对，且手机与电脑在同一网络');
+                setPairError(copy.pairDiscoverMiss);
                 return;
               }
               void pairWithTicket(hit.relayUrl, hit.pairingId, hit.installationId, hit.pairingTicket, undefined, pairCode, hit.gatewayKeyFingerprint);
@@ -251,9 +252,9 @@ export default function DevicesRoute() {
                 void pairWithTicket(parsed.relayUrl, parsed.pairingId, parsed.installationId, parsed.pairingTicket ?? '', typeof parsed.gatewayEphemeralPub === 'string' ? parsed.gatewayEphemeralPub : undefined, undefined, parsed.gatewayKeyFingerprint);
                 return;
               }
-              setPairError('二维码内容缺少 relayUrl/pairingId/installationId/gatewayKeyFingerprint');
+              setPairError(copy.pairQrMissingFields);
             } catch {
-              setPairError('二维码内容不是合法配对载荷');
+              setPairError(copy.pairQrInvalidPayload);
             }
           }}
           visible={qrScanning}

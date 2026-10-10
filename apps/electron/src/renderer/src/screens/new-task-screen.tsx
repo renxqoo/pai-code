@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useStore } from 'zustand';
 
-import { thinkingLevelLabel, thinkingLevelOfLabel, type ApiOutcome, type CommandView } from '@paiapp/contracts';
+import { thinkingLevelLabel, thinkingLevelOfLabel, type ApiOutcome, type CommandView } from '@x3code/contracts';
 
 import { branchSegmentOf } from '@/composer/branch-segment';
 import { BranchPanel } from '@/composer/branch-panel';

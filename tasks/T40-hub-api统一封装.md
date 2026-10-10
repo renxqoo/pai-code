@@ -32,7 +32,7 @@ catch-all `String(error)` ≥10 处（需 internal 族）；"Session file not re
 down/invalid id/worker died）；packages 层开放词表（compaction 5 条、archive `corrupt:`）需
 **内层 Error 带 code 穿透**（小型重构）。双侧测试断言换形 ~70 处入 W0 触面。
 
-**调用面事实修正**：直连 host.request 实为 **7 处**（pai-runtime :180/:282/:446/:449/:451/:457/:482
+**调用面事实修正**：直连 host.request 实为 **7 处**（x3code-runtime :180/:282/:446/:449/:451/:457/:482
 + monitor :118-119 两条）；adapter 消费方 = 主进程 3 文件 + **infra 1 文件**（frame-decoder，
 v2 记「全在主进程」有误）+ 矩阵/测试 3 处；超时档实为**四档**（缺省 30s/prompt 10min/
 compact 30min/**bash 24h**）。
@@ -146,7 +146,7 @@ hub `get_host_info` 增加 `errorCodes: HUB_ERROR_CODES` 快照；app 启动期�
   （现状 host_unavailable 降级语义保持）。
 - **monitor**：保留 `host()` accessor 作 poll 前置守卫与快照数据源（hostPhase/restarts 来自
   port.diagnostics()，非命令面）；hub 只替换 get_host_info/thread/list 两条命令调用。
-- **keepalive 编排留驻 pai-runtime**：register-then-retry 容忍链是域内补偿业务，
+- **keepalive 编排留驻 x3code-runtime**：register-then-retry 容忍链是域内补偿业务，
   hub.thread.setKeepalive 是单命令薄封装；失败日志保留「host 空窗不告警」语义。
 - **子路由组按域窄接口注入**（settings/thread-ops/runtime/resume 各拿所需域接口类型，
   不拿整只 HubApi——窄类型缝不倒退）。
@@ -163,7 +163,7 @@ hub `get_host_info` 增加 `errorCodes: HUB_ERROR_CODES` 快照；app 启动期�
 
 ```ts
 // commands/thread.ts
-type SetKeepaliveInput = Omit<Extract<PaiCommand, { type: 'thread/set_keepalive' }>, 'type'>;
+type SetKeepaliveInput = Omit<Extract<X3codeCommand, { type: 'thread/set_keepalive' }>, 'type'>;
 // = { threadId: string; keepalive: boolean }——hub 协议改字段这里编译红
 ```
 
@@ -225,7 +225,7 @@ export function settle<T>(r: HubResult<T>): ApiOutcome<T> {
   return { ok: true, data: view };
 },
 
-// 形态③ 非路由消费（pai-runtime/monitor）——本来就是一行：
+// 形态③ 非路由消费（x3code-runtime/monitor）——本来就是一行：
 await hub.thread.setKeepalive({ threadId, keepalive });
 ```
 
@@ -244,7 +244,7 @@ key 只写一次（`'session/start': method(StartParamsSchema, startSession(deps
 运行时 unknown_method 才暴露）；② key 类型绑定 ApiMethod 闭集（拼错编译红）。方法名
 全文只余两处且各司其职：renderer 调用点（协议使用方）与 routes 定义点（协议实现方）。
 
-**圈1b · pai-runtime（原直连收编——单命令薄封装 + 编排留驻原地）**：
+**圈1b · x3code-runtime（原直连收编——单命令薄封装 + 编排留驻原地）**：
 
 ```ts
 // 收编前：let outcome = await host?.request({ type: 'thread/set_keepalive', … });
@@ -272,7 +272,7 @@ if (!outcome.ok) pushNotice(copyOf(outcome.error));    // COPY_BY_KIND 查表（
 | # | 仓 | 动作 | 拦截面 |
 |---|---|---|---|
 | 1 | x-harness | protocol/commands.ts 词表 + handler + 错误发射用 HUB_ERROR_CODES | 词表封闭断言 |
-| 2 | app contracts | HUB_COMMAND_TYPES 登记 + PaiCommand 联合成员 | CoversUnion 编译断言 |
+| 2 | app contracts | HUB_COMMAND_TYPES 登记 + X3codeCommand 联合成员 | CoversUnion 编译断言 |
 | 3 | app packages/api | 域文件一档（①②，必要时 views ③④） | typecheck（Extract 命中即类型就位） |
 | 4 | app api-routes | 方法 + zod ApiSchemas 注册 | ApiSchemas 自有属性判定 |
 | 5 | app renderer | 消费（若直达 UI） | kind 查表编译封闭 |

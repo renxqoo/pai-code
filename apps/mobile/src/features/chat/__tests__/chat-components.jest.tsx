@@ -47,19 +47,19 @@ describe("chat and history components", () => {
     );
     const order = JSON.stringify(view.toJSON());
     // 贴在最后一条消息后面：不浮到屏幕最底部，也不进头部
-    expect(order.indexOf("Pai Code 正在生成回复")).toBeGreaterThan(order.indexOf("最后一条消息"));
+    expect(order.indexOf("X3code 正在生成回复")).toBeGreaterThan(order.indexOf("最后一条消息"));
     // 不固定：样式里没有任何 position 定位（随消息流滚动）
-    const row = view.getByLabelText("Pai Code 正在生成回复");
+    const row = view.getByLabelText("X3code 正在生成回复");
     const styles = (Array.isArray(row.props.style) ? row.props.style : [row.props.style]) as readonly { position?: string }[];
     expect(styles.every((entry) => entry?.position === undefined)).toBe(true);
     // 未生成不渲染
     const idle = await render(<TimelineList generating={false} messages={[]} />);
-    expect(idle.queryByLabelText("Pai Code 正在生成回复")).toBeNull();
+    expect(idle.queryByLabelText("X3code 正在生成回复")).toBeNull();
   });
 
   it("执行中指示视觉本体只有旋转指示（与 PC 同形态）：无可见文案，语义靠读屏；全应用唯一旋转 loading 在这里", async () => {
     const view = await render(<TurnLoadingRow />);
-    expect(view.getByLabelText("Pai Code 正在生成回复")).toBeTruthy();
+    expect(view.getByLabelText("X3code 正在生成回复")).toBeTruthy();
     expect(view.queryByText(/正在生成/)).toBeNull();
     expect(view.getAllByTestId("loading-spinner", { includeHiddenElements: true })).toHaveLength(1);
   });
@@ -146,7 +146,7 @@ describe("chat and history components", () => {
         <WorkspaceSheet />
       </TestWrapper>,
     );
-    await fireEvent.press(view.getByText("Pai Mobile"));
+    await fireEvent.press(view.getByText("X3code Mobile"));
     expect(useNavigationStore.getState().sheet).toBeNull();
     expect(useConversationStore.getState()).toMatchObject({ workspaceId: "workspace-mobile" });
   });

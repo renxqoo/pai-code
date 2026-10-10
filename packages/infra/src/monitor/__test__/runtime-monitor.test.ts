@@ -1,15 +1,15 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createHubApi } from '@paiapp/api';
+import { createHubApi } from '@x3code/api';
 import type {
   HostCommandOutcome,
   HostDiagnostics,
   HostPhase,
   HostProcessPort,
-  PaiCommand,
+  X3codeCommand,
   ResourceSampleView,
   WorkerRowView,
-} from '@paiapp/contracts';
+} from '@x3code/contracts';
 
 import { createRuntimeMonitor, type RuntimeMonitorDeps } from '../create-runtime-monitor';
 
@@ -32,12 +32,12 @@ const THREAD_LIST_DATA = [
   { threadId: 't2', cwd: '/w/b', sessionPath: '/w/b/sessions/t2/transcript.jsonl', isStreaming: false, state: 'parked', idleMs: 0, rssBytes: null, keepalive: true },
 ];
 
-function makePort(overrides: Partial<Record<PaiCommand['type'], HostCommandOutcome>> = {}): HostProcessPort {
+function makePort(overrides: Partial<Record<X3codeCommand['type'], HostCommandOutcome>> = {}): HostProcessPort {
   return {
     get phase(): HostPhase {
       return 'ready';
     },
-    request: (command: PaiCommand) => {
+    request: (command: X3codeCommand) => {
       const outcome =
         command.type === 'get_host_info' ? overrides['get_host_info'] ?? { ok: true as const, data: HOST_INFO_DATA }
         : command.type === 'thread/list' ? overrides['thread/list'] ?? { ok: true as const, data: THREAD_LIST_DATA }
@@ -55,7 +55,7 @@ function makePort(overrides: Partial<Record<PaiCommand['type'], HostCommandOutco
 function makeDeps(host: HostProcessPort | null, polled: WorkerRowView[] = []): RuntimeMonitorDeps {
   return {
     host: () => host,
-    // hub 绑定 fake port 的 request 面（生产形态：pai-runtime 装配的门面同构）
+    // hub 绑定 fake port 的 request 面（生产形态：x3code-runtime 装配的门面同构）
     hub: () => (host === null ? null : createHubApi({ request: (cmd, timeoutMs) => host.request(cmd, timeoutMs) })),
     appMetrics: () => ({ rssBytes: 100, cpuPercent: 1.5 }),
     systemMemory: () => ({ totalBytes: 1000, availableBytes: 400 }),

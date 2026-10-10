@@ -1,4 +1,4 @@
-import type { IdleRecycleMinutes, RuntimeSnapshotView } from '@paiapp/contracts';
+import type { IdleRecycleMinutes, RuntimeSnapshotView } from '@x3code/contracts';
 
 import { copy } from '@/strings';
 import { writeClipboardText } from '@/lib/clipboard';

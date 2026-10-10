@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import type { TodoSnapshotTask } from '@paiapp/contracts';
+import type { TodoSnapshotTask } from '@x3code/contracts';
 
 import { TodoRow } from '../todo-row';
 

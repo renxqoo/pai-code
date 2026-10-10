@@ -1,8 +1,8 @@
-import { DurationTag } from '@paiapp/ui';
+import { DurationTag } from '@x3code/ui';
 
 import { copy } from '@/strings';
 import { formatElapsed } from '@/thread/format-elapsed';
-import { toolSummary } from '@paiapp/ui-thread';
+import { toolSummary } from '@x3code/ui-thread';
 import type { ToolCallModel } from '@/thread/thread-model';
 
 type AgentToolRowProps = {

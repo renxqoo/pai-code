@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { ChevronDown } from 'lucide-react';
 
-import { MenuButton, selectTriggerClassName } from '@paiapp/ui';
+import { MenuButton, selectTriggerClassName } from '@x3code/ui';
 
 import { FieldLabel } from './field-label';
 

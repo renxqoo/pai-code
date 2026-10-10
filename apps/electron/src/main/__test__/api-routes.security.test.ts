@@ -3,15 +3,15 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { HostCommandOutcome, HostPhase, HostProcessPort, HubFrame, PaiCommand } from "@paiapp/contracts";
+import type { HostCommandOutcome, HostPhase, HostProcessPort, HubFrame, X3codeCommand } from "@x3code/contracts";
 
 import { createApiRoutes } from "../api-routes";
-import { createSettingsRoutes } from '@paiapp/api';
+import { createSettingsRoutes } from '@x3code/api';
 import { createAgentDefinitionsStore } from "../agent-definitions-store";
 import { createSkillImporter } from "../skill-import";
 import { createFileSettings, type ProviderKeyStore } from "../file-settings";
-import { createPaiRuntime } from "../pai-runtime";
-import { createRuntimeMonitor } from '@paiapp/infra';
+import { createPaiRuntime } from "../x3code-runtime";
+import { createRuntimeMonitor } from '@x3code/infra';
 
 /**
  * 路由安全面回归（对抗审查 C-S2/C-S8/C-S4）：
@@ -28,13 +28,13 @@ const keyStore: ProviderKeyStore = {
 };
 
 /** fake host：get_models 回预设目录（撞键判定源）；其余命令成功并记账。 */
-function fakeHost(models: Array<Record<string, unknown>>): { port: HostProcessPort; sent: PaiCommand[] } {
-  const sent: PaiCommand[] = [];
+function fakeHost(models: Array<Record<string, unknown>>): { port: HostProcessPort; sent: X3codeCommand[] } {
+  const sent: X3codeCommand[] = [];
   const port: HostProcessPort = {
     get phase(): HostPhase {
       return "ready";
     },
-    request: (command: PaiCommand): Promise<HostCommandOutcome> => {
+    request: (command: X3codeCommand): Promise<HostCommandOutcome> => {
       sent.push(command);
       if (command.type === "get_models") return Promise.resolve({ ok: true, data: models });
       if (command.type === "permission/get_mode") return Promise.resolve({ ok: true, data: { mode: "default", source: "user", modes: ["plan", "auto", "edit-confirm", "full", "sandboxed-auto"] } });
@@ -151,7 +151,7 @@ describe("api-routes 安全面（C-S2/C-S8/C-S4）", () => {
     expect(traversal.error?.kind).toBe("skill_source_invalid");
   });
 
-  test("C-S8：provider 名 sanitize 碰撞拒绝（a-b 与 a_b 同映射 PAI_KEY_A_B）", async () => {
+  test("C-S8：provider 名 sanitize 碰撞拒绝（a-b 与 a_b 同映射 X3CODE_KEY_A_B）", async () => {
     const work = mkdtempSync(join(tmpdir(), "pai-sec-collide-"));
     const { routes } = await makeRoutes(work, { models: [] });
     const first = (await routes.invoke("provider/upsert", {

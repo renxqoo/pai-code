@@ -1,4 +1,4 @@
-import type { ApiError } from '@paiapp/contracts';
+import type { ApiError } from '@x3code/contracts';
 
 import { copy } from '@/strings';
 

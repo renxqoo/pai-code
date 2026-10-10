@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { isWindowStateEvent } from '../window-state';
 
-/** pai:event 通道同时承载 UiEvent 逐事件直发与壳层状态单发：守卫只放行合法 window-state 事件。 */
+/** x3code:event 通道同时承载 UiEvent 逐事件直发与壳层状态单发：守卫只放行合法 window-state 事件。 */
 describe('window-state 事件守卫', () => {
   test('合法事件（maximized/fullscreen 布尔齐全）放行', () => {
     expect(isWindowStateEvent({ kind: 'window-state', maximized: true, fullscreen: false })).toBe(true);

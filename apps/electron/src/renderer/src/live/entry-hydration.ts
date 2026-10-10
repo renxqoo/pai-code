@@ -1,5 +1,5 @@
-import { createApiClient } from '@paiapp/api/client';
-import type { PendingDialogView } from '@paiapp/contracts';
+import { createApiClient } from '@x3code/api/client';
+import type { PendingDialogView } from '@x3code/contracts';
 
 import type { BridgeClient } from './client-invoke';
 import type { ReadPorts } from './read-ports';

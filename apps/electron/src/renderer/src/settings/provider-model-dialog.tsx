@@ -1,10 +1,10 @@
 import * as React from "react";
 
-import type { ProviderModel } from "@paiapp/contracts";
+import type { ProviderModel } from "@x3code/contracts";
 
 import { copy } from "@/strings";
 
-import { ActionButton, Dialog, DialogContent, DialogHeader, DialogTitle } from "@paiapp/ui";
+import { ActionButton, Dialog, DialogContent, DialogHeader, DialogTitle } from "@x3code/ui";
 
 import {
   ProviderModelDialogFields,

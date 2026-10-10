@@ -2,7 +2,7 @@ import * as React from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { Clock3 } from 'lucide-react-native';
 
-import { detailOutput, toolKindOf, toolPreviewMono, toolRowLabelOf, toolSummary } from '@paiapp/ui-thread';
+import { detailOutput, toolKindOf, toolPreviewMono, toolRowLabelOf, toolSummary } from '@x3code/ui-thread';
 
 import { Sheet } from '@/components/ui/sheet';
 import { AnsiText } from '@/features/chat/ansi/ansi-text';

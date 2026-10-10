@@ -3,8 +3,8 @@
  *  确认走 host 内存置位（proposals.json 文件伪造不可达）；空面板零渲染。 */
 import * as React from 'react';
 
-import type { PluginProposalRow } from '@paiapp/contracts';
-import { ActionButton } from '@paiapp/ui';
+import type { PluginProposalRow } from '@x3code/contracts';
+import { ActionButton } from '@x3code/ui';
 
 import { copy } from '@/strings';
 

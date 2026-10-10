@@ -1,4 +1,4 @@
-import type { InflightMessageView, InflightToolView, InflightView } from '@paiapp/contracts';
+import type { InflightMessageView, InflightToolView, InflightView } from '@x3code/contracts';
 import type { ToolCallModel, TurnBlock } from '@/thread/thread-model';
 
 import type { LiveThreadState } from './live-thread-state';

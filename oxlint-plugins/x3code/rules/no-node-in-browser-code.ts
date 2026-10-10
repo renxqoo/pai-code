@@ -22,7 +22,7 @@ export default defineRule({
 
 function create(context: Context) {
   const pkg = packageOf(context.filename)
-  const inBrowserZone = pkg === '@paiapp/contracts' || pkg === '@paiapp/ui' || isRenderer(context.filename)
+  const inBrowserZone = pkg === '@x3code/contracts' || pkg === '@x3code/ui' || isRenderer(context.filename)
   if (!inBrowserZone) return {}
   const isTestFile = context.filename.includes('/__test__/')
   return importVisitors((spec, node) => {

@@ -1,4 +1,4 @@
-import type { ProviderConfigView } from '@paiapp/contracts';
+import type { ProviderConfigView } from '@x3code/contracts';
 
 import { copy } from '@/strings';
 

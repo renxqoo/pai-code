@@ -1,7 +1,7 @@
 {
-  "name": "@paiapp/ui-thread",
+  "name": "@x3code/ui-thread",
   "private": true,
   "type": "module",
   "exports": { ".": "./src/index.ts" },
-  "dependencies": { "@paiapp/contracts": "workspace:*" }
+  "dependencies": { "@x3code/contracts": "workspace:*" }
 }

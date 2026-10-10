@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { hydrateItems, hydrateNewItems, mergeDiffFile } from '../hydrate-items';
-import type { HistoryItem } from '@paiapp/contracts';
+import type { HistoryItem } from '@x3code/contracts';
 
 const at = (n: number): number => 1_000 + n;
 

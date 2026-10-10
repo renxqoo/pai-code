@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { SubagentSnapshotView } from '@paiapp/contracts';
+import type { SubagentSnapshotView } from '@x3code/contracts';
 
 import { createLiveStore } from '../store';
 

@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 
-import { createFrameDecoder, encodeCommand } from '@paiapp/api';
-import type { HostDiagnostics, HostPhase, HostProcessPort, HostRuntimeConfig, HostCommandOutcome, HubFrame, PaiCommand } from '@paiapp/contracts';
+import { createFrameDecoder, encodeCommand } from '@x3code/api';
+import type { HostDiagnostics, HostPhase, HostProcessPort, HostRuntimeConfig, HostCommandOutcome, HubFrame, X3codeCommand } from '@x3code/contracts';
 
 import { hubSpawnEnv } from './spawn-env';
 
@@ -155,7 +155,7 @@ export function createHostProcess(deps: HostProcessDeps): HostProcessPort {
     spawnStartedAt = Date.now();
     lastHeartbeatAt = spawnStartedAt;
     // 白名单继承：第三方渠道凭据（宿主 shell 的 OPENAI_API_KEY 等）不得透传，
-    // 渠道真相只来自 buildEnv 注入的 $PAI_KEY_*（见 spawn-env 模块注释）。
+    // 渠道真相只来自 buildEnv 注入的 $X3CODE_KEY_*（见 spawn-env 模块注释）。
     // hubEntry null = 直执行形态：bunPath 即自包含可执行（编译产物），无入口参数。
     const env: Record<string, string> = { ...hubSpawnEnv(process.env), ...config.buildEnv(), HUB_AGENT_DIR: config.agentDir };
     const proc = spawn(config.bunPath, config.hubEntry === null ? [] : [config.hubEntry], {
@@ -289,7 +289,7 @@ export function createHostProcess(deps: HostProcessDeps): HostProcessPort {
     get phase(): HostPhase {
       return phase ?? 'starting';
     },
-    request(command: PaiCommand, timeoutMs?: number): Promise<HostCommandOutcome> {
+    request(command: X3codeCommand, timeoutMs?: number): Promise<HostCommandOutcome> {
       if (disposed) return Promise.resolve({ ok: false, error: 'host_disposed' });
       if (pending.size >= PENDING_LIMIT) return Promise.resolve({ ok: false, error: 'busy' });
       const id = String(nextId++);

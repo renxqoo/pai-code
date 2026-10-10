@@ -1,4 +1,4 @@
-import type { ApiError, ApiMethod, ApiOutcome, ApiParams, SkillCandidateView, SkillView } from '@paiapp/contracts';
+import type { ApiError, ApiMethod, ApiOutcome, ApiParams, SkillCandidateView, SkillView } from '@x3code/contracts';
 
 import type { SettingsCommands } from '../commands/settings';
 import { appError } from '../errors';

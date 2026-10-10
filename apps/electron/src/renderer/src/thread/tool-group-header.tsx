@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { ChevronToggle } from '@paiapp/ui';
+import { ChevronToggle } from '@x3code/ui';
 
 import { copy } from '@/strings';
 import { cn } from '@/lib/utils';
@@ -8,7 +8,7 @@ import { toolGroupIcon } from './tool-icons';
 import { toolCopy } from '@/strings/tool-copy';
 import { chevronRevealClass } from './collapse-state';
 import { ProcessRailIcon } from './process-rail-icon';
-import { toolGroupLabel, toolGroupStatus } from '@paiapp/ui-thread';
+import { toolGroupLabel, toolGroupStatus } from '@x3code/ui-thread';
 import type { ToolCallModel } from './thread-model';
 
 type ToolGroupHeaderProps = {

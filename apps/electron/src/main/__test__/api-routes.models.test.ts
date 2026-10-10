@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { ModelInfoView } from '@paiapp/contracts';
+import type { ModelInfoView } from '@x3code/contracts';
 
 import { channelScopedModels } from '../api-routes';
 

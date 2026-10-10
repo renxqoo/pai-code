@@ -1,4 +1,4 @@
-import { DurationTag, Spinner } from '@paiapp/ui';
+import { DurationTag, Spinner } from '@x3code/ui';
 import { agentElapsedMs } from '@/thread/panel-summary';
 import { formatElapsed } from '@/thread/format-elapsed';
 import type { SubagentModel } from '@/thread/thread-model';

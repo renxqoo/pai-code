@@ -3,7 +3,7 @@ import * as React from 'react';
 
 import { PromptInputArea } from '../prompt-input-area';
 import { render } from '@/testing/render';
-import type { CommandView } from '@paiapp/contracts';
+import type { CommandView } from '@x3code/contracts';
 
 /**
  * 补全采纳后的光标定位（T33 初审中-10 承诺项）：acceptToken → pendingCaret →

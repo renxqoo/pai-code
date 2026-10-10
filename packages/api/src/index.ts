@@ -1,5 +1,5 @@
 /**
- * HubApi 门面（T40 §2/§2c）：全进程恰一个实例（pai-runtime buildHost 装配），
+ * HubApi 门面（T40 §2/§2c）：全进程恰一个实例（x3code-runtime buildHost 装配），
  * 消费方经注入拿域接口，不自己拼命令。零 class、freeze、纯依赖注入可裸测。
  * 七域齐备（thread/session/models/permissions/agents/settings/host）；帧解码/
  * 命令编码/事件映射（events/）与协议响应收窄视图（views/）由本包统一导出。

@@ -5,7 +5,7 @@ import { singletonTab } from '@/panel/panel-state';
 import { initialThreadState } from '@/live/live-thread-state';
 import { store as liveStore } from '@/live/workspace-runtime';
 import { uiStore } from '@/ui/ui-store';
-import type { SessionView } from '@paiapp/contracts';
+import type { SessionView } from '@x3code/contracts';
 
 /** 面板控制器：文件 tab 按活跃 cwd 寻址（文件 tab 入口 = 命令面板 file: 条目与 Diff 列表点击）。 */
 

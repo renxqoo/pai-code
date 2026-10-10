@@ -1,4 +1,4 @@
-import { hostInfoView, parseDiagnosticEvent, threadListRows, type HubApi } from '@paiapp/api';
+import { hostInfoView, parseDiagnosticEvent, threadListRows, type HubApi } from '@x3code/api';
 import type {
   HeartbeatFrame,
   HostInfoView,
@@ -8,7 +8,7 @@ import type {
   ResourceSampleView,
   RuntimeSnapshotView,
   WorkerRowView,
-} from '@paiapp/contracts';
+} from '@x3code/contracts';
 import { createSampleRing } from './sample-ring';
 import { createSupervisionLog } from './supervision-log';
 

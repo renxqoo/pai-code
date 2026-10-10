@@ -10,7 +10,7 @@ import { collectHarnessDeps, collectThirdPartyDirs, gatewayBuildArgs, resolveRes
 
 test('env 覆盖优先于缺省来源', () => {
   const sources = resolveResourceSources(
-    { PAI_BUN_PATH: '/custom/bun', PAI_HUB_ENTRY: '/custom/host/cli.ts' },
+    { X3CODE_BUN_PATH: '/custom/bun', X3CODE_HUB_ENTRY: '/custom/host/cli.ts' },
     '/repo',
     '/exec/bun',
   );
@@ -43,7 +43,7 @@ test('gateway 打包构建参数：build 子命令 + 源码入口 + bundled 单�
 /** harnessRoot 解析 + 依赖闭包收集（plugin-runtime M2：node_modules 子集面）。 */
 
 test('harnessRoot：env 覆盖与缺省旁级检出', () => {
-  expect(resolveResourceSources({ PAI_HARNESS_ROOT: '/h' }, '/repo', '/b').harnessRoot).toBe('/h');
+  expect(resolveResourceSources({ X3CODE_HARNESS_ROOT: '/h' }, '/repo', '/b').harnessRoot).toBe('/h');
   expect(resolveResourceSources({}, '/repo', '/b').harnessRoot).toBe('/x-harness');
 });
 

@@ -1,7 +1,7 @@
 
 
-import type { ApiError, ApiMethod, ApiOutcome, ApiParams, PreferencesView, ProviderConfig, ProviderConfigView } from '@paiapp/contracts';
-import { isApiFormat, permVocabOf, resolveStoredPermMode, type PermissionModeData } from '@paiapp/contracts';
+import type { ApiError, ApiMethod, ApiOutcome, ApiParams, PreferencesView, ProviderConfig, ProviderConfigView } from '@x3code/contracts';
+import { isApiFormat, permVocabOf, resolveStoredPermMode, type PermissionModeData } from '@x3code/contracts';
 import { appError } from '../errors';
 import type { PermissionCommands } from '../commands/permissions';
 import type { SettingsCommands } from '../commands/settings';
@@ -34,7 +34,7 @@ export type SettingsRoutesDeps = {
   keyStore: KeyStorePort;
   /** provider 配置结构变更（无 key 变更）：hub models/reload 热更新,存量会话存活。 */
   reloadModels: () => Promise<void>;
-  /** key 变更后重启 host（$PAI_KEY_* 经 spawn env 注入,进程存活期不可变）。 */
+  /** key 变更后重启 host（$X3CODE_KEY_* 经 spawn env 注入,进程存活期不可变）。 */
   restartHost: () => Promise<void>;
   /** relay 配置变更后重启网关（gateway.json 只在启动期读入）。 */
   restartGateway: () => Promise<void>;
@@ -92,7 +92,7 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps) {
     'app/setPreference': Handler<'app/setPreference'>;
   } = {
     'provider/upsert': async (params) => {
-      // env 变量名碰撞防护：不同名字 sanitize 后同名会导致 key 互串（a-b 与 a_b 同映射 PAI_KEY_A_B）
+      // env 变量名碰撞防护：不同名字 sanitize 后同名会导致 key 互串（a-b 与 a_b 同映射 X3CODE_KEY_A_B）
       const envName = envVarNameForProvider(params.name);
       const collides = deps.settings
         .listProviders()

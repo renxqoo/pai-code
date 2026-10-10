@@ -1,9 +1,9 @@
 import * as React from 'react';
 
-import type { AgentDefinition, IdleRecycleMinutes, PluginCandidateView, PluginProposalRow, PluginView, ProviderConfigView, ProviderModel, RelayConfig, SkillCandidateView, SkillView, ThinkingLevel } from '@paiapp/contracts';
+import type { AgentDefinition, IdleRecycleMinutes, PluginCandidateView, PluginProposalRow, PluginView, ProviderConfigView, ProviderModel, RelayConfig, SkillCandidateView, SkillView, ThinkingLevel } from '@x3code/contracts';
 import type { HubSettingsView } from '@/live/store';
 import type { PluginImportRequest, PluginImportSummary, SkillImportRequest, SkillImportSummary } from '@/live/live-controller-types';
-import { AGENT_TOOL_IDS } from '@paiapp/contracts';
+import { AGENT_TOOL_IDS } from '@x3code/contracts';
 import type { Theme } from '@/components/theme-context';
 import { useTheme } from '@/components/use-theme';
 import { useStore } from 'zustand';

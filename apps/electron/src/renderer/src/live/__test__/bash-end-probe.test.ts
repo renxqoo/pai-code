@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { BASH_END_PROBE_MAX_REARMS, createBashEndProbe } from '../bash-end-probe';
-import type { InflightView } from '@paiapp/contracts';
+import type { InflightView } from '@x3code/contracts';
 
 /** 直执行 bash 收尾探测：静默后读口确认收尾；仍在跑时有界重排；四条回收路径。 */
 

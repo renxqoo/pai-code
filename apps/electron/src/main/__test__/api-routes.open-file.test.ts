@@ -6,8 +6,8 @@ import { join } from 'node:path';
 import { createApiRoutes } from '../api-routes';
 import { createAgentDefinitionsStore } from '../agent-definitions-store';
 import { createFileSettings, type ProviderKeyStore } from '../file-settings';
-import { createPaiRuntime } from '../pai-runtime';
-import { createRuntimeMonitor } from '@paiapp/infra';
+import { createPaiRuntime } from '../x3code-runtime';
+import { createRuntimeMonitor } from '@x3code/infra';
 import type { FileRead } from '../file-read';
 import type { OpenLocation } from '../open-location';
 

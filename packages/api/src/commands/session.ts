@@ -2,13 +2,13 @@
  * session 域命令（轮次执行面）：prompt 受理档 / compact 同步压缩档 / bash 24h 长命档
  * 为本域三档特殊面（T40 timeouts 单一真相）。
  */
-import type { PaiCommand } from '@paiapp/contracts';
+import type { X3codeCommand } from '@x3code/contracts';
 
 import type { HubResult } from '../errors';
 import type { Transport } from '../transport';
 import { TIMEOUTS } from '../timeouts';
 
-type Input<C extends PaiCommand['type']> = Omit<Extract<PaiCommand, { type: C }>, 'type'>;
+type Input<C extends X3codeCommand['type']> = Omit<Extract<X3codeCommand, { type: C }>, 'type'>;
 
 export interface SessionCommands {
   prompt(input: Input<'prompt'>): Promise<HubResult<unknown>>;

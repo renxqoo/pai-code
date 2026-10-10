@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { commandTokenDeleteRange, leadingCommandHighlight, splitHighlight } from '../command-highlight';
-import type { CommandView } from '@paiapp/contracts';
+import type { CommandView } from '@x3code/contracts';
 
 const SKILL: CommandView = { name: 'skill:writer', description: null, source: 'skill' };
 

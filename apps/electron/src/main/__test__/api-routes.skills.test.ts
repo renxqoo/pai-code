@@ -3,14 +3,14 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 
-import type { HostCommandOutcome, HostPhase, HostProcessPort, HubFrame, PaiCommand } from '@paiapp/contracts';
+import type { HostCommandOutcome, HostPhase, HostProcessPort, HubFrame, X3codeCommand } from '@x3code/contracts';
 
 import { createApiRoutes } from '../api-routes';
 import { createAgentDefinitionsStore } from '../agent-definitions-store';
 import { createSkillImporter } from '../skill-import';
 import { createFileSettings, type ProviderKeyStore } from '../file-settings';
-import { createPaiRuntime } from '../pai-runtime';
-import { createRuntimeMonitor } from '@paiapp/infra';
+import { createPaiRuntime } from '../x3code-runtime';
+import { createRuntimeMonitor } from '@x3code/infra';
 
 /**
  * skills/list 与 skills/setEnabled 路由回归（hub 命令面）：
@@ -40,14 +40,14 @@ type HostScript = {
 function fakeSkillsHost(
   initial: Array<SkillsEntry | string>,
   script: HostScript = {},
-): { port: HostProcessPort; sent: PaiCommand[] } {
+): { port: HostProcessPort; sent: X3codeCommand[] } {
   let skills: unknown[] = [...initial];
-  const sent: PaiCommand[] = [];
+  const sent: X3codeCommand[] = [];
   const port: HostProcessPort = {
     get phase(): HostPhase {
       return 'ready';
     },
-    request: (command: PaiCommand): Promise<HostCommandOutcome> => {
+    request: (command: X3codeCommand): Promise<HostCommandOutcome> => {
       sent.push(command);
       if (command.type === 'skills/list') return Promise.resolve({ ok: true, data: { skills } });
       if (command.type === 'skills/set_enabled') {

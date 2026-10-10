@@ -1,4 +1,4 @@
-import type { HostInfoView } from '@paiapp/contracts';
+import type { HostInfoView } from '@x3code/contracts';
 
 import { copy } from '@/strings';
 import { cn } from '@/lib/utils';

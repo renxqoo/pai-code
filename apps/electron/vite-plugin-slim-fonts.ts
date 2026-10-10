@@ -44,7 +44,7 @@ function slimCssForId(css: string, id: string): string | null {
 
 function slimFontsPlugin(): Plugin {
   return {
-    name: 'pai:slim-fonts',
+    name: 'x3code:slim-fonts',
     enforce: 'pre',
     transform(code, id) {
       const slimmed = slimCssForId(code, id);

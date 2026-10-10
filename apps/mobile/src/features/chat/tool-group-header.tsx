@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Pressable } from 'react-native';
 import { ChevronDown, ChevronRight } from 'lucide-react-native';
 
-import { toolGroupLabel, toolGroupStatus } from '@paiapp/ui-thread';
+import { toolGroupLabel, toolGroupStatus } from '@x3code/ui-thread';
 
 import { useAppTheme } from '@/theme/theme-context';
 import { copy, toolCopy } from '@/strings/zh';

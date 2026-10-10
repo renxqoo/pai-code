@@ -1,4 +1,4 @@
-import { formatCountUnit, StatusDot } from '@paiapp/ui';
+import { formatCountUnit, StatusDot } from '@x3code/ui';
 
 import { copy } from '@/strings';
 import type { PanelSummary } from '@/thread/panel-summary';

@@ -13,6 +13,9 @@ jest.mock('expo-secure-store', () => ({
   deleteItemAsync: jest.fn(() => Promise.resolve()),
 }));
 jest.mock('expo-image-picker', () => ({ launchImageLibraryAsync: jest.fn() }));
+jest.mock('expo-constants', () => ({
+  default: { expoConfig: null, expoGoConfig: null },
+}));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn(), back: jest.fn() }) }));
 
 // RN jest 预设的 Image.getSize mock 只兼容回调形态（promise 形态会去调 undefined 的 success）——补齐两态。

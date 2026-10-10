@@ -2,7 +2,7 @@
  * hub spawn env 白名单构造：宿主环境只携带进程运行所必需的系统变量，
  * 一切模型渠道凭据（OPENAI_API_KEY、ANTHROPIC_AUTH_TOKEN 等第三方 env key）
  * 不得透传——hub 侧 pi 会把「有 env key 的内置渠道」判定为可用模型，
- * 渠道真相只允许来自 app 设置面注入的 $PAI_KEY_*。
+ * 渠道真相只允许来自 app 设置面注入的 $X3CODE_KEY_*。
  */
 
 /**
@@ -51,7 +51,7 @@ const NAMED_ALLOW = new Set([
 /** 前缀放行：区域化与桌面环境变量族。 */
 const PREFIX_ALLOW = ['LC_', 'XDG_'];
 
-/** 过滤后的宿主 env（新对象；键保留原始大小写，不修改入参）。注入面（$PAI_KEY_* 等）由调用方合并。 */
+/** 过滤后的宿主 env（新对象；键保留原始大小写，不修改入参）。注入面（$X3CODE_KEY_* 等）由调用方合并。 */
 export function hubSpawnEnv(source: NodeJS.ProcessEnv): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [name, value] of Object.entries(source)) {

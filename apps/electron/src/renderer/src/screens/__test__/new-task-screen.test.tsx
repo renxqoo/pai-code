@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import type { CommandView, GitBranchesView } from '@paiapp/contracts';
+import type { CommandView, GitBranchesView } from '@x3code/contracts';
 
 import { initialThreadState } from '@/live/live-thread-state';
 import { store as liveStore } from '@/live/workspace-runtime';

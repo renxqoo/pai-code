@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Folder, ListTree } from 'lucide-react';
 import { useStore } from 'zustand';
 
-import { ChevronToggle, MenuButton, type MenuItemDef } from '@paiapp/ui';
+import { ChevronToggle, MenuButton, type MenuItemDef } from '@x3code/ui';
 
 import { cn } from '@/lib/utils';
 import { copy } from '@/strings';

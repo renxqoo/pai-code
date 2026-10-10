@@ -1,9 +1,9 @@
 /**
- * Client 接口适配（T58）：invoke/subscribe 形态与 @paiapp/contracts Client 同构
+ * Client 接口适配（T58）：invoke/subscribe 形态与 @x3code/contracts Client 同构
  * （UI/共享包零改动消费）；实现走 RelayTransport（relay 链路）。
  */
-import { UiEventSchema, type ApiMethod, type Client, type ClientCapabilities, type UiEvent, type Unsubscribe } from '@paiapp/contracts';
-import { readCommandError, type CommandError } from '@paiapp/relay-protocol';
+import { UiEventSchema, type ApiMethod, type Client, type ClientCapabilities, type UiEvent, type Unsubscribe } from '@x3code/contracts';
+import { readCommandError, type CommandError } from '@x3code/relay-protocol';
 import { mapResponseData, translateCommand } from '../relay/command-map';
 
 type Subscriber = (event: UiEvent) => void;

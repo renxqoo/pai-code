@@ -8,7 +8,7 @@
  * 非 png/jpeg/webp/gif 格式（如 HEIC）Canvas 无法解码 → 拒绝（返回 null 由调用方提示）。
  */
 
-import type { ImagePayload } from '@paiapp/contracts';
+import type { ImagePayload } from '@x3code/contracts';
 
 const MAX_SOURCE_BYTES = 20 * 1024 * 1024;
 const MAX_EDGE_PX = 2000;

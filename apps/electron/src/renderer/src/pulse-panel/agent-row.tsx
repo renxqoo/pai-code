@@ -1,4 +1,4 @@
-import { DurationTag, Spinner, StatusDot } from '@paiapp/ui';
+import { DurationTag, Spinner, StatusDot } from '@x3code/ui';
 import { agentElapsedMs } from '@/thread/panel-summary';
 import { formatElapsed } from '@/thread/format-elapsed';
 import { subagentStatusLabel } from '@/thread/subagent-status';

@@ -1,7 +1,7 @@
 import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import type { RuntimeEventView, RuntimeSnapshotView } from '@paiapp/contracts';
+import type { RuntimeEventView, RuntimeSnapshotView } from '@x3code/contracts';
 
 /**
  * 诊断包导出（T29）：userData/diagnostics/<ts>/ 目录——summary.md + 事件/快照

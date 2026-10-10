@@ -7,7 +7,7 @@ import { store as liveStore } from '@/live/workspace-runtime';
 import { uiStore } from '@/ui/ui-store';
 import { render } from '@/testing/render';
 import { copy } from '@/strings';
-import type { SessionView } from '@paiapp/contracts';
+import type { SessionView } from '@x3code/contracts';
 
 /** 新建任务页装配（T34 M3）：订阅随页挂卸——问候语/已知目录/hostDown 文案数据面。 */
 

@@ -9,13 +9,13 @@ import { isWindowStateEvent, type WindowState } from '@/lib/window-state';
 function useWindowState(): WindowState {
   const [state, setState] = React.useState<WindowState>({ maximized: false, fullscreen: false });
   React.useEffect(() => {
-    const pai = window.pai;
-    if (pai === undefined) return;
+    const bridge = window.x3code;
+    if (bridge === undefined) return;
     let mounted = true;
-    void pai.window.getState().then((initial) => {
+    void bridge.window.getState().then((initial) => {
       if (mounted) setState(initial);
     });
-    const unsubscribe = pai.subscribe((event: unknown) => {
+    const unsubscribe = bridge.subscribe((event: unknown) => {
       if (isWindowStateEvent(event)) {
         setState({ maximized: event.maximized, fullscreen: event.fullscreen });
       }

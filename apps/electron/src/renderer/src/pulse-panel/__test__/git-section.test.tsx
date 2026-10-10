@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import type { GitStatusView } from '@paiapp/contracts';
+import type { GitStatusView } from '@x3code/contracts';
 
 import { GitSection } from '../git-section';
 

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { PromptInputArea } from '../prompt-input-area';
-import type { CommandView } from '@paiapp/contracts';
+import type { CommandView } from '@x3code/contracts';
 
 const SKILL: CommandView = { name: 'skill:writer', description: null, source: 'skill' };
 

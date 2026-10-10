@@ -1,7 +1,7 @@
 import type * as React from 'react';
 import { ChevronDown, Folder, GitBranch } from 'lucide-react';
 
-import { AnchoredPanel } from '@paiapp/ui';
+import { AnchoredPanel } from '@x3code/ui';
 
 import { cn } from '@/lib/utils';
 import { copy } from '@/strings';

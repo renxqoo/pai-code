@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { FileDiff } from 'lucide-react';
 
-import { ChevronToggle, formatDiffDelta, SplitButton } from '@paiapp/ui';
+import { ChevronToggle, formatDiffDelta, SplitButton } from '@x3code/ui';
 
 import { copy } from '@/strings';
 import { DiffFileList } from './diff-file-list';

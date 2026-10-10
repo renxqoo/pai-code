@@ -1,6 +1,6 @@
 import type { AgentDefinitionsPort, RuntimePort } from './ports';
 
-import type { ApiError, ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
+import type { ApiError, ApiMethod, ApiOutcome, ApiParams } from '@x3code/contracts';
 import { appError } from '../errors';
 import type { AgentCommands } from '../commands/agents';
 import { splitModelRef } from './agent-definition';

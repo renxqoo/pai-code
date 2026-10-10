@@ -1,7 +1,7 @@
 /** 对话流文案（中文；key 结构与 enFlow 逐字段对齐，类型强制同步）。 */
 import type { enFlow } from './en-flow';
-import type { RetryCopy } from '@paiapp/ui-thread';
-import { retryLineOf } from '@paiapp/ui-thread';
+import type { RetryCopy } from '@x3code/ui-thread';
+import { retryLineOf } from '@x3code/ui-thread';
 import {
   bashImagesRejectedCopy,
   imagesDeniedCopy,
@@ -10,7 +10,7 @@ import {
   resumeFailedCopy,
 } from './zh-error-copy';
 
-/** 重试行词面（共享拼装入 @paiapp/ui-thread，两端同一句）：hub 错误码 → 原因短语。 */
+/** 重试行词面（共享拼装入 @x3code/ui-thread，两端同一句）：hub 错误码 → 原因短语。 */
 export const zhRetryCopy: RetryCopy = {
   reasonHttp429: '请求过于频繁',
   reasonHttp408: '请求超时',
@@ -116,7 +116,7 @@ export const zhFlow: typeof enFlow = {
   turnAnchorRailAria: '历史轮次导航',
   thinking: '思考',
   /**
-   * 重试行整句（序号 + 原因）：拼装单点在 @paiapp/ui-thread/retry-copy，词面由
+   * 重试行整句（序号 + 原因）：拼装单点在 @x3code/ui-thread/retry-copy，词面由
    * zhRetryCopy / enRetryCopy 注入——两端同一句话，无分隔符空格漂移。
    */
   retryLine: (attempt: number, code: string | null): string => retryLineOf(attempt, code, zhRetryCopy),

@@ -1,6 +1,6 @@
 /** 工具参数 → 单行预览（命令类工具显示命令本体，其余显示关键参数）。 */
 
-import { clipText, isCommentLine } from '@paiapp/contracts';
+import { clipText, isCommentLine } from '@x3code/contracts';
 
 
 const COMMAND_FIELDS = ['command', 'cmd'] as const;

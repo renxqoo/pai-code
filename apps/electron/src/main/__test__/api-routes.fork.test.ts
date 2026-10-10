@@ -3,13 +3,13 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { HostPhase, HostProcessPort, PaiCommand, HostCommandOutcome, UiEvent } from "@paiapp/contracts";
+import type { HostPhase, HostProcessPort, X3codeCommand, HostCommandOutcome, UiEvent } from "@x3code/contracts";
 
 import { createApiRoutes } from "../api-routes";
 import { createAgentDefinitionsStore } from "../agent-definitions-store";
 import { createFileSettings, type ProviderKeyStore } from "../file-settings";
-import { createPaiRuntime } from "../pai-runtime";
-import { createRuntimeMonitor } from '@paiapp/infra';
+import { createPaiRuntime } from "../x3code-runtime";
+import { createRuntimeMonitor } from '@x3code/infra';
 
 /**
  * session/fork 路由回归（fork 换轨语义；入参 seq = WAL 行号域）：
@@ -29,10 +29,10 @@ const keyStore: ProviderKeyStore = {
 type ForkResponse = Record<string, unknown>;
 
 /** 可编程 fake host：按命令类型回放预置响应。 */
-function fakeHost(responses: { fork?: ForkResponse | { error: { code: string; message: string } }; state?: Record<string, unknown> }): { port: HostProcessPort; sent: PaiCommand[] } {
-  const sent: PaiCommand[] = [];
+function fakeHost(responses: { fork?: ForkResponse | { error: { code: string; message: string } }; state?: Record<string, unknown> }): { port: HostProcessPort; sent: X3codeCommand[] } {
+  const sent: X3codeCommand[] = [];
   const port: HostProcessPort = {
-    request: (command: PaiCommand): Promise<HostCommandOutcome> => {
+    request: (command: X3codeCommand): Promise<HostCommandOutcome> => {
       sent.push(command);
       if (command.type === 'fork') {
         const fork = responses.fork;

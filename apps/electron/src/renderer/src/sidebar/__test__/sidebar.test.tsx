@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, jest, test } from 'bun:test';
 import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import type { PreferencesView, SessionView } from '@paiapp/contracts';
+import type { PreferencesView, SessionView } from '@x3code/contracts';
 
 import { Sidebar } from '../sidebar';
 import { store as liveStore } from '@/live/workspace-runtime';
@@ -83,12 +83,11 @@ afterEach(() => {
 });
 
 describe('Sidebar 壳（SSR 初始态冒烟）', () => {
-  test('快捷操作/视图切换/底部工具条在位；死入口（插件市场/工作流/占位钮）已按 U1 删除', () => {
+  test('快捷操作/项目胶囊/底部工具条在位；死入口（插件市场/工作流/占位钮）已按 U1 删除', () => {
     const html = renderToStaticMarkup(<Sidebar />);
     expect(html).toContain('新建任务');
     expect(html).toContain('搜索');
     expect(html).toContain('自动化');
-    expect(html).toContain('分组');
     expect(html).toContain('项目');
     expect(html).toContain('收起侧栏');
     expect(html).toContain('设置');
@@ -139,7 +138,6 @@ describe('Sidebar 列表区域（客户端渲染）', () => {
 
   test('项目视图：文件夹行 + 项目分组渲染', () => {
     seedLive({ a: makeSession('a', { cwd: '/tmp/pai' }), b: makeSession('b', { cwd: '/tmp/other' }) });
-    uiStore.setState({ sidebarView: 'projects' });
     const view = render(<Sidebar />);
     expect(view.container.textContent).toContain('pai');
     expect(view.container.textContent).toContain('other');
@@ -215,7 +213,6 @@ describe('Sidebar 交互（客户端渲染，动作直落 store）', () => {
       sessions[`s${i}`] = makeSession(`s${i}`, { cwd: '/tmp/pai', title: `任务-${i}` });
     }
     seedLive(sessions);
-    uiStore.setState({ sidebarView: 'projects' });
     const view = render(<Sidebar />);
     const rowsBefore = view.container.querySelectorAll('[data-active]').length;
     expect(view.container.textContent).toContain('显示更多');
@@ -228,14 +225,11 @@ describe('Sidebar 交互（客户端渲染，动作直落 store）', () => {
     view.unmount();
   });
 
-  test('视图切换 Tab：分组 ↔ 项目', () => {
+  test('症状回归：视图切换 Tab 已下线（项目为唯一视图）——不再出现「分组」入口，胶囊恒为项目', () => {
     seedLive({ a: makeSession('a') });
     const view = render(<Sidebar />);
-    const projectTab = [...view.container.querySelectorAll('button')].find((b) => b.textContent?.includes('项目'));
-    React.act(() => {
-      projectTab?.click();
-    });
-    expect(uiStore.getState().sidebarView).toBe('projects');
+    expect(view.container.textContent).not.toContain('分组');
+    expect(view.container.querySelector('[aria-pressed="true"]')?.textContent).toContain('项目');
     view.unmount();
   });
 });
@@ -257,9 +251,9 @@ describe('重渲边界回归（B1/B2）', () => {
       uiStore.setState({ composerDraft: 'unrelated' });
     });
     expect(commits).toBe(0);
-    // 订阅切片 set（视图切换）：子树提交——边界只挡无关更新，不挡正常更新
+    // 订阅切片 set（侧栏折叠）：子树提交——边界只挡无关更新，不挡正常更新
     React.act(() => {
-      uiStore.setState({ sidebarView: 'projects' });
+      uiStore.setState({ sidebarCollapsed: true });
     });
     expect(commits).toBeGreaterThan(0);
     // 宿主重渲照常发生（阳性对照：探针非 memo，随宿主渲染）

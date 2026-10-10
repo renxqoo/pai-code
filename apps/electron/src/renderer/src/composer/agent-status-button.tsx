@@ -1,6 +1,6 @@
 import { Bot } from 'lucide-react';
 
-import { IconBadge } from '@paiapp/ui';
+import { IconBadge } from '@x3code/ui';
 
 import { copy } from '@/strings';
 

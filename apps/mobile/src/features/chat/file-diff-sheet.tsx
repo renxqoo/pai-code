@@ -2,7 +2,7 @@ import * as React from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { Pencil } from 'lucide-react-native';
 
-import { objectName } from '@paiapp/ui-thread';
+import { objectName } from '@x3code/ui-thread';
 
 import { Sheet } from '@/components/ui/sheet';
 import { useAppTheme } from '@/theme/theme-context';

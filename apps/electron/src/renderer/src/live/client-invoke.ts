@@ -1,7 +1,7 @@
-import type { ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
+import type { ApiMethod, ApiOutcome, ApiParams } from '@x3code/contracts';
 
 /**
- * preload 桥的 typed invoke：window.pai 存在时走 IPC，
+ * preload 桥的 typed invoke：window.x3code 存在时走 IPC，
  * 浏览器直开（无 preload）返回 unavailable —— 组件层据此降级为空形态。
  * subscribe 逐事件回调（主进程到达即直发，无批形态）；壳层混入的非 UiEvent
  * 消息由消费方按形状过滤。

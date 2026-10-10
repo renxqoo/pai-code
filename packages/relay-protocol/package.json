@@ -1,5 +1,5 @@
 {
-  "name": "@paiapp/relay-protocol",
+  "name": "@x3code/relay-protocol",
   "private": true,
   "type": "module",
   "exports": {

@@ -1,12 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { serializeGatewayConfig, type RelayConfig } from '@paiapp/contracts';
+import { serializeGatewayConfig, type RelayConfig } from '@x3code/contracts';
 
 /**
  * agentDir/gateway.json 派生落盘与重载判定（fs 壳）：relay 配置的真相在
  * settings.json，本文件是 gateway spawn 期重生成的读口产物——序列化单一真相在
- * @paiapp/contracts serializeGatewayConfig；gateway 只在启动期读入，differs
+ * @x3code/contracts serializeGatewayConfig；gateway 只在启动期读入，differs
  * 即「需重启网关重载」信号（与 providers.json / models-config 同形）。
  */
 

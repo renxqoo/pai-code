@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { CopyButton } from '@paiapp/ui';
+import { CopyButton } from '@x3code/ui';
 
 import { copy } from '@/strings';
 import { writeClipboardText } from '@/lib/clipboard';

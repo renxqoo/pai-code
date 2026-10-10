@@ -7,7 +7,7 @@
 // 期望集合语义与 hub 侧 reconcile 同构）；1s 对账拍不另设（集合即声明面，无表可查）。
 
 import { watch, type FSWatcher } from 'node:fs';
-import type { UiEvent } from '@paiapp/contracts';
+import type { UiEvent } from '@x3code/contracts';
 
 export interface GitWatchBridge {
   /** 声明关注 cwd（幂等；非 git 目录静默无锚） */

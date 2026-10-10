@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from '@jest/globals';
 
 import { createPairingSession, generateDeviceIdentity, type PairingWire } from '../pairing';
-import { pakeRespond, pakeConfirm } from '@paiapp/relay-protocol';
+import { pakeRespond, pakeConfirm } from '@x3code/relay-protocol';
 import { relayCredentialsStore, setRatchetKv, createKvRatchetStore } from '../credentials';
 
 /** 内存配对线（gateway pairing-server 模拟）。 */

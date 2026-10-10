@@ -1,6 +1,6 @@
 import { MoreHorizontal, Pin, PinOff } from 'lucide-react';
 
-import { formatTokenCount, IconButton, MenuButton, type MenuItemDef } from '@paiapp/ui';
+import { formatTokenCount, IconButton, MenuButton, type MenuItemDef } from '@x3code/ui';
 
 import { copy } from '@/strings';
 import { cn } from '@/lib/utils';

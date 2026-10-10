@@ -5,8 +5,8 @@
  * 热生效分叉：启停/导入后活跃会话走 plugins/hot_install（world 内即时装载），
  * 失败降级「重开生效」——与技能面「恒重开」刻意不同（插件支持热装）。
  */
-import type { ApiClient } from '@paiapp/api/client';
-import type { PluginCandidateView, PluginProposalRow, PluginView } from '@paiapp/contracts';
+import type { ApiClient } from '@x3code/api/client';
+import type { PluginCandidateView, PluginProposalRow, PluginView } from '@x3code/contracts';
 
 import { copyOfError } from '@/lib/error-text';
 

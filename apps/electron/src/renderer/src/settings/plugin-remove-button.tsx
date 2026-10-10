@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { Trash2 } from 'lucide-react';
 
-import { ActionButton, IconButton } from '@paiapp/ui';
+import { ActionButton, IconButton } from '@x3code/ui';
 
 import { copy } from '@/strings';
 

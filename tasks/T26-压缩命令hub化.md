@@ -1,22 +1,22 @@
 # 压缩命令 hub 化（/compact 目录下发 + prompt 通路拦截）方案
 
-> 状态：已实施（2026-09-10；B1 hub 批次由用户在 pi 仓库 `t26-compact-hub` 分支完成——词法真相 `src/compact-invocation.ts`、能力注入 `WorkerContext.capabilities`、拦截响应 command 字段仍 `prompt`、design.md v0.11 增补、测试与 e2e 旅程齐备；B2 Pai 批次由本仓库完成，桥下线）
+> 状态：已实施（2026-09-10；B1 hub 批次由用户在 pi 仓库 `t26-compact-hub` 分支完成——词法真相 `src/compact-invocation.ts`、能力注入 `WorkerContext.capabilities`、拦截响应 command 字段仍 `prompt`、design.md v0.11 增补、测试与 e2e 旅程齐备；B2 X3code 批次由本仓库完成，桥下线）
 > 级别：中（跨仓库协议语义变更；无存量数据迁移、协议演进向后安全、两仓库改动面各自可控——不足大级三件套，按 design-b 走方案+实施两节；B1 hub 批次即天然最小垂直切片）
 > 用户裁决（2026-09-10）：推翻 T25 默认裁决①（渲染层拦截），改为 hub 侧机制——与 skill 触发同型：`get_commands` 目录下发条目 + prompt 通路处理。T25 的本地注册表（builtin-commands.ts）是为「hub 尚未提供」准备的桥，其 `mergeCommands` 同名让位设计正是为本次收敛预留的接口。
 
 ## 背景与现状事实（探查结论）
 
-- **T25 现状**：Pai 渲染层本地注册 `/compact`（目录合成 + 提交拦截分派 `session/compact`），hub 侧零改动。遗留约束：命令目录真相分裂在两层（hub 三源 + 本地 builtin）、`/compact` 误发保护依赖渲染层词法。
+- **T25 现状**：X3code 渲染层本地注册 `/compact`（目录合成 + 提交拦截分派 `session/compact`），hub 侧零改动。遗留约束：命令目录真相分裂在两层（hub 三源 + 本地 builtin）、`/compact` 误发保护依赖渲染层词法。
 - **hub prompt 是 fire-and-accept**：`handlePrompt`（`src/worker-commands.ts:131-165`）经 SDK preflight 钩子在接受时刻回包，接受后失败走事件流；`/skill:` 指针化改写就在此层（`src/skill-pointer.ts`，前缀 + 空格分词 + 精确名匹配、未知透传）。
 - **compact 是长操作**：`handleCompact`（worker-commands.ts:209-220）inflight 注册 `abortCompaction`、完成才回包；SDK 错误（`"Already compacted"`、`"Nothing to compact (session too small)"`）沿全局 catch 变 failure error string。
-- **能力门控缺口**：`collectCommands(thread)` 拿不到后端能力——capabilities 只在 `WorkerBackend` 上（worker.ts:426 分发器门控用），`PaiThread`/`PaiSession`/`WorkerContext` 均无查询面；pi-agent-core 后端无 `session.compact` 位（compact 命令被门控拒绝、session 是 unsupported 桩）。
+- **能力门控缺口**：`collectCommands(thread)` 拿不到后端能力——capabilities 只在 `WorkerBackend` 上（worker.ts:426 分发器门控用），`X3codeThread`/`X3codeSession`/`WorkerContext` 均无查询面；pi-agent-core 后端无 `session.compact` 位（compact 命令被门控拒绝、session 是 unsupported 桩）。
 - **压缩态可查**：`session.isCompacting` 是 port 成员（内存 getter，含手动/自动/branch summary）。
 - **无 reason 词表**：`ResponseFrame` 只有 `error?: string`，全部错误是英文句子透传（design.md:34-36 承诺中性英文）。
 - **文档既有矛盾**：design.md:299 称 skill 改写在「host 侧」，实际在 worker 侧——本批顺手同变修正。
 
 ## 目标形态
 
-用户在 Pai 输入 `/compact`（可带附加指示文字）→ 提交走 `session/prompt`（普通消息通路，与 skill 一致）→ hub `handlePrompt` 拦截首 token → `session.compact(customInstructions)` → 完成回包，`compaction_start/end` 事件照常流出（Pai 横幅既有消费不变）。Pai 渲染层删除本地命令注册表与提交分派（T25 桥下线），命令目录真相单一回归 hub。
+用户在 X3code 输入 `/compact`（可带附加指示文字）→ 提交走 `session/prompt`（普通消息通路，与 skill 一致）→ hub `handlePrompt` 拦截首 token → `session.compact(customInstructions)` → 完成回包，`compaction_start/end` 事件照常流出（X3code 横幅既有消费不变）。X3code 渲染层删除本地命令注册表与提交分派（T25 桥下线），命令目录真相单一回归 hub。
 
 ## 契约
 
@@ -34,7 +34,7 @@
 4. **不新造 reason 词表**：错误沿用 error string 透传（`'Compaction already in progress'`、SDK 既有句子、capabilityError 模板），与 hub 现状一致。
 5. 文档同变：design.md 命令表（prompt 行为注记）、get_commands 三源改四源、「恰好一次」例外条款、299 行 host/worker 措辞修正；api.md `source` 枚举同步。
 
-### Pai 侧（hub 提交后同日批次）
+### X3code 侧（hub 提交后同日批次）
 
 - **contracts 镜像**：`CommandViewSchema.source` 枚举加 `'builtin'`（`packages/contracts/src/api.ts`）；`packages/adapter/src/response-views.ts` 的 `sessionCommands` 收窄白名单加 `'builtin'`（不加则 hub 下发条目被静默丢弃）。
 - **删除面**（T25 桥下线，单轨）：
@@ -50,9 +50,9 @@
 
 ## 问题域
 
-- 处理：hub 目录条目与能力门控、prompt 拦截全语义（词法/时序/inflight/images/压缩中/优先级）、双仓库文档与镜像同变、Pai 删除面与词法化收口、兼容矩阵验证。
+- 处理：hub 目录条目与能力门控、prompt 拦截全语义（词法/时序/inflight/images/压缩中/优先级）、双仓库文档与镜像同变、X3code 删除面与词法化收口、兼容矩阵验证。
 - 不处理（归属）：
-  - TUI 与 pi rpc-mode 的 `/compact`（SDK 侧既有机制，保持不动；本次只在 pai hub 的 prompt 编排层拦截）；
+  - TUI 与 pi rpc-mode 的 `/compact`（SDK 侧既有机制，保持不动；本次只在 x3code hub 的 prompt 编排层拦截）；
   - 其他 builtin 命令（/subagents 等）提升进目录——仅入驻 compact 一条，后续按需逐条走同型流程；
   - pi-agent-core 后端的压缩支持（unsupported 照旧，目录无条目即无入口）；
   - `reason` 结构化词表（hub 全局改造，超出本批）；
@@ -62,33 +62,33 @@
 
 - hub：拦截路径 inflight 注册（shutdown abort 恰好一次响应语义继承）；`isCompacting` 判定与 `compact()` 调用之间存在受理窗口（同 T25 P2-3 形态）——窗口内二次提交直达 SDK，以 SDK 并发行为兜底（错误句子透传，不崩溃、不双压缩；实施时验证并发调用形态并补测试锚定）。
 - streaming 中 `/compact`：`session.compact()` 在流式中的行为未探明——实施时验证（预期 SDK 拒绝或排队，错误透传即闭环）；方案不预置流态判定。
-- Pai：净删除，无新定时器/IO/状态。
+- X3code：净删除，无新定时器/IO/状态。
 
 ## 拆分（文件面）
 
 - **hub（/Users/wrr/work/pi/app，用户在 `t26-compact-hub` 分支完成）**：`src/command-listing.ts`、`src/compact-invocation.ts`（新，词法与拦截单一真相）、`src/worker-context.ts`、`src/worker.ts`、`src/worker-commands.ts`、`docs/{design,api,worker-contract}.md`、`test/{command-listing,compact-intercept}.test.ts`、`test/e2e.mjs`。
-- **Pai（本仓库）**：`packages/contracts/src/{api,commands}.ts`、`packages/adapter/src/response-views.ts`、`apps/electron/src/main/{api-routes,pai-runtime,auto-title(新)}.ts`、`renderer/src/live/{live-controller,workspace-actions,use-live-workspace}.ts`、`renderer/src/composer/{builtin-commands(删),command-groups,command-highlight,prompt-input-area,composer,composer-actions-row}.ts(x)`、`renderer/src/screens/submit-draft.ts`（`workspace-main` 行为经 `isImmediateSubmit` 隐式变化，仅注释同变）、`renderer/src/strings/{zh,en}.ts`、`tasks/T10` 面表、对应 `__test__`。
+- **X3code（本仓库）**：`packages/contracts/src/{api,commands}.ts`、`packages/adapter/src/response-views.ts`、`apps/electron/src/main/{api-routes,x3code-runtime,auto-title(新)}.ts`、`renderer/src/live/{live-controller,workspace-actions,use-live-workspace}.ts`、`renderer/src/composer/{builtin-commands(删),command-groups,command-highlight,prompt-input-area,composer,composer-actions-row}.ts(x)`、`renderer/src/screens/submit-draft.ts`（`workspace-main` 行为经 `isImmediateSubmit` 隐式变化，仅注释同变）、`renderer/src/strings/{zh,en}.ts`、`tasks/T10` 面表、对应 `__test__`。
 
 ### B2 对抗审查处置（2026-09-10，问题清零）
 
 - P1-1 prompt 通路 30s 默认超时会误杀 compact 完成时序（大上下文压缩可远超）→ `session/prompt` 路由放宽至 10 分钟（`PROMPT_REQUEST_TIMEOUT_MS`；普通 prompt 接受时刻回包不受影响）。
 - P1-2 拦截型 `/compact` 成功会触发自动命名、把未命名会话改名为命令文本 → 标题语料判定提纯 `main/auto-title.ts`：行首 `/` 非标题语料（斜杠命令族一并根治），回归用例锁症状。
-- P2-1 `PaiCommandType` 删 `'compact'`（Pai 实际发出的命令子集不再含它；hub 全量词表镜像保留），T10 面表同变。
+- P2-1 `X3codeCommandType` 删 `'compact'`（X3code 实际发出的命令子集不再含它；hub 全量词表镜像保留），T10 面表同变。
 - P2-2/P2-3 注释漂移三处修正、`' /compact'` 前导空白边缘补回表驱动并落档「轮末冲刷时 trim 后仍被 hub 拦截」取舍；`sendFailed` 的「请重试」文案对 'already in progress' 类拒绝非最优建议——通用文案不针对单场景定制（裁决 F 延续），error string 自描述可接受，落档不改。
 
 ## 实施顺序
 
-1. **B1 hub 批次**（独立可用，旧 Pai 不受影响——其 adapter 白名单会把 builtin 条目降级丢弃，行为不变）：文档（design.md/api.md）→ WorkerContext.capabilities → collectCommands 门控 → handlePrompt 拦截 → 测试。门禁 `npm run ci`（check + build + test：单测/smoke/e2e-mock/conformance）。
-2. **B2 Pai 批次**（同日，hub 提交之后）：contracts 镜像 + adapter 白名单 → 删除面（注册表/分派/调用链/strings）→ isImmediateSubmit 词法化 → 测试改造。四门 + 对抗审查（跨仓库协议面）。
+1. **B1 hub 批次**（独立可用，旧 X3code 不受影响——其 adapter 白名单会把 builtin 条目降级丢弃，行为不变）：文档（design.md/api.md）→ WorkerContext.capabilities → collectCommands 门控 → handlePrompt 拦截 → 测试。门禁 `npm run ci`（check + build + test：单测/smoke/e2e-mock/conformance）。
+2. **B2 X3code 批次**（同日，hub 提交之后）：contracts 镜像 + adapter 白名单 → 删除面（注册表/分派/调用链/strings）→ isImmediateSubmit 词法化 → 测试改造。四门 + 对抗审查（跨仓库协议面）。
 3. **B3 真机联调验收**：裸 /compact、带指示、压缩中重复、生成中、携图、pi-agent-core 后端目录、旧 hub 退化（/compact 原样发送不炸）。
 
 ## 裁决（默认裁决，否决窗口随定稿）
 
-- A：**拦截后响应按 compact 时序**（完成才回包）而非 fire-and-accept——与协议 compact 命令同型、Pai 失败提示链路复用 prompt failure 通路、避免「接受即回但压缩失败只能靠事件流补通知」的隐藏成本（T24 已知 bug e 同类）。
-- B：能力门控放 **WorkerContext**（buildContext 组装）而非 PaiSession port——port 面零改动，注入面最小。
+- A：**拦截后响应按 compact 时序**（完成才回包）而非 fire-and-accept——与协议 compact 命令同型、X3code 失败提示链路复用 prompt failure 通路、避免「接受即回但压缩失败只能靠事件流补通知」的隐藏成本（T24 已知 bug e 同类）。
+- B：能力门控放 **WorkerContext**（buildContext 组装）而非 X3codeSession port——port 面零改动，注入面最小。
 - C：能力不支持时**不拦截**（原样发消息）——与未知命令语义一致，不制造「目录没有但手输报错」的特殊分支。
 - D：hub 拦截**优先于 pi 扩展命令**——与 skill 指针化同层；扩展注册 compact 的冲突属边缘。
-- E：Pai `isImmediateSubmit` 词法化为「`/` 开头即不入暂存」——命令族通用，不依赖运行时目录。
+- E：X3code `isImmediateSubmit` 词法化为「`/` 开头即不入暂存」——命令族通用，不依赖运行时目录。
 - F：不新造 reason 词表（error string 透传，hub 全局现状）。
 
 ## 测试口径
@@ -100,7 +100,7 @@
   - 时序：拦截路径完成才回包（mock-model 装置）、inflight abort（shutdown 中止路径）、`compaction_start/end` 事件照常流出；
   - 错误表：压缩中 `'Compaction already in progress'`、携图固定句、SDK `"Nothing to compact..."` 透传；
   - 优先级：注册名为 compact 的扩展命令时 hub 拦截优先（如有装置面，否则文档锚定）。
-- **Pai**：
+- **X3code**：
   - 契约：`CommandViewSchema.source` 含 builtin；`sessionCommands` 白名单透传 builtin 条目（垃圾 source 丢弃不回归）；
   - 分箱：builtin 归「命令」组（既有用例改 `CommandView` 字面量）；
   - 删除面回归：全仓 grep `builtin-commands|parseBuiltinCommand|commandUnhandled|compactBusy` 零残留；`session/compact` 不在 ApiSchemas；
@@ -112,8 +112,8 @@
 
 | 组合 | 行为 |
 | --- | --- |
-| 旧 Pai × 新 hub | 目录 builtin 条目被 adapter 白名单丢弃（降级安全）；无 /compact 入口，行为同现状 |
-| 新 Pai × 旧 hub | 目录无 builtin 条目；手输 /compact 原样作为消息发送（hub 不拦截）——退化为 T25 之前的误发风险，联调窗口内收敛，B1/B2 同日提交 |
+| 旧 X3code × 新 hub | 目录 builtin 条目被 adapter 白名单丢弃（降级安全）；无 /compact 入口，行为同现状 |
+| 新 X3code × 旧 hub | 目录无 builtin 条目；手输 /compact 原样作为消息发送（hub 不拦截）——退化为 T25 之前的误发风险，联调窗口内收敛，B1/B2 同日提交 |
 | conformance 参考实现 | 固定回空目录（test/conformance/reference-worker.mjs:111-113），不受影响 |
 
 ## 与 T25 的关系
@@ -124,5 +124,5 @@ T25 状态推进「已核销」并加注：裁决①经用户裁决推翻，渲�
 
 - hub 侧真机 e2e（GLM，opt-in real 门）：ALL PASS——e2e.mjs 11b 节钉死 prompt 通路 `/compact`：行首命令不达模型、compaction_start/end 流出、response 后于 compaction_end（compact 时序，真实栈）；本轮会话量级触发 too small 守卫（双合规容错口径同 compact 命令节）。
 - hub `t26-compact-hub` 已合并 pi 仓库 main（merge `2dc5f1d35`，与 v0.10 sandbox 批次 `ae11a0cae` 合流零冲突）；合并后 hub 全量门禁：oxlint 0/0 / tsc / build / 单测 418/0 / smoke ALL PASS / e2e-mock **16/16**（含 sandbox-enforcement 修复后全绿）/ conformance 4/4。
-- 待人工确认（Pai 桌面 × hub 真机联跑）：压缩中横幅与 summary 回显、携图 `/compact` 端到端失败文案、压缩中重复提交的用户可见路径（'Compaction already in progress' → sendFailed 通知）。
+- 待人工确认（X3code 桌面 × hub 真机联跑）：压缩中横幅与 summary 回显、携图 `/compact` 端到端失败文案、压缩中重复提交的用户可见路径（'Compaction already in progress' → sendFailed 通知）。
 - 开发分支处置：本仓库 `t26-compact-hub`（adef393/61571db，独立 worktree 会话产出）已被 `05abda9` 精修落地取代，未合并、可删；其独有的 B3 清单细节以本节为准。

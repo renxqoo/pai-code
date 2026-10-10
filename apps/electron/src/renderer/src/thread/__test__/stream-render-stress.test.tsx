@@ -2,7 +2,7 @@ import * as React from 'react';
 import { expect, test } from 'bun:test';
 import { useStore } from 'zustand';
 
-import type { HistoryItem, UiEvent } from '@paiapp/contracts';
+import type { HistoryItem, UiEvent } from '@x3code/contracts';
 import { createLiveStore, threadModelOf } from '@/live/store';
 import { render } from '@/testing/render';
 import { MessageList } from '../message-list';

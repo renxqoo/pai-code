@@ -3,13 +3,13 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { HostCommandOutcome, HostPhase, HostProcessPort, HubFrame, PaiCommand, UiEvent } from '@paiapp/contracts';
+import type { HostCommandOutcome, HostPhase, HostProcessPort, HubFrame, X3codeCommand, UiEvent } from '@x3code/contracts';
 
 import { createApiRoutes } from '../api-routes';
 import { createAgentDefinitionsStore } from '../agent-definitions-store';
 import { createFileSettings, type ProviderKeyStore } from '../file-settings';
-import { createPaiRuntime } from '../pai-runtime';
-import { createRuntimeMonitor } from '@paiapp/infra';
+import { createPaiRuntime } from '../x3code-runtime';
+import { createRuntimeMonitor } from '@x3code/infra';
 
 /**
  * 事件/响应单一全序的主进程侧结构测试（IPC 直发后无冲批钩子，全序由「emit 同步
@@ -29,7 +29,7 @@ const emptyKeyStore: ProviderKeyStore = {
   keyNames: [],
 };
 
-function makeFixture(work: string, reply: (cmd: PaiCommand, pushFrame: (frame: HubFrame) => void) => Reply) {
+function makeFixture(work: string, reply: (cmd: X3codeCommand, pushFrame: (frame: HubFrame) => void) => Reply) {
   const agentDir = join(work, 'agent');
   mkdirSync(join(agentDir, 'sessions'), { recursive: true });
   writeFileSync(join(work, 'cli.js'), '');
@@ -41,7 +41,7 @@ function makeFixture(work: string, reply: (cmd: PaiCommand, pushFrame: (frame: H
     },
     // hub 语义：同一 stdout 管道先写事件帧后写 response 行——request 处理内同步
     // 推帧（帧分发 → emit 同步落数组），再回命令结果
-    request: (command: PaiCommand) => Promise.resolve(reply(command, (frame) => frameCb?.(frame))),
+    request: (command: X3codeCommand) => Promise.resolve(reply(command, (frame) => frameCb?.(frame))),
     onFrame: (cb: (frame: HubFrame) => void) => {
       frameCb = cb;
       return () => undefined;

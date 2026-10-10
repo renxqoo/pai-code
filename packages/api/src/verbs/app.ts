@@ -1,6 +1,6 @@
 import type { AgentDefinitionsPort, RuntimePort } from './ports';
 
-import type { ApiError, ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
+import type { ApiError, ApiMethod, ApiOutcome, ApiParams } from '@x3code/contracts';
 import { appError } from '../errors';
 import { settle } from '../settle';
 import { modelInfos, previewCommands, sessionCommands, type savedSessions } from '../views/response-views';
@@ -9,7 +9,7 @@ import type { ModelCommands } from '../commands/models';
 import type { SessionCommands } from '../commands/session';
 import type { HubApi } from '../index';
 
-import type { ModelInfoView, PreferencesView, ProviderConfigView, SkillView } from '@paiapp/contracts';
+import type { ModelInfoView, PreferencesView, ProviderConfigView, SkillView } from '@x3code/contracts';
 
 
 type Handler<M extends ApiMethod> = (params: ApiParams<M>) => Promise<ApiOutcome<M>>;

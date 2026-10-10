@@ -1,12 +1,12 @@
 import * as React from 'react';
 
-import { CopyButton } from '@paiapp/ui';
+import { CopyButton } from '@x3code/ui';
 
 import { copy } from '@/strings';
 import { cn } from '@/lib/utils';
 import { writeClipboardText } from '@/lib/clipboard';
 import { fileLines, readFooterHint } from './file-lines';
-import { toolSummary } from '@paiapp/ui-thread';
+import { toolSummary } from '@x3code/ui-thread';
 import type { ToolCallModel } from './thread-model';
 
 type FileContentPanelProps = {

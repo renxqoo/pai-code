@@ -19,10 +19,10 @@ type CommandResult = { ok: true; body: Record<string, unknown> } | { ok: false; 
  */
 
 function stubGateway(command: (payload: { command: string; args?: Record<string, unknown> }) => Promise<CommandResult> = () => Promise.resolve({ ok: true, body: {} })): void {
-  // 先装共享 DOM 装置再挂 window.pai——直接替换 globalThis.window 会把后续
+  // 先装共享 DOM 装置再挂 window.x3code——直接替换 globalThis.window 会把后续
   // 文件的 happy-dom 实体打掉（症状：全部 DOM 测试在本文件之后假红）
   installDom();
-  (window as unknown as { pai: unknown }).pai = {
+  (window as unknown as { x3code: unknown }).x3code = {
     gateway: {
       status: () => Promise.resolve({ process: 'running', connected: true, staleSocket: false }),
       command,
@@ -53,7 +53,7 @@ const buttonOf = (view: RenderHandle, text: string): HTMLButtonElement | undefin
 
 afterEach(() => {
   if (typeof window === 'undefined') return;
-  delete (window as unknown as { pai?: unknown }).pai;
+  delete (window as unknown as { x3code?: unknown }).x3code;
 });
 
 describe('DevicesSection（症状回归：配对失败被吞成兜底文案）', () => {
@@ -97,7 +97,7 @@ describe('DevicesSection（症状回归：配对失败被吞成兜底文案）',
 
   test('网关面缺失（浏览器直开）渲染引导卡不崩', () => {
     installDom();
-    (window as unknown as { pai?: unknown }).pai = {};
+    (window as unknown as { x3code?: unknown }).x3code = {};
     const view = render(<DevicesSection relay={{ relayUrl: '', relayKeyFingerprint: '' }} onRelaySave={() => Promise.resolve(true)} />);
     expect(view.container.textContent).toContain(copy.settings.gatewayUnavailable);
     view.unmount();
@@ -185,7 +185,7 @@ describe('DevicesSection（症状回归：配对失败被吞成兜底文案）',
   });
 });
 
-/** 装置纪律：本文件只挂 window.pai，不替换 globalThis.window（曾把后续 DOM 测试全部打红）。 */
+/** 装置纪律：本文件只挂 window.x3code，不替换 globalThis.window（曾把后续 DOM 测试全部打红）。 */
 describe('测试装置不污染 window', () => {
   test('stub 后 window 仍是 DOM 实体（HTMLElement 可用）', () => {
     const view = section();

@@ -4,7 +4,7 @@
  * 形状缺失或不成形时客户端须给出显式缺因标记而不是空原因。
  */
 import { describe, expect, it } from '@jest/globals';
-import type { CommandError } from '@paiapp/relay-protocol';
+import type { CommandError } from '@x3code/relay-protocol';
 
 import { createBridgeClient, type ClientTransportFace } from '../../transport/client';
 import { copyReason } from '@/strings/zh';

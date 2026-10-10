@@ -3,8 +3,8 @@ import { homedir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { dirname as dirnamePath, join as joinPaths } from 'node:path';
 
-import { AGENT_FIELD_LINE, isValidAgentName, type AgentDefinition, type AgentScope } from '@paiapp/contracts';
-import { fileNameStemOf, isSafeFileNameStem, parseAgentDefinition, serializeAgentDefinition } from '@paiapp/api';
+import { AGENT_FIELD_LINE, isValidAgentName, type AgentDefinition, type AgentScope } from '@x3code/contracts';
+import { fileNameStemOf, isSafeFileNameStem, parseAgentDefinition, serializeAgentDefinition } from '@x3code/api';
 
 import { agentDefinitionPath } from './agent-definition-path';
 

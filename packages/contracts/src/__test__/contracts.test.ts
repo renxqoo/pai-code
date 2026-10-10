@@ -3,7 +3,7 @@ import {
   HUB_COMMAND_TYPES,
   HUB_EVENT_NAMES,
   HUB_FRAME_TYPES,
-  PAI_COMMAND_TYPES,
+  X3CODE_COMMAND_TYPES,
   UI_EVENT_TYPES,
   UiEventSchema,
   SessionViewSchema,
@@ -15,7 +15,7 @@ import {
   HistoryItemSchema,
   isValidAgentName,
   type HubCommand,
-  type PaiCommand,
+  type X3codeCommand,
   type UiEvent,
 } from '../index';
 
@@ -100,22 +100,22 @@ describe('词表封闭（双向）', () => {
   });
 
   test('Pai 命令词表是 hub 命令词表的子集', () => {
-    for (const t of PAI_COMMAND_TYPES) {
+    for (const t of X3CODE_COMMAND_TYPES) {
       expect(HUB_COMMAND_TYPES).toContain(t);
     }
   });
 
   test('Pai 命令子集含 x-harness 新面：compact/thread/delete 与 agents CRUD 直接寻址（hub 协议一等命令）', () => {
     for (const t of ['compact', 'thread/delete', 'agents/create', 'agents/remove']) {
-      expect(PAI_COMMAND_TYPES).toContain(t);
+      expect(X3CODE_COMMAND_TYPES).toContain(t);
       expect(HUB_COMMAND_TYPES).toContain(t);
     }
   });
 
-  test('命令词表类型级校验：PaiCommand 可赋给 HubCommand 的 type 集', () => {
+  test('命令词表类型级校验：X3codeCommand 可赋给 HubCommand 的 type 集', () => {
     const all: HubCommand['type'][] = [...HUB_COMMAND_TYPES];
-    const pai: PaiCommand['type'][] = [...PAI_COMMAND_TYPES];
-    for (const t of pai) expect(all).toContain(t);
+    const x3code: X3codeCommand['type'][] = [...X3CODE_COMMAND_TYPES];
+    for (const t of x3code) expect(all).toContain(t);
     expect(all.length).toBe(HUB_COMMAND_TYPES.length);
   });
 
@@ -444,7 +444,7 @@ describe('git 分支契约（两页分支面板共用）', () => {
       hash: 'a'.repeat(40),
       shortHash: 'aaaaaaa',
       subject: 'feat: x',
-      author: 'pai',
+      author: 'x3code',
       timestamp: 1_760_000_000,
       parents: ['b'.repeat(40)],
       refs: ['HEAD -> main', 'main'],

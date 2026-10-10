@@ -1,4 +1,4 @@
-import type { UiEvent } from '@paiapp/contracts';
+import type { UiEvent } from '@x3code/contracts';
 import type { ThreadItem, ToolCallModel, TurnBlock } from '@/thread/thread-model';
 
 import { onSubagentEvent } from './fold-subagents';

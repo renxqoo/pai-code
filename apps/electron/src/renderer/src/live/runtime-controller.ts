@@ -1,5 +1,5 @@
-import { createApiClient } from '@paiapp/api/client';
-import type { IdleRecycleMinutes, RuntimeSnapshotView } from '@paiapp/contracts';
+import { createApiClient } from '@x3code/api/client';
+import type { IdleRecycleMinutes, RuntimeSnapshotView } from '@x3code/contracts';
 
 import type { BridgeClient } from './client-invoke';
 

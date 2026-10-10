@@ -1,6 +1,6 @@
 import { join as joinPaths } from 'node:path';
 
-import type { AgentScope } from '@paiapp/contracts';
+import type { AgentScope } from '@x3code/contracts';
 
 /** 定义键位（作用域 + 项目 + name）→ 定义文件绝对路径；调用方保证 stem 已过校验。
  *  布局契约（x-harness agents 域 agentDir 派生缝）：agentDir 在场 = user 定义写

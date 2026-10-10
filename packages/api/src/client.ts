@@ -6,7 +6,7 @@
  * 注册表，本层只做类型化调用面。域划分与 ApiMethod 闭集一一对照（词表漂移
  * 由 __test__/client.test.ts 映射断言钉住）。
  */
-import type { ApiData, ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
+import type { ApiData, ApiMethod, ApiOutcome, ApiParams } from '@x3code/contracts';
 
 /** 代理传输面（preload 桥注入） */
 export interface ApiClientTransport {

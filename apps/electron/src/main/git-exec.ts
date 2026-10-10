@@ -1,11 +1,11 @@
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 
-import { classifyGitExecError, type GitExec } from '@paiapp/api';
+import { classifyGitExecError, type GitExec } from '@x3code/api';
 
 /**
  * git 执行器（GitExec 的宿主默认实现）：execFile 无 shell + 超时 + 输出上限 +
- * 仓库可执行面隔离。git 读口族（分支/图谱）共用；纯逻辑与解析在 @paiapp/api。
+ * 仓库可执行面隔离。git 读口族（分支/图谱）共用；纯逻辑与解析在 @x3code/api。
  */
 
 const GIT_TIMEOUT_MS = 5000;

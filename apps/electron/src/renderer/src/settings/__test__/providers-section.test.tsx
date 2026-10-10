@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import type { ProviderConfigView } from '@paiapp/contracts';
+import type { ProviderConfigView } from '@x3code/contracts';
 import { copy } from '@/strings';
 import { ProvidersSection } from '../providers-section';
 

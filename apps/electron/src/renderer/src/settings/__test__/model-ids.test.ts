@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { ProviderModel } from "@paiapp/contracts";
+import type { ProviderModel } from "@x3code/contracts";
 import { toggleModelFlag } from "../model-ids";
 
 const glm: ProviderModel = { id: "glm-4.6", reasoning: true, vision: false };

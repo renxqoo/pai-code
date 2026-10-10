@@ -1,6 +1,6 @@
 import type { MonitorPort, RuntimePort } from './ports';
 
-import type { ApiError, ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
+import type { ApiError, ApiMethod, ApiOutcome, ApiParams } from '@x3code/contracts';
 import { appError } from '../errors';
 import { settle } from '../settle';
 import type { SessionCommands } from '../commands/session';

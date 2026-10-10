@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { HUB_ERROR_CODES, type ApiError } from '@paiapp/contracts';
+import { HUB_ERROR_CODES, type ApiError } from '@x3code/contracts';
 
 import { en } from '../en';
 import { zh } from '../zh';

@@ -9,7 +9,7 @@ import type { HubCommand } from './hub-commands';
  * 对 parked/dead thread 由 host 本地直读应答（不唤醒 worker，直读不可用自动回退
  * 唤醒路径）；live thread 恒透传 worker。其余线程域命令对非 live thread 自动唤醒。
  */
-export type PaiCommandType =
+export type X3codeCommandType =
   | 'thread/start'
   | 'thread/resume'
   | 'thread/register'
@@ -70,9 +70,9 @@ export type PaiCommandType =
   | 'plugins/trusted_source/confirm'
   | 'plugins/trusted_source/reject';
 
-export type PaiCommand = Extract<HubCommand, { type: PaiCommandType }>;
+export type X3codeCommand = Extract<HubCommand, { type: X3codeCommandType }>;
 
-export const PAI_COMMAND_TYPES = [
+export const X3CODE_COMMAND_TYPES = [
   'thread/start',
   'thread/resume',
   'thread/register',
@@ -120,9 +120,9 @@ export const PAI_COMMAND_TYPES = [
   'thread/delete',
   'agents/create',
   'agents/remove',
-] as const satisfies readonly PaiCommandType[];
+] as const satisfies readonly X3codeCommandType[];
 
 // 编译期封闭断言：Pai 命令词表与类型联合双向绑定（漏登记即编译失败）。
 type CoversUnion<T, U extends T> = [T] extends [U] ? unknown : never;
-const _paiCommandsCover = null as unknown as CoversUnion<PaiCommandType, (typeof PAI_COMMAND_TYPES)[number]>;
+const _paiCommandsCover = null as unknown as CoversUnion<X3codeCommandType, (typeof X3CODE_COMMAND_TYPES)[number]>;
 void _paiCommandsCover;

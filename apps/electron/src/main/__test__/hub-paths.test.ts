@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { devGatewayEntryCandidates, devHubEntryCandidates, packagedGatewayEntry, packagedHubCandidates, resolveGatewayEntry, resolveHubPaths } from '../hub-paths';
 
 /**
- * 宿主路径解析链回归：dev shell 丢失 PAI_HUB_ENTRY 时曾直接判 hub_paths_unconfigured
+ * 宿主路径解析链回归：dev shell 丢失 X3CODE_HUB_ENTRY 时曾直接判 hub_paths_unconfigured
  * （host 不启动 → 模型目录空 → composer 显示「还没有模型」，误导已配置 provider 的用户）。
  */
 
@@ -81,7 +81,7 @@ describe('hub-paths 解析链（设置 > env > dev 同级探测 > 打包产物�
   });
 });
 
-describe('gateway 入口解析链（症状回归：PAI_X_HARNESS_ROOT 是唯一来源，未设即 stub）', () => {
+describe('gateway 入口解析链（症状回归：X3CODE_X_HARNESS_ROOT 是唯一来源，未设即 stub）', () => {
   test('dev 旁级探测：src 优先于 dist（与宿主同链同序）', () => {
     const [src, dist] = devGatewayEntryCandidates('/work/agent-app');
     expect(src).toBe('/work/x-harness/apps/hub-gateway/src/cli.ts');

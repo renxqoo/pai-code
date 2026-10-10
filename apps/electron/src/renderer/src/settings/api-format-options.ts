@@ -1,4 +1,4 @@
-import { API_FORMAT_IDS, isApiFormat } from '@paiapp/contracts';
+import { API_FORMAT_IDS, isApiFormat } from '@x3code/contracts';
 
 import { copy } from '@/strings';
 

@@ -5,7 +5,7 @@
  */
 import { describe, expect, test } from 'bun:test';
 
-import type { ApiError } from '@paiapp/contracts';
+import type { ApiError } from '@x3code/contracts';
 import { mapPluginError, pluginRowsOf, createPluginRoutes } from '../plugins';
 import { failClosedPluginSources } from '../plugin-source';
 import type { SettingsCommands } from '../../commands/settings';

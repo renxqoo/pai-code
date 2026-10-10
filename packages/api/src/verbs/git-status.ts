@@ -1,4 +1,4 @@
-import type { GitStatusFile, GitStatusView } from '@paiapp/contracts';
+import type { GitStatusFile, GitStatusView } from '@x3code/contracts';
 import type { ApiError } from '../errors';
 import { failureError, mapGitFailure, type GitExec } from './git-branches';
 

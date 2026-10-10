@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { InflightView, UiEvent } from '@paiapp/contracts';
+import type { InflightView, UiEvent } from '@x3code/contracts';
 
 import { createLiveController } from '../live-controller';
 import { foldThreadEvent } from '../fold-events';
@@ -9,7 +9,7 @@ import { initialThreadState, type LiveThreadState } from '../live-thread-state';
 import { createLiveStore, type LiveStore } from '../store';
 import { claimAnonymousBlocks } from '../turn-ops';
 import type { ToolCallModel, TurnBlock } from '@/thread/thread-model';
-import type { SessionView } from '@paiapp/contracts';
+import type { SessionView } from '@x3code/contracts';
 import type { BridgeClient } from '../client-invoke';
 
 /**

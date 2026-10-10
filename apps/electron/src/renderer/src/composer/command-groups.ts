@@ -4,8 +4,8 @@
  * @ 文件引用为单组。空组整组丢弃，组序即键盘导航序（拍平后循环）。
  */
 
-import type { CommandView } from '@paiapp/contracts';
-import type { AutocompleteGroup, AutocompleteGroupItem } from '@paiapp/ui';
+import type { CommandView } from '@x3code/contracts';
+import type { AutocompleteGroup, AutocompleteGroupItem } from '@x3code/ui';
 
 import { filterTokenItems } from '@/composer/token-trigger';
 

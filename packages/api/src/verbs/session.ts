@@ -1,5 +1,5 @@
-import type { ApiError, ApiMethod, ApiOutcome, ApiParams, PermissionModeData } from '@paiapp/contracts';
-import { permVocabOf } from '@paiapp/contracts';
+import type { ApiError, ApiMethod, ApiOutcome, ApiParams, PermissionModeData } from '@x3code/contracts';
+import { permVocabOf } from '@x3code/contracts';
 import { appError } from '../errors';
 import {
   inflightView,
@@ -19,8 +19,8 @@ import type { SessionCommands } from '../commands/session';
 import type { ThreadCommands } from '../commands/thread';
 import type { AuditPort, FailPort, RuntimePort } from './ports';
 
-import type { ModelInfoView } from '@paiapp/contracts';
-import { THINKING_LEVEL_ORDER, type ThinkingLevel } from '@paiapp/contracts';
+import type { ModelInfoView } from '@x3code/contracts';
+import { THINKING_LEVEL_ORDER, type ThinkingLevel } from '@x3code/contracts';
 
 
 type Handler<M extends ApiMethod> = (params: ApiParams<M>) => Promise<ApiOutcome<M>>;

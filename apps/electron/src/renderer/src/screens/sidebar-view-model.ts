@@ -1,14 +1,12 @@
 import { excludeArchivedSessions } from '@/sidebar/exclude-archived';
 import { excludeHiddenProjects } from '@/sidebar/hidden-projects';
 import { buildPinnedList } from '@/sidebar/build-pinned-list';
-import { buildTimeList } from '@/sidebar/build-time-list';
 import { buildProjectGroups } from '@/sidebar/build-project-groups';
 import type { SessionCardModel } from '@/sidebar/session-card-model';
 
 export type SidebarViewModel = {
   visible: readonly SessionCardModel[];
   pinned: readonly SessionCardModel[];
-  timeList: readonly SessionCardModel[];
   projectGroups: ReturnType<typeof buildProjectGroups>;
   /** 空态裁决：'none' = 零会话；null = 有内容。 */
   emptyState: 'none' | null;
@@ -16,7 +14,7 @@ export type SidebarViewModel = {
 
 /**
  * 侧栏列表视图模型（T17/T18）：隐藏项目过滤 → 归档过滤 →
- * 置顶 / 分组平铺 / 项目分组三列表（置顶项不重复出现在列表）。
+ * 置顶 / 项目分组两列表（置顶项不重复出现在列表）。
  */
 export function buildSidebarViewModel(
   sessions: readonly SessionCardModel[],
@@ -29,7 +27,6 @@ export function buildSidebarViewModel(
   return {
     visible,
     pinned: buildPinnedList(visible, pinnedPaths),
-    timeList: buildTimeList(visible, pinnedPaths),
     projectGroups: buildProjectGroups(visible, pinnedPaths, expanded),
     emptyState: visible.length === 0 ? 'none' : null,
   };

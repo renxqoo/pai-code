@@ -14,7 +14,7 @@ import {
   SettingsSchema,
   type ProviderConfig,
   type Settings,
-} from "@paiapp/contracts";
+} from "@x3code/contracts";
 
 /**
  * 设置读写：settings.json（无 key）+ provider-keys.json（safeStorage 加密）。

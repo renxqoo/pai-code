@@ -1,6 +1,6 @@
-import type { IdleRecycleMinutes } from '@paiapp/contracts';
-import { IDLE_RECYCLE_MINUTE_OPTIONS } from '@paiapp/contracts';
-import { ActionButton, SegmentedControl, type SegmentedControlOption, ToggleSwitch } from '@paiapp/ui';
+import type { IdleRecycleMinutes } from '@x3code/contracts';
+import { IDLE_RECYCLE_MINUTE_OPTIONS } from '@x3code/contracts';
+import { ActionButton, SegmentedControl, type SegmentedControlOption, ToggleSwitch } from '@x3code/ui';
 
 import type { Theme } from '@/components/theme-context';
 import type { LocaleSetting } from '@/strings';

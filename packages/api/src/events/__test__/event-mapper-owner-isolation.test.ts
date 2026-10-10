@@ -4,7 +4,7 @@
  * 契约依据（x-harness apps/host-hub/src/worker/event-bridge.ts）：
  * - 桥侧工具增量流键 = `${owner}:${callId}`，结算边沿只清自己的；
  * - 「子代理后台跨父轮运行——父 turn/end 只清父自己的」（settleOwnerStreams 注释）。
- * app 侧 mapper 是全进程单例（pai-runtime.ts:108，跨全部 threadId 共享一个 StreamState），
+ * app 侧 mapper 是全进程单例（x3code-runtime.ts:108，跨全部 threadId 共享一个 StreamState），
  * settled 处理却无差别 clear 整个 toolStreams 表——他线程/后台子代理的在途累积被清空。
  * UiEvent toolUpdated 是快照语义（mapper 自己的注释：「协议边界按 callId 累积」），
  * 累积丢失 = 渲染层输出视图突然回缩为单个 delta。

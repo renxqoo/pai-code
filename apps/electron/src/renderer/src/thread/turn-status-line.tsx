@@ -1,4 +1,4 @@
-import { ChevronToggle } from '@paiapp/ui';
+import { ChevronToggle } from '@x3code/ui';
 
 import { copy } from '@/strings';
 

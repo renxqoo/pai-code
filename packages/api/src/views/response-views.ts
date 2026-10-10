@@ -14,7 +14,7 @@ import type {
   ThinkingLevelView,
   TokenAnalyticsView,
   WorkerRowView,
-} from '@paiapp/contracts';
+} from '@x3code/contracts';
 
 import { subagentsField } from './subagent-spawns';
 import { editHunksField } from './edit-hunks';

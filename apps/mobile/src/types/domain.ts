@@ -1,4 +1,4 @@
-import type { EditHunkView, SubagentSpawnView, ToolCallStatus } from '@paiapp/contracts';
+import type { EditHunkView, SubagentSpawnView, ToolCallStatus } from '@x3code/contracts';
 
 export type ThemePreference = 'light' | 'dark' | 'system';
 export type ThinkingLevel = 'off' | 'low' | 'medium' | 'high';

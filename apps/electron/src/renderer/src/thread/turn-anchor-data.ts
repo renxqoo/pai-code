@@ -1,6 +1,6 @@
 import { formatClockTime } from './format-clock-time';
 import { resultTextBlock, turnEndedAt } from './turn-state';
-import { toolSummary } from '@paiapp/ui-thread';
+import { toolSummary } from '@x3code/ui-thread';
 import type { ThreadItem, TurnModel } from './thread-model';
 
 /** 锚点摘要上限（码点数）：超出截断补省略号，tooltip 内最多两行。 */

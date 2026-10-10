@@ -1,6 +1,6 @@
-# Pai
+# X3code
 
-Pai 是一个 macOS 上的 AI 干活助手：你用一句话说清要什么，它自己去读项目、写代码、跑任务，把做完的结果交给你。
+X3code 是一个 macOS 上的 AI 干活助手：你用一句话说清要什么，它自己去读项目、写代码、跑任务，把做完的结果交给你。
 
 比如「给这个项目加个深色模式」——它会找到该改的文件、动手修改、运行验证，每一步在界面上都看得见。
 
@@ -12,13 +12,13 @@ Pai 是一个 macOS 上的 AI 干活助手：你用一句话说清要什么，�
 
 ## 界面预览
 
-![Pai 桌面端界面：左侧会话侧栏，右侧对话舞台与工具执行过程](image.png)
+![X3code 桌面端界面：左侧会话侧栏，右侧对话舞台与工具执行过程](image.png)
 
 ## 架构
 
-- monorepo：bun workspaces，scope `@paiapp/*`，包源码直出（业务包零构建耦合，`bun test` 零 mock 可测）
+- monorepo：bun workspaces，scope `@x3code/*`，包源码直出（业务包零构建耦合，`bun test` 零 mock 可测）
 - 单 hub 宿主：hub 由随包 bun 二进制运行，本仓库不修改 hub 代码；hub 协议文档是协议唯一真相，本仓库 `contracts` 包维护类型镜像
-- 分层纪律：业务包不 `import 'electron'`（Electron API 只出现在 `apps/electron`），由 oxlint 插件 `pai/*` 在 lint 门禁强制
+- 分层纪律：业务包不 `import 'electron'`（Electron API 只出现在 `apps/electron`），由 oxlint 插件 `x3code/*` 在 lint 门禁强制
 
 ### 目录
 
@@ -32,14 +32,14 @@ Pai 是一个 macOS 上的 AI 干活助手：你用一句话说清要什么，�
 | `packages/api` | hub 接口统一封装：七域命令门面、transport 管线、ApiError 解码、views/events（收窄映射与帧编解码） |
 | `packages/ui` | 渲染层通用组件（shadcn 风格）与 strings 文案目录 |
 | `packages/testkit` | 测试装置（fake-hub 等） |
-| `oxlint-plugins/pai` | 工程纪律 oxlint 插件：依赖白名单、环境面、UI 规则 |
+| `oxlint-plugins/x3code` | 工程纪律 oxlint 插件：依赖白名单、环境面、UI 规则 |
 | `rule/` · `tasks/` · `scripts/` | 重构规则 · 任务文档 · typecheck / 打包脚本 |
 
 ## 环境要求
 
 - [bun](https://bun.sh)（包管理、测试运行时、hub 运行时）
 - macOS（当前打包目标 mac arm64）
-- 真实运行需要 host-hub 检出（`/Users/wrr/work/my-agent`）：默认探测本仓库旁级 `../my-agent/packages/host-hub`（`src/host/cli.ts` 源码形态优先，`dist/host/cli.js` 兜底），也可用环境变量 `PAI_HUB_ENTRY` / `PAI_BUN_PATH` 指定；无 hub 检出时，单测与 UI 开发走 testkit 的 fake-hub / mock Client
+- 真实运行需要 host-hub 检出（`/Users/wrr/work/my-agent`）：默认探测本仓库旁级 `../my-agent/packages/host-hub`（`src/host/cli.ts` 源码形态优先，`dist/host/cli.js` 兜底），也可用环境变量 `X3CODE_HUB_ENTRY` / `X3CODE_BUN_PATH` 指定；无 hub 检出时，单测与 UI 开发走 testkit 的 fake-hub / mock Client
 
 ## 快速开始
 
@@ -47,7 +47,7 @@ Pai 是一个 macOS 上的 AI 干活助手：你用一句话说清要什么，�
 bun install
 
 # 开发（electron-vite dev，热更新）
-bun run --filter '@paiapp/electron' dev
+bun run --filter '@x3code/electron' dev
 ```
 
 ## 门禁（四门，提交前全绿）
@@ -65,10 +65,10 @@ bun run ci        # 以上全部
 ## 打包
 
 ```bash
-bun run --filter '@paiapp/electron' package   # mac arm64 冒烟包（未签名）
+bun run --filter '@x3code/electron' package   # mac arm64 冒烟包（未签名）
 ```
 
-打包流程先跑 `scripts/packaging/sync-resources.ts`：拷贝 bun 二进制进 `resources/bun/`，并从旁级 `../my-agent` 的 host-hub 源码入口 `bun build --compile` 出单文件可执行进 `resources/host-hub/host-hub`（打包态直执行形态）；来源可用 `PAI_BUN_PATH` / `PAI_HUB_ENTRY` 覆盖。
+打包流程先跑 `scripts/packaging/sync-resources.ts`：拷贝 bun 二进制进 `resources/bun/`，并从旁级 `../my-agent` 的 host-hub 源码入口 `bun build --compile` 出单文件可执行进 `resources/host-hub/host-hub`（打包态直执行形态）；来源可用 `X3CODE_BUN_PATH` / `X3CODE_HUB_ENTRY` 覆盖。
 
 ## CI（GitHub Actions）
 

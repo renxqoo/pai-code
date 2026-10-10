@@ -1,4 +1,4 @@
-import type { SessionView } from '@paiapp/contracts';
+import type { SessionView } from '@x3code/contracts';
 
 /** 侧栏会话卡片的展示字段（会话真相在 hub，这里只承载 UI 状态）。 */
 export type SessionCardModel = {

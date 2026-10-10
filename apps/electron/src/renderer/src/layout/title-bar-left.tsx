@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { PanelLeft } from 'lucide-react';
 
-import { IconButton } from '@paiapp/ui';
+import { IconButton } from '@x3code/ui';
 
 import { useObservedWidth } from '@/hooks/use-observed-width';
 import { useWindowState } from '@/hooks/use-window-state';
@@ -10,7 +10,6 @@ import { TITLEBAR_LEFT_PADDING, TITLEBAR_LEFT_PADDING_FULLSCREEN } from '@/lib/p
 
 type TitleBarLeftProps = {
   titleName: string
-  titleSuffix: string
   toggleLabel: string
   collapsed: boolean
   sidebarWidth: number
@@ -23,7 +22,7 @@ type TitleBarLeftProps = {
  * 收起时保持内容宽并发布 --titlebar-left-w 供主区头部避让。
  * 全屏态（macOS 红绿灯隐藏）左距收窄，侧栏开关贴近窗口左缘。
  */
-function TitleBarLeft({ titleName, titleSuffix, toggleLabel, collapsed, sidebarWidth, onToggle }: TitleBarLeftProps) {
+function TitleBarLeft({ titleName, toggleLabel, collapsed, sidebarWidth, onToggle }: TitleBarLeftProps) {
   const { fullscreen } = useWindowState();
   const publishWidth = React.useCallback((width: number) => {
     document.documentElement.style.setProperty('--titlebar-left-w', `${Math.round(width)}px`);
@@ -33,7 +32,7 @@ function TitleBarLeft({ titleName, titleSuffix, toggleLabel, collapsed, sidebarW
   return (
     <div
       ref={rootRef}
-      className="app-drag pointer-events-none fixed top-0 left-0 z-30 flex h-[46px] items-center gap-[14px] pr-4 transition-[padding] duration-200 motion-reduce:transition-none"
+      className="app-drag pointer-events-none fixed top-0 left-0 z-30 flex h-[46px] items-center gap-[10px] pr-4 transition-[padding] duration-200 motion-reduce:transition-none"
       style={{
         paddingLeft: fullscreen ? TITLEBAR_LEFT_PADDING_FULLSCREEN : TITLEBAR_LEFT_PADDING,
         maxWidth: collapsed ? undefined : sidebarWidth,
@@ -55,7 +54,6 @@ function TitleBarLeft({ titleName, titleSuffix, toggleLabel, collapsed, sidebarW
       </IconButton>
       <span className="min-w-0 truncate text-[13.5px] leading-none tracking-[-0.01em]">
         <span className="font-bold text-foreground">{titleName}</span>
-        <span className="font-medium text-foreground/70"> {titleSuffix}</span>
       </span>
     </div>
   );

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { fileGroup, slashCommandGroups } from '../command-groups';
-import type { CommandView } from '@paiapp/contracts';
+import type { CommandView } from '@x3code/contracts';
 
 const cmd = (name: string, source: CommandView['source'], description: string | null = null): CommandView => ({
   name,

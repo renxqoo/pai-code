@@ -66,7 +66,7 @@ export default function ModelsRoute() {
         {list.length > 0 ? (
           <ContentCard items={list.map((item) => ({ detail: item.description, icon: Cpu, label: item.name, onPress: () => select(item.id), selected: selected === item.id, trailing: item.provider }))} />
         ) : null}
-        <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 19, marginTop: spacing.xs3 }}>凭据由电脑端受保护的存储管理，Pai Code 不会在手机上显示完整密钥。</Text>
+        <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 19, marginTop: spacing.xs3 }}>凭据由电脑端受保护的存储管理，X3code 不会在手机上显示完整密钥。</Text>
       </ScrollView>
     </View>
   );

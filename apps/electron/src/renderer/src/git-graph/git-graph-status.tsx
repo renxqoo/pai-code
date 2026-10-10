@@ -1,4 +1,4 @@
-import { Spinner } from '@paiapp/ui';
+import { Spinner } from '@x3code/ui';
 
 import { copy } from '@/strings';
 

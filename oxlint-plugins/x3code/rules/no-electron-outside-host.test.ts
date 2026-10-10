@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 
 import { lintTree, MINI_TREE, ruleCount } from '../test/utils.ts'
 
-describe('pai/no-electron-outside-host', () => {
+describe('x3code/no-electron-outside-host', () => {
   test('packages 引 electron：报', () => {
     const { exitCode, stdout } = lintTree(
       { ...MINI_TREE, 'packages/core/src/e.ts': "import { app } from 'electron';\nexport const x = app;\n" },

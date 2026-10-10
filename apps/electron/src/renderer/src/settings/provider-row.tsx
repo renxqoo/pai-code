@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { Boxes, Trash2, X } from 'lucide-react';
 
-import type { ProviderConfigView } from '@paiapp/contracts';
-import { IconButton } from '@paiapp/ui';
+import type { ProviderConfigView } from '@x3code/contracts';
+import { IconButton } from '@x3code/ui';
 
 import { copy } from '@/strings';
 

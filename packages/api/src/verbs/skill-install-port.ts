@@ -4,7 +4,7 @@
  * app 侧**不实现任何装载器校验规则**——本文件只做 hub 命令的 typed 调用面与应答形状收窄；
  * hub 缺命令（< 60 词表的旧 hub）由 skills-import.ts 的映射层降级 skill_not_supported。
  */
-import type { SkillsInstallData, SkillsInspectData } from '@paiapp/contracts';
+import type { SkillsInstallData, SkillsInspectData } from '@x3code/contracts';
 
 import type { SettingsCommands } from '../commands/settings';
 import type { HubResult } from '../errors';

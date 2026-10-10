@@ -1,5 +1,5 @@
-import { createApiClient } from '@paiapp/api/client';
-import type { ApiOutcome } from '@paiapp/contracts';
+import { createApiClient } from '@x3code/api/client';
+import type { ApiOutcome } from '@x3code/contracts';
 
 import type { BridgeClient } from './client-invoke';
 

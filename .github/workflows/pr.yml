@@ -21,5 +21,5 @@ jobs:
         working-directory: x-harness
       - run: bun run ci
         env:
-          PAI_HUB_ENTRY: ${{ github.workspace }}/x-harness/apps/host-hub/src/host/cli.ts
-          PAI_BUN_PATH: bun
+          X3CODE_HUB_ENTRY: ${{ github.workspace }}/x-harness/apps/host-hub/src/host/cli.ts
+          X3CODE_BUN_PATH: bun

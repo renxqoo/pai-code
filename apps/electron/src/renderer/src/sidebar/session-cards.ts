@@ -1,4 +1,4 @@
-import type { SessionView } from '@paiapp/contracts';
+import type { SessionView } from '@x3code/contracts';
 
 import { baseNameOf } from '@/lib/project-dirs';
 import type { SessionCardModel } from '@/sidebar/session-card-model';

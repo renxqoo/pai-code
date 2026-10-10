@@ -26,7 +26,7 @@ function findUnresolvedImportStubs(code: string): UnresolvedImportStub[] {
 
 function failOnUnresolvedImportsPlugin(): Plugin {
   return {
-    name: 'pai:fail-on-unresolved-imports',
+    name: 'x3code:fail-on-unresolved-imports',
     apply: 'build',
     generateBundle(_, bundle) {
       const stubs: string[] = [];

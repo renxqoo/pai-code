@@ -6,7 +6,7 @@ import { initialThreadState, type LiveThreadState } from '@/live/live-thread-sta
 import { store as liveStore } from '@/live/workspace-runtime';
 import { uiStore } from '@/ui/ui-store';
 import { render } from '@/testing/render';
-import type { SessionView } from '@paiapp/contracts';
+import type { SessionView } from '@x3code/contracts';
 import { ThreadStage } from '../thread-stage';
 
 /**

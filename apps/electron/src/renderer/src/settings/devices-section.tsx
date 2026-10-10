@@ -1,8 +1,8 @@
 import * as React from 'react';
 import QRCode from 'qrcode';
 
-import type { RelayConfig } from '@paiapp/contracts';
-import { ActionButton } from '@paiapp/ui';
+import type { RelayConfig } from '@x3code/contracts';
+import { ActionButton } from '@x3code/ui';
 import { KeyRound, QrCode, RefreshCw, ShieldOff, Smartphone } from 'lucide-react';
 
 import { copy } from '@/strings';
@@ -79,7 +79,7 @@ const now = (): number => Date.now();
  * 已配对设备管理（改档/撤销）。数据全部经 gateway owner socket（桌面 = 全权 owner）。
  */
 export function DevicesSection({ relay, onRelaySave }: DevicesSectionProps): React.ReactElement {
-  const gateway = (typeof window !== 'undefined' ? window.pai.gateway : undefined) as GatewayFace | undefined;
+  const gateway = (typeof window !== 'undefined' ? window.x3code.gateway : undefined) as GatewayFace | undefined;
   const [status, setStatus] = React.useState<GatewayStatus | null>(null);
   const [connected, setConnected] = React.useState(false);
   const [devices, setDevices] = React.useState<DeviceRow[]>([]);

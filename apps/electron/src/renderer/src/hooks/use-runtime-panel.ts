@@ -1,6 +1,6 @@
 import React from 'react';
 
-import type { RuntimeSnapshotView, SessionStatsView, SessionView } from '@paiapp/contracts';
+import type { RuntimeSnapshotView, SessionStatsView, SessionView } from '@x3code/contracts';
 
 import { buildRuntimeRows, type RuntimeWorkerRow } from '@/screens/runtime-entries';
 import type { WorkspaceActions } from '@/live/workspace-actions';

@@ -1,4 +1,4 @@
-import { createApiClient } from '@paiapp/api/client';
+import { createApiClient } from '@x3code/api/client';
 import type { BridgeClient } from './client-invoke';
 import type { LiveStore } from './store';
 

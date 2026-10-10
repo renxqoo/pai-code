@@ -1,6 +1,6 @@
 import { GitMerge } from 'lucide-react';
 
-import type { GitGraphCommit } from '@paiapp/contracts';
+import type { GitGraphCommit } from '@x3code/contracts';
 
 import { cn } from '@/lib/utils';
 

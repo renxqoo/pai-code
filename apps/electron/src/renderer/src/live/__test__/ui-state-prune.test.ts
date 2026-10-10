@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { SessionView } from '@paiapp/contracts';
+import type { SessionView } from '@x3code/contracts';
 
 import { connectSessionUiPrune } from '../ui-state-prune';
 import { createLiveStore } from '../store';

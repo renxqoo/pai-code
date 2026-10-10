@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Pressable } from 'react-native';
 import { ChevronRight, Pencil } from 'lucide-react-native';
 
-import { objectName, type FileDiffGroup } from '@paiapp/ui-thread';
+import { objectName, type FileDiffGroup } from '@x3code/ui-thread';
 
 import { useAppTheme } from '@/theme/theme-context';
 import { copy, toolCopy } from '@/strings/zh';

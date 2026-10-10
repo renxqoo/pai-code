@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 
-import { appError, type ApiError } from '@paiapp/api';
+import { appError, type ApiError } from '@x3code/api';
 
 /**
  * 在系统工具中打开已知项目目录（顶栏项目菜单的执行面）：

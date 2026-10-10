@@ -3,9 +3,9 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { HostCommandOutcome, HostPhase, HostProcessPort, HubFrame, PaiCommand, UiEvent } from '@paiapp/contracts';
+import type { HostCommandOutcome, HostPhase, HostProcessPort, HubFrame, X3codeCommand, UiEvent } from '@x3code/contracts';
 
-import { createPaiRuntime } from '../pai-runtime';
+import { createPaiRuntime } from '../x3code-runtime';
 import type { ProviderKeyStore } from '../file-settings';
 
 /**
@@ -32,7 +32,7 @@ function makeFixture() {
     get phase(): HostPhase {
       return 'ready';
     },
-    request: (_command: PaiCommand) => Promise.resolve({ ok: true, data: {} } satisfies HostCommandOutcome),
+    request: (_command: X3codeCommand) => Promise.resolve({ ok: true, data: {} } satisfies HostCommandOutcome),
     onFrame: (cb: (frame: HubFrame) => void) => {
       frameCb = cb;
       return () => undefined;

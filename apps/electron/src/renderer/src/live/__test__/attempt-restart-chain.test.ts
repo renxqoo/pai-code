@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createEventMapper } from '@paiapp/api';
+import { createEventMapper } from '@x3code/api';
 import { foldThreadEvent } from '../fold-events';
 import { initialThreadState } from '../live-thread-state';
-import type { UiEvent } from '@paiapp/contracts';
+import type { UiEvent } from '@x3code/contracts';
 
 /**
  * attempt 重开全链合测（用户症状：流式中断重试后同一消息出现两遍）：

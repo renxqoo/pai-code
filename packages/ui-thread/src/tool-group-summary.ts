@@ -6,7 +6,7 @@
  * 标题不带调用计数——执行过程是脚注，标题要短；要看多少次由展开后的调用行承担。
  */
 
-import type { ToolCallStatus } from '@paiapp/contracts';
+import type { ToolCallStatus } from '@x3code/contracts';
 import type { ToolCopy } from './tool-copy';
 import { toolKindOf, type ToolKind } from './tool-kind';
 import type { ToolNameRef, ToolStatusRef } from './tool-refs';

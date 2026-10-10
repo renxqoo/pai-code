@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from '@paiapp/ui';
+import { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from '@x3code/ui';
 
 import { useCommandItems } from '@/screens/use-command-panel';
 import { fileItems, type PaletteGroupKind, type PaletteItem } from './palette-items';

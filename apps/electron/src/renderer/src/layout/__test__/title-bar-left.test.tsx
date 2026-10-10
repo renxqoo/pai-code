@@ -12,8 +12,7 @@ import { TitleBarLeft } from '../title-bar-left';
 function renderTitleBar(collapsed: boolean): string {
   return renderToStaticMarkup(
     <TitleBarLeft
-      titleName="Pai"
-      titleSuffix="Code"
+      titleName="X3code"
       toggleLabel={collapsed ? '展开侧栏' : '收起侧栏'}
       collapsed={collapsed}
       sidebarWidth={240}
@@ -33,7 +32,7 @@ describe('TitleBarLeft 侧栏开关', () => {
     const collapsedHtml = renderTitleBar(true);
     const expandedHtml = renderTitleBar(false);
     for (const html of [collapsedHtml, expandedHtml]) {
-      expect(html).toContain('lucide-panel-left"');
+      expect(html).toContain('lucide-panel-left ');
       expect(html).not.toContain('panel-left-open');
       expect(html).not.toContain('panel-left-close');
     }
@@ -47,10 +46,9 @@ describe('TitleBarLeft 侧栏开关', () => {
     expect(renderTitleBar(false)).toContain('title="收起侧栏"');
   });
 
-  test('标题块渲染应用名与后缀，展开态宽度钳制在侧栏内', () => {
+  test('标题块渲染应用名，展开态宽度钳制在侧栏内', () => {
     const html = renderTitleBar(false);
-    expect(html).toContain('Pai');
-    expect(html).toContain('Code');
+    expect(html).toContain('X3code');
     expect(html).toContain('max-width:240px');
   });
 });

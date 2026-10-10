@@ -4,7 +4,7 @@ import { ArrowUp, ChevronDown, Plus } from 'lucide-react';
 
 import { UsageDetails, formatWindowPct, type LiveUsageView } from './usage-details';
 
-import { IconButton, MenuButton, menuTriggerClassName, PickerDialog, Progress, Spinner } from '@paiapp/ui';
+import { IconButton, MenuButton, menuTriggerClassName, PickerDialog, Progress, Spinner } from '@x3code/ui';
 import { groupModelOptions } from '@/components/group-model-options';
 import { copy } from '@/strings';
 import { cn } from '@/lib/utils';

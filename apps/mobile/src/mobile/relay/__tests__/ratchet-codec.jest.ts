@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from '@jest/globals';
 
 import { createRelayRatchetCodec, type RatchetBoundaryStore } from '../ratchet-codec';
-import { generateBoxKeyPair, x25519 } from '@paiapp/relay-protocol';
+import { generateBoxKeyPair, x25519 } from '@x3code/relay-protocol';
 
 function memoryStore(): RatchetBoundaryStore & { sends: unknown[]; recvs: unknown[] } {
   return {

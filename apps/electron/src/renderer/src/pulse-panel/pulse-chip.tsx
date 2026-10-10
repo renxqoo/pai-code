@@ -1,4 +1,4 @@
-import { DiffStat, formatDiffDelta } from '@paiapp/ui';
+import { DiffStat, formatDiffDelta } from '@x3code/ui';
 import { copy } from '@/strings';
 
 import type { PulseChipSegments } from './pulse-assembly';

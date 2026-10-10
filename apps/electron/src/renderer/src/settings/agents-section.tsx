@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { Bot, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 
-import type { AgentDefinition } from '@paiapp/contracts';
-import { ActionButton, IconButton } from '@paiapp/ui';
+import type { AgentDefinition } from '@x3code/contracts';
+import { ActionButton, IconButton } from '@x3code/ui';
 
 import { cn } from '@/lib/utils';
 import { copy } from '@/strings';

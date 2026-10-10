@@ -1,4 +1,4 @@
-import type { UiEvent } from '@paiapp/contracts';
+import type { UiEvent } from '@x3code/contracts';
 import type { SubagentModel } from '@/thread/thread-model';
 
 import { noteCallStart, omitCallStart, type LiveThreadState } from './live-thread-state';

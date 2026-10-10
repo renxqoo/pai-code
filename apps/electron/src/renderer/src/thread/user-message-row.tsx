@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { GitBranch, PenLine, RotateCcw } from 'lucide-react';
 
-import { ChatBubble, CopyButton, IconButton } from '@paiapp/ui';
+import { ChatBubble, CopyButton, IconButton } from '@x3code/ui';
 
 import { copy } from '@/strings';
 import { writeClipboardText } from '@/lib/clipboard';

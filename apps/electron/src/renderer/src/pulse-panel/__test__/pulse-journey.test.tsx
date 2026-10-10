@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import * as React from 'react';
 
-import type { SessionView, TodoSnapshotEventData } from '@paiapp/contracts';
+import type { SessionView, TodoSnapshotEventData } from '@x3code/contracts';
 
 import { PulsePanel } from '../pulse-panel';
 import { render } from '@/testing/render';

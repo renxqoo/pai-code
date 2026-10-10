@@ -1,5 +1,5 @@
-import type { ModelInfoView, SessionView } from '@paiapp/contracts';
-import { THINKING_LEVEL_ORDER, isSettableThinkingLevel, thinkingLevelLabel } from '@paiapp/contracts';
+import type { ModelInfoView, SessionView } from '@x3code/contracts';
+import { THINKING_LEVEL_ORDER, isSettableThinkingLevel, thinkingLevelLabel } from '@x3code/contracts';
 
 import type { ThinkingLevelStateView } from '@/live/store';
 

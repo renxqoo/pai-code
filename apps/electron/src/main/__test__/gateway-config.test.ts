@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { gatewayConfigDiffers, writeGatewayConfig } from '../gateway-config';
-import { serializeGatewayConfig } from '@paiapp/contracts';
+import { serializeGatewayConfig } from '@x3code/contracts';
 
 /**
  * gateway.json 派生落盘回归（全局统一：settings.json 的 relay 是唯一真相，

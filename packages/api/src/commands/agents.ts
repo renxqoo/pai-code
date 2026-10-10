@@ -1,11 +1,11 @@
 /** agents 域命令（类型 CRUD + 子代理操纵 + 弹窗应答）。 */
-import type { PaiCommand } from '@paiapp/contracts';
+import type { X3codeCommand } from '@x3code/contracts';
 
 import type { HubResult } from '../errors';
 import type { Transport } from '../transport';
 import { TIMEOUTS } from '../timeouts';
 
-type Input<C extends PaiCommand['type']> = Omit<Extract<PaiCommand, { type: C }>, 'type'>;
+type Input<C extends X3codeCommand['type']> = Omit<Extract<X3codeCommand, { type: C }>, 'type'>;
 
 export interface AgentCommands {
   createAgent(input: Input<'agents/create'>): Promise<HubResult<unknown>>;

@@ -4,8 +4,8 @@
 import * as React from 'react';
 import { Puzzle, RefreshCw, FolderInput } from 'lucide-react';
 
-import type { PluginCandidateView, PluginProposalRow, PluginView } from '@paiapp/contracts';
-import { ActionButton, IconButton, ToggleSwitch } from '@paiapp/ui';
+import type { PluginCandidateView, PluginProposalRow, PluginView } from '@x3code/contracts';
+import { ActionButton, IconButton, ToggleSwitch } from '@x3code/ui';
 
 import { copy } from '@/strings';
 import type { PluginImportRequest, PluginImportSummary } from '@/live/live-controller-types';

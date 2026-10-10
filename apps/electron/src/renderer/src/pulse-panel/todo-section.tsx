@@ -1,6 +1,6 @@
-import type { TodoSnapshotTask } from '@paiapp/contracts';
+import type { TodoSnapshotTask } from '@x3code/contracts';
 
-import { CollapsibleSection } from '@paiapp/ui';
+import { CollapsibleSection } from '@x3code/ui';
 import { copy } from '@/strings';
 
 import { TodoRow } from './todo-row';

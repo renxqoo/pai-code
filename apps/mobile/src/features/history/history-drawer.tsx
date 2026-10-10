@@ -7,7 +7,7 @@ import { useAppTheme } from '@/theme/theme-context';
 import { radius, spacing } from '@/theme/tokens';
 import { IconButton } from '@/components/ui/icon-button';
 import { SectionHeader } from '@/components/ui/section-header';
-import { PaiMark } from '@/components/brand/pai-mark';
+import { X3codeMark } from '@/components/brand/x3code-mark';
 import { SessionRow } from '@/features/history/session-row';
 import { DrawerLink } from '@/features/navigation/drawer-link';
 import { useConversationStore } from '@/store/conversation-store';
@@ -42,7 +42,7 @@ export function HistoryDrawer() {
   return (
     <Modal animationType="fade" onRequestClose={() => setDrawerOpen(false)} transparent visible={open}>
       <View style={{ backgroundColor: colors.overlay, flex: 1 }}><Pressable accessibilityLabel="关闭对话历史" onPress={() => setDrawerOpen(false)} style={{ flex: 1 }} /><View accessibilityLabel="对话历史" style={{ backgroundColor: colors.background, borderTopRightRadius: 28, bottom: 0, left: 0, paddingTop: insets.top, position: 'absolute', shadowColor: '#000000', shadowOffset: { width: 5, height: 0 }, shadowOpacity: 0.12, shadowRadius: 20, top: 0, width: '88%' }}>
-        <View style={{ alignItems: 'center', flexDirection: 'row', minHeight: 58, paddingHorizontal: spacing.xs3 }}><PaiMark size={30} /><Text style={{ color: colors.text, fontSize: 17, fontWeight: '700', marginLeft: 9 }}>Pai Code</Text><IconButton icon={X} label="关闭" onPress={() => setDrawerOpen(false)} style={{ marginLeft: 'auto' }} /></View>
+        <View style={{ alignItems: 'center', flexDirection: 'row', minHeight: 58, paddingHorizontal: spacing.xs3 }}><X3codeMark size={30} /><Text style={{ color: colors.text, fontSize: 17, fontWeight: '700', marginLeft: 9 }}>X3code</Text><IconButton icon={X} label="关闭" onPress={() => setDrawerOpen(false)} style={{ marginLeft: 'auto' }} /></View>
         <View style={{ paddingHorizontal: spacing.xs3 }}><Pressable accessibilityRole="button" onPress={() => { startNewSession(); setDrawerOpen(false); }} style={{ alignItems: 'center', backgroundColor: 'transparent', borderRadius: radius.lg, flexDirection: 'row', minHeight: 54, paddingHorizontal: 4 }}><SquarePen color={colors.text} size={21} /><Text style={{ color: colors.text, fontSize: 16, fontWeight: '500', marginLeft: 12 }}>新建对话</Text></Pressable>
           <DrawerLink icon={Laptop} label="连接电脑" onPress={() => { router.push('/devices'); setDrawerOpen(false); }} />
           <DrawerLink icon={HardDrive} label="资产" onPress={() => { router.push('/files'); setDrawerOpen(false); }} />

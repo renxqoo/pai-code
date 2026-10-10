@@ -3,8 +3,8 @@
  * 启停（链式串行）/候选扫描/批量导入（T42 D5/D6：逐条隔离 + 批末单次重开）/
  * 整目录移除。编排链（chainSkills）与重开回调由控制器注入。
  */
-import type { ApiClient } from '@paiapp/api/client';
-import type { SkillCandidateView, SkillView } from '@paiapp/contracts';
+import type { ApiClient } from '@x3code/api/client';
+import type { SkillCandidateView, SkillView } from '@x3code/contracts';
 
 import { copyOfError } from '@/lib/error-text';
 

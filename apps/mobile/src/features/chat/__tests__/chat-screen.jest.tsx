@@ -107,6 +107,6 @@ describe("ChatScreen", () => {
       </TestWrapper>,
     );
     // 在消息流里（ScrollView 内容末尾），不在输入区上方悬浮
-    expect(within(view.getByTestId("conversation-scroll")).getByLabelText("Pai Code 正在生成回复")).toBeTruthy();
+    expect(within(view.getByTestId("conversation-scroll")).getByLabelText("X3code 正在生成回复")).toBeTruthy();
   });
 });

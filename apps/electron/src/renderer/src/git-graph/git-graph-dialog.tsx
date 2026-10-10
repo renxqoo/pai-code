@@ -1,7 +1,7 @@
 import { GitGraph, RotateCw, X } from 'lucide-react';
 
-import type { GitGraphCommit, GitGraphView } from '@paiapp/contracts';
-import { Dialog, DialogContent, DialogTitle, IconButton } from '@paiapp/ui';
+import type { GitGraphCommit, GitGraphView } from '@x3code/contracts';
+import { Dialog, DialogContent, DialogTitle, IconButton } from '@x3code/ui';
 
 import { cn } from '@/lib/utils';
 import { copy } from '@/strings';

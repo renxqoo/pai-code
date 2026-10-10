@@ -1,4 +1,4 @@
-import type { InflightView } from '@paiapp/contracts';
+import type { InflightView } from '@x3code/contracts';
 
 /**
  * 直执行 bash 的收尾探测（T35 M2b）。

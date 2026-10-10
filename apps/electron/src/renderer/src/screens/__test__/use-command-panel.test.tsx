@@ -6,7 +6,7 @@ import { initialThreadState } from '@/live/live-thread-state';
 import { store as liveStore, workspaceActions } from '@/live/workspace-runtime';
 import { uiStore } from '@/ui/ui-store';
 import { render } from '@/testing/render';
-import type { SessionView } from '@paiapp/contracts';
+import type { SessionView } from '@x3code/contracts';
 
 /** 命令面板装配：开合本地态 + onSelect 派发全分支（actions/uiStore/通道单例 spy）+ 条目 hook 数据面。 */
 

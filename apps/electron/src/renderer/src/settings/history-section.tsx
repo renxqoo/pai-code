@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { ChevronDown, Pin, RefreshCw } from 'lucide-react';
 
-import { IconButton, MenuButton, type MenuItemDef } from '@paiapp/ui';
+import { IconButton, MenuButton, type MenuItemDef } from '@x3code/ui';
 
 import { formatRelativeAge } from '@/lib/relative-age';
 import { cn } from '@/lib/utils';

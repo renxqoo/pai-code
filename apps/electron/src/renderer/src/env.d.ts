@@ -1,10 +1,10 @@
 /// <reference types="vite/client" />
 
-import type { PaiBridge } from '../../preload/index';
+import type { X3codeBridge } from '../../preload/index';
 
 declare global {
   interface Window {
-    pai: PaiBridge;
+    x3code: X3codeBridge;
   }
 }
 

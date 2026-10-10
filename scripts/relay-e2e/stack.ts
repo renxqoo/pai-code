@@ -6,7 +6,7 @@ import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const X_HARNESS_ROOT = process.env['PAI_X_HARNESS_ROOT'] ?? new URL('../../../x-harness', import.meta.url).pathname;
+const X_HARNESS_ROOT = process.env['X3CODE_X_HARNESS_ROOT'] ?? new URL('../../../x-harness', import.meta.url).pathname;
 
 /**
  * 权限确认往返探针的落盘文件名（相对线程 cwd）。
@@ -82,7 +82,7 @@ export async function startPcStack(options: { relayKeyFingerprint?: string; rela
     },
     log: (message: string) => {
       gatewayLog.push(message);
-      if (process.env['PAI_E2E_VERBOSE'] === '1') process.stderr.write(`[gw] ${message}\n`);
+      if (process.env['X3CODE_E2E_VERBOSE'] === '1') process.stderr.write(`[gw] ${message}\n`);
     },
   });
 

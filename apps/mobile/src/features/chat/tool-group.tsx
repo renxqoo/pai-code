@@ -1,11 +1,11 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { autoOpenForGroup } from '@paiapp/ui-thread';
+import { autoOpenForGroup } from '@x3code/ui-thread';
 
 import { rhythm } from '@/theme/tokens';
 import type { ChatMessage } from '@/types/domain';
-import type { FileDiffGroup } from '@paiapp/ui-thread';
+import type { FileDiffGroup } from '@x3code/ui-thread';
 import { toolViewOf } from '@/features/chat/tool-message';
 import { ToolGroupHeader } from '@/features/chat/tool-group-header';
 import { ToolRow } from '@/features/chat/tool-row';

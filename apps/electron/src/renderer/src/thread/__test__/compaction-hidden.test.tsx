@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { hydrateItems } from '@/live/hydrate-items';
 import { MessageList } from '../message-list';
 import type { ThreadModel } from '../thread-model';
-import type { HistoryItem } from '@paiapp/contracts';
+import type { HistoryItem } from '@x3code/contracts';
 
 function userItem(id: string, text: string, origin: 'user' | 'system' = 'user', at = 1): HistoryItem {
   return { kind: 'user', id, text, origin, at, images: [] } as HistoryItem;

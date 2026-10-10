@@ -1,4 +1,4 @@
-import type { DiffFileView } from '@paiapp/contracts';
+import type { DiffFileView } from '@x3code/contracts';
 
 /**
  * 工具调用 → 文件变更视图（x-harness 工具名：write——tool-write 包当前仅此一个

@@ -4,12 +4,12 @@
  *  Portal，仓内对话框内容一律抽内容组件后测——provider-model-dialog 同款）。 */
 import * as React from 'react';
 
-import type { SkillCandidateView } from '@paiapp/contracts';
-import { isInstallableSkillName } from '@paiapp/api';
+import type { SkillCandidateView } from '@x3code/contracts';
+import { isInstallableSkillName } from '@x3code/api';
 
 import { copy } from '@/strings';
 
-import { ActionButton } from '@paiapp/ui';
+import { ActionButton } from '@x3code/ui';
 
 import type { SkillImportRequest, SkillImportSummary } from '@/live/live-controller-types';
 

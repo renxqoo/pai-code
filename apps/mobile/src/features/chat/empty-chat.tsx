@@ -3,7 +3,7 @@ import { Pressable, Text, View } from 'react-native';
 import { Code2, MessageSquareText, SearchCheck, ShieldCheck } from 'lucide-react-native';
 import { useAppTheme } from '@/theme/theme-context';
 import { radius, spacing, type } from '@/theme/tokens';
-import { PaiMark } from '@/components/brand/pai-mark';
+import { X3codeMark } from '@/components/brand/x3code-mark';
 import { EmptyChatSuggestion } from '@/features/chat/empty-chat-suggestion';
 import { copy } from '@/strings/zh';
 
@@ -15,14 +15,14 @@ export function EmptyChat({ onWorkspace, onPrompt, onDemo, detached = false }: E
   if (detached) {
     return (
       <View style={{ alignItems: 'center', flex: 1, justifyContent: 'center', paddingHorizontal: spacing.xs5 }}>
-        <PaiMark size={54} />
+        <X3codeMark size={54} />
         <Text style={{ color: colors.text, fontSize: type.display.fontSize, fontWeight: '600', letterSpacing: -0.5, marginTop: spacing.xs3, textAlign: 'center' }}>{copy.detachedEmptyChat}</Text>
       </View>
     );
   }
   return (
     <View style={{ alignItems: 'center', flex: 1, justifyContent: 'center', paddingHorizontal: spacing.xs5 }}>
-      <PaiMark size={54} />
+      <X3codeMark size={54} />
       <Text style={{ color: colors.text, fontSize: type.display.fontSize, fontWeight: '600', letterSpacing: -0.5, marginTop: spacing.xs3 }}>{copy.emptyTitle}</Text>
       <Text style={{ color: colors.textMuted, fontSize: type.row.fontSize, lineHeight: type.row.lineHeight, marginTop: spacing.xs, textAlign: 'center' }}>{copy.tagline}</Text>
       <Pressable accessibilityRole="button" onPress={onWorkspace} style={({ pressed }) => ({ backgroundColor: colors.primary, borderRadius: radius.pill, marginTop: spacing.xs4, opacity: pressed ? 0.65 : 1, paddingHorizontal: 18, paddingVertical: 11 })}><Text style={{ color: colors.primaryText, fontSize: type.row.fontSize, fontWeight: '600' }}>{copy.emptyWorkspace}</Text></Pressable>

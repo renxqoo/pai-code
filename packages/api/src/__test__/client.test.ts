@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { ApiMethod, ApiOutcome, ApiParams } from '@paiapp/contracts';
+import type { ApiMethod, ApiOutcome, ApiParams } from '@x3code/contracts';
 
 import { createApiClient } from '../client';
 

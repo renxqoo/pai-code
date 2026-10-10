@@ -1,7 +1,7 @@
 import type { RuntimePort } from './ports';
 
-import type { ApiError, ApiMethod, ApiOutcome, ApiParams, SessionView } from '@paiapp/contracts';
-import type { SessionRow } from '@paiapp/contracts';
+import type { ApiError, ApiMethod, ApiOutcome, ApiParams, SessionView } from '@x3code/contracts';
+import type { SessionRow } from '@x3code/contracts';
 import { appError } from '../errors';
 import type { ThreadCommands } from '../commands/thread';
 

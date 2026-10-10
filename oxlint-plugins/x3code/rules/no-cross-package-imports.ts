@@ -15,7 +15,7 @@ export default defineRule({
     },
     messages: {
       matrix:
-        "'{{spec}}' is not in the dependency whitelist of this package; see the matrix in oxlint-plugins/pai/utils.ts.",
+        "'{{spec}}' is not in the dependency whitelist of this package; see the matrix in oxlint-plugins/x3code/utils.ts.",
     },
   },
   create,
@@ -25,7 +25,7 @@ function create(context: Context) {
   const allowed = WORKSPACE_MATRIX[packageOf(context.filename) ?? '']
   if (allowed === undefined) return {}
   return importVisitors((spec, node) => {
-    if (!spec.startsWith('@paiapp/')) return
+    if (!spec.startsWith('@x3code/')) return
     if (allowed.includes(spec)) return
     context.report({ node, messageId: 'matrix', data: { spec } })
   })

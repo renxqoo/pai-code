@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { PERM_MODES, type ApiError, type PermissionModeData } from '@paiapp/contracts';
+import { PERM_MODES, type ApiError, type PermissionModeData } from '@x3code/contracts';
 
 import { sessionRoutes } from '../session';
 import { createSettingsRoutes } from '../settings';

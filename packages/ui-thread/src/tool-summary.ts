@@ -20,7 +20,7 @@
  * 「一行放不下」）。
  */
 
-import { isCommentLine } from '@paiapp/contracts';
+import { isCommentLine } from '@x3code/contracts';
 
 /** 整行 shell 注释（`#` / `;` 起头）——判定与数据层截断预算同源（contracts
  * isCommentLine）：预算侧不占额度、展示侧整行剥掉，两处必须同一谓词。只匹配整行

@@ -1,13 +1,13 @@
-# T38 — pi-hub → host-hub 后端全量替换
+# T38 — host-hub → host-hub 后端全量替换
 
 > 状态：已核销（两轮对抗审查清零 + §6 全勾 + 四门全绿；数字如实见 §9）
 > 状态流转：草稿 → 定稿（对抗审查清零）→ 实施中 → 已核销（验收清单全勾）
-> 迁移源：后端进程 `/Users/wrr/work/pi/app`（pai-cli）→ `/Users/wrr/work/my-agent/packages/host-hub`（下称 host-hub，协议 v1）
+> 迁移源：后端进程 `/Users/wrr/work/pi/app`（pi-hub）→ `/Users/wrr/work/my-agent/packages/host-hub`（下称 host-hub，协议 v1）
 > 本文档为三件套合一：§1-3 = DESIGN（契约基线），§4 = IMPLEMENTATION（裁决表与实施顺序），§5-7 = MIGRATION（对照、矩阵、回滚），§8 = 审查处置。
 
 ## 0. 定位
 
-把 Pai 的唯一后端进程从 pi-hub 换成 host-hub：**全量替换，零兼容层**。app（contracts/adapter/infra/main/renderer/testkit）五个面同步演进；pi-hub 退役后 app 仓库内不再有任何 pai 协议残留。host-hub 是 pai-cli 的直系演进（其仓库 MIGRATION.md 已核销 pai→host-hub 迁移，含客户端迁移指引 §7），协议差异全部有档可查——本任务 = 按该差异面重写 app 侧消费面。
+把 X3code 的唯一后端进程从 pi-hub 换成 host-hub：**全量替换，零兼容层**。app（contracts/adapter/infra/main/renderer/testkit）五个面同步演进；host-hub 退役后 app 仓库内不再有任何 pai 协议残留。host-hub 是 pai 的直系演进（其仓库 MIGRATION.md 已核销 pai→host-hub 迁移，含客户端迁移指引 §7），协议差异全部有档可查——本任务 = 按该差异面重写 app 侧消费面。
 
 **规格真相源 = host-hub 代码**（`protocol/commands.ts` COMMAND_NAMES + `protocol/frames.ts` + 各 handler 实现行为）。注意：host-hub 仓库自身文档（MIGRATION.md/DESIGN.md）有三处与代码不符的陈旧表述（get_subagents 字段、subagent/steer 用 agentName、ui_request 保留 select/input/notify/setStatus）——**一律以代码为准**，文档对拍不作为验收依据。
 
@@ -63,12 +63,12 @@
 ## 2. DESIGN — 方向性裁决（默认裁决；审查复核过）
 
 - **【D1】二进制集成**：dev = bun 直跑 my-agent 源码形态 `src/host/cli.ts`（零构建热迭代；**不用 dist 产物**——dist `--external @my-agent/*` 只能原地跑，src 形态同样原地但免构建；探测次序 src > dist 是有意翻转，理由即此）；打包 = sync-resources 从 my-agent 源路径 `bun build --compile` 出单文件可执行进 `resources/host-hub/host-hub`。spawn 形态扩展：`HostRuntimeConfig.hubEntry` 类型放宽 `string | null`（null = 直执行，`spawn(bunPath, [])`，bunPath=编译产物）；`settings.hubDev` 形状同步（entry 为空串/null 语义 = 直执行）。`resources/bun/` 保留（hubDev 指向脚本形态时仍需 bun；dev 形态用系统/配置 bun）。
-- **【D2】渠道与凭据真相源不变**：app 仍是唯一渠道真相与 models.json 唯一写者（`models/add|remove` 不消费，避免双写者）。`writeModelsConfig` 重写为 §1.1 形状：`provider` = 渠道名（同时是 providerId/set_model 寻址键，model/list → set_model 全链同源派生）；`apiKeyEnv` = `PAI_KEY_<NAME>` 引用（key 经 spawn env 注入，hub envFor 进程 env 兜底，不落盘）；**写前校验三道**（镜像 host-hub models-admin，app 侧收口）：渠道名撞 hub 预设键拒（预设键集合运行期从 get_models `source:"preset"` 的 provider 集派生，冷启动缓存）、api 词表校验、数值正整数校验。ProviderConfig 的 `thinkingFormat/compat` 字段退役（host-hub 无此面）；`modelOverrides` 不写（app 的 contextWindow/maxTokens 内联条目，overrides 是 set_model_override 命令域，app 不消费）。GLM 预设保留为 hub 内置，app 渠道列表不依赖预设（真模型一律 custom 条目）。
+- **【D2】渠道与凭据真相源不变**：app 仍是唯一渠道真相与 models.json 唯一写者（`models/add|remove` 不消费，避免双写者）。`writeModelsConfig` 重写为 §1.1 形状：`provider` = 渠道名（同时是 providerId/set_model 寻址键，model/list → set_model 全链同源派生）；`apiKeyEnv` = `X3CODE_KEY_<NAME>` 引用（key 经 spawn env 注入，hub envFor 进程 env 兜底，不落盘）；**写前校验三道**（镜像 host-hub models-admin，app 侧收口）：渠道名撞 hub 预设键拒（预设键集合运行期从 get_models `source:"preset"` 的 provider 集派生，冷启动缓存）、api 词表校验、数值正整数校验。ProviderConfig 的 `thinkingFormat/compat` 字段退役（host-hub 无此面）；`modelOverrides` 不写（app 的 contextWindow/maxTokens 内联条目，overrides 是 set_model_override 命令域，app 不消费）。GLM 预设保留为 hub 内置，app 渠道列表不依赖预设（真模型一律 custom 条目）。
 - **【D3】权限面模式化**：pai 规则域（全局 permission-rules.json + 会话 sidecar get/set_permission_rules）整体退役，`agent-dir-files.ts`（ALLOWED_FILES 只服务这两个退役域）随之删除。新面：T14 会话模式操作栏 → `permission/set_mode`；thread/start 带 `permissionMode` 初值；用户级默认 = `settings/set permission.defaultMode`；项目级 = 带 cwd 的 settings/set。全局规则编辑 UI 删除，替换为「默认模式」设置项。`contracts/permissions.ts` 收缩为 PermMode 词表。
 - **【D4】思考档 4 档**：7 档（off…max）→ `off|low|medium|high` + unset（**仅 get 回退值**，set 不接受 unset）。thread/start 带 `thinkingLevel` 初值（app 发送前自行校验词表——hub 对词表外值静默降级）；运行期改档 `set_thinking_level`（**在飞拒绝 + hub 侧 dialSupportsThinking 校验拒绝**（模型不支持/预算超限）——两路失败都降级为 UI toast，菜单恒 4 档可选不预判能力，app 自有渠道可用 ProviderConfig.reasoning 提示性灰显但不硬禁）；读口 `get_thinking_level{level, source}`；用户级默认 `settings/set thinking.default`；模型级 effortLevelsForModel 本地推导退役。
 - **【D5】技能面 hub 化**：app 本地 skills-catalog/skills-inventory（pi 语义）退役 → `skills/list|set_enabled|remove` 命令。设置页技能开关与新任务页预构命令目录改走命令。
 - **【D6】子代理定义面 hub 化**：app 文件面（`<agentDir>/agents` + `<项目>/.pi/agents` + pi frontmatter 格式）退役。user 级 CRUD → `agents/create|remove`（hub 写 `~/.my-agent/agents/<name>.md`，严格四字段 frontmatter）；枚举 → `agents/list`（live 线程带 cwd 时含 project 级）；project 级 CRUD = app 直写 `<cwd>/.my-agent/agents/<name>.md`（hub 格式热发现），**app 侧自带同规校验**（NAME_PATTERN `^[a-z0-9]+(-[a-z0-9]+)*$`、保留名 fork/main、description ≤500 字符、四字段 frontmatter）——hub 对坏文件是静默跳过 + stderr warn，无校验则用户定义静默消失。
-- **【D7】settled 驱动（含 /compact 特例与受理窗口竞态）**：`session/prompt` 的 APIOutcome 语义 = 受理；终态信号 = `settled{sendId, ok}`（sendId = host.request 自动分配的命令 id），pai-runtime 按 sendId 关联在途 prompt + 派发 turnSettled。**特例：app 本地预判行首 `/compact` 词形（trim 后行首，与 hub interceptCompact 同规则，注释注明单源出处）——该类 prompt 以响应为终态、不等待 settled、保留长超时（压缩是同步长操作）**。**受理窗口竞态：app 的 streaming 状态来自事件流、天然滞后于 hub 受理窗口（`pendingSends>0`）**——prompt 路由对 `"streamingBehavior required while streaming"` 错误做**恰一次自动重试**（补 `streamingBehavior:"followUp"` 重发），重试仍败才上抛 UI。
+- **【D7】settled 驱动（含 /compact 特例与受理窗口竞态）**：`session/prompt` 的 APIOutcome 语义 = 受理；终态信号 = `settled{sendId, ok}`（sendId = host.request 自动分配的命令 id），x3code-runtime 按 sendId 关联在途 prompt + 派发 turnSettled。**特例：app 本地预判行首 `/compact` 词形（trim 后行首，与 hub interceptCompact 同规则，注释注明单源出处）——该类 prompt 以响应为终态、不等待 settled、保留长超时（压缩是同步长操作）**。**受理窗口竞态：app 的 streaming 状态来自事件流、天然滞后于 hub 受理窗口（`pendingSends>0`）**——prompt 路由对 `"streamingBehavior required while streaming"` 错误做**恰一次自动重试**（补 `streamingBehavior:"followUp"` 重发），重试仍败才上抛 UI。
 - **【D8】队列 UI 双信号**：`inbox/spliced`（结构信号，触发一次 get_state 拉取）+ `get_state.queue {steering, followUp}`（文本快照）→ queueChanged UiEvent。
 - **【D9】fork seq 化**：app API `session/fork` 入参 entryId → seq（渲染层从 entries 的 seq 取）；流式中 fork 拒绝的 UI 处理 = 先 abort 提示；cancelled/ABA 分支删除。
 - **【D10】通知域收缩**：ui_request 仅 confirm；pai 的 notify/setStatus 对话框与 app 通知条 dialog 来源退役（`notifyIfBlurred` 的 notify/setStatus 分支删除；失焦系统通知保留给 bashOutput 等自有信号）。对话框 UI 收敛为 confirm 单形态。
@@ -81,7 +81,7 @@
 
 | 不处理 | 归属 |
 | --- | --- |
-| OAuth / 后端协商 / PAI_BACKEND | 域已随 pi 退役（host-hub 无此面） |
+| OAuth / 后端协商 / X3CODE_BACKEND | 域已随 pi 退役（host-hub 无此面） |
 | pai 规则 JSON 的迁移/转换 | D3：域退役，无转换义务 |
 | 旧 pai 会话格式转换 | D11：显式挂账不迁移 |
 | host-hub 内核行为（WAL/压缩/恢复） | my-agent 仓库职责，app 只消费协议 |
@@ -119,7 +119,7 @@
 | `adapter/src/content.ts` | mimeType → mediaType（跟随 wire 词法） |
 | `main/models-config.ts` | hub 形状 + D2 三道写前校验 |
 | `main/api-routes.ts` | 命令增删改 + 权限/思考/技能/fork 面 + /compact 特判（D7）+ 受理窗口重试（D7） |
-| `main/pai-runtime.ts` | settled 关联、hub_error、队列快照、对账收敛（D11） |
+| `main/x3code-runtime.ts` | settled 关联、hub_error、队列快照、对账收敛（D11） |
 | `main/agent-definitions-store.ts` | user 级走命令 + project 级 hub 格式直写 + D6 同规校验 |
 | 渲染层 `live/fold-events.ts`、`fold-subagents.ts` | 内核词表折叠 + agentName 分流 |
 | 渲染层 `live/entry-hydration.ts`、`read-ports.ts`、`fold-hydrate.ts`、`hydrate-items.ts` | seq 游标 + 新响应形状 |
@@ -131,7 +131,7 @@
 | `infra/host-process/create-host-process.ts` | `PI_CODING_AGENT_DIR`→`HUB_AGENT_DIR`；直执行形态（hubEntry null → 无参 spawn） |
 | `contracts/src/ports.ts`、`contracts/src/settings.ts` | hubEntry `string\|null` + hubDev 形状同步 |
 | `main/hub-paths.ts` | dev 探测 `../my-agent/packages/host-hub/src/host/cli.ts`（源码形态，翻转理由见 D1）> dist；打包 `resources/host-hub/host-hub`（直执行） |
-| `main/pai-runtime.ts` `buildHost()` | env 键改名 + 直执行分派 |
+| `main/x3code-runtime.ts` `buildHost()` | env 键改名 + 直执行分派 |
 | `main/runtime-monitor/*` | get_host_info/thread_list 字段适配；在途徽标数据源换 agents/state |
 | `main/api-routes-runtime.ts` | retire/forceRetire/setKeepalive/setIdleRecycle 字段微调 |
 | `main/api-routes-settings.ts` | provider 写盘走新 models-config（撞预设键/api 词表校验）；provider/test 不变 |
@@ -141,7 +141,7 @@
 | `infra/__test__/fake-host.ts` | 帧词表对齐（heartbeat/hub_error 字段） |
 | `scripts/packaging/sync-resources.ts` | host-hub 编译产物（源 = my-agent 路径，env 可覆写） |
 | `apps/electron/electron-builder.yml` | extraResources 布局与注释（resources/host-hub） |
-| 渲染层 `strings/en.ts`、`zh.ts` | 「pai-cli 路径」等用户可见文案更新 |
+| 渲染层 `strings/en.ts`、`zh.ts` | 「x3code-cli 路径」等用户可见文案更新 |
 
 **删除**：
 
@@ -154,7 +154,7 @@
 | `adapter/src/subagent-spawns.ts` | subagent_event/subagent_message 帧摘除（逻辑并入 event-mapper 用例） |
 | hub-protocol 中 navigate_tree/get_sandbox_state/get_thinking_levels/get·set_permission_rules/subagent 帧 | 命令/帧摘除 |
 | 渲染层 notify 对话框 → 通知条路径 | D10 |
-| `resources/pai-cli/` | 换 `resources/host-hub/` |
+| `resources/x3code-cli/` | 换 `resources/host-hub/` |
 
 ### 4.2 实施顺序（每波独立提交、四门全绿——无任何豁免）
 
@@ -253,7 +253,7 @@
 - [x] 打包形态：sync-resources `bun build --compile` 产物（65MB）直执行冒烟过（get_host_info 应答 + EOF exit 0）
 - [x] 对抗审查两轮清零：方案轮 3H/7M/7L（§8）；实施轮 2H/8M/5L（§9 处置记录）——H1 修复经真 hub agents/list 复验、H2 修复带旧布局种子行回归
 - [x] 假绿对抗抽查：skip/only/todo grep 零命中（唯一 skip = GLM opt-in 的 test.if 显式跳过）；覆盖率阈值未动；断言强度抽查（integration 97 断言、词表封闭双向断言维持）
-- [x] 删除域全部有 §2/§4.1 裁决出处；pai 协议字面量 grep 清零——**豁免口径（写实）**：负向测试夹具（frame-decoder 对已摘除帧的拒绝断言、contracts 词表测试的「已摘除」命名）与文档（tasks/*.md）；renderer 单一转换点 mimeType 别名（read-image-file.ts，注释声明）与 entryId 内部命名（HistoryItem.id 概念）非 wire 面不属协议残留
+- [x] 删除域全部有 §2/§4.1 裁决出处；x3code 协议字面量 grep 清零——**豁免口径（写实）**：负向测试夹具（frame-decoder 对已摘除帧的拒绝断言、contracts 词表测试的「已摘除」命名）与文档（tasks/*.md）；renderer 单一转换点 mimeType 别名（read-image-file.ts，注释声明）与 entryId 内部命名（HistoryItem.id 概念）非 wire 面不属协议残留
 - [x] 文档状态推进「已核销」
 
 ## 7. 挂账（显式）
@@ -291,7 +291,7 @@
 
 - contracts：hub-protocol 拆四（hub-protocol 帧 + hub-commands 55 命令 + hub-events 事件词表 + hub-data 响应形状——max-lines 预算）；api/ui-events/inflight-views/runtime/agents/permissions/settings/thinking-levels 全量重写（词表/形状见 §1）。测试 80 用例绿。
 - adapter：五 mapper + content/diff-extract（edit_file/write_file）/subagent-spawns（agent 工具 {prompt,subagent_type}）重写；event-mapper 有状态化（assistant/stream 增量累积→done 出权威 messageFinal）；测试 155 用例绿。审查观察处置：frame-decoder finish() 不可达超限分支删除、inflightView 注释对齐。
-- main：api-routes（fork seq/权限模式化/受理重试/entries seq 游标兜底/bash 结果对象/agent 键位 name 化）、models-config（hub 扁平形状）、api-routes-settings（技能走 hub 命令、provider 三道写前校验、hub 设置读写）、agent-definitions-store（~/.my-agent 布局 + kebab 校验 + homeDir 注入缝）、pai-runtime（createEventMapper 装配、inbox/spliced→get_state 合成 queueChanged、hub_error.message、extraSpawnEnv 注入缝）、runtime-monitor（字段适配）；删除 skills-catalog/skills-inventory/agent-dir-files。
+- main：api-routes（fork seq/权限模式化/受理重试/entries seq 游标兜底/bash 结果对象/agent 键位 name 化）、models-config（hub 扁平形状）、api-routes-settings（技能走 hub 命令、provider 三道写前校验、hub 设置读写）、agent-definitions-store（~/.my-agent 布局 + kebab 校验 + homeDir 注入缝）、x3code-runtime（createEventMapper 装配、inbox/spliced→get_state 合成 queueChanged、hub_error.message、extraSpawnEnv 注入缝）、runtime-monitor（字段适配）；删除 skills-catalog/skills-inventory/agent-dir-files。
 - **实施期发现的真缺陷与修复**：
   1. **resume 撞 already open**（集成测试抓出）：host-hub 的 parked 唤醒语义 = 按 threadId 的驱动命令自动唤醒，resume-by-path 对表内 parked 条目按设计拒绝——app 懒恢复对刚收编会话必失败。修：resume 路由遇 `already open` 从 thread/list 按 path 收养既有表项（adoptExistingThread/finishResume）。
   2. bun 的 os.homedir() 启动即缓存——进程内 HOME 重定向无效，agent-definitions-store 加 homeDir 注入缝。

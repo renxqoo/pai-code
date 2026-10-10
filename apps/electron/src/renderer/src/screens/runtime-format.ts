@@ -1,4 +1,4 @@
-import type { RuntimeSnapshotView } from '@paiapp/contracts';
+import type { RuntimeSnapshotView } from '@x3code/contracts';
 
 import { copy } from '@/strings';
 

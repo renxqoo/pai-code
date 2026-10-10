@@ -7,7 +7,7 @@
 import type { ToolCopy } from './tool-copy';
 import { toolKindOf, type ToolKind } from './tool-kind';
 import type { ToolCallRef } from './tool-refs';
-import type { ToolCallStatus } from '@paiapp/contracts';
+import type { ToolCallStatus } from '@x3code/contracts';
 
 function doneByKind(copy: ToolCopy): Readonly<Partial<Record<ToolKind, string>>> {
   return {

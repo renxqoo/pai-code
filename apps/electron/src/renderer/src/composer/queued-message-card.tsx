@@ -1,6 +1,6 @@
 import { ArrowUpFromLine, GripVertical, Pencil, Trash2 } from 'lucide-react';
 
-import { IconButton } from '@paiapp/ui';
+import { IconButton } from '@x3code/ui';
 
 import { cn } from '@/lib/utils';
 

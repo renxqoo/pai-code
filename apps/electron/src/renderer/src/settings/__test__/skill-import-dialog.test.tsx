@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import type { SkillCandidateView } from '@paiapp/contracts';
+import type { SkillCandidateView } from '@x3code/contracts';
 import { copy } from '@/strings';
 import { buildImportItems, SkillImportContent, type RowSelection } from '../skill-import-content';
 import { SkillImportDialog } from '../skill-import-dialog';

@@ -1,5 +1,5 @@
 {
-  "name": "pai",
+  "name": "x3code",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -11,8 +11,8 @@
     "lint": "oxlint --type-aware .",
     "fmt": "oxfmt .",
     "fmt:check": "oxfmt --check .",
-    "build": "bun run --filter '@paiapp/electron' build && bun run --filter '@paiapp/mobile' build:web",
-    "test": "bun run --filter '@paiapp/mobile' test",
+    "build": "bun run --filter '@x3code/electron' build && bun run --filter '@x3code/mobile' build:web",
+    "test": "bun run --filter '@x3code/mobile' test",
     "ci": "bun run lint && bun run typecheck && bun run build && bun run test"
   },
   "devDependencies": {

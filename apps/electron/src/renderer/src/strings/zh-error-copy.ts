@@ -1,5 +1,5 @@
 /** 中文错误文案查表（自 zh.ts 拆出；键集与 en 表经 ErrorCopyTable 编译期对齐）。 */
-import type { ApiError, TransientFace } from '@paiapp/contracts';
+import type { ApiError, TransientFace } from '@x3code/contracts';
 
 import type { ErrorCopyTable } from './en-error-copy';
 

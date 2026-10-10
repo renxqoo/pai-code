@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { TodoSnapshotTask } from '@paiapp/contracts';
+import type { TodoSnapshotTask } from '@x3code/contracts';
 
 import type { SubagentModel } from '@/thread/thread-model';
 

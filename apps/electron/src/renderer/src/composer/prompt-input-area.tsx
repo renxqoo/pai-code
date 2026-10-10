@@ -1,7 +1,7 @@
 import * as React from 'react';
 
-import type { CommandView } from '@paiapp/contracts';
-import { AutocompleteGroupList, type AutocompleteGroup } from '@paiapp/ui';
+import type { CommandView } from '@x3code/contracts';
+import { AutocompleteGroupList, type AutocompleteGroup } from '@x3code/ui';
 import { ComposerHighlightLayer } from '@/composer/composer-highlight-layer';
 import { leadingCommandHighlight, commandTokenDeleteRange } from '@/composer/command-highlight';
 import { activeTokenQuery, applyTokenSelection, filterTokenItems, type TokenTrigger } from '@/composer/token-trigger';

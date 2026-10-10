@@ -1,4 +1,4 @@
-import { formatDiffDelta } from '@paiapp/ui';
+import { formatDiffDelta } from '@x3code/ui';
 import type { DiffFileModel } from './thread-model';
 
 type DiffFileListProps = {

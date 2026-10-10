@@ -1,5 +1,5 @@
-import type { ResourceSampleView } from '@paiapp/contracts';
-import { AreaTimeChart, type AreaTimeChartSeries } from '@paiapp/ui';
+import type { ResourceSampleView } from '@x3code/contracts';
+import { AreaTimeChart, type AreaTimeChartSeries } from '@x3code/ui';
 
 import { formatClockTime } from '@/thread/format-clock-time';
 import { copy } from '@/strings';

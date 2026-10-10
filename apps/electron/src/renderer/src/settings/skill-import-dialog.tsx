@@ -5,11 +5,11 @@
  */
 import * as React from 'react';
 
-import type { SkillCandidateView } from '@paiapp/contracts';
+import type { SkillCandidateView } from '@x3code/contracts';
 
 import { copy } from '@/strings';
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@paiapp/ui';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@x3code/ui';
 
 import type { SkillImportRequest, SkillImportSummary } from '@/live/live-controller-types';
 

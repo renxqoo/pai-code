@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import type { ProviderConfigView, SkillCandidateView, SkillView } from '@paiapp/contracts';
+import type { ProviderConfigView, SkillCandidateView, SkillView } from '@x3code/contracts';
 import type { SkillImportSummary } from '@/live/live-controller-types';
 import { copy } from '@/strings';
 import { SettingsScreen } from '../settings-screen';

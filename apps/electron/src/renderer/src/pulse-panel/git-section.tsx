@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { ArrowUpDown, FileDiff, FolderGit2, GitGraph } from 'lucide-react';
 
-import type { GitBranchesView, GitStatusView } from '@paiapp/contracts';
+import type { GitBranchesView, GitStatusView } from '@x3code/contracts';
 
-import { DiffStat, Spinner } from '@paiapp/ui';
+import { DiffStat, Spinner } from '@x3code/ui';
 import { GitGraphDialog } from '@/git-graph/git-graph-dialog';
 import { useGitGraph } from '@/hooks/use-git-graph';
 import { workspaceActions } from '@/live/workspace-runtime';

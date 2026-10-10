@@ -1,4 +1,4 @@
-import type { GitBranchesView } from '@paiapp/contracts';
+import type { GitBranchesView } from '@x3code/contracts';
 import { appError, type ApiError } from '../errors';
 
 /**

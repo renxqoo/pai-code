@@ -1,4 +1,4 @@
-import { Spinner } from '@paiapp/ui';
+import { Spinner } from '@x3code/ui';
 
 type TurnLoadingRowProps = {
   /** 无障碍标签（执行中状态词）；视觉本体只有旋转指示 */

@@ -5,7 +5,7 @@ import { createSettingsRoutes } from '../settings';
 /**
  * 模型配置保存 × 会话存活（症状回归：保存模型 → host SIGKILL → 全部 agent 中断）：
  * hub 侧 models/reload 热更新链路就位后，无 key 变更的 provider 写不再重启 host；
- * key 变更（spawn env 通道 $PAI_KEY_*）仍需重启注入。
+ * key 变更（spawn env 通道 $X3CODE_KEY_*）仍需重启注入。
  */
 
 function makeRoutes() {

@@ -1,4 +1,4 @@
-import { CollapsibleSection } from '@paiapp/ui';
+import { CollapsibleSection } from '@x3code/ui';
 import type { SubagentModel } from '@/thread/thread-model';
 import { copy } from '@/strings';
 

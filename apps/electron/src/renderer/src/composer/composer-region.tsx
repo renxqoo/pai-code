@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useStore } from 'zustand';
 
-import { normalizePermMode, type ModelInfoView, type QueueEntry } from '@paiapp/contracts';
+import { normalizePermMode, type ModelInfoView, type QueueEntry } from '@x3code/contracts';
 
 import { CONVERSATION_COLUMN_CLASS } from '@/thread/conversation-column';
 import { baseNameOf } from '@/lib/project-dirs';

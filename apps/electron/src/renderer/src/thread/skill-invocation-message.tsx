@@ -1,6 +1,6 @@
 import { Sparkles } from "lucide-react";
 
-import { ChatBubble } from "@paiapp/ui";
+import { ChatBubble } from "@x3code/ui";
 
 import type { SkillInvocation } from "./skill-invocation";
 

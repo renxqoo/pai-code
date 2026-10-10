@@ -1,4 +1,4 @@
-import type { SavedSessionView } from '@paiapp/contracts';
+import type { SavedSessionView } from '@x3code/contracts';
 
 /** 已保存会话的渲染层视图（settings 历史分区与新建任务页已知目录共用）。 */
 export type SavedSessionEntry = {

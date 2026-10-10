@@ -1,4 +1,4 @@
-import type { ProviderModel } from "@paiapp/contracts";
+import type { ProviderModel } from "@x3code/contracts";
 
 /** 切换单个模型的布尔能力位（id 不存在时原样返回）。 */
 export function toggleModelFlag(

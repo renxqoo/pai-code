@@ -17,7 +17,7 @@ const secureAvailable = Platform.OS !== 'web';
 const secureGet = async (key: string): Promise<string | null> => {
   if (!secureAvailable) {
     try {
-      return globalThis.sessionStorage?.getItem(`pai.web.${key}`) ?? null;
+      return globalThis.sessionStorage?.getItem(`x3code.web.${key}`) ?? null;
     } catch {
       return null;
     }
@@ -27,7 +27,7 @@ const secureGet = async (key: string): Promise<string | null> => {
 const secureSet = async (key: string, value: string): Promise<void> => {
   if (!secureAvailable) {
     try {
-      globalThis.sessionStorage?.setItem(`pai.web.${key}`, value);
+      globalThis.sessionStorage?.setItem(`x3code.web.${key}`, value);
     } catch {
       // 无 sessionStorage（隐私模式）——内存单会话语义，save 仍报成功（App 内 cached 已生效）
     }
@@ -38,7 +38,7 @@ const secureSet = async (key: string, value: string): Promise<void> => {
 const secureDelete = async (key: string): Promise<void> => {
   if (!secureAvailable) {
     try {
-      globalThis.sessionStorage?.removeItem(`pai.web.${key}`);
+      globalThis.sessionStorage?.removeItem(`x3code.web.${key}`);
     } catch {
       // 同上
     }
@@ -47,10 +47,10 @@ const secureDelete = async (key: string): Promise<void> => {
   await SecureStore.deleteItemAsync(key);
 };
 
-const KEY_DEVICE = 'pai.relay.device';
-const KEY_SHARED = 'pai.relay.shared';
-const KEY_ENDPOINT = 'pai.relay.endpoint';
-const RATCHET_PREFIX = 'pai.relay.ratchet.';
+const KEY_DEVICE = 'x3code.relay.device';
+const KEY_SHARED = 'x3code.relay.shared';
+const KEY_ENDPOINT = 'x3code.relay.endpoint';
+const RATCHET_PREFIX = 'x3code.relay.ratchet.';
 
 export interface RelayCredentials {
   deviceId: string;

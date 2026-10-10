@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createEventMapper } from '@paiapp/api';
+import { createEventMapper } from '@x3code/api';
 import { foldThreadEvent, hasRetryInFlight } from '../fold-events';
 import { initialThreadState } from '../live-thread-state';
 import type { TurnBlock } from '@/thread/thread-model';
-import type { UiEvent } from '@paiapp/contracts';
+import type { UiEvent } from '@x3code/contracts';
 
 /**
  * 重试横幅生命周期全链合测（用户症状：重试已经跑通，「重试中（第 N 次）」横幅还挂着）。

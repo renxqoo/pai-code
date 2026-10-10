@@ -1,4 +1,4 @@
-import { createApiClient } from '@paiapp/api/client';
+import { createApiClient } from '@x3code/api/client';
 
 import { createBridgeClient } from './client-invoke';
 import { createLiveController, type LiveController } from './live-controller';
@@ -12,8 +12,8 @@ import { createLiveStore } from './store';
  */
 
 export const store = createLiveStore();
-export const bridgeClient = createBridgeClient(typeof window !== 'undefined' ? window.pai : undefined);
-/** UI→api 直调门面（T41：IPC 方法字符串全仓仅 @paiapp/api client.ts 与 main 注册表） */
+export const bridgeClient = createBridgeClient(typeof window !== 'undefined' ? window.x3code : undefined);
+/** UI→api 直调门面（T41：IPC 方法字符串全仓仅 @x3code/api client.ts 与 main 注册表） */
 export const apiClient = createApiClient(bridgeClient);
 export const controller: LiveController = createLiveController(bridgeClient, store);
 export const workspaceActions = createWorkspaceActions();

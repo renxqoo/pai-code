@@ -1,4 +1,4 @@
-import type { RuntimeEventView } from '@paiapp/contracts';
+import type { RuntimeEventView } from '@x3code/contracts';
 
 /**
  * 监督事件环（监控页时间线的存储原语）：定长 FIFO，新在尾。

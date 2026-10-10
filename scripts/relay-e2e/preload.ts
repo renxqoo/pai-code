@@ -24,7 +24,7 @@ export default {
 `;
 
 const REACT_NATIVE = `
-const OS = process.env.PAI_E2E_PLATFORM === 'ios' ? 'ios' : 'web';
+const OS = process.env.X3CODE_E2E_PLATFORM === 'ios' ? 'ios' : 'web';
 export const Platform = { OS, select: (spec) => spec[OS] ?? spec.default };
 `;
 

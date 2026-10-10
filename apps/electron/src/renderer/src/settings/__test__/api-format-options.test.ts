@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { API_FORMAT_IDS } from '@paiapp/contracts';
+import { API_FORMAT_IDS } from '@x3code/contracts';
 import { copy } from '@/strings';
 import { apiFormatLabel, apiFormatOptions } from '../api-format-options';
 

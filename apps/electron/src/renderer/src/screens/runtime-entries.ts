@@ -1,4 +1,4 @@
-import type { RuntimeSnapshotView, SessionStatsView, SessionView, WorkerRowView } from '@paiapp/contracts';
+import type { RuntimeSnapshotView, SessionStatsView, SessionView, WorkerRowView } from '@x3code/contracts';
 
 /**
  * 运行状态页行装配（T29）：hub thread/list（进程态真相）× 本地会话视图（标题）

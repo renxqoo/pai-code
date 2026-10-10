@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { ApiClient } from '@paiapp/api/client';
+import type { ApiClient } from '@x3code/api/client';
 
 import { createAgentsActions } from '../agents-actions';
 import type { LiveStore } from '../store';

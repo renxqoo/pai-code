@@ -6,7 +6,7 @@ import { CommandPanel } from '../command-panel';
 import { initialThreadState } from '@/live/live-thread-state';
 import { store as liveStore } from '@/live/workspace-runtime';
 import { render as renderComponent } from '@/testing/render';
-import type { SessionView } from '@paiapp/contracts';
+import type { SessionView } from '@x3code/contracts';
 
 /**
  * CommandPanel 装配面冒烟（items 自订阅 store——条目种子改 store 驱动，断言口径不变）。

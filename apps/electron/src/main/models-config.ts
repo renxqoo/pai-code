@@ -1,12 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import type { ProviderConfig } from "@paiapp/contracts";
-import { envVarNameForProvider, serializeProvidersConfig } from "@paiapp/api";
+import type { ProviderConfig } from "@x3code/contracts";
+import { envVarNameForProvider, serializeProvidersConfig } from "@x3code/api";
 
 /**
  * agentDir/providers.json 落盘与重载判定（fs 壳）：序列化单一真相在
- * @paiapp/api verbs/providers-config；hub 目录只在 spawn 期读入，differs
+ * @x3code/api verbs/providers-config；hub 目录只在 spawn 期读入，differs
  * 即「需重启重载」信号。
  */
 

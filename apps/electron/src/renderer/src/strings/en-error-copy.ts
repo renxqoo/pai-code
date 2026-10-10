@@ -1,5 +1,5 @@
 /** 英文错误文案查表（自 en.ts 拆出：kind 全集分派 + 跨节共享句单一真相）。 */
-import type { ApiError, ApiErrorKind, TransientFace } from '@paiapp/contracts';
+import type { ApiError, ApiErrorKind, TransientFace } from '@x3code/contracts';
 
 /** 错误文案查表：键集 = ApiErrorKind 全集（Record 编译期封闭——新增 kind 不加键不编译）；
  *  函数值用于 transient（face 细分）与 unregistered_code（原文透传）。 */

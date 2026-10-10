@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createEventMapper } from '@paiapp/api/events/event-mapper';
-import type { HistoryItem, SessionView, UiEvent } from '@paiapp/contracts';
+import { createEventMapper } from '@x3code/api/events/event-mapper';
+import type { HistoryItem, SessionView, UiEvent } from '@x3code/contracts';
 
 import { foldThreadEvent } from '../fold-events';
 import { foldHydrate } from '../fold-hydrate';

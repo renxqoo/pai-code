@@ -1,6 +1,6 @@
 /** 对话流文案（英文；key 结构 = 唯一真相，zh 表按同形状翻译）。 */
-import type { RetryCopy } from '@paiapp/ui-thread';
-import { retryLineOf } from '@paiapp/ui-thread';
+import type { RetryCopy } from '@x3code/ui-thread';
+import { retryLineOf } from '@x3code/ui-thread';
 import {
   bashImagesRejectedCopy,
   imagesDeniedCopy,
@@ -9,7 +9,7 @@ import {
   resumeFailedCopy,
 } from './en-error-copy';
 
-/** 重试行词面（共享拼装入 @paiapp/ui-thread，两端同一句）：hub 错误码 → 原因短语。 */
+/** 重试行词面（共享拼装入 @x3code/ui-thread，两端同一句）：hub 错误码 → 原因短语。 */
 export const enRetryCopy: RetryCopy = {
   reasonHttp429: 'Rate limited',
   reasonHttp408: 'Request timed out',
@@ -119,7 +119,7 @@ export const enFlow = {
   /** 历史轮锚点带（无障碍名） */
   turnAnchorRailAria: 'Turn history navigation',
   thinking: 'Thinking',
-  /** 重试行整句：拼装单点在 @paiapp/ui-thread/retry-copy（词面注入，两端同句）。 */
+  /** 重试行整句：拼装单点在 @x3code/ui-thread/retry-copy（词面注入，两端同句）。 */
   retryLine: (attempt: number, code: string | null): string => retryLineOf(attempt, code, enRetryCopy),
   crashedBanner: 'This conversation\'s worker has exited. Sending a message resumes the session.',
   hydrateFailedTitle: 'Failed to load history',

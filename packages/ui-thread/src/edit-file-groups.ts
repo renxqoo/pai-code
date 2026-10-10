@@ -1,4 +1,4 @@
-import type { EditHunkView } from '@paiapp/contracts';
+import type { EditHunkView } from '@x3code/contracts';
 
 /**
  * 编辑调用 → 按文件归并的 diff 组（GitHub 形态：一个文件一个 diff）。

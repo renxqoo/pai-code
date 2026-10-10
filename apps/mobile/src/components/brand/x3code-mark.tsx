@@ -2,12 +2,12 @@ import * as React from 'react';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { useAppTheme } from '@/theme/theme-context';
 
-type PaiMarkProps = { size?: number };
+type X3codeMarkProps = { size?: number };
 
-export function PaiMark({ size = 34 }: PaiMarkProps) {
+export function X3codeMark({ size = 34 }: X3codeMarkProps) {
   const { colors } = useAppTheme();
   return (
-    <Svg accessibilityLabel="Pai Code" height={size} viewBox="0 0 40 40" width={size}>
+    <Svg accessibilityLabel="X3code" height={size} viewBox="0 0 40 40" width={size}>
       <Rect fill={colors.text} height="40" rx="11" width="40" x="0" y="0" />
       <Path d="M11 14.5L17.5 9H29v14.5L22.5 29H11V14.5Z" fill={colors.surface} stroke={colors.background} strokeWidth="1.5" />
       <Path d="M11 24V14.5L17.5 9h11.5" fill="none" stroke={colors.background} strokeLinecap="round" strokeWidth="2" />

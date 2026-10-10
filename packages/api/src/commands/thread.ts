@@ -1,20 +1,20 @@
 /**
- * thread 域命令（T40 §2b）：入参类型从 contracts PaiCommand 判别联合抽取（零复制）；
+ * thread 域命令（T40 §2b）：入参类型从 contracts X3codeCommand 判别联合抽取（零复制）；
  * 每方法内定超时档；响应原样（收窄视图在 W3 views/ 并入后于域方法内应用）。
  */
-import type { PaiCommand } from '@paiapp/contracts';
+import type { X3codeCommand } from '@x3code/contracts';
 
 import type { HubResult } from '../errors';
 import type { Transport } from '../transport';
 import { TIMEOUTS } from '../timeouts';
 
-type StartInput = Omit<Extract<PaiCommand, { type: 'thread/start' }>, 'type'>;
-type ResumeInput = Omit<Extract<PaiCommand, { type: 'thread/resume' }>, 'type'>;
-type RegisterInput = Omit<Extract<PaiCommand, { type: 'thread/register' }>, 'type'>;
-type KeepaliveInput = Omit<Extract<PaiCommand, { type: 'thread/set_keepalive' }>, 'type'>;
-type RetireInput = Omit<Extract<PaiCommand, { type: 'thread/retire' }>, 'type'>;
-type StopInput = Omit<Extract<PaiCommand, { type: 'thread/stop' }>, 'type'>;
-type DeleteInput = Omit<Extract<PaiCommand, { type: 'thread/delete' }>, 'type'>;
+type StartInput = Omit<Extract<X3codeCommand, { type: 'thread/start' }>, 'type'>;
+type ResumeInput = Omit<Extract<X3codeCommand, { type: 'thread/resume' }>, 'type'>;
+type RegisterInput = Omit<Extract<X3codeCommand, { type: 'thread/register' }>, 'type'>;
+type KeepaliveInput = Omit<Extract<X3codeCommand, { type: 'thread/set_keepalive' }>, 'type'>;
+type RetireInput = Omit<Extract<X3codeCommand, { type: 'thread/retire' }>, 'type'>;
+type StopInput = Omit<Extract<X3codeCommand, { type: 'thread/stop' }>, 'type'>;
+type DeleteInput = Omit<Extract<X3codeCommand, { type: 'thread/delete' }>, 'type'>;
 
 export interface NotifyInput {
   threadId: string;

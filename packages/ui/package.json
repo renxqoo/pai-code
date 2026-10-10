@@ -1,5 +1,5 @@
 {
-  "name": "@paiapp/ui",
+  "name": "@x3code/ui",
   "private": true,
   "type": "module",
   "exports": {
@@ -7,7 +7,7 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
-    "@paiapp/contracts": "workspace:*",
+    "@x3code/contracts": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "cmdk": "^1.1.1",
     "cn": "^0.2.6",

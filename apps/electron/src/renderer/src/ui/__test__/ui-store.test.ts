@@ -15,7 +15,6 @@ describe('ui store', () => {
     const s = store.getState();
     expect(s.sidebarWidth).toBe(SIDEBAR_WIDTH);
     expect(s.sidebarCollapsed).toBe(false);
-    expect(s.sidebarView).toBe('grouped');
     expect(s.settingsOpen).toBe(false);
     expect(s.settingsEntry).toBe(null);
     expect(s.usageOpen).toBe(false);

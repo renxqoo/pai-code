@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 
-import { callExpandable, toolKindOf, toolPreviewMono, toolRowLabelOf, toolSummary } from '@paiapp/ui-thread';
+import { callExpandable, toolKindOf, toolPreviewMono, toolRowLabelOf, toolSummary } from '@x3code/ui-thread';
 
 import { useAppTheme } from '@/theme/theme-context';
 import { type } from '@/theme/tokens';

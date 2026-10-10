@@ -1,6 +1,6 @@
 import { createStore } from 'zustand/vanilla';
 
-import { EMPTY_RELAY_CONFIG } from '@paiapp/contracts';
+import { EMPTY_RELAY_CONFIG } from '@x3code/contracts';
 import type {
   AgentDefinition,
   PendingDialogView,
@@ -17,7 +17,7 @@ import type {
   SavedSessionView,
   SessionView,
   UiEvent,
-} from '@paiapp/contracts';
+} from '@x3code/contracts';
 import type { SubagentModel, ThreadModel } from '@/thread/thread-model';
 import type { ThreadItem } from '@/thread/thread-model';
 

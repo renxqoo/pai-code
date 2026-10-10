@@ -105,8 +105,8 @@ describe('mobile UI stores', () => {
   });
 
   it('chooses a workspace for new tasks', () => {
-    useConversationStore.getState().chooseWorkspace('workspace-mobile', 'Pai Mobile');
+    useConversationStore.getState().chooseWorkspace('workspace-mobile', 'X3code Mobile');
     expect(useConversationStore.getState()).toMatchObject({ workspaceId: 'workspace-mobile' });
-    expect(useConversationStore.getState().session.project).toBe('Pai Mobile');
+    expect(useConversationStore.getState().session.project).toBe('X3code Mobile');
   });
 });

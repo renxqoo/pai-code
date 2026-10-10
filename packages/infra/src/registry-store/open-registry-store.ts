@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 
-import type { RegistryStorePort, SessionRow } from '@paiapp/contracts';
+import type { RegistryStorePort, SessionRow } from '@x3code/contracts';
 
 /**
  * 会话注册表（node:sqlite）：窗口打开的会话真相，崩溃/重启恢复与侧栏的输入。

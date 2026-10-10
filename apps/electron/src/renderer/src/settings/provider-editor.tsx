@@ -1,7 +1,7 @@
 import * as React from "react";
 
-import type { ProviderConfigView, ProviderModel } from "@paiapp/contracts";
-import { ActionButton } from "@paiapp/ui";
+import type { ProviderConfigView, ProviderModel } from "@x3code/contracts";
+import { ActionButton } from "@x3code/ui";
 
 import { copy } from "@/strings";
 

@@ -3,13 +3,13 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { HostCommandOutcome, HostPhase, HostProcessPort, HubFrame, PaiCommand, UiEvent } from '@paiapp/contracts';
+import type { HostCommandOutcome, HostPhase, HostProcessPort, HubFrame, X3codeCommand, UiEvent } from '@x3code/contracts';
 
 import { createApiRoutes } from '../api-routes';
 import { createAgentDefinitionsStore } from '../agent-definitions-store';
 import { createFileSettings, type ProviderKeyStore } from '../file-settings';
-import { createPaiRuntime, type PaiRuntime } from '../pai-runtime';
-import { createRuntimeMonitor } from '@paiapp/infra';
+import { createPaiRuntime, type PaiRuntime } from '../x3code-runtime';
+import { createRuntimeMonitor } from '@x3code/infra';
 
 /**
  * 启动懒恢复回归（T16）：启动/host 重启只对账（list_saved 聚合），
@@ -46,20 +46,20 @@ function sessionFileOf(work: string, id: string): string {
   return join(dir, 'events.jsonl');
 }
 
-function makeFixture(work: string, reply: (cmd: PaiCommand) => Reply) {
+function makeFixture(work: string, reply: (cmd: X3codeCommand) => Reply) {
   const agentDir = join(work, 'agent');
   mkdirSync(join(agentDir, 'sessions'), { recursive: true });
   writeFileSync(join(work, 'cli.js'), '');
   const events: UiEvent[] = [];
   const logs: string[] = [];
-  const sent: PaiCommand[] = [];
+  const sent: X3codeCommand[] = [];
   let restartHook: (() => Promise<void>) | null = null;
   let frameCb: ((frame: HubFrame) => void) | null = null;
   const port: HostProcessPort = {
     get phase(): HostPhase {
       return 'ready';
     },
-    request: (command: PaiCommand) => {
+    request: (command: X3codeCommand) => {
       sent.push(command);
       return Promise.resolve(reply(command));
     },
@@ -128,7 +128,7 @@ function flushEvents(runtime: PaiRuntime): void {
   runtime.emitBuffered();
 }
 
-function makeRoutes(work: string, reply: (cmd: PaiCommand) => Reply) {
+function makeRoutes(work: string, reply: (cmd: X3codeCommand) => Reply) {
   const fixture = makeFixture(work, reply);
   const settings = createFileSettings(join(work, 's-settings.json'), emptyKeyStore);
   const routes = createApiRoutes({
@@ -146,7 +146,7 @@ function makeRoutes(work: string, reply: (cmd: PaiCommand) => Reply) {
   return { ...fixture, routes };
 }
 
-describe('pai-runtime 启动对账（懒恢复，0 resume）', () => {
+describe('x3code-runtime 启动对账（懒恢复，0 resume）', () => {
   test('症状回归：启动只对账渲染占位，不发任何 thread/resume', async () => {
     const work = mkdtempSync(join(tmpdir(), 'pai-reconcile-'));
     const onDisk: Record<string, string[]> = { '/w/proj': ['a', 'b'], '/w/other': ['c'] };

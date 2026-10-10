@@ -1,11 +1,11 @@
 import { ChevronDown, Shield } from 'lucide-react';
 
-import { MenuButton, type MenuItemDef } from '@paiapp/ui';
+import { MenuButton, type MenuItemDef } from '@x3code/ui';
 
 import { copy } from '@/strings';
 import { permModeLabel } from '@/strings/perm-mode-label';
 
-import { menuTriggerClassName } from '@paiapp/ui';
+import { menuTriggerClassName } from '@x3code/ui';
 
 type PermissionModeMenuProps = {
   /** 当前生效模式（permission/mode 读口；normalizePermMode 已收敛为词表值）。 */

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { createLiveStore, threadModelOf } from '../store';
-import type { PreferencesView, SessionView, UiEvent } from '@paiapp/contracts';
+import type { PreferencesView, SessionView, UiEvent } from '@x3code/contracts';
 
 const session = (threadId: string): SessionView => ({
   threadId,

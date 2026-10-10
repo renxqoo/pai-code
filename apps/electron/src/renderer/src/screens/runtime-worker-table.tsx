@@ -2,9 +2,9 @@ import * as React from 'react';
 
 import { Recycle } from 'lucide-react';
 
-import type { IdleRecycleMinutes } from '@paiapp/contracts';
-import { IDLE_RECYCLE_MINUTE_OPTIONS } from '@paiapp/contracts';
-import { SegmentedControl, type SegmentedControlOption } from '@paiapp/ui';
+import type { IdleRecycleMinutes } from '@x3code/contracts';
+import { IDLE_RECYCLE_MINUTE_OPTIONS } from '@x3code/contracts';
+import { SegmentedControl, type SegmentedControlOption } from '@x3code/ui';
 
 import { copy } from '@/strings';
 import { cn } from '@/lib/utils';

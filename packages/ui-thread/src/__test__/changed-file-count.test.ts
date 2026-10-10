@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { changedFileCount } from '../changed-file-count';
 import type { EditCallRef, ToolStatusRef } from '../tool-refs';
-import type { EditHunkView, ToolCallStatus } from '@paiapp/contracts';
+import type { EditHunkView, ToolCallStatus } from '@x3code/contracts';
 
 function edit(path: string, status: ToolCallStatus = 'ok'): ToolStatusRef & EditCallRef {
   const hunk: EditHunkView = { oldText: 'a', newText: 'b', path };

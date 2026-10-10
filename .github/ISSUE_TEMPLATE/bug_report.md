@@ -36,6 +36,6 @@ body:
     id: environment
     attributes:
       label: 环境
-      placeholder: 系统 / Pai 版本或提交 / hub 检出状态
+      placeholder: 系统 / X3code 版本或提交 / hub 检出状态
     validations:
       required: true

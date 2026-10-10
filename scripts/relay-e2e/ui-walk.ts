@@ -94,7 +94,7 @@ async function evaluate(expression: string): Promise<unknown> {
 
 async function openBrowser(origin: string): Promise<{ stop(): void }> {
   const chrome =
-    process.env['PAI_CHROME'] ??
+    process.env['X3CODE_CHROME'] ??
     '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
   const profile = await mkdtemp(join(tmpdir(), 'pai-ui-walk-'));
   const proc = spawn(

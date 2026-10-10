@@ -3,13 +3,13 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { HostCommandOutcome, HostPhase, HostProcessPort, HubFrame, PaiCommand } from '@paiapp/contracts';
+import type { HostCommandOutcome, HostPhase, HostProcessPort, HubFrame, X3codeCommand } from '@x3code/contracts';
 
 import { createApiRoutes } from '../api-routes';
 import { createAgentDefinitionsStore } from '../agent-definitions-store';
 import { createFileSettings, type ProviderKeyStore } from '../file-settings';
-import { createPaiRuntime } from '../pai-runtime';
-import { createRuntimeMonitor } from '@paiapp/infra';
+import { createPaiRuntime } from '../x3code-runtime';
+import { createRuntimeMonitor } from '@x3code/infra';
 
 /**
  * session 通路契约回归（host-hub 协议面）：
@@ -29,14 +29,14 @@ const keyStore: ProviderKeyStore = {
 };
 
 /** 可编程 fake host：按命令类型回放（首答可注入失败再成功）。 */
-function makeProgrammableHost(reply: (command: PaiCommand, callIndexOfType: number) => HostCommandOutcome): { port: HostProcessPort; sent: PaiCommand[] } {
-  const sent: PaiCommand[] = [];
+function makeProgrammableHost(reply: (command: X3codeCommand, callIndexOfType: number) => HostCommandOutcome): { port: HostProcessPort; sent: X3codeCommand[] } {
+  const sent: X3codeCommand[] = [];
   const counts = new Map<string, number>();
   const port: HostProcessPort = {
     get phase(): HostPhase {
       return 'ready';
     },
-    request: (command: PaiCommand): Promise<HostCommandOutcome> => {
+    request: (command: X3codeCommand): Promise<HostCommandOutcome> => {
       const index = counts.get(command.type) ?? 0;
       counts.set(command.type, index + 1);
       sent.push(command);
@@ -54,7 +54,7 @@ function makeProgrammableHost(reply: (command: PaiCommand, callIndexOfType: numb
 const dirs: string[] = [];
 
 async function makeRoutes(
-  reply: (command: PaiCommand, callIndexOfType: number) => HostCommandOutcome,
+  reply: (command: X3codeCommand, callIndexOfType: number) => HostCommandOutcome,
   logSink?: string[],
   auditSink?: string[],
 ) {

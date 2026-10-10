@@ -2,8 +2,8 @@
  * 代理定义动作组（自 live-controller 拆出——max-lines 500 纪律，纯移动）：
  * 定义目录拉取 / 写 / 删；失败回查表文案，成功刷新目录快照。
  */
-import type { ApiClient } from '@paiapp/api/client';
-import type { AgentDefinition } from '@paiapp/contracts';
+import type { ApiClient } from '@x3code/api/client';
+import type { AgentDefinition } from '@x3code/contracts';
 
 import { copyOfError } from '@/lib/error-text';
 

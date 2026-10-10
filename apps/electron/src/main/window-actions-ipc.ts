@@ -11,7 +11,7 @@ export function registerIpcWindowActions(
   actions: Record<string, (event?: unknown, ...args: unknown[]) => void>,
 ): void {
   for (const [action, handler] of Object.entries(actions)) {
-    ipcMain.removeHandler(`pai:window-${action}`);
-    ipcMain.handle(`pai:window-${action}`, handler);
+    ipcMain.removeHandler(`x3code:window-${action}`);
+    ipcMain.handle(`x3code:window-${action}`, handler);
   }
 }

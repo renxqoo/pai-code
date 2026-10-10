@@ -22,7 +22,7 @@ import {
   pakeConfirm,
   verifyPairingTranscript,
   x25519,
-} from '@paiapp/relay-protocol';
+} from '@x3code/relay-protocol';
 
 export interface PairingEndpoints {
   /** relay WSS 基址（qrPayload.relayUrl 或手动输入的 host）。 */

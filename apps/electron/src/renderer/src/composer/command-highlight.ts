@@ -1,4 +1,4 @@
-import type { CommandView } from '@paiapp/contracts';
+import type { CommandView } from '@x3code/contracts';
 
 /**
  * 输入框命令 token 高亮计算（纯函数，供镜像层渲染）。

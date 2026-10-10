@@ -1,8 +1,8 @@
 import * as React from "react";
 import { Plus } from "lucide-react";
 
-import type { ProviderModel } from "@paiapp/contracts";
-import { ActionButton } from "@paiapp/ui";
+import type { ProviderModel } from "@x3code/contracts";
+import { ActionButton } from "@x3code/ui";
 
 import { copy } from "@/strings";
 

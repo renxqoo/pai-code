@@ -1,6 +1,6 @@
 import { diffWordsWithSpace } from 'diff';
 
-import type { HunkLine } from '@paiapp/ui-thread';
+import type { HunkLine } from '@x3code/ui-thread';
 
 export type WordPart = { readonly text: string; readonly changed: boolean };
 

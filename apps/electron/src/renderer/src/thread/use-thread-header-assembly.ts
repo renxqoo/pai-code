@@ -35,7 +35,7 @@ export function useThreadHeaderAssembly(input: ThreadHeaderAssemblyInput): Omit<
 
   /** 浏览器直开（无 preload）时桥不存在，降级为无动作 */
   const toggleMaximize = React.useCallback(() => {
-    void window.pai?.window.toggleMaximize();
+    void window.x3code?.window.toggleMaximize();
   }, []);
 
   const status = threadStatus({

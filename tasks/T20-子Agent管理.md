@@ -3,7 +3,7 @@
 > 状态：已实施（四门全绿 756 测试；真机表单/校验/失败路径走查通过，跨进程写路径 E2E 待 dev 重启后用户一键完成——运行中 dev 实例主进程为旧代码，表单数据已保留在界面）
 > 级别：中
 > 参考稿：`setting-png/子智能体-01-列表页.png`（搜索/计数/刷新/新建 + 卡片列表）、`子智能体-02-编辑表单.png`（编辑 ui-coding：名称/描述/模型/工具/提示词/开关）、`子智能体-03-新建表单.png`（面包屑「子智能体 › 新建子智能体」同款表单）——UI 按 1:1 还原
-> 前置审计：Pai 侧（agent/list 链路/agent-dir-files 白名单/AgentView）+ hub 侧（agent-definitions.ts 机制/协议边界）双审计已完成，结论入「契约」
+> 前置审计：X3code 侧（agent/list 链路/agent-dir-files 白名单/AgentView）+ hub 侧（agent-definitions.ts 机制/协议边界）双审计已完成，结论入「契约」
 
 ## 契约（基于两侧审计的裁决）
 
@@ -17,7 +17,7 @@
   - `agent/definitions`（枚举）：主进程本地扫描 `agentDir/agents` + 已知项目目录集合（会话注册表 cwd ∪ 活跃会话）的 `.pi/agents`，**不经 hub**（管理面需要 systemPrompt 原文与文件真相；hub 枚举不回传这些且 project 级受 trusted 门禁）
   - `agent/upsert`（新建/编辑/改名/移动统一）：写新文件 + previous 键位文件存在则删除；原子写（tmp+fsync+rename）；audit
   - `agent/remove`：按 file 键位删白名单文件；audit
-- **旧链删除（实施裁决）**：hub `agents/list` 透传链整体移除（contracts AgentView 与 'agent/list' 方法、adapter agentViews、api-routes 路由、controller.refreshAgents、store.agents）——管理面单一真相 = 主进程文件枚举；hub-protocol.ts 的 `agents/list` 命令镜像保留（协议事实）。会话运行时的 agent 可见性由 hub 在每次任务调用时自行热发现（Pai 不镜像该视角）
+- **旧链删除（实施裁决）**：hub `agents/list` 透传链整体移除（contracts AgentView 与 'agent/list' 方法、adapter agentViews、api-routes 路由、controller.refreshAgents、store.agents）——管理面单一真相 = 主进程文件枚举；hub-protocol.ts 的 `agents/list` 命令镜像保留（协议事实）。会话运行时的 agent 可见性由 hub 在每次任务调用时自行热发现（X3code 不镜像该视角）
 - **身份键 = 文件名主干（file）**（对抗审查 major 根治）：hub 只认 frontmatter name，手写文件 name 可与主干不等 → AgentDefinition 携带 `file`（枚举填充）；remove/upsert-previous 按 file 定位旧文件（宽松 stem 校验：无分隔符/非点开头）；upsert 新文件主干恒 = name（pattern 内），编辑手写文件即归一到「主干=name」不变式
 - **解析器覆盖 hub 合法全集**（对抗审查 major 根治）：flow 数组 tools（`[a, b]` / `[]`）、无引号标量尾注释（` #` 起剥，引号内 # 是内容）、BOM、栅栏行尾空格、symlink 定义文件、任意非空字符串 name（pattern 门禁只在写路径）；store 枚举含符号链接文件（hub isFile ∥ isSymbolicLink 同语义）
 - **安全门禁**：
@@ -37,7 +37,7 @@
   - **agent 启用/禁用开关**（参考稿卡片带开关）：hub 无 enabled 概念，禁用 = 删文件语义不清；卡片操作为 编辑/删除，开关不还原（偏差已声明）
   - 参考稿「内置/已安装」计数分组、诊断横幅、「+ 新建」旁的下拉（用户切换）：无数据面，不还原
   - project 级写入只覆盖「已知项目集合」（注册表 + 已保存会话）；任意路径手输不做（安全面收窄）
-  - hub「最近上溯 .pi/agents」语义：Pai 只写指定项目根的 `.pi/agents`，编辑已有上溯目录中的定义不支持（列表也只枚举已知项目根）
+  - hub「最近上溯 .pi/agents」语义：X3code 只写指定项目根的 `.pi/agents`，编辑已有上溯目录中的定义不支持（列表也只枚举已知项目根）
 
 ## 并发/一致性预算
 

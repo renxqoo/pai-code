@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { ProviderConfigView } from '@paiapp/contracts';
+import type { ProviderConfigView } from '@x3code/contracts';
 import { copy } from '@/strings';
 import { filterProviders, providerListEmptyMessage } from '../provider-list-filter';
 

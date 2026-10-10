@@ -1,4 +1,4 @@
-import type { UiEvent, UiRequestFrame } from '@paiapp/contracts';
+import type { UiEvent, UiRequestFrame } from '@x3code/contracts';
 
 /**
  * ui_request 帧 → dialogRequest 事件。

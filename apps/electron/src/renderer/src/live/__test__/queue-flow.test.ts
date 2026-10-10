@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { HistoryItem, InflightView, ThreadStateView, UiEvent } from '@paiapp/contracts';
+import type { HistoryItem, InflightView, ThreadStateView, UiEvent } from '@x3code/contracts';
 
 import { createLiveController } from '../live-controller';
 import { createLiveStore } from '../store';

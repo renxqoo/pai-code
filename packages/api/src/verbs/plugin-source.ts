@@ -4,8 +4,8 @@
  * 安全面：sourcePath 的 realpath 必须位于批准根（手选目录 ∪ agent propose 链）
  * 之下——渲染层不可把任意目录（如 ~/.ssh）经导入面拷进 vendor 根。
  */
-import type { ApiError } from '@paiapp/contracts';
-import type { PluginCandidateView } from '@paiapp/contracts';
+import type { ApiError } from '@x3code/contracts';
+import type { PluginCandidateView } from '@x3code/contracts';
 
 export interface PluginSourcePort {
   /** 候选发现（含白名单门）；sourcePath 缺省 = 手选目录集合全扫。 */

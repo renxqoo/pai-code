@@ -1,17 +1,17 @@
 {
   "expo": {
-    "name": "Pai Code",
-    "slug": "pai-code",
+    "name": "X3code",
+    "slug": "x3code",
     "version": "0.1.0",
     "orientation": "portrait",
-    "scheme": "pai-code",
+    "scheme": "x3code",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.pai.code"
+      "bundleIdentifier": "com.x3code.app"
     },
     "android": {
-      "package": "com.pai.code",
+      "package": "com.x3code.app",
       "predictiveBackGestureEnabled": true
     },
     "web": {

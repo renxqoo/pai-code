@@ -1,4 +1,4 @@
-import type { EditHunkView } from '@paiapp/contracts';
+import type { EditHunkView } from '@x3code/contracts';
 
 /**
  * 补丁片段 → 展示行：原文行标删除（红）、新文行标新增（绿），其余按原样。

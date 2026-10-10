@@ -1,4 +1,4 @@
-import type { SessionStatsView } from '@paiapp/contracts';
+import type { SessionStatsView } from '@x3code/contracts';
 
 import type { SessionCardModel } from '@/sidebar/session-card-model';
 

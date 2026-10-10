@@ -1,9 +1,9 @@
 import * as React from "react";
 import { ChevronDown } from "lucide-react";
 
-import type { ProviderConfigView } from "@paiapp/contracts";
+import type { ProviderConfigView } from "@x3code/contracts";
 
-import { ActionButton, PickerDialog, selectTriggerClassName } from "@paiapp/ui";
+import { ActionButton, PickerDialog, selectTriggerClassName } from "@x3code/ui";
 import { groupModelOptions } from "@/components/group-model-options";
 import { copy } from "@/strings";
 

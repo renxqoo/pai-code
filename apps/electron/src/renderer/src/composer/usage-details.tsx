@@ -1,6 +1,6 @@
 import type * as React from 'react';
 
-import type { Usage } from '@paiapp/contracts';
+import type { Usage } from '@x3code/contracts';
 
 import { copy } from '@/strings';
 

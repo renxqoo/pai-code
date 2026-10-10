@@ -1,5 +1,5 @@
 import * as React from 'react';
-import type { FileDiffGroup } from '@paiapp/ui-thread';
+import type { FileDiffGroup } from '@x3code/ui-thread';
 
 import type { ChatMessage } from '@/types/domain';
 import { MessageItem } from '@/features/chat/message-item';

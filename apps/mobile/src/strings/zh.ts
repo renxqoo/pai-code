@@ -1,7 +1,7 @@
-import type { RetryCopy, ToolCopy } from '@paiapp/ui-thread';
-import { retryLineOf } from '@paiapp/ui-thread';
+import type { RetryCopy, ToolCopy } from '@x3code/ui-thread';
+import { retryLineOf } from '@x3code/ui-thread';
 
-/** 重试行词面（共享拼装入 @paiapp/ui-thread，两端同一句）：hub 错误码 → 原因短语。 */
+/** 重试行词面（共享拼装入 @x3code/ui-thread，两端同一句）：hub 错误码 → 原因短语。 */
 export const retryCopy: RetryCopy = {
   reasonHttp429: '请求过于频繁',
   reasonHttp408: '请求超时',
@@ -13,7 +13,7 @@ export const retryCopy: RetryCopy = {
 };
 
 export const copy = {
-  appName: 'Pai Code',
+  appName: 'X3code',
   tagline: '把想法交给代码，把工作留在掌控中。',
   emptyTitle: '今天想完成什么？',
   emptyWorkspace: '选择工作空间',
@@ -30,7 +30,7 @@ export const copy = {
   stop: '停止生成',
   placeholder: '描述任务，或粘贴代码和错误信息…',
   selectWorkspace: '选择工作空间',
-  workspaceHint: '选择 Pai Code 可以访问的代码目录',
+  workspaceHint: '选择 X3code 可以访问的代码目录',
   connectedComputer: '连接电脑',
   assets: '文件与附件',
   more: '更多',
@@ -57,7 +57,7 @@ export const copy = {
   tokenUsage: '上下文',
   noProject: '无项目',
   workspaceNoMatch: '没有匹配的工作区——可直接输入桌面端会话使用的目录路径。',
-  workspaceHintText: '选择 Pai Code 可以访问的代码目录',
+  workspaceHintText: '选择 X3code 可以访问的代码目录',
   taskConfigHint: '配置应用于当前对话；默认配置可在个人设置中调整。',
   taskConfigPending: '当前对话尚未在桌面端启动——先发送一条消息，配置即会同步过去。',
   settingsTitle: '个人设置',
@@ -68,7 +68,7 @@ export const copy = {
   storage: '存储空间',
   privacy: '隐私与安全',
   help: '帮助与反馈',
-  about: '关于 Pai Code',
+  about: '关于 X3code',
   language: '界面语言',
   defaultModel: '默认模型',
   defaultThinking: '默认思考强度',
@@ -77,12 +77,12 @@ export const copy = {
   system: '跟随系统',
   light: '浅色',
   dark: '深色',
-  permissionExplain: '控制 Pai Code 执行命令和修改文件时需要你的确认。',
+  permissionExplain: '控制 X3code 执行命令和修改文件时需要你的确认。',
   quickAnalyze: '分析当前项目',
   quickFix: '定位并修复问题',
   quickReview: '审查代码质量',
   processLabel: '执行过程',
-  turnLoadingLabel: 'Pai Code 正在生成回复',
+  turnLoadingLabel: 'X3code 正在生成回复',
   activityFailed: '执行遇到问题',
   activityRunning: '正在执行',
   running: '进行中',
@@ -115,13 +115,20 @@ export const copy = {
   collapseThinking: '收起思考详情',
   workingFor: (label: string) => `已工作 ${label}`,
   workedFor: (label: string) => `共工作 ${label}`,
-  /** 重试行整句：拼装单点在 @paiapp/ui-thread/retry-copy（词面注入，两端同句）。 */
+  /** 重试行整句：拼装单点在 @x3code/ui-thread/retry-copy（词面注入，两端同句）。 */
   retryLine: (attempt: number, code: string | null) => retryLineOf(attempt, code, retryCopy),
   notDelivered: '未送达',
   sendFailed: (reason: string) => `发送失败：${reason}`,
   sessionCreateFailed: '会话创建失败',
   hostUnavailable: '桌面端不可用',
   noReason: '桌面端未返回失败原因，请重试',
+  pairDiscoverMiss: '未找到配对码——确认桌面端已发起配对，且手机与电脑在同一网络',
+  pairNotStarted: '桌面端未能开启配对会话，请重启桌面端后重试',
+  pairIncomplete: (reason: string): string => `配对未完成：${copyReason(reason)}`,
+  pairCredentialsSaveFailed: '凭证保存失败（本会话可用，重启后需重新配对）',
+  pairFailed: (detail: string): string => `配对失败：${detail}`,
+  pairQrMissingFields: '二维码内容缺少 relayUrl/pairingId/installationId/gatewayKeyFingerprint',
+  pairQrInvalidPayload: '二维码内容不是合法配对载荷',
 } as const;
 
 /**
@@ -152,7 +159,7 @@ export function copyReason(code: string | null | undefined): string {
   return REASON_COPY[code] ?? code;
 }
 
-/** 执行过程共享派生层（@paiapp/ui-thread）的中文文案注入面（词面与 PC 端同源）。 */
+/** 执行过程共享派生层（@x3code/ui-thread）的中文文案注入面（词面与 PC 端同源）。 */
 export const toolCopy: ToolCopy = {
   groupBashPhrase: '运行了命令',
   groupListPhrase: '列出了目录',

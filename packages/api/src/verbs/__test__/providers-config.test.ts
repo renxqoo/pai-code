@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 
 import { serializeProvidersConfig } from "../providers-config";
-import type { ProviderConfig } from "@paiapp/contracts";
+import type { ProviderConfig } from "@x3code/contracts";
 
 /**
  * providers.json 序列化回归（x-harness 档案形状 {providers:[{name,protocol,
@@ -42,7 +42,7 @@ test("多渠道档案并列；env 变量名按渠道名 sanitize；协议字段�
     ]),
   ) as { providers: Profile[] };
   expect(file.providers.map((profile) => profile.name)).toEqual(["glm", "zai-glm"]);
-  expect(file.providers.map((profile) => profile.apiKeyEnv)).toEqual(["PAI_KEY_GLM", "PAI_KEY_ZAI_GLM"]);
+  expect(file.providers.map((profile) => profile.apiKeyEnv)).toEqual(["X3CODE_KEY_GLM", "X3CODE_KEY_ZAI_GLM"]);
   expect(file.providers.map((profile) => profile.protocol)).toEqual(["openai", "anthropic"]);
 });
 

@@ -15,7 +15,7 @@ body.qrPayload` 形状——网关任何失败（`{ success: false, error }`）�
 统一替换成硬编码英文 `bad pairing response`（违反「用户可见文案只写 strings/」）。
 
 **B. 网关入口解析缺链**（`index.ts:431` + `gateway-process.ts:67-78`）：入口唯一来源是
-`process.env.PAI_X_HARNESS_ROOT`（无任何设置面写入、无打包产物），拿不到即退化成 stub，
+`process.env.X3CODE_X_HARNESS_ROOT`（无任何设置面写入、无打包产物），拿不到即退化成 stub，
 命令一律 `{ success: false, error: 'gateway not configured' }`（日志 `gateway_entry_missing`）。
 `resolveHubPathsForRuntime` 的宿主链路（设置 > env > dev 旁级 > 打包资源）**未覆盖 gateway**。
 
@@ -73,7 +73,7 @@ export function serializeGatewayConfig(relay: RelayConfig): string
 与宿主同链同序，新增 gateway 条目候选（`resolveGatewayEntry`）：
 
 1. `settings.hubDev.gatewayEntry`（开发者显式覆盖）
-2. `PAI_GATEWAY_ENTRY` 环境变量
+2. `X3CODE_GATEWAY_ENTRY` 环境变量
 3. dev 旁级探测 `../x-harness/apps/hub-gateway/src/cli.ts`（打包态跳过）
 4. 打包资源 `resources/hub-gateway/dist/cli.js`
 
@@ -144,7 +144,7 @@ owner 命令应答 `body` = `{ success: true, data } | { success: false, error }
 - 状态/设备列表读 `body.data`（网关 response 包裹），设备列表是行数组——读顶层即面板恒空；
 - relay 未配置 → 配对卡显 `relayNotConfigured` 引导（配对钮保留）；
 - relay 表单：草稿取自偏好面，保存回传完整配置；
-- **装置纪律**：本文件只挂 `window.pai`，不替换 `globalThis.window`（旧装置覆盖后把其后
+- **装置纪律**：本文件只挂 `window.x3code`，不替换 `globalThis.window`（旧装置覆盖后把其后
   所有 DOM 测试打红——渲染层套件 77 红 → 1 红）；
 - 受控 `onChange` 在 bun + happy-dom 下派发 input 不触发（实测矩阵全红、仓库无先例），
   键入路径由 bw 真机走查覆盖。
@@ -156,14 +156,14 @@ owner 命令应答 `body` = `{ success: true, data } | { success: false, error }
 ## 7. 验收清单
 
 - [x] `settings.json` 是 relay 配置唯一真相；`gateway.json` 为派生产物，无手编路径
-- [x] `PAI_X_HARNESS_ROOT` 不再是 gateway 入口唯一来源（设置/env/dev/打包四段链）
+- [x] `X3CODE_X_HARNESS_ROOT` 不再是 gateway 入口唯一来源（设置/env/dev/打包四段链）
 - [x] 渲染层不再出现硬编码英文兜底；全部文案在 strings 目录
 - [x] 网关失败时 UI 展示可诊断原因，且不再出现「点击无反应等 10s」（断连/退子进程即拒挂起）
 - [x] 配对失败不再杀死 gateway 进程（x-harness 命令边界总函数）
 - [x] bw 真机走查（隔离数据区 + 真 Electron + 真 gateway）：设置→设备与连接导航可达、
       relay 键入保存落 `settings.json`（网关重启 + 「已保存」提示 + 引导消失）、发起配对
       2s 内显示 `pairing ticket unavailable (relay enroll pending?)`、无 `bad pairing response`、
-      网关仍在线、设备列表渲染（截图 `/tmp/pai-devices-walk.png`）
+      网关仍在线、设备列表渲染（截图 `/tmp/x3code-devices-walk.png`）
 - [ ] 四门全绿 + 覆盖率数字如实报告；无 skip/删断言（**他人在途未清，见 §8**）
 
 ## 8. 门禁归属（2026-09-29）

@@ -1,13 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { InflightView, PreferencesView, SessionView } from '@paiapp/contracts';
+import type { InflightView, PreferencesView, SessionView } from '@x3code/contracts';
 
 import { createLiveController } from '../live-controller';
 import { foldThreadEvent } from '../fold-events';
 import { foldHydrate } from '../fold-hydrate';
 import { createLiveStore, type LiveStore } from '../store';
 import { applyInflight } from '../fold-inflight';
-import type { HistoryItem, UiEvent } from '@paiapp/contracts';
+import type { HistoryItem, UiEvent } from '@x3code/contracts';
 import { initialThreadState, type LiveThreadState } from '../live-thread-state';
 import type { BridgeClient } from '../client-invoke';
 

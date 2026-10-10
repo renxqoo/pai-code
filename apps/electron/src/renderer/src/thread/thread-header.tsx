@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { ChevronDown, Folder, Maximize2, MoreHorizontal, PanelRight } from 'lucide-react';
 
-import { IconButton, MenuButton, type MenuItemDef } from '@paiapp/ui';
+import { IconButton, MenuButton, type MenuItemDef } from '@x3code/ui';
 
 import { WINDOWS_CAPTION_WIDTH } from '@/lib/platform';
 import { reduceTitleEdit, titleCommit, type TitleEditState } from '@/thread/title-edit';

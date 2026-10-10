@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { createLiveController } from '../live-controller';
 import { createLiveStore } from '../store';
 import type { BridgeClient } from '../client-invoke';
-import type { InflightView } from '@paiapp/contracts';
+import type { InflightView } from '@x3code/contracts';
 
 /**
  * 对抗审查红测 A：bash 收尾探测的在途 invoke 无法被 sessionRemoved 取消，

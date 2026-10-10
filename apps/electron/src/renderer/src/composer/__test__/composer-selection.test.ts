@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { composerSelectionOf } from '../composer-selection';
-import type { ModelInfoView, SessionView } from '@paiapp/contracts';
+import type { ModelInfoView, SessionView } from '@x3code/contracts';
 import type { ThinkingLevelStateView } from '@/live/store';
 
 /** 模型/思考档选择数据面派生（自 buildComposer 同构迁出，语义基线随迁）。 */

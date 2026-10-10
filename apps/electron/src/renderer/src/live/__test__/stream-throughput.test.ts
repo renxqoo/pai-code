@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import type { HistoryItem, UiEvent } from '@paiapp/contracts';
+import type { HistoryItem, UiEvent } from '@x3code/contracts';
 import type { ThreadItem } from '@/thread/thread-model';
 import { createLiveStore, threadModelOf } from '../store';
 

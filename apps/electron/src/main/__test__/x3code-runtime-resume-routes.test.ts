@@ -3,15 +3,15 @@ import { mkdirSync, mkdtempSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { HostCommandOutcome, HostPhase, HostProcessPort, HubFrame, PaiCommand, UiEvent } from '@paiapp/contracts';
+import type { HostCommandOutcome, HostPhase, HostProcessPort, HubFrame, X3codeCommand, UiEvent } from '@x3code/contracts';
 
 import { createApiRoutes } from '../api-routes';
 import { createAgentDefinitionsStore } from '../agent-definitions-store';
 import { createFileSettings, type ProviderKeyStore } from '../file-settings';
-import { createPaiRuntime, type PaiRuntime } from '../pai-runtime';
-import { createRuntimeMonitor } from '@paiapp/infra';
+import { createPaiRuntime, type PaiRuntime } from '../x3code-runtime';
+import { createRuntimeMonitor } from '@x3code/infra';
 
-/** session/resume 懒恢复通路面（拆自 pai-runtime-reconcile：500 行纪律）；
+/** session/resume 懒恢复通路面（拆自 x3code-runtime-reconcile：500 行纪律）；
  *  fixture/seedRow 与原文件同构（自含装置，不跨文件引私有 helper）。 */
 
 type Reply = HostCommandOutcome;
@@ -229,7 +229,7 @@ function flushEvents(runtime: PaiRuntime): void {
   runtime.emitBuffered();
 }
 
-function makeRoutes(work: string, reply: (cmd: PaiCommand) => Reply) {
+function makeRoutes(work: string, reply: (cmd: X3codeCommand) => Reply) {
   const agentDir = join(work, 'agent');
   mkdirSync(join(agentDir, 'sessions'), { recursive: true });
   writeFileSync(join(work, 'cli.js'), '');
@@ -240,7 +240,7 @@ function makeRoutes(work: string, reply: (cmd: PaiCommand) => Reply) {
     get phase(): HostPhase {
       return 'ready';
     },
-    request: (command: PaiCommand) => Promise.resolve(reply(command)),
+    request: (command: X3codeCommand) => Promise.resolve(reply(command)),
     onFrame: (_cb: (frame: HubFrame) => void) => () => undefined,
     onPhase: (_cb: (phase: HostPhase) => void) => () => undefined,
     restart: async () => {

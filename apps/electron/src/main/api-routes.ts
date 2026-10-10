@@ -12,34 +12,34 @@ import {
   type GitGraph,
   type GitStatus,
   type HubApi,
-} from '@paiapp/api';
+} from '@x3code/api';
 import { createFileRead, type FileRead } from './file-read';
 import { searchProjectFiles } from './file-search';
 import { runGit } from './git-exec';
 import { createOpenLocation, type OpenLocation } from './open-location';
 import { writeModelsConfig } from './models-config';
-import { createLocalRoutes } from '@paiapp/api';
-import { createSettingsRoutes } from '@paiapp/api';
-import { createSkillRoutes, failClosedSkillSources, type SkillSourcePort } from '@paiapp/api';
-import { createPluginRoutes, failClosedPluginSources, type PluginSourcePort } from '@paiapp/api';
-import { promptRoutes } from '@paiapp/api';
+import { createLocalRoutes } from '@x3code/api';
+import { createSettingsRoutes } from '@x3code/api';
+import { createSkillRoutes, failClosedSkillSources, type SkillSourcePort } from '@x3code/api';
+import { createPluginRoutes, failClosedPluginSources, type PluginSourcePort } from '@x3code/api';
+import { promptRoutes } from '@x3code/api';
 import type { AgentDefinitionsStore } from './agent-definitions-store';
-import type { ApiError } from '@paiapp/contracts';
-import { errorLogToken } from '@paiapp/api';
-import { ApiSchemas, type ApiMethod, type ApiOutcome, type ApiParams, type ModelInfoView } from '@paiapp/contracts';
+import type { ApiError } from '@x3code/contracts';
+import { errorLogToken } from '@x3code/api';
+import { ApiSchemas, type ApiMethod, type ApiOutcome, type ApiParams, type ModelInfoView } from '@x3code/contracts';
 
-import type { PaiRuntime } from './pai-runtime';
-import type { RuntimeMonitor } from '@paiapp/infra';
-import { runtimeRoutes } from '@paiapp/api';
-import { threadOpsRoutes } from '@paiapp/api';
-import { appRoutes, bashRouteHandler, sessionRoutes } from '@paiapp/api';
-import { resumeRoutes } from '@paiapp/api';
+import type { PaiRuntime } from './x3code-runtime';
+import type { RuntimeMonitor } from '@x3code/infra';
+import { runtimeRoutes } from '@x3code/api';
+import { threadOpsRoutes } from '@x3code/api';
+import { appRoutes, bashRouteHandler, sessionRoutes } from '@x3code/api';
+import { resumeRoutes } from '@x3code/api';
 import type { createFileSettings } from './file-settings';
 import type { ProviderKeyStore } from './file-settings';
 
 /**
  * 渲染层 invoke 路由：zod 校验 → hub 域方法（runtime.hub 单实例门面）→ 响应收窄为视图。
- * 全部错误以 {ok:false,error:ApiError}（kind 判别联合）；协议字面量只在本文件族与 @paiapp/api（views/events）出现。
+ * 全部错误以 {ok:false,error:ApiError}（kind 判别联合）；协议字面量只在本文件族与 @x3code/api（views/events）出现。
  */
 
 type FileSettings = ReturnType<typeof createFileSettings>;
@@ -49,7 +49,7 @@ type FileSettings = ReturnType<typeof createFileSettings>;
 
 /**
  * 模型清单的渠道真相域过滤：app 的唯一模型/凭据面是设置里的渠道
- * （env 清洗 + $PAI_KEY_* 注入），hub 内置目录的模型不经渠道配置不可用，
+ * （env 清洗 + $X3CODE_KEY_* 注入），hub 内置目录的模型不经渠道配置不可用，
  * 不进选择面。
  */
 export function channelScopedModels(
@@ -237,7 +237,7 @@ export function createApiRoutes(deps: ApiRouteDeps) {
   };
 
   /**
-   * key 变更 → 重启 host 恢复链路：key 经 spawn env 注入（$PAI_KEY_*）——
+   * key 变更 → 重启 host 恢复链路：key 经 spawn env 注入（$X3CODE_KEY_*）——
    * 进程存活期 env 不可变,必须重 spawn 才生效。
    * host 未启动则配置已落盘，下次启动时生效。
    */

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import type { ProviderModel } from "@paiapp/contracts";
+import type { ProviderModel } from "@x3code/contracts";
 
 import { copy } from "@/strings";
 

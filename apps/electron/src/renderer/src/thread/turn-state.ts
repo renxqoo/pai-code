@@ -1,4 +1,4 @@
-import { changedFileCount as changedFileCountOfCalls } from '@paiapp/ui-thread';
+import { changedFileCount as changedFileCountOfCalls } from '@x3code/ui-thread';
 import type { TurnBlock, TurnModel } from './thread-model';
 
 /** 轮次是否仍在走表（细节实时展开、状态行实时计时）。 */

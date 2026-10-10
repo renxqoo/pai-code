@@ -27,9 +27,9 @@ describe('registerIpcWindowActions', () => {
     const ipcMain = makeIpcMain();
     const actions = { minimize: () => undefined, close: () => undefined };
     registerIpcWindowActions(ipcMain, actions);
-    expect(ipcMain.has('pai:window-minimize')).toBe(true);
+    expect(ipcMain.has('x3code:window-minimize')).toBe(true);
     // 关窗 → dock 重开：同通道二次注册不得抛错
     expect(() => registerIpcWindowActions(ipcMain, actions)).not.toThrow();
-    expect(ipcMain.has('pai:window-close')).toBe(true);
+    expect(ipcMain.has('x3code:window-close')).toBe(true);
   });
 });

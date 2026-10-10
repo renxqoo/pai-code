@@ -4,7 +4,7 @@
  * 设计（对照 LAN ws-client 已修语义 + x-harness remote-client 装配）：
  * - socket 段用 RN 全局 WebSocket（平台原生分帧/掩码/pong）；上层 ingest/outbox/
  *   ACK/chunk 重组逻辑同构 x-harness connect.ts
- * - L3 信封 + ratchet codec（@paiapp/relay-protocol）；事件经 dispatch 上抛
+ * - L3 信封 + ratchet codec（@x3code/relay-protocol）；事件经 dispatch 上抛
  * - 重连退避 1s→30s + 连接身份守卫（旧 socket 迟到 close 不动现行状态）
  * - 心跳：20s ping、2 次未收任何帧主动断开（半开探测——relay 无应用层 pong，
  *   以「任意入站帧」为活性证据）
@@ -18,7 +18,7 @@ import {
   parseFrame,
   type Frame,
   type ResponseBody,
-} from '@paiapp/relay-protocol';
+} from '@x3code/relay-protocol';
 
 
 export interface RelayCodec {

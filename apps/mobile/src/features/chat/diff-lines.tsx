@@ -1,14 +1,14 @@
 import * as React from 'react';
 import { Text, View } from 'react-native';
 
-import { allHunkLines, type HunkLine } from '@paiapp/ui-thread';
+import { allHunkLines, type HunkLine } from '@x3code/ui-thread';
 
 import { useAppTheme } from '@/theme/theme-context';
 import { wordDiffByLine } from '@/features/chat/diff-word';
 import type { ColorScheme } from '@/theme/colors';
 import { radius, spacing, type } from '@/theme/tokens';
 import { monospaceFont } from '@/components/monospace-font';
-import type { EditHunkView } from '@paiapp/contracts';
+import type { EditHunkView } from '@x3code/contracts';
 
 type DiffLinesProps = { hunks: readonly EditHunkView[] };
 

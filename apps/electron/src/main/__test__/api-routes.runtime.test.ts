@@ -3,13 +3,13 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { HostCommandOutcome, HostDiagnostics, HostPhase, HostProcessPort, HubFrame, PaiCommand } from '@paiapp/contracts';
+import type { HostCommandOutcome, HostDiagnostics, HostPhase, HostProcessPort, HubFrame, X3codeCommand } from '@x3code/contracts';
 
 import { createApiRoutes } from '../api-routes';
 import { createAgentDefinitionsStore } from '../agent-definitions-store';
 import { createFileSettings, type ProviderKeyStore } from '../file-settings';
-import { createPaiRuntime } from '../pai-runtime';
-import { createRuntimeMonitor } from '@paiapp/infra';
+import { createPaiRuntime } from '../x3code-runtime';
+import { createRuntimeMonitor } from '@x3code/infra';
 
 /**
  * T29 运行状态 api 面：app/runtime 快照、档位写路径（settings + set_idle_retire_ms）、
@@ -24,18 +24,18 @@ const keyStore: ProviderKeyStore = {
 };
 
 async function makeRoutes() {
-  const work = mkdtempSync(join(tmpdir(), 'pai-runtime-api-'));
+  const work = mkdtempSync(join(tmpdir(), 'x3code-runtime-api-'));
   const agentDir = join(work, 'agent');
   mkdirSync(join(agentDir, 'sessions'), { recursive: true });
   writeFileSync(join(work, 'cli.js'), '');
   const settings = createFileSettings(join(work, 'settings.json'), keyStore);
-  const commands: PaiCommand[] = [];
+  const commands: X3codeCommand[] = [];
   // 记账假宿主：全部命令应答成功（回收链的命令序列断言依赖此记录）
   const port: HostProcessPort = {
     get phase(): HostPhase {
       return 'ready';
     },
-    request: (command: PaiCommand) => {
+    request: (command: X3codeCommand) => {
       commands.push(command);
       return Promise.resolve({ ok: true, data: {} } satisfies HostCommandOutcome);
     },

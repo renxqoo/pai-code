@@ -1,5 +1,5 @@
-import type { AgentDefinition, ApiOutcome, CommandView, IdleRecycleMinutes, ImagePayload, PluginCandidateView, PluginProposalRow, ProviderModel, RelayConfig, RuntimeSnapshotView, SkillCandidateView } from '@paiapp/contracts';
-import { thinkingLevelOfLabel } from '@paiapp/contracts';
+import type { AgentDefinition, ApiOutcome, CommandView, IdleRecycleMinutes, ImagePayload, PluginCandidateView, PluginProposalRow, ProviderModel, RelayConfig, RuntimeSnapshotView, SkillCandidateView } from '@x3code/contracts';
+import { thinkingLevelOfLabel } from '@x3code/contracts';
 
 import { writeClipboard } from '@/lib/write-clipboard';
 import { copyOfError } from '@/lib/error-text';

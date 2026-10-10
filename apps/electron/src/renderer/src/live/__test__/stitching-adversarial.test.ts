@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import type { UiEvent } from '@paiapp/contracts';
+import type { UiEvent } from '@x3code/contracts';
 
 import { foldThreadEvent } from '../fold-events';
 import { foldHydrate } from '../fold-hydrate';
 import { initialThreadState, noteMessageTurn } from '../live-thread-state';
 import type { LiveThreadState } from '../live-thread-state';
-import type { HistoryItem } from '@paiapp/contracts';
+import type { HistoryItem } from '@x3code/contracts';
 import type { ThreadItem, TurnBlock } from '@/thread/thread-model';
 
 /**

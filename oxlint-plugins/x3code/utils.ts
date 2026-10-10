@@ -3,22 +3,22 @@ import { builtinModules } from 'node:module'
 import { dirname, join } from 'node:path'
 import type { ESTree } from '@oxlint/plugins'
 
-// pai 插件共享：包定位（向上找最近 package.json）与 import 说明符收集。
+// x3code 插件共享：包定位（向上找最近 package.json）与 import 说明符收集。
 // 规则语义与方案第 1 章依赖白名单矩阵一致；矩阵改动 = 修宪法，就近同步测试。
 
 export const WORKSPACE_MATRIX: Record<string, readonly string[]> = {
-  '@paiapp/contracts': [],
-  '@paiapp/core': ['@paiapp/contracts'],
-  '@paiapp/api': ['@paiapp/contracts'],
-  '@paiapp/infra': ['@paiapp/contracts', '@paiapp/core', '@paiapp/api'],
-  '@paiapp/ui': ['@paiapp/contracts'],
-  '@paiapp/ui-thread': ['@paiapp/contracts'],
-  '@paiapp/testkit': ['@paiapp/contracts'],
+  '@x3code/contracts': [],
+  '@x3code/core': ['@x3code/contracts'],
+  '@x3code/api': ['@x3code/contracts'],
+  '@x3code/infra': ['@x3code/contracts', '@x3code/core', '@x3code/api'],
+  '@x3code/ui': ['@x3code/contracts'],
+  '@x3code/ui-thread': ['@x3code/contracts'],
+  '@x3code/testkit': ['@x3code/contracts'],
 }
 
 const pkgNameCache = new Map<string, string | null>()
 
-/** 从文件向上找最近 package.json 的 @paiapp/* 包名；非 workspace 文件返回 null。 */
+/** 从文件向上找最近 package.json 的 @x3code/* 包名；非 workspace 文件返回 null。 */
 export function packageOf(filename: string): string | null {
   const start = dirname(filename)
   const cached = pkgNameCache.get(start)
@@ -28,7 +28,7 @@ export function packageOf(filename: string): string | null {
   for (;;) {
     try {
       const name = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).name
-      result = typeof name === 'string' && name.startsWith('@paiapp/') ? name : null
+      result = typeof name === 'string' && name.startsWith('@x3code/') ? name : null
       break
     } catch {
       const parent = dirname(dir)

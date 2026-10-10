@@ -8,13 +8,12 @@ import {
 } from './en-error-copy';
 export const en = {
   /** 标题行双色文案：名称重字重、产品线后缀轻字重（与设计稿一致） */
-  appTitle: { name: 'Pai', suffix: 'Code' },
+  appTitle: 'X3code',
   sidebar: {
     search: 'Search',
     newTask: 'New task',
     hotkeyNewTask: (modifier: string): string => `${modifier}N`,
     hotkeySearch: (modifier: string): string => `${modifier}K`,
-    viewGrouped: 'Grouped',
     viewProjects: 'Projects',
     pinnedSection: 'Pinned',
     pinSession: 'Pin',
@@ -365,8 +364,6 @@ export const en = {
     refreshModels: 'Refresh',
   },
   bootstrap: {
-    loadingTitle: 'Starting up…',
-    loadingHint: 'Connecting to the coding agent host.',
     failedTitle: 'Cannot start',
     bridgeHint: 'The preload bridge is unavailable. Relaunch the app from the desktop entry.',
     hostFailed: 'The agent host failed to start. Check Settings for provider configuration and the host-hub path.',

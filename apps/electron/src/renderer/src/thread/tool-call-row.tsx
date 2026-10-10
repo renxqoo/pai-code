@@ -1,8 +1,8 @@
 import * as React from 'react';
 
-import { ChevronToggle } from '@paiapp/ui';
+import { ChevronToggle } from '@x3code/ui';
 
-import type { SubagentSpawnView } from '@paiapp/contracts';
+import type { SubagentSpawnView } from '@x3code/contracts';
 
 import { copy } from '@/strings';
 import { toolCopy } from '@/strings/tool-copy';
@@ -14,7 +14,7 @@ import {
   toolPreviewMono,
   toolRowLabelOf,
   toolSummary,
-} from '@paiapp/ui-thread';
+} from '@x3code/ui-thread';
 import { ToolCallDetail } from './tool-call-detail';
 import { ProcessRailIcon } from './process-rail-icon';
 import { toolRowIcon } from './tool-icons';

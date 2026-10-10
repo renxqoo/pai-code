@@ -1,4 +1,4 @@
-import type { EditHunkView, ToolCallStatus } from '@paiapp/contracts';
+import type { EditHunkView, ToolCallStatus } from '@x3code/contracts';
 
 /**
  * 共享派生函数的输入面：只声明消费到的最小形状（结构化兼容——

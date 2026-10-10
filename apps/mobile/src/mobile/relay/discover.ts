@@ -1,9 +1,12 @@
 /**
- * 6 位配对码网关发现：同网段/同机探测 relay 的 /api/discover?code=xxxxxx。
- * 候选源：本机固定端口（web 预览与 gateway 同机）、QR 扫描记录的 relay 主机、
- * 常见网关地址。命中即返回 {relayUrl, installationId, gatewayKeyFingerprint,
- * pairingId}——手机侧免填任何地址。
+ * 6 位配对码网关发现：探测候选主机的 relay /api/discover?code=xxxxxx。
+ * 候选源：dev 形态的 Metro 宿主（Expo Go/dev build 的 hostUri——真机即 Mac LAN IP）、
+ * 本机固定端口（web 预览与 gateway 同机）、loopback。
+ * 命中即返回 {relayUrl, installationId, gatewayKeyFingerprint, pairingId}——手机侧免填任何地址。
  */
+import { Platform } from 'react-native';
+import Constants from 'expo-constants';
+
 export interface DiscoveredGateway {
   relayUrl: string;
   installationId: string;
@@ -14,12 +17,39 @@ export interface DiscoveredGateway {
 
 export const DISCOVER_PORT = 8787;
 
+/** host 形态（hostUri/debuggerHost 可能带端口后缀）：仅 IPv4/主机名，剥掉端口与路径。 */
+function hostOf(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0 || trimmed.includes('/')) return null;
+  const bare = trimmed.split(':')[0] ?? '';
+  if (bare.length === 0) return null;
+  return bare;
+}
+
+/** dev 形态宿主（真机走 Metro 加载——Metro 所在机即桌面端所在机）。 */
+export function devHosts(): string[] {
+  if (Platform.OS === 'web') return [];
+  const out: string[] = [];
+  const expoConfigHost = Constants.expoConfig?.hostUri;
+  if (typeof expoConfigHost === 'string') {
+    const host = hostOf(expoConfigHost);
+    if (host !== null) out.push(host);
+  }
+  const debuggerHost = Constants.expoGoConfig?.debuggerHost;
+  if (typeof debuggerHost === 'string') {
+    const host = hostOf(debuggerHost);
+    if (host !== null) out.push(host);
+  }
+  return [...new Set(out)];
+}
+
 function candidates(): string[] {
   const out: string[] = [];
   if (typeof window === 'object' && window !== null && typeof window.location === 'object' && window.location !== null) {
     const host = window.location.hostname;
     if (typeof host === 'string' && host.length > 0) out.push(host);
   }
+  out.push(...devHosts());
   out.push('127.0.0.1');
   return [...new Set(out)];
 }

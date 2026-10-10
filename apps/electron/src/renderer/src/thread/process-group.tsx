@@ -1,7 +1,7 @@
 import * as React from 'react';
 
-import { ChevronToggle } from '@paiapp/ui';
-import { toolGroupSummary } from '@paiapp/ui-thread';
+import { ChevronToggle } from '@x3code/ui';
+import { toolGroupSummary } from '@x3code/ui-thread';
 
 import { toolCopy } from '@/strings/tool-copy';
 import { autoOpenForProcessGroup } from './process-group-state';

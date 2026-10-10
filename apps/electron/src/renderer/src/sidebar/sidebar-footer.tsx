@@ -1,6 +1,6 @@
 import { ChartNoAxesColumn, RotateCw, Settings } from 'lucide-react';
 
-import { IconButton } from '@paiapp/ui';
+import { IconButton } from '@x3code/ui';
 
 import { workspaceActions } from '@/live/workspace-runtime';
 import { copy } from '@/strings';

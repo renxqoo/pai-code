@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Check, GitBranch, GitGraph, Lock, Plus, Search } from 'lucide-react';
 
-import type { GitBranchesView } from '@paiapp/contracts';
+import type { GitBranchesView } from '@x3code/contracts';
 
 import { cn } from '@/lib/utils';
 import { copy } from '@/strings';

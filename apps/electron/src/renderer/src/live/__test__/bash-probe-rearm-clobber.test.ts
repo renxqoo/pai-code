@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { createBashEndProbe } from '../bash-end-probe';
-import type { InflightView } from '@paiapp/contracts';
+import type { InflightView } from '@x3code/contracts';
 
 /**
  * 对抗审查红测 B：bash 收尾探测的 schedule() 在覆盖 timers[threadId] 前不清旧句柄。

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { PERM_MODES, type ThinkingLevel } from '@paiapp/contracts';
+import { PERM_MODES, type ThinkingLevel } from '@x3code/contracts';
 import { copy } from '@/strings';
 import { PermissionsSection } from '../permissions-section';
 

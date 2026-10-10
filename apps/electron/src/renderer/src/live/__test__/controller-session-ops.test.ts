@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import type { ApiError } from '@paiapp/contracts';
+import type { ApiError } from '@x3code/contracts';
 
 import { createLiveController } from '../live-controller';
 import { createLiveStore } from '../store';

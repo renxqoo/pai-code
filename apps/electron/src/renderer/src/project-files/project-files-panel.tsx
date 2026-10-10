@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { ArrowLeft, File, FileCode, FileCog, FileImage, FileText, Search } from 'lucide-react';
 
-import { ChevronToggle } from '@paiapp/ui';
+import { ChevronToggle } from '@x3code/ui';
 
 import { filterFileTree } from '@/project-files/filter-file-tree';
 import { cn } from '@/lib/utils';

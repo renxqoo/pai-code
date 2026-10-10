@@ -126,7 +126,7 @@
 ### M3｜agent-app：契约 + API verbs + 主进程编排
 | 做什么 | 文件 |
 |---|---|
-| 命令类型 `PluginsList/Inspect/Install/Uninstall/SetEnabled/Remove/HotInstall Cmd` + Data 形状 + `PAI_COMMAND_TYPES`/`COMMAND_NAMES` 封闭集扩员 + 错误码 `plugin_*` 族 | `packages/contracts/src/{hub-commands,commands,hub-data,hub-errors}.ts` |
+| 命令类型 `PluginsList/Inspect/Install/Uninstall/SetEnabled/Remove/HotInstall Cmd` + Data 形状 + `X3CODE_COMMAND_TYPES`/`COMMAND_NAMES` 封闭集扩员 + 错误码 `plugin_*` 族 | `packages/contracts/src/{hub-commands,commands,hub-data,hub-errors}.ts` |
 | 视图 schema `PluginView{name,source:'builtin'\|'vendor',origin?:'manual'\|'agent',version?,enabled,status:'active'\|'failed'\|'disabled',disabledReason?,description?}`（**source 两值统一——P3**）、`PluginCandidateView` | `packages/contracts/src/api.ts`（zod） |
 | verbs 域（批准根门、错误映射、零装载器规则镜像——同 skills.ts 纪律） | `packages/api/src/verbs/plugins.ts`（新）、`index.ts` 导出 |
 | client 域方法 | `packages/api/src/client.ts`（`plugins:` 域） |
@@ -157,7 +157,7 @@
 | `store.ts` | 加 `plugins: readonly PluginView[]` |
 | `use-settings-screen.ts` | 加 `plugins` 段 props 派生 |
 
-**卡片信息面**：名称 + 来源徽章（builtin/vendor + origin 标记 agent 注册）+ 状态徽章（active/failed/disabled，disabled 附原因）+ 启停开关 + 删除（仅 vendor；builtin 只可禁用）+ 错误详情展开。状态驱动全经 `@paiapp/api` → 主进程 verbs → hub 命令；UI 只吃 `PluginView[]`，无协议字面量。
+**卡片信息面**：名称 + 来源徽章（builtin/vendor + origin 标记 agent 注册）+ 状态徽章（active/failed/disabled，disabled 附原因）+ 启停开关 + 删除（仅 vendor；builtin 只可禁用）+ 错误详情展开。状态驱动全经 `@x3code/api` → 主进程 verbs → hub 命令；UI 只吃 `PluginView[]`，无协议字面量。
 
 **审批文案（P2 硬约束）**：安装确认对话框必须明示「确认安装 = 授予该插件会话、工具注册、系统提示词、LLM 运行时等全部平台能力的访问权」，不得弱化为「添加插件」之类中性表述；显示插件将获得的能力面清单（caps 可见面枚举）。
 

@@ -1,7 +1,7 @@
 # 冒烟包配置（T9 §未决项 Spike 1：未签名 mac 包）。签名/公证/codesign、三平台
 # bun 锁定修订、哈希清单与 license 审计属 T9 M6，此处不实现。
-appId: app.paiapp.pai
-productName: Pai
+appId: app.x3code.app
+productName: X3code
 # @electron/get 每次构建都绕过缓存重新下载 SHASUMS256.txt（源码标定 cacheMode:
 # Bypass），GitHub 不可达时 packaging 阶段会挂在 TCP 连接上直到 ECONNREFUSED。
 # 钉死官方校验和后走本地生成的校验文件，打包不再依赖网络；zip 本体仍用
@@ -25,6 +25,7 @@ extraResources:
     to: .
 mac:
   identity: null
+  icon: build/icon.icns
   target:
     - target: dir
     - target: dmg

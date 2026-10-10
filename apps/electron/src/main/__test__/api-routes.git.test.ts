@@ -7,9 +7,9 @@ import { join } from 'node:path';
 import { createApiRoutes } from '../api-routes';
 import { createAgentDefinitionsStore } from '../agent-definitions-store';
 import { createFileSettings, type ProviderKeyStore } from '../file-settings';
-import { createPaiRuntime } from '../pai-runtime';
-import { createRuntimeMonitor } from '@paiapp/infra';
-import type { GitBranches, GitGraph } from '@paiapp/api';
+import { createPaiRuntime } from '../x3code-runtime';
+import { createRuntimeMonitor } from '@x3code/infra';
+import type { GitBranches, GitGraph } from '@x3code/api';
 
 /**
  * git 路由面：cwd 白名单门禁 + git 能力注入透传 + 失败面 + audit；

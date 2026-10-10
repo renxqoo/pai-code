@@ -1,11 +1,11 @@
 import * as React from 'react';
 
-import { CopyButton } from '@paiapp/ui';
+import { CopyButton } from '@x3code/ui';
 
 import { copy } from '@/strings';
 import { cn } from '@/lib/utils';
 import { writeClipboardText } from '@/lib/clipboard';
-import { detailOutput, toolSummary } from '@paiapp/ui-thread';
+import { detailOutput, toolSummary } from '@x3code/ui-thread';
 import type { ToolCallModel } from './thread-model';
 
 type OutputPanelProps = {

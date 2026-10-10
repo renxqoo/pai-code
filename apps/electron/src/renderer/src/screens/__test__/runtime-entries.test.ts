@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { RuntimeSnapshotView, SessionStatsView, SessionView, WorkerRowView } from '@paiapp/contracts';
+import type { RuntimeSnapshotView, SessionStatsView, SessionView, WorkerRowView } from '@x3code/contracts';
 
 import { buildRuntimeRows, runtimeHealthLevel } from '../runtime-entries';
 

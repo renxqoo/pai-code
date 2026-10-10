@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { CaretToggle, DurationTag, formatTokenCount, MetaLine, StatusDot, TypePill } from '@paiapp/ui';
+import { CaretToggle, DurationTag, formatTokenCount, MetaLine, StatusDot, TypePill } from '@x3code/ui';
 
 import { copy } from '@/strings';
 import { agentActivity } from '@/thread/agent-activity';

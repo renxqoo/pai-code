@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, jest, test } from 'bun:test';
 import * as React from 'react';
 
-import type { SessionStatsView, SessionView } from '@paiapp/contracts';
+import type { SessionStatsView, SessionView } from '@x3code/contracts';
 
 import { render } from '@/testing/render';
 import { store as liveStore, workspaceActions } from '@/live/workspace-runtime';
-import { formatTokenCount } from '@paiapp/ui';
+import { formatTokenCount } from '@x3code/ui';
 import { copy } from '@/strings';
 
 import { UsageScreen } from '../usage-screen';

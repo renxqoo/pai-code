@@ -2,7 +2,7 @@
  * UiEvent → ChatMessage 归并器（T57 §5 核心）：hub 事件流折叠为移动端
  * TimelineList 消费的 ChatMessage[]（与 PC live-controller 同语义）。
  *
- * 事件字段形状以 @paiapp/contracts/ui-events 为单一真相：
+ * 事件字段形状以 @x3code/contracts/ui-events 为单一真相：
  * - turnStarted → streaming=true；turnSettled{ok,reason} → streaming=false（失败落 status 行）
  * - userMessage{message:{seq,text,origin,images}} → 用户行（origin=system 不进列表——过程噪音；
  *   id = `u-<seq>` 与历史水化同域，seed 后同条不重复上屏）

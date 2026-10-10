@@ -1,4 +1,4 @@
-import { clipText, type EditHunkView } from '@paiapp/contracts';
+import { clipText, type EditHunkView } from '@x3code/contracts';
 
 /**
  * edit 工具参数 → 补丁片段对。x-harness edit 工具入参 {path, edits:[{oldText, newText}]}：

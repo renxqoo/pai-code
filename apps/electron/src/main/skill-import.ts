@@ -2,14 +2,14 @@ import { readdir, realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-import type { SkillCandidateView } from '@paiapp/contracts';
+import type { SkillCandidateView } from '@x3code/contracts';
 import {
   appError,
   discoverSkillDirs,
   isPathInside,
   type ScanDirent,
   type SkillSourcePort,
-} from '@paiapp/api';
+} from '@x3code/api';
 
 /**
  * 技能源面实现（T42 M2）：批准根解析 + realpath 归一的越界拒绝 + 两深度候选发现。

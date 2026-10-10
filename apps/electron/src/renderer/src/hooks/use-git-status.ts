@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import type { ApiOutcome, GitStatusView } from '@paiapp/contracts';
+import type { ApiOutcome, GitStatusView } from '@x3code/contracts';
 
 /** 已结算快照：cwd 或 revision 与请求不等 = 在途（loading），旧响应按序号丢弃。 */
 type GitStatusState = {

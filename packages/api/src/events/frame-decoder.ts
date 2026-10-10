@@ -1,6 +1,6 @@
-import { isWireError } from '@paiapp/contracts';
-import type { HubErrorShape } from '@paiapp/contracts';
-import type { HubFrame } from '@paiapp/contracts';
+import { isWireError } from '@x3code/contracts';
+import type { HubErrorShape } from '@x3code/contracts';
+import type { HubFrame } from '@x3code/contracts';
 
 /**
  * stdout 帧解码器：LF 是唯一记录分隔符（U+2028/U+2029 是 JSON 字符串内容，

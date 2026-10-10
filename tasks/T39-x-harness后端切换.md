@@ -7,7 +7,7 @@
 
 ## 0. 定位
 
-把 Pai 的唯一后端进程从 my-agent host-hub 换成 x-harness hub：**全量替换，零兼容层**。两仓 host-hub 同源分叉各自演化——x-harness 侧 = my-agent 直系延续 + BATCH2/BATCH3（prompt images 能力门、toolOutputs 实时尾部、agent/spawned|finished 生命周期、thread/delete、/compact 内核命令注册面、get_commands 统一目录）。**协议代差集中在：事件面（全换代）、工具名面（整体换代）、响应形状（局部换代）**；帧集/命令族/进程契约高度同形。
+把 X3code 的唯一后端进程从 my-agent host-hub 换成 x-harness hub：**全量替换，零兼容层**。两仓 host-hub 同源分叉各自演化——x-harness 侧 = my-agent 直系延续 + BATCH2/BATCH3（prompt images 能力门、toolOutputs 实时尾部、agent/spawned|finished 生命周期、thread/delete、/compact 内核命令注册面、get_commands 统一目录）。**协议代差集中在：事件面（全换代）、工具名面（整体换代）、响应形状（局部换代）**；帧集/命令族/进程契约高度同形。
 
 **规格真相源 = x-harness hub 代码**（`apps/host-hub/src/protocol/` + 各 handler 实现 + `docs/MIGRATION.md` §4 客户端对照表——代码优先）。双侧事实已逐文件审计（2026-09-21，§1/§5 结论带 file:line 依据）。
 
@@ -69,8 +69,8 @@ event 帧 `{type:"event", threadId, name, payload, agentName?}` 不变。**归�
 
 ## 2. DESIGN — 方向性裁决（方案轮审查后定稿）
 
-- **【D1】集成路径切换**：hub-paths dev 探测改 `../x-harness/apps/host-hub`（`src/host/cli.ts` > `dist/host/cli.js`）；sync-resources 编译源 = `<repoRoot>/../x-harness/apps/host-hub/src/host/cli.ts`（`PAI_HUB_ENTRY` 覆写不变）；spawn 直执行形态与 `resources/bun/bun` 保留。**存量集成测试（host-hub.integration.test.ts）的入口/env/装置换代整体归 W6**——该测试自带 hubPaths 注入，不随 hub-paths 联动；W1-W5 过渡期默认集成门继续跑 my-agent 形态（装置仍指向旧仓），W6 一次性换代并移除（过渡态如实声明，非兼容层——旧装置在 W6 被删）。
-- **【D2】providers.json 重写（app 仍是唯一目录写者）**：`writeModelsConfig` 重写为 x-harness catalog 形状 `{providers: [{name, protocol, baseUrl, apiKeyEnv: PAI_KEY_<NAME>, models: [{id, contextWindow?, maxTokens?, reasoning, input, cost?}], contextWindow?, maxOutputTokens?}]}`（不写 default/apiKey 字面量）。**模型级 `reasoning`/`input` 显式写布尔/数组（omit-when-false 惯例退役**——x-harness 缺省 reasoning=true、缺 input 拒图，省略即语义翻转）；baseUrl 写前形状校验（`http(s)://` 前缀，缺 scheme 整档案被剔且零告警）。app 内部 api 词表 `anthropic-messages|openai-completions` → `anthropic|openai`：ProviderConfig.api 直接换 + 存量 settings.json 读盘一次性归一迁移（写侧只产新词表）。写前校验两道保留（env 碰撞 / api 词表）+ baseUrl 形状（第③道）；~~预设键撞名拒~~ **实施轮用户裁决废除**：x-harness 撞名 = 整档覆盖（用户配置胜出）+ 消歧 custom 优先（x-harness ce8c344）——同名即覆盖、删渠道即恢复内置，app 无「预设挡人」面；保存不再依赖 host（目录只在 spawn 期读入）。
+- **【D1】集成路径切换**：hub-paths dev 探测改 `../x-harness/apps/host-hub`（`src/host/cli.ts` > `dist/host/cli.js`）；sync-resources 编译源 = `<repoRoot>/../x-harness/apps/host-hub/src/host/cli.ts`（`X3CODE_HUB_ENTRY` 覆写不变）；spawn 直执行形态与 `resources/bun/bun` 保留。**存量集成测试（host-hub.integration.test.ts）的入口/env/装置换代整体归 W6**——该测试自带 hubPaths 注入，不随 hub-paths 联动；W1-W5 过渡期默认集成门继续跑 my-agent 形态（装置仍指向旧仓），W6 一次性换代并移除（过渡态如实声明，非兼容层——旧装置在 W6 被删）。
+- **【D2】providers.json 重写（app 仍是唯一目录写者）**：`writeModelsConfig` 重写为 x-harness catalog 形状 `{providers: [{name, protocol, baseUrl, apiKeyEnv: X3CODE_KEY_<NAME>, models: [{id, contextWindow?, maxTokens?, reasoning, input, cost?}], contextWindow?, maxOutputTokens?}]}`（不写 default/apiKey 字面量）。**模型级 `reasoning`/`input` 显式写布尔/数组（omit-when-false 惯例退役**——x-harness 缺省 reasoning=true、缺 input 拒图，省略即语义翻转）；baseUrl 写前形状校验（`http(s)://` 前缀，缺 scheme 整档案被剔且零告警）。app 内部 api 词表 `anthropic-messages|openai-completions` → `anthropic|openai`：ProviderConfig.api 直接换 + 存量 settings.json 读盘一次性归一迁移（写侧只产新词表）。写前校验两道保留（env 碰撞 / api 词表）+ baseUrl 形状（第③道）；~~预设键撞名拒~~ **实施轮用户裁决废除**：x-harness 撞名 = 整档覆盖（用户配置胜出）+ 消歧 custom 优先（x-harness ce8c344）——同名即覆盖、删渠道即恢复内置，app 无「预设挡人」面；保存不再依赖 host（目录只在 spawn 期读入）。
 - **【D3】事件面换代（UiEvent 语义面稳定 + 主会话谓词）**：渲染层 UiEvent 词表不动；adapter event-mapper 全表重写（§5.2，每行带主会话谓词）；**子会话 session 域帧（payload.session ≠ threadId）不进主时间线**——子代理面板消费实时域（agent/assistant-stream|tool-stream|spawned|finished|status，agentName/agentId 分流），其余子会话帧忽略。entries-mapper 按 SessionEventData 全集重写（HistoryItem 形状不变，水化天然只有主会话）。
 - **【D4】词表三跟随**：权限 4 档 → `plan|auto|full`（菜单 3 档，文案进 strings）；思考 4 档 → `off|low|medium|high|max`（菜单 5 档；unset 退役——无值态 = off/source off）；api 词表（D2）。用户可见变化如实进 strings，不做映射伪装。
 - **【D5】布局三变 + 旧会话不迁移**：sessionPath 词法 `transcript.jsonl` → `events.jsonl`（三处：response-views 重建、isHubSessionLayout + **id 词法镜像全词法**、resume/register 白名单）；models.json → providers.json（app 每次 spawn 重写；**孤儿 models.json 启动清扫删除**）；`.my-agent` → `.x-harness` 域。旧 my-agent 会话（transcript 布局）围栏词法拦 → 对账按非 hub 布局删行（现有路径自动覆盖）。挂账见 §7。
@@ -136,7 +136,7 @@ event 帧 `{type:"event", threadId, name, payload, agentName?}` 不变。**归�
 | 文件 | 变更 |
 | --- | --- |
 | `main/hub-paths.ts` | dev 探测 x-harness |
-| `main/pai-runtime.ts` | **dispatchFrame `inbox/spliced` → `agent/inbox/spliced`**；isHubSessionLayout（events.jsonl + id 全词法）；`main/provider-probe.ts` 传输表键换新 api 词表 |
+| `main/x3code-runtime.ts` | **dispatchFrame `inbox/spliced` → `agent/inbox/spliced`**；isHubSessionLayout（events.jsonl + id 全词法）；`main/provider-probe.ts` 传输表键换新 api 词表 |
 | `main/api-routes.ts` | compact 直发路由（D7）+ session/delete + stats cost 消费点 |
 | `main/index.ts` | 孤儿 models.json 清扫 |
 | `scripts/packaging/sync-resources.ts` | 编译源 x-harness |
@@ -256,7 +256,7 @@ event 帧 `{type:"event", threadId, name, payload, agentName?}` 不变。**归�
 - **B-H1 W1 波次自相矛盾（集成测试换代必归 W6）** → 采纳：D1/W1 重构 + 过渡态声明。
 - **B-H2 按层切波必红** → 采纳：§4.2 域切片波 + 原子序列兜底声明。
 - **B-H3 回滚「数据面不受影响」失实** → 采纳：§5.4 如实改写。
-- **B-H4 完备性门口径丢失 + provider-probe.ts/pai-runtime inbox 硬编码两漏网文件** → 采纳：§4 口径段 + grep 清零清单 + §4.1 微修表补两行。
+- **B-H4 完备性门口径丢失 + provider-probe.ts/x3code-runtime inbox 硬编码两漏网文件** → 采纳：§4 口径段 + grep 清零清单 + §4.1 微修表补两行。
 - **A-M1 messageStarted/final 步边界缺失** → 采纳：(turn,step) 变化重置流缓冲（§1.2/§5.2）；toolCallAdded 源改 WAL tool/call（采纳其建议——参数集齐即现，信息同源更稳）。
 - **A-M2 pendingAsk 替代表述错位** → 采纳：如实标「ask 归属能力退役」挂账（§7）。
 - **A-M3 stats cost 搬家非加字段** → 采纳：§5.1 明示字段迁移。

@@ -7,9 +7,9 @@
  * - AppError = app 本地闭集（路由/渲染层自产失败），与协议词表互不污染。
  * decodeApiError 永不抛（任意输入落可呈现形态）。
  */
-import { HUB_ERROR_CODES, type ApiError, type AppError, type AppErrorCode, type HubErrorCode, type HubErrorShape, type TransientFace } from '@paiapp/contracts';
+import { HUB_ERROR_CODES, type ApiError, type AppError, type AppErrorCode, type HubErrorCode, type HubErrorShape, type TransientFace } from '@x3code/contracts';
 
-export type { ApiError, AppError, AppErrorCode, HubError, TransientError, TransientFace, UnregisteredCodeError } from '@paiapp/contracts';
+export type { ApiError, AppError, AppErrorCode, HubError, TransientError, TransientFace, UnregisteredCodeError } from '@x3code/contracts';
 
 export type HubResult<T> = { ok: true; data: T } | { ok: false; error: ApiError };
 

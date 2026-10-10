@@ -1,4 +1,4 @@
-import { changedFileCount } from '@paiapp/ui-thread';
+import { changedFileCount } from '@x3code/ui-thread';
 
 import type { ChatMessage } from '@/types/domain';
 import { toolViewOf } from '@/features/chat/tool-message';

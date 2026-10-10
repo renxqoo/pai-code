@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { foldStopIntent, foldThreadEvent } from '../fold-events';
 import { foldHydrate } from '../fold-hydrate';
 import { initialThreadState, type LiveThreadState } from '../live-thread-state';
-import type { HistoryItem, UiEvent } from '@paiapp/contracts';
+import type { HistoryItem, UiEvent } from '@x3code/contracts';
 
 /** 水化对账语义（窗口重建/在途轮归属）回归：从 fold-events.test.ts 拆出（一文件一事）。 */
 

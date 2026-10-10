@@ -3,13 +3,13 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { HostPhase, HostProcessPort, PaiCommand, HostCommandOutcome } from "@paiapp/contracts";
+import type { HostPhase, HostProcessPort, X3codeCommand, HostCommandOutcome } from "@x3code/contracts";
 
 import { createApiRoutes } from "../api-routes";
 import { createAgentDefinitionsStore } from "../agent-definitions-store";
 import { createFileSettings, type ProviderKeyStore } from "../file-settings";
-import { createPaiRuntime } from "../pai-runtime";
-import { createRuntimeMonitor } from '@paiapp/infra';
+import { createPaiRuntime } from "../x3code-runtime";
+import { createRuntimeMonitor } from '@x3code/infra';
 
 /**
  * 单条队列路由回归（session/queueDrop、session/queueSendNow）：
@@ -25,10 +25,10 @@ const keyStore: ProviderKeyStore = {
   keyNames: [],
 };
 
-function fakeHost(responses: Record<string, unknown>): { port: HostProcessPort; sent: PaiCommand[] } {
-  const sent: PaiCommand[] = [];
+function fakeHost(responses: Record<string, unknown>): { port: HostProcessPort; sent: X3codeCommand[] } {
+  const sent: X3codeCommand[] = [];
   const port: HostProcessPort = {
-    request: (command: PaiCommand): Promise<HostCommandOutcome> => {
+    request: (command: X3codeCommand): Promise<HostCommandOutcome> => {
       sent.push(command);
       if (command.type === 'queue/drop' || command.type === 'queue/send_now') {
         const preset = responses[command.type];

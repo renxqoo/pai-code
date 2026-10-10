@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { EditHunkList } from '../edit-hunk-list';
-import { allHunkLines, hunkLines } from '@paiapp/ui-thread';
+import { allHunkLines, hunkLines } from '@x3code/ui-thread';
 import { ToolCallDetail } from '../tool-call-detail';
 import type { ToolCallModel } from '../thread-model';
 

@@ -8,7 +8,7 @@
 ## 契约
 
 - **hub 协议（语义扩展，词表零新增）**：`get_entries`/`get_state` 对 parked/dead thread 由 host 本地直读会话文件应答（不 spawn worker）；live thread 照旧透传；直读失败回退唤醒路径。其余 thread 级命令对非 live thread 的唤醒语义不变。详见 hub 方案 §二（含字段同源表）。
-- **本仓库 contracts**：`PaiCommandType` 词表不变；`get_entries`/`get_state` 相关注释同步直读语义（协议字面量仍只允许出现在 adapter/contracts/夹具三处）。
+- **本仓库 contracts**：`X3codeCommandType` 词表不变；`get_entries`/`get_state` 相关注释同步直读语义（协议字面量仍只允许出现在 adapter/contracts/夹具三处）。
 - **渲染层行为变更**：
   - 点开 parked 会话 = **只读激活**：直接 `setActiveThread`（不 `wakeAndActivate`、不发 `session/resume`），历史经 `session/entries`（hub 直读）水化。
   - 浏览态输入框**可输入**：发送时走既有 `ensureLiveSession` 兜底（resume 唤醒 → 以响应 threadId 投递）——链路已存在（submitDraft），本任务不动。

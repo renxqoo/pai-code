@@ -6,7 +6,7 @@
  */
 import * as React from 'react';
 
-import type { ApiMethod, ApiOutcome, Client, UiEvent, Unsubscribe } from '@paiapp/contracts';
+import type { ApiMethod, ApiOutcome, Client, UiEvent, Unsubscribe } from '@x3code/contracts';
 
 import { createBridgeClient, type BridgeClient, type ClientTransportFace } from '../transport/client';
 import { createRelayTransport, type RelayStatus, type RelayTransport } from './transport';
@@ -17,7 +17,7 @@ import { createKvRatchetStore, preloadRelayCredentials, relayCredentialsStore, t
 import { noteThreadPath, noteThreadPaths, threadPathOf } from './thread-paths';
 import { withSavedMeta } from './with-saved-meta';
 import { createSessionSync } from '../state/session-sync';
-import { createEventMapper, type EventMapper } from '@paiapp/api/events/event-mapper';
+import { createEventMapper, type EventMapper } from '@x3code/api/events/event-mapper';
 import { createHistorySync } from '../state/history-sync';
 import { useConversationStore } from '@/store/conversation-store';
 import { useHistoryStore } from '@/store/history-store';

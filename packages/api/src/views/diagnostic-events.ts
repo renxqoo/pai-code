@@ -1,8 +1,8 @@
-import type { RuntimeEventView } from '@paiapp/contracts';
+import type { RuntimeEventView } from '@x3code/contracts';
 
 /**
  * 宿主监督字符串 → 结构化事件（create-host-process onDiagnostic 消息面的解析）。
- * 生产路径消息经 pai-runtime 以 `host:` 前缀包装落日志——解析前先剥前缀；
+ * 生产路径消息经 x3code-runtime 以 `host:` 前缀包装落日志——解析前先剥前缀；
  * 前缀表与发射源（create-host-process note()）一一对应，前缀变更两侧同步。
  */
 

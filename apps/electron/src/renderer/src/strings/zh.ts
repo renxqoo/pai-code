@@ -9,13 +9,12 @@ import {
 } from './zh-error-copy';
 
 export const zh: typeof en = {
-  appTitle: { name: 'Pai', suffix: 'Code' },
+  appTitle: 'X3code',
   sidebar: {
     search: '搜索',
     newTask: '新建任务',
     hotkeyNewTask: (modifier: string): string => `${modifier}N`,
     hotkeySearch: (modifier: string): string => `${modifier}K`,
-    viewGrouped: '分组',
     viewProjects: '项目',
     pinnedSection: '已置顶',
     pinSession: '置顶',
@@ -368,8 +367,6 @@ export const zh: typeof en = {
     refreshModels: '刷新',
   },
   bootstrap: {
-    loadingTitle: '正在启动…',
-    loadingHint: '正在连接 coding agent 宿主。',
     failedTitle: '无法启动',
     bridgeHint: '预加载桥不可用。请从桌面入口重新启动应用。',
     hostFailed: 'agent 宿主启动失败。请在设置中检查 Provider 配置与 host-hub 路径。',

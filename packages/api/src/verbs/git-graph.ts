@@ -1,4 +1,4 @@
-import type { GitGraphCommit, GitGraphView } from '@paiapp/contracts';
+import type { GitGraphCommit, GitGraphView } from '@x3code/contracts';
 import type { ApiError } from '../errors';
 
 import { failureError, mapGitFailure, type GitExec } from './git-branches';

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useStore } from 'zustand';
 
-import { PERM_MODES, type CommandView } from '@paiapp/contracts';
+import { PERM_MODES, type CommandView } from '@x3code/contracts';
 
 import type { ComposerAttachment } from '@/composer/prompt-card';
 import { imagePayloadOf } from '@/composer/read-image-file';

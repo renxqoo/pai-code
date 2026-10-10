@@ -1,5 +1,5 @@
 {
-  "name": "@paiapp/mobile",
+  "name": "@x3code/mobile",
   "version": "0.1.0",
   "private": true,
   "main": "expo-router/entry",
@@ -18,10 +18,10 @@
     "doctor": "expo-doctor"
   },
   "dependencies": {
-    "@paiapp/api": "workspace:*",
-    "@paiapp/contracts": "workspace:*",
-    "@paiapp/relay-protocol": "workspace:*",
-    "@paiapp/ui-thread": "workspace:*",
+    "@x3code/api": "workspace:*",
+    "@x3code/contracts": "workspace:*",
+    "@x3code/relay-protocol": "workspace:*",
+    "@x3code/ui-thread": "workspace:*",
     "@shikijs/core": "^3",
     "@shikijs/engine-javascript": "^3",
     "@shikijs/langs": "^3",

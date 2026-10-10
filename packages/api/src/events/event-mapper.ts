@@ -1,4 +1,4 @@
-import { isTodoTool, usageOf, type UiEvent } from '@paiapp/contracts';
+import { isTodoTool, usageOf, type UiEvent } from '@x3code/contracts';
 
 import { previewArgs } from '../views/args-preview';
 import { flattenUserText, userImages } from '../views/content';

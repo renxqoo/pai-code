@@ -9,7 +9,7 @@ import {
   deriveInitialChains,
   parseNonce,
   aeadSeal,
-} from '@paiapp/relay-protocol';
+} from '@x3code/relay-protocol';
 
 export interface RatchetBoundaryStore {
   /** 发送边界落盘（返回 reject = seal 拒发——fail-closed）。 */

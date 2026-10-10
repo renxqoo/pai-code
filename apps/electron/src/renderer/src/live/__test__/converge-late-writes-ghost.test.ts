@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { createLiveController } from '../live-controller';
 import { createLiveStore } from '../store';
 import type { BridgeClient } from '../client-invoke';
-import type { InflightView, PendingDialogView, SubagentSnapshotView, ThreadStateView } from '@paiapp/contracts';
+import type { InflightView, PendingDialogView, SubagentSnapshotView, ThreadStateView } from '@x3code/contracts';
 
 /**
  * 对抗审查红测 C：只读收敛链（converge）的 Promise.all 在途期间会话被移除，

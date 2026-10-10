@@ -3,27 +3,27 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFi
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
-import { HUB_ERROR_CODES, type TokenAnalyticsView } from '@paiapp/contracts';
+import { HUB_ERROR_CODES, type TokenAnalyticsView } from '@x3code/contracts';
 import { createApiRoutes } from '../api-routes';
 import { createAgentDefinitionsStore } from '../agent-definitions-store';
 import { createSkillImporter } from '../skill-import';
 import { createFileSettings, type ProviderKeyStore } from '../file-settings';
-import { createPaiRuntime, type PaiRuntime } from '../pai-runtime';
-import { createRuntimeMonitor } from '@paiapp/infra';
+import { createPaiRuntime, type PaiRuntime } from '../x3code-runtime';
+import { createRuntimeMonitor } from '@x3code/infra';
 
 /**
  * 真 x-harness host-hub 集成（默认门）：script provider（HUB_WORKER_PROVIDER=script +
  * HUB_WORKER_SCRIPT 剧本——env 值是裸 JSON 数组，判别键 reply/toolCalls/error/delayMs），
  * 驱动全部 hub 触达的 app API 面并断言落存储——会话 WAL（<agentDir>/sessions/<id>/
  * events.jsonl + header.json）、注册表、providers.json、hub-settings.json、agent 定义
- * 文件（HOME 隔离，.x-harness 域）。GLM 真凭证旅程保留 opt-in（PAI_E2E=1 + GLM_*）。
+ * 文件（HOME 隔离，.x-harness 域）。GLM 真凭证旅程保留 opt-in（X3CODE_E2E=1 + GLM_*）。
  */
 
 // hub 检出：优先取 x-harness 主仓（feat/sandbox-srt 已并 skill-install 且带
 // get_token_analytics/capability_plugin——技能+上下文分析两面的超集）；旧环境退回
 // x-harness-skill-install worktree 时能力面按 test.if 特性探测（见下）
 const hubEntry =
-  process.env['PAI_HUB_ENTRY'] ??
+  process.env['X3CODE_HUB_ENTRY'] ??
   (existsSync('/Users/wrr/work/x-harness/apps/host-hub/src/host/cli.ts')
     ? '/Users/wrr/work/x-harness/apps/host-hub/src/host/cli.ts'
     : '/Users/wrr/work/x-harness-skill-install/apps/host-hub/src/host/cli.ts');
@@ -34,7 +34,7 @@ function hubSourceHas(marker: string, ...segments: string[]): boolean {
 }
 const hubSkillsInstall = hubSourceHas('skills/install', 'protocol', 'commands.ts');
 const hubTokenAnalytics = hubSourceHas('capability_plugin', 'shared', 'errors.ts');
-const bunPath = process.env['PAI_BUN_PATH'] ?? '/Users/wrr/work/agent-app/resources/bun/bun';
+const bunPath = process.env['X3CODE_BUN_PATH'] ?? '/Users/wrr/work/agent-app/resources/bun/bun';
 const hubAvailable = existsSync(hubEntry);
 
 /** script 剧本：多次文本回复（prompt/fork 重试等多轮消费——worker 单例共享游标）。 */
@@ -548,7 +548,7 @@ describe('app API 全接口 × 真 x-harness host-hub（script 默认门）', ()
 });
 
 describe('app API × 真 x-harness host-hub（GLM 真门，opt-in）', () => {
-  const e2eEnabled = process.env['PAI_E2E'] === '1';
+  const e2eEnabled = process.env['X3CODE_E2E'] === '1';
   const glmKey = process.env['GLM_API_KEY'] ?? '';
   const glmModel = process.env['GLM_MODEL'] ?? '';
   const glmBaseUrl = (process.env['GLM_BASE_URL'] ?? '').replace(/\/chat\/completions$/, '');

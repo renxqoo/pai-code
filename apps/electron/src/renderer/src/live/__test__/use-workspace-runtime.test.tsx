@@ -7,7 +7,7 @@ import { initialThreadState } from '@/live/live-thread-state';
 import { bridgeClient, controller, store as liveStore } from '@/live/workspace-runtime';
 import { uiStore } from '@/ui/ui-store';
 import { render } from '@/testing/render';
-import type { AgentDefinition, ModelInfoView, SessionView } from '@paiapp/contracts';
+import type { AgentDefinition, ModelInfoView, SessionView } from '@x3code/contracts';
 
 /**
  * 工作区运行挂载回归（T34 M3）：切会话 effect（parked 读不唤醒 / live 离线桥

@@ -1,7 +1,7 @@
 import { closeSync, openSync, readSync, realpathSync, statSync } from 'node:fs';
 import { join as joinPaths, sep as pathSep } from 'node:path';
 
-import { appError, type ApiError } from '@paiapp/api';
+import { appError, type ApiError } from '@x3code/api';
 
 /**
  * 项目文件只读面（代码查看器/Markdown 预览数据源）：相对路径 + 点前缀段拒绝

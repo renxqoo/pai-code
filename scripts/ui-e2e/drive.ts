@@ -16,7 +16,7 @@ function prepareUserData(): void {
   rmSync(USER_DATA, { recursive: true, force: true });
   // 假 hub 的命令追踪只增不清：断言按全文 grep，必须每次运行从零开始
   rmSync(resolve(import.meta.dir, 'hub-trace.log'), { force: true });
-  // 会话根 = agentDir/sessions（HUB_AGENT_DIR 布局，与 pai-runtime sessionsRoot 同构）；
+  // 会话根 = agentDir/sessions（HUB_AGENT_DIR 布局，与 x3code-runtime sessionsRoot 同构）；
   // s1/s2 双会话——弹窗隔离验收需要跨会话切换
   for (const id of ['s1', 's2']) {
     mkdirSync(join(USER_DATA, 'agent', 'sessions', id), { recursive: true });
@@ -188,9 +188,9 @@ async function main(): Promise<void> {
       cwd: ROOT,
       env: {
         ...process.env,
-        PAI_USER_DATA_DIR: USER_DATA,
-        PAI_BUN_PATH: process.execPath,
-        PAI_HUB_ENTRY: resolve(import.meta.dir, 'fake-hub.ts'),
+        X3CODE_USER_DATA_DIR: USER_DATA,
+        X3CODE_BUN_PATH: process.execPath,
+        X3CODE_HUB_ENTRY: resolve(import.meta.dir, 'fake-hub.ts'),
       },
       stdout: 'pipe',
       stderr: 'pipe',

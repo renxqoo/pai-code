@@ -1,4 +1,4 @@
-# Pai Code 对话时间线与 Mock 展示
+# X3code 对话时间线与 Mock 展示
 
 > 状态：已核销
 > 级别：中

@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { foldDeath, foldStopIntent, foldThreadEvent, hasRetryInFlight } from '../fold-events';
 import { foldHydrate } from '../fold-hydrate';
 import { initialThreadState } from '../live-thread-state';
-import type { HistoryItem, UiEvent } from '@paiapp/contracts';
+import type { HistoryItem, UiEvent } from '@x3code/contracts';
 import type { ThreadItem } from '@/thread/thread-model';
 
 const T = 1_000;
@@ -186,7 +186,7 @@ describe('foldEvents · 真实协议形态回归（对抗审查 P0-1/P0-2）', (
   });
 
   test('user 消息不产生渲染事件（映射层过滤）；fold 侧防御：messageStarted 空 id 不炸', () => {
-    // 映射层（@paiapp/api events）已过滤；fold 侧防御：messageStarted 空 id 不炸
+    // 映射层（@x3code/api events）已过滤；fold 侧防御：messageStarted 空 id 不炸
     let s = initialThreadState;
     s = foldThreadEvent(s, ev({ type: 'turnStarted', threadId: 't', at: tick(0) }), tick(0));
     s = foldThreadEvent(s, ev({ type: 'messageStarted', threadId: 't', messageId: '', at: tick(1) }), tick(1));

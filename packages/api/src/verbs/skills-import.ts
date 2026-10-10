@@ -12,7 +12,7 @@ import type {
   SkillInspectedCandidate,
   SkillProblemCode,
   SkillView,
-} from '@paiapp/contracts';
+} from '@x3code/contracts';
 
 import { appError } from '../errors';
 

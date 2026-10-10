@@ -1,7 +1,7 @@
 /**
  * settings 分区文案（自 en 主表拆出：主表超单文件行数上限；键集与主表 HEAD 严格一致 + 本增补新键）。
  */
-import type { KnownPermMode } from '@paiapp/contracts';
+import type { KnownPermMode } from '@x3code/contracts';
 
 export const enSettings = {
     title: 'Settings',

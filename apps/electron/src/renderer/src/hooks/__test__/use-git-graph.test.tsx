@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import * as React from 'react';
 
-import type { ApiOutcome, GitGraphView } from '@paiapp/contracts';
+import type { ApiOutcome, GitGraphView } from '@x3code/contracts';
 
 import { useGitGraph, type GitGraphHandle } from '../use-git-graph';
 import { render } from '@/testing/render';

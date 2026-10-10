@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { TodoSnapshotEventData } from '@paiapp/contracts';
+import type { TodoSnapshotEventData } from '@x3code/contracts';
 
 import { foldThreadEvent } from '../fold-events';
 import { foldHydrate } from '../fold-hydrate';

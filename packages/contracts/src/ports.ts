@@ -1,6 +1,6 @@
 import type { HubErrorShape } from './hub-errors';
 import type { HubFrame } from './hub-protocol';
-import type { PaiCommand } from './commands';
+import type { X3codeCommand } from './commands';
 
 /** hub host 进程装配输入（apps/electron 组合根构造后注入）。 */
 export interface HostRuntimeConfig {
@@ -33,7 +33,7 @@ export type HostPhase = 'starting' | 'ready' | 'restarting' | 'failed';
  * 挂死检测（>10s 无心跳）由实现负责并驱动重启回调。
  */
 export interface HostProcessPort {
-  request(command: PaiCommand, timeoutMs?: number): Promise<HostCommandOutcome>;
+  request(command: X3codeCommand, timeoutMs?: number): Promise<HostCommandOutcome>;
   onFrame(cb: (frame: HubFrame) => void): () => void;
   onPhase(cb: (phase: HostPhase) => void): () => void;
   /** 显式重启（配置变更等）：与挂死重启同一链路（杀组→重spawn→恢复钩子）。 */

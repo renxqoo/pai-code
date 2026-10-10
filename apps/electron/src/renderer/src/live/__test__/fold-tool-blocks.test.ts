@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { foldThreadEvent } from '../fold-events';
 import { hydrateItems } from '../hydrate-items';
 import { initialThreadState } from '../live-thread-state';
-import type { HistoryItem, UiEvent } from '@paiapp/contracts';
+import type { HistoryItem, UiEvent } from '@x3code/contracts';
 import type { ThreadItem } from '@/thread/thread-model';
 
 const T = 1_000;

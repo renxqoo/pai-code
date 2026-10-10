@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { ApiOutcome, SessionView } from '@paiapp/contracts';
+import type { ApiOutcome, SessionView } from '@x3code/contracts';
 
 import { appError } from '../../errors';
 import type { SessionCommands } from '../../commands/session';

@@ -18,7 +18,7 @@ export interface HubPaths {
 export interface ResolveHubPathsDeps {
   /** settings.json hubDev（用户显式覆盖；只表达脚本形态）。 */
   fromSettings: HubPaths | null;
-  /** 环境变量 PAI_HUB_ENTRY / PAI_BUN_PATH（开发 shell；只表达脚本形态）。 */
+  /** 环境变量 X3CODE_HUB_ENTRY / X3CODE_BUN_PATH（开发 shell；只表达脚本形态）。 */
   fromEnv: HubPaths | null;
   /** 打包产物内嵌 hub（resources/host-hub/host-hub，直执行形态）。 */
   fromPackaged: HubPaths | null;
@@ -73,7 +73,7 @@ export function packagedGatewayEntry(resourcesPath: string): string {
 export interface ResolveGatewayEntryDeps {
   /** settings.json hubDev.gatewayEntry（用户显式覆盖）。 */
   fromSettings: string | null;
-  /** 环境变量 PAI_GATEWAY_ENTRY（开发 shell）。 */
+  /** 环境变量 X3CODE_GATEWAY_ENTRY（开发 shell）。 */
   fromEnv: string | null;
   /** 打包产物内嵌 gateway 入口（存在才由调用方传入）。 */
   packagedEntry: string | null;

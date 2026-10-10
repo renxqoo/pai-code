@@ -237,6 +237,61 @@
 }
 
 /*
+ * 启动页 logo 水波纹（logo-ripple）：logo 背后的同心圆环自内向外扩散并淡出，
+ * 两道环相位错开形成连续涟漪。颜色走 --muted-foreground，亮暗自适应；
+ * 系统减弱动态偏好下停在静态单环——启动仍可读，不做无反馈的纯静止。
+ *
+ * 扩散需要空间：环最大到 1.85 倍，故外层 .logo-ripple-stage 比 logo 大且不裁剪，
+ * logo 居中悬于其上；环在 logo 之下（z-0）、logo 之上无遮挡，涟漪完整可见。
+ */
+.logo-ripple-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.logo-ripple-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--logo-size, 96px);
+  height: var(--logo-size, 96px);
+  margin: calc(var(--logo-size, 96px) / -2) 0 0 calc(var(--logo-size, 96px) / -2);
+  border-radius: 9999px;
+  border: 1px solid color-mix(in oklab, var(--muted-foreground) 55%, transparent);
+  opacity: 0;
+  z-index: 0;
+  pointer-events: none;
+  animation: logo-ripple 2.4s cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
+}
+
+.logo-ripple-ring:nth-of-type(2) {
+  animation-delay: 1.2s;
+}
+
+@keyframes logo-ripple {
+  0% {
+    transform: scale(0.55);
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.16;
+  }
+  100% {
+    transform: scale(1.85);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logo-ripple-ring {
+    animation: none;
+    transform: scale(0.7);
+    opacity: 0.12;
+  }
+}
+
+/*
  * 嵌套滚动区（思考正文阅读区）细滚动条：轨道全透明，拇指比全局窄，
  * 悬停变色沿用全局 thumb:hover 规则（background-clip 一并继承）。
  */

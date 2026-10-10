@@ -1,4 +1,4 @@
-import type { ApiError } from '@paiapp/contracts';
+import type { ApiError } from '@x3code/contracts';
 
 /**
  * 诊断日志 token（api-routes 族失败落日志用）：kind 为干（transient 细分 face、

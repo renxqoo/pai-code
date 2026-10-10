@@ -2,7 +2,7 @@ import { fireEvent, render } from '@testing-library/react-native';
 import { describe, expect, it, jest } from '@jest/globals';
 import * as React from 'react';
 import { Bell, FileText, Search } from 'lucide-react-native';
-import { PaiMark } from '@/components/brand/pai-mark';
+import { X3codeMark } from '@/components/brand/x3code-mark';
 import { ActionButton } from '@/components/ui/action-button';
 import { Card } from '@/components/ui/card';
 import { ContentCard } from '@/components/ui/content-card';
@@ -18,8 +18,8 @@ import { TestWrapper } from '@/test/test-wrapper';
 describe('presentational components', () => {
   it('renders brand, card, header and empty state', async () => {
     const noop = jest.fn();
-    const view = await render(<TestWrapper><PaiMark size={48} /><Card><SectionHeader action="添加" onAction={noop} title="项目" /><EmptyState description="说明" icon={Search} title="空态" /></Card></TestWrapper>);
-    expect(view.getByLabelText('Pai Code')).toBeTruthy();
+    const view = await render(<TestWrapper><X3codeMark size={48} /><Card><SectionHeader action="添加" onAction={noop} title="项目" /><EmptyState description="说明" icon={Search} title="空态" /></Card></TestWrapper>);
+    expect(view.getByLabelText('X3code')).toBeTruthy();
     expect(view.getByText('空态')).toBeTruthy();
   });
 
@@ -37,9 +37,9 @@ describe('presentational components', () => {
     const single = jest.fn();
     const multi = jest.fn();
     const view = await render(<><TextField label="名称" onChangeText={single} /><TextField multiline onChangeText={multi} placeholder="内容" /></>);
-    await fireEvent.changeText(view.getByLabelText('名称'), 'Pai');
+    await fireEvent.changeText(view.getByLabelText('名称'), 'X3code');
     await fireEvent.changeText(view.getByPlaceholderText('内容'), '多行');
-    expect(single).toHaveBeenCalledWith('Pai');
+    expect(single).toHaveBeenCalledWith('X3code');
     expect(multi).toHaveBeenCalledWith('多行');
   });
 

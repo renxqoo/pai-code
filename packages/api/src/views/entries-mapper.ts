@@ -1,4 +1,4 @@
-import { isTodoTool, usageOf, type HistoryItem, type TodoSnapshotEventData } from '@paiapp/contracts';
+import { isTodoTool, usageOf, type HistoryItem, type TodoSnapshotEventData } from '@x3code/contracts';
 
 import { assistantText, assistantThinking, assistantToolCalls, flattenUserText, toolResultText, userImages } from './content';
 import { previewArgs } from './args-preview';

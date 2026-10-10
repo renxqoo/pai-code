@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { modelsConfigDiffers, writeModelsConfig } from "../models-config";
-import { serializeProvidersConfig } from "@paiapp/api";
-import type { ProviderConfig } from "@paiapp/contracts";
+import { serializeProvidersConfig } from "@x3code/api";
+import type { ProviderConfig } from "@x3code/contracts";
 import type { ProviderKeyStore } from "../file-settings";
 
 /**
@@ -65,10 +65,10 @@ test('症状回归：vision 模型显式写 input:["text","image"]；reasoning �
     name: "glm",
     protocol: "openai",
     baseUrl: "https://open.bigmodel.cn/api/paas/v4",
-    apiKeyEnv: "PAI_KEY_GLM",
+    apiKeyEnv: "X3CODE_KEY_GLM",
     models: [{ id: "glm-5.3-flash", reasoning: true, input: ["text", "image"] }],
   });
-  expect(env).toEqual({ PAI_KEY_GLM: "sk-secret" });
+  expect(env).toEqual({ X3CODE_KEY_GLM: "sk-secret" });
 });
 
 test("旧 models.json 孤儿随写清扫（x-harness 只认 providers.json，残留徒增排障噪音）", () => {

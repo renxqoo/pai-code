@@ -8,7 +8,7 @@
  * 折叠为移动端 ChatMessage[]；未知事件类型保守跳过。
  */
 import type { ChatMessage } from '@/types/domain';
-import { isSnapshotFrame } from '@paiapp/api/views/snapshot-frame';
+import { isSnapshotFrame } from '@x3code/api/views/snapshot-frame';
 import { foldToolRows, toolRowId } from './tool-rows';
 
 interface WalLine {

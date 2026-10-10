@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import * as React from 'react';
 
-import type { GitBranchesView } from '@paiapp/contracts';
+import type { GitBranchesView } from '@x3code/contracts';
 
 import { BranchPanel, filterBranches } from '../branch-panel';
 import { render } from '@/testing/render';

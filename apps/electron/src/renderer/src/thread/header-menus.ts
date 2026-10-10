@@ -1,4 +1,4 @@
-import type { MenuItemDef } from '@paiapp/ui';
+import type { MenuItemDef } from '@x3code/ui';
 
 /**
  * 顶栏两组菜单的词条装配（纯函数）：项目菜单 = 本机打开四动作；

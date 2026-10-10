@@ -8,7 +8,7 @@ import { store as liveStore, workspaceActions } from '@/live/workspace-runtime';
 import { uiStore } from '@/ui/ui-store';
 import { render, renderProbe } from '@/testing/render';
 import { copy } from '@/strings';
-import type { ModelInfoView, PreferencesView, SessionStatsView, SessionView } from '@paiapp/contracts';
+import type { ModelInfoView, PreferencesView, SessionStatsView, SessionView } from '@x3code/contracts';
 
 /**
  * 输入卡区域回归（T33 M2）：0 props 自订阅——数据形态/交互动作直落 store；

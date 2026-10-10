@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { parseDiagnosticEvent } from '../diagnostic-events';
 
 describe('parseDiagnosticEvent（监督字符串 → 事件）', () => {
-  test('前缀表逐项（生产形态：pai-runtime 落日志带 host: 前缀）', () => {
+  test('前缀表逐项（生产形态：x3code-runtime 落日志带 host: 前缀）', () => {
     expect(parseDiagnosticEvent('host:restart:cause=hang:attempt=2', 5)).toMatchObject({ at: 5, kind: 'host_restart', level: 'warn', detail: 'cause=hang' });
     expect(parseDiagnosticEvent('restart:cause=manual:providers_changed:attempt=1', 5)).toMatchObject({ kind: 'host_restart', detail: 'cause=manual' });
     expect(parseDiagnosticEvent('host:heartbeat stale >10000ms; restarting host', 5)).toMatchObject({ kind: 'heartbeat_stale', level: 'warn' });

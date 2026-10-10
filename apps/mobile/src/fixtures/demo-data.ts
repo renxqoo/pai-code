@@ -2,7 +2,7 @@ import type { ConversationSession, WorkspaceOption } from '@/types/domain';
 
 export const workspaces: readonly WorkspaceOption[] = [
   { id: 'workspace-pai', name: 'agent-app', path: '~/work/agent-app', connected: true },
-  { id: 'workspace-mobile', name: 'Pai Mobile', path: '~/work/pai-mobile', connected: false },
+  { id: 'workspace-mobile', name: 'X3code Mobile', path: '~/work/pai-mobile', connected: false },
   { id: 'workspace-docs', name: '产品文档', path: '~/Documents/Pai', connected: false },
   { id: 'workspace-archive', name: '归档项目', path: '~/Projects/archive', connected: false },
 ];
@@ -43,9 +43,9 @@ export const demoSessions: readonly ConversationSession[] = [
   },
   {
     id: 'session-mobile',
-    title: 'Pai Mobile 视觉走查',
+    title: 'X3code Mobile 视觉走查',
     preview: '已完成 5 个页面的移动端适配检查。',
-    project: 'Pai Mobile',
+    project: 'X3code Mobile',
     timeLabel: '09:18',
     state: 'idle',
     pinned: false,

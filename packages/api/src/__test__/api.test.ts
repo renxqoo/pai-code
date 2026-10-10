@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { HostCommandOutcome, PaiCommand } from '@paiapp/contracts';
+import type { HostCommandOutcome, X3codeCommand } from '@x3code/contracts';
 
-import { HUB_ERROR_CODES } from '@paiapp/contracts';
+import { HUB_ERROR_CODES } from '@x3code/contracts';
 
 import { createHubApi } from '../index';
 import { decodeApiError } from '../errors';
@@ -10,10 +10,10 @@ import { createTransport } from '../transport';
 
 /** 剧本假面（圈3 单测装置）：按命令 type 回放预设应答，记录调用。 */
 function scriptHub(script: Record<string, HostCommandOutcome>): {
-  request: (command: PaiCommand, timeoutMs?: number) => Promise<HostCommandOutcome>;
-  calls: Array<{ command: PaiCommand; timeoutMs?: number }>;
+  request: (command: X3codeCommand, timeoutMs?: number) => Promise<HostCommandOutcome>;
+  calls: Array<{ command: X3codeCommand; timeoutMs?: number }>;
 } {
-  const calls: Array<{ command: PaiCommand; timeoutMs?: number }> = [];
+  const calls: Array<{ command: X3codeCommand; timeoutMs?: number }> = [];
   return {
     calls,
     request: (command, timeoutMs) => {

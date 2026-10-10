@@ -5,7 +5,7 @@ import { join } from 'node:path';
 
 import { createHostProcess } from '../host-process/create-host-process';
 import type { HostProcessDeps } from '../host-process/create-host-process';
-import type { HubCommand, HubFrame } from '@paiapp/contracts';
+import type { HubCommand, HubFrame } from '@x3code/contracts';
 
 const fakeHostPath = join(import.meta.dir, 'fake-host.ts');
 const agentDir = mkdtempSync(join(tmpdir(), 'pai-host-test-'));

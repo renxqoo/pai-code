@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { FileDiffGroup } from '@paiapp/ui-thread';
+import type { FileDiffGroup } from '@x3code/ui-thread';
 import type { ChatMessage } from '@/types/domain';
 
 type SheetName = 'workspace' | 'attachments' | 'task-config' | 'settings-thinking' | 'settings-permission' | 'session-actions' | null;

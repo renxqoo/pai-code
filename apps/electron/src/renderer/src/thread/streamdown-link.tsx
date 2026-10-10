@@ -7,8 +7,8 @@ type StreamdownLinkProps = ComponentProps<'a'> & ExtraProps;
 
 /** 链接出口统一走系统浏览器：Electron 经桥打开（主进程二次校验 http(s)），浏览器直开时降级新标签 */
 function openInSystemBrowser(url: string): void {
-  if (window.pai) {
-    void window.pai.window.openExternal(url);
+  if (window.x3code) {
+    void window.x3code.window.openExternal(url);
     return;
   }
   window.open(url, '_blank', 'noopener');

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import * as React from 'react';
 
-import type { AgentDefinition } from '@paiapp/contracts';
+import type { AgentDefinition } from '@x3code/contracts';
 import { copy } from '@/strings';
 import { render } from '@/testing/render';
 

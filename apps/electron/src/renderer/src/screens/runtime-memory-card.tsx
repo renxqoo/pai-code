@@ -1,4 +1,4 @@
-import type { ResourceSampleView } from '@paiapp/contracts';
+import type { ResourceSampleView } from '@x3code/contracts';
 
 import { copy } from '@/strings';
 import { cn } from '@/lib/utils';

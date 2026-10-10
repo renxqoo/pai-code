@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { SessionView } from '@paiapp/contracts';
+import type { SessionView } from '@x3code/contracts';
 
 import { createLiveController } from '../live-controller';
 import { createLazyResume } from '../lazy-resume';

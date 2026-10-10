@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { GitGraphCommit } from '@paiapp/contracts';
+import type { GitGraphCommit } from '@x3code/contracts';
 
 import { buildGraphLayouts, laneCountOf } from '../graph-layout';
 

@@ -11,7 +11,7 @@ import { spacing } from '@/theme/tokens';
 const assets = [
   { id: 'asset-readme', name: 'README.md', detail: '2.4 KB · Markdown', icon: FileText, size: 2400, kind: 'document' as const },
   { id: 'asset-mobile', name: 'mobile.tsx', detail: '18.7 KB · TypeScript', icon: FileCode2, size: 18700, kind: 'document' as const },
-  { id: 'asset-logo', name: 'pai-mark.png', detail: '96 KB · PNG', icon: ImageIcon, size: 96000, kind: 'image' as const },
+  { id: 'asset-logo', name: 'x3code-mark.png', detail: '96 KB · PNG', icon: ImageIcon, size: 96000, kind: 'image' as const },
 ] as const;
 
 export default function AssetsRoute() {

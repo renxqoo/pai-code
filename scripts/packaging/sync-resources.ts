@@ -7,7 +7,7 @@
  *    形态（plugin-manager 保持源码经 node_modules 链解析，worker/host.ts 在磁盘）；
  * ④ host-hub/node_modules/（@x-harness/* 子集——dist 形态的运行时依赖闭包，
  *    从 x-harness 检出的 workspace 链按包依赖图收集）。
- * 来源默认 AGENTS.md dev 拓扑的旁级 x-harness 检出；PAI_HUB_ENTRY / PAI_BUN_PATH 可覆盖。
+ * 来源默认 AGENTS.md dev 拓扑的旁级 x-harness 检出；X3CODE_HUB_ENTRY / X3CODE_BUN_PATH 可覆盖。
  */
 import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
@@ -29,13 +29,13 @@ export function resolveResourceSources(
   repoRoot: string,
   execPath: string,
 ): ResourceSources {
-  const harnessRoot = env['PAI_HARNESS_ROOT'] ?? resolve(repoRoot, '..', 'x-harness');
+  const harnessRoot = env['X3CODE_HARNESS_ROOT'] ?? resolve(repoRoot, '..', 'x-harness');
   return {
-    bunPath: env['PAI_BUN_PATH'] ?? execPath,
+    bunPath: env['X3CODE_BUN_PATH'] ?? execPath,
     hubSource:
-      env['PAI_HUB_ENTRY'] ?? join(harnessRoot, 'apps', 'host-hub', 'src', 'host', 'cli.ts'),
+      env['X3CODE_HUB_ENTRY'] ?? join(harnessRoot, 'apps', 'host-hub', 'src', 'host', 'cli.ts'),
     gatewaySource:
-      env['PAI_GATEWAY_ENTRY'] ?? join(harnessRoot, 'apps', 'hub-gateway', 'src', 'cli.ts'),
+      env['X3CODE_GATEWAY_ENTRY'] ?? join(harnessRoot, 'apps', 'hub-gateway', 'src', 'cli.ts'),
     harnessRoot,
   };
 }

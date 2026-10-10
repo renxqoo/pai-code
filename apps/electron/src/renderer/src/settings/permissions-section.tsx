@@ -1,8 +1,8 @@
 import * as React from 'react';
 
-import type { ThinkingLevel } from '@paiapp/contracts';
-import { THINKING_LEVEL_ORDER, thinkingLevelLabel } from '@paiapp/contracts';
-import { SegmentedControl, type SegmentedControlOption } from '@paiapp/ui';
+import type { ThinkingLevel } from '@x3code/contracts';
+import { THINKING_LEVEL_ORDER, thinkingLevelLabel } from '@x3code/contracts';
+import { SegmentedControl, type SegmentedControlOption } from '@x3code/ui';
 
 import { copy } from '@/strings';
 import { permModeLabel } from '@/strings/perm-mode-label';

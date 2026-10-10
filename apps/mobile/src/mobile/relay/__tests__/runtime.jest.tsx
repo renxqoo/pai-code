@@ -47,7 +47,7 @@ describe('relay runtime（T58 装配）', () => {
     const { useHistoryStore } = historyStoreModule;
     const rt = initializeRelayRuntime();
     const client = rt.client as unknown as { dispatch(rawEvent: unknown): void };
-    client.dispatch({ type: 'sessionUpdated', session: { threadId: 't-1', title: 'Relay 会话', cwd: '/p', state: 'live', streaming: false, model: null, thinkingLevel: null, sessionPath: '/s/1.jsonl', lastActivityAt: 1000 } });
+    client.dispatch({ type: 'sessionUpdated', session: { threadId: 't-1', title: 'Relay 会话', cwd: '/p', state: 'live', streaming: false, model: null, thinkingLevel: null, sessionPath: '/s/1.jsonl', lastActivityAt: 1000, createdAt: 1000 } });
     expect(useHistoryStore.getState().sessions.some((s) => s.title === 'Relay 会话')).toBe(true);
     client.dispatch({ type: 'sessionRemoved', threadId: 't-1' });
     expect(useHistoryStore.getState().sessions.some((s) => s.id === 't-1')).toBe(false);
@@ -94,7 +94,7 @@ describe('relay runtime 路由与装配分支', () => {
     const client = rt.client as unknown as { dispatch(rawEvent: unknown): void };
     attachThread('t-die');
     conversationStoreModule.useConversationStore.getState().openSession({ id: 't-die', title: 'D', preview: '', project: '', timeLabel: '', state: 'working', pinned: false, archived: false, unread: false, messages: [] });
-    client.dispatch({ type: 'sessionUpdated', session: { threadId: 't-die', title: 'D', cwd: '/d', state: 'live', streaming: true, model: null, thinkingLevel: null, sessionPath: '/s/d.jsonl', lastActivityAt: 5 } });
+    client.dispatch({ type: 'sessionUpdated', session: { threadId: 't-die', title: 'D', cwd: '/d', state: 'live', streaming: true, model: null, thinkingLevel: null, sessionPath: '/s/d.jsonl', lastActivityAt: 5, createdAt: 5 } });
     client.dispatch({ type: 'sessionDied', threadId: 't-die', reason: 'worker crash' });
     const messages = conversationStoreModule.useConversationStore.getState().session.messages;
     const failureRows = messages.filter((m) => m.kind === 'status' && m.text === 'session ended');

@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { render } from '@testing-library/react-native';
 import { describe, expect, it } from '@jest/globals';
-import type { HunkLine } from '@paiapp/ui-thread';
-import type { EditHunkView } from '@paiapp/contracts';
+import type { HunkLine } from '@x3code/ui-thread';
+import type { EditHunkView } from '@x3code/contracts';
 
 import { DiffLines } from '@/features/chat/diff-lines';
 import { wordDiffByLine, wordParts } from '@/features/chat/diff-word';

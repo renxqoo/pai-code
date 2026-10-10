@@ -16,7 +16,7 @@ export default {
     // 替身（协议逻辑测试）；真加密等价性由 bun 侧 wire-parity（RFC 向量对拍）背书
     // relay-protocol 的 crypto（@noble 纯 ESM——Jest 29 CJS 拒载）：按解析后的绝对路径
     // 映射到确定性替身（协议逻辑测试）；真加密等价性由 bun 侧 wire-parity 背书
-    '^@paiapp/relay-protocol$': '<rootDir>/src/test/relay-protocol-jest.ts',
+    '^@x3code/relay-protocol$': '<rootDir>/src/test/relay-protocol-jest.ts',
     // relay-protocol 内部的 ./crypto 相对引用（真 noble——Jest 拒载）：替身接管
     '^\\./crypto\\.ts$': '<rootDir>/src/test/relay-crypto-stub.ts',
     // shiki 系只发 ESM——同 marked 垫片机制（语言/主题按名映射到对应垫片）
