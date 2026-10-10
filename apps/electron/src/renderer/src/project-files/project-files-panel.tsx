@@ -187,7 +187,7 @@ function ProjectFilesPanel({ projectName, projectPath, tree, loading, onClose }:
           className="h-full min-w-0 flex-1 bg-transparent text-[12px] leading-none text-foreground outline-none placeholder:text-muted-foreground/70"
         />
       </label>
-      <div className="min-h-0 flex-1 overflow-y-auto pt-2 pb-2">
+      <div className="scrollbar-none min-h-0 flex-1 overflow-y-auto pt-2 pb-2">
         {loading ? (
           <p className={EMPTY_STATE_CLASS}>{copy.projectFiles.loading}</p>
         ) : rows.length === 0 ? (

@@ -50,7 +50,7 @@ function Sidebar(): React.JSX.Element {
               <QuickActionsRow />
             </div>
 
-            <div className="overflow-y-auto   overflow-x-hidden">
+            <div className="scrollbar-none overflow-y-auto   overflow-x-hidden">
               <div className="px-2">
                 <div className="pt-2.5">
                   <ViewSwitchTabs />
