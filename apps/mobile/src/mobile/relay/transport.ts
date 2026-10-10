@@ -185,6 +185,11 @@ export function createRelayTransport(options: RelayTransportOptions): RelayTrans
     backoffMs = Math.min(backoffMs * 2, 30_000);
   };
 
+  /**
+   * 只在真实停机（stop）时清算在途等待者。重拨是瞬态换 socket：命令已进 outbox，
+   * 重连后由 resendOutboxInternal 重发，响应回来仍按 id 认领——此处提前 resolve
+   * disconnected 会把一次正常重连报成发送失败。
+   */
   const failAllWaiters = (): void => {
     for (const waiter of responseWaiters.values()) {
       clearTimeout(waiter.timer);
@@ -250,7 +255,6 @@ export function createRelayTransport(options: RelayTransportOptions): RelayTrans
       }
     }
     stopHeartbeat();
-    failAllWaiters();
     setStatus('connecting', options.relayUrl);
     let ws: RelaySocketLike;
     try {
