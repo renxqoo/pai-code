@@ -400,5 +400,15 @@ export const zh: typeof en = {
     searchPlaceholder: '搜索模型…',
     empty: '没有匹配的模型',
   },
+  imageViewer: {
+    close: '关闭预览',
+    zoomIn: '放大',
+    zoomOut: '缩小',
+    reset: '重置缩放',
+    prev: '上一张',
+    next: '下一张',
+    error: '图片不可用',
+    counter: (index: number, total: number): string => `第 ${index} 张，共 ${total} 张`,
+  },
   errorCopy: zhErrorCopy,
 };

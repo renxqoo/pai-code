@@ -3,6 +3,7 @@ import { Copy, Minus, Square, X } from 'lucide-react';
 import { useWindowState } from '@/hooks/use-window-state';
 import { cn } from '@/lib/utils';
 import { copy } from '@/strings';
+import { TOPBAR_HEIGHT } from '@shared/window-chrome';
 
 /**
  * Windows 自绘 caption 三键（hidden 标题栏下系统按钮不可用）：
@@ -40,7 +41,7 @@ function WindowCaptionButtons() {
   ];
 
   return (
-    <div className="fixed top-0 right-0 z-30 flex h-[46px]">
+    <div className="fixed top-0 right-0 z-30 flex" style={{ height: TOPBAR_HEIGHT }}>
       {buttons.map((button) => (
         <button
           key={button.key}

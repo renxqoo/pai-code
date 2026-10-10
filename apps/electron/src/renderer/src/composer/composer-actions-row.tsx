@@ -48,7 +48,7 @@ type ComposerActionsRowProps = {
   canSend: boolean
   /** 发送在途（表单提交 → 受理结算）：发送位换加载指示并禁用——唤醒/受理的慢窗口不再无反馈 */
   sending: boolean
-  /** 生成中且无输入时发送键让位给红色停止键；有输入时发送键回归（提交=排队，投递语义由父层裁决） */
+  /** 生成中且无输入时发送键让位给灰色停止键；有输入时发送键回归（提交=排队，投递语义由父层裁决） */
   generating: boolean
   onStop: () => void
   /** 会话权限模式（当前生效；null = 未加载/无会话，控件不渲染） */
@@ -74,7 +74,7 @@ function optionItems(options: readonly string[], selected: string) {
 }
 
 /**
- * 输入框底行：左侧附件与权限模式，右侧用量 / 模型 / 思考档 / 发送（在途呈加载指示；生成中且无输入时为红色停止）。
+ * 输入框底行：左侧附件与权限模式，右侧用量 / 模型 / 思考档 / 发送（在途呈加载指示；生成中且无输入时为灰色停止）。
  * 模型选择走统一 CommandDialog 弹窗（T21）；思考档恒四档（会话读口当前值，新建页本地选择）；
  * 用量入口只在有会话时出现：主指标 = 上下文占用百分比环（T43，实报输入侧口径——
  * 累计 total 单调增不重置，不冒充上下文），插件缺席回落累计 total；环色随阈值
@@ -202,7 +202,7 @@ function ComposerActionsRow({
             aria-label={stopLabel}
             title={stopLabel}
             onClick={onStop}
-            className="flex size-[29px] shrink-0 cursor-pointer items-center justify-center rounded-full bg-stop text-white outline-none transition-colors select-none hover:bg-stop/85 focus-visible:ring-3 focus-visible:ring-ring/50"
+            className="flex size-[29px] shrink-0 cursor-pointer items-center justify-center rounded-full bg-halt text-foreground outline-none transition-colors select-none hover:bg-halt/85 focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             <span aria-hidden="true" className="block size-[11px] rounded-[2px] bg-current" />
           </button>

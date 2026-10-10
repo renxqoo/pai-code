@@ -14,9 +14,9 @@ export function SendButton({ canSend, generating, onPress }: SendButtonProps) {
       accessibilityRole="button"
       disabled={!canSend && !generating}
       onPress={onPress}
-      style={({ pressed }) => ({ alignItems: 'center', backgroundColor: generating ? colors.destructive : canSend ? colors.primary : colors.surfaceSubtle, borderRadius: radius.pill, flexShrink: 0, height: 44, justifyContent: 'center', marginLeft: 2, opacity: pressed ? 0.65 : 1, width: 44 })}
+      style={({ pressed }) => ({ alignItems: 'center', backgroundColor: generating ? colors.halt : canSend ? colors.primary : colors.surfaceSubtle, borderRadius: radius.pill, flexShrink: 0, height: 44, justifyContent: 'center', marginLeft: 2, opacity: pressed ? 0.65 : 1, width: 44 })}
     >
-      {generating ? <Square color={colors.primaryText} fill={colors.primaryText} size={13} /> : <ArrowUp color={canSend ? colors.primaryText : colors.textFaint} size={19} strokeWidth={2.4} />}
+      {generating ? <Square color={colors.text} fill={colors.text} size={13} /> : <ArrowUp color={canSend ? colors.primaryText : colors.textFaint} size={19} strokeWidth={2.4} />}
     </Pressable>
   );
 }

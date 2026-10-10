@@ -17,6 +17,8 @@ export { FloatingPanel, type FloatingPanelProps } from './floating-panel';
 export { formatCountUnit, formatDiffDelta, formatTokenCount } from './format-count-unit';
 export { IconBadge, type IconBadgeProps } from './icon-badge';
 export { IconButton, iconButtonVariants, type IconButtonProps } from './icon-button';
+export { ImageLightbox, type ImageLightboxProps, type ImageLightboxLabels, type LightboxImage } from './image-lightbox';
+export { INITIAL_RATIO, INITIAL_ZOOM, MAX_RATIO, MIN_RATIO, ZOOM_STEP_FACTOR, clampPan, clampRatio, settleZoom, zoomAt, type ZoomState } from './image-lightbox-zoom';
 export { InlineCode, type InlineCodeProps } from './inline-code';
 export { Input } from './input';
 export { InputGroup, InputGroupAddon, InputGroupButton, InputGroupText, InputGroupInput, InputGroupTextarea } from './input-group';

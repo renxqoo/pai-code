@@ -3,6 +3,7 @@ import { useStore } from 'zustand';
 
 import { escActionFor } from './esc-action';
 import { closeProjectFiles } from '@/sidebar/project-files';
+import { closeViewer, imageViewerStore } from '@/image-viewer/image-viewer-store';
 import type { WorkspaceActions } from '@/live/workspace-actions';
 import { summarizeAgents } from '@/thread/panel-summary';
 import { store as liveStore } from '@/live/workspace-runtime';
@@ -11,7 +12,6 @@ import { uiStore } from '@/ui/ui-store';
 /** ui store 拥有的覆盖层开合（含停止确认条）在本 hook 内自订阅自派发（引用恒定的模块动作）；
  * 其余裁决输入（hub 对话框/命令面板/右侧面板/线程运行面）仍由调用方喂。 */
 const { closeSettings, closeUsage, closeNewTask, setConfirmStop, setNewTaskDialogOpen } = uiStore.getState();
-
 type UseEscDismissInput = {
   /** 新建任务页内本地浮层开着（浮层自行消费 Esc，不穿透关闭整页）。 */
   localDialogOpen: boolean;
@@ -40,11 +40,15 @@ export function useEscDismiss(input: UseEscDismissInput): void {
   const usageOpen = useStore(uiStore, (s) => s.usageOpen);
   const newTaskOpen = useStore(uiStore, (s) => s.newTaskOpen);
   const settingsOpen = useStore(uiStore, (s) => s.settingsOpen);
+  const imageViewerOpen = useStore(imageViewerStore, (s) => s.viewer !== null);
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') return;
-      const action = escActionFor({ localDialogOpen, commandPanelOpen, usageOpen, projectFilesOpen, newTaskOpen, settingsOpen, panelOpen, bashRunning, confirmStop, generating, agentsActive });
+      const action = escActionFor({ localDialogOpen, commandPanelOpen, usageOpen, projectFilesOpen, newTaskOpen, settingsOpen, panelOpen, bashRunning, confirmStop, generating, agentsActive, imageViewerOpen });
       switch (action.kind) {
+        case 'close-image-viewer':
+          closeViewer();
+          break;
         case 'close-local-dialog':
           setNewTaskDialogOpen(false);
           break;
@@ -82,5 +86,5 @@ export function useEscDismiss(input: UseEscDismissInput): void {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [localDialogOpen, commandPanelOpen, usageOpen, projectFilesOpen, newTaskOpen, settingsOpen, panelOpen, bashRunning, confirmStop, generating, agentsActive, abortBash, stopActiveTurn, onPanelClose]);
+  }, [localDialogOpen, commandPanelOpen, usageOpen, projectFilesOpen, newTaskOpen, settingsOpen, panelOpen, bashRunning, confirmStop, generating, agentsActive, imageViewerOpen, abortBash, stopActiveTurn, onPanelClose]);
 }

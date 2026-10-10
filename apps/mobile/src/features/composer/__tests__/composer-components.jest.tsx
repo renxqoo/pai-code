@@ -9,26 +9,64 @@ import { useComposerStore } from '@/store/composer-store';
 import { useConversationStore } from '@/store/conversation-store';
 import { useNavigationStore } from '@/store/navigation-store';
 import { TestWrapper } from '@/test/test-wrapper';
-import { useDemoModeStore } from '@/store/demo-mode-store';
+import { initializeRelayRuntime } from '@/mobile/relay/runtime';
+
+const invoke = jest.fn();
+
+/** 显式未连接：runtime 是单例，上一个用例留下的 ready 状态必须由用例自己归位。 */
+function bridgeOffline(): void {
+  const runtime = initializeRelayRuntime();
+  runtime.status = 'disconnected';
+  invoke.mockReset();
+  invoke.mockImplementation(() => Promise.resolve({ ok: false }));
+}
+
+/** 连接就绪的 bridge：模型目录只能来自它（未连接时面板不给占位模型）。 */
+function readyBridge(modelList: Array<{ provider: string; modelId: string; reasoning?: boolean }>): void {
+  const runtime = initializeRelayRuntime();
+  runtime.status = 'ready';
+  (runtime.client as unknown as { invoke: unknown }).invoke = invoke;
+  invoke.mockReset();
+  invoke.mockImplementation((method: string) => Promise.resolve(
+    method === 'model/list' ? { ok: true, data: modelList } : { ok: true, data: { sessions: [] } },
+  ));
+}
 
 describe('composer components', () => {
   beforeEach(() => {
-    useComposerStore.setState({ draft: '', model: 'gpt-5.2-codex', thinking: 'medium', permission: 'ask', sending: false, generating: false, contextPercent: 24 });
+    bridgeOffline();
+    useComposerStore.setState({ draft: '', model: '', thinking: 'medium', permission: 'ask', sending: false, generating: false });
     useAttachmentStore.setState({ items: [] });
     useConversationStore.getState().startNewSession();
     useNavigationStore.setState({ drawerOpen: false, sheet: null });
   });
 
-  it('edits and sends a draft with attachments from the compact input', async () => {
+  it('edits a draft with attachments from the compact input', async () => {
     useAttachmentStore.getState().addAttachment({ id: 'sent-file', name: '设计.pdf', size: 2000, kind: 'pdf', status: 'ready' });
     const view = await render(<ComposerPanel />);
     expect(view.getByPlaceholderText('尽管问，带图也行')).toBeTruthy();
     await fireEvent.changeText(view.getByLabelText('消息输入框'), '检查 Android 构建');
     await fireEvent.press(view.getByLabelText('发送消息'));
+    expect(useComposerStore.getState().draft).toBe('检查 Android 构建');
+  });
+
+  it('未连接时发送不上屏也不假装在生成（症状：本地回显让没送出的消息看起来已送达）', async () => {
+    const view = await render(<ComposerPanel />);
+    await fireEvent.changeText(view.getByLabelText('消息输入框'), '检查 Android 构建');
+    await fireEvent.press(view.getByLabelText('发送消息'));
+    expect(useComposerStore.getState().generating).toBe(false);
+    expect(useConversationStore.getState().session.messages.some((message) => message.kind === 'user')).toBe(false);
+    expect(useConversationStore.getState().session.messages[0]?.text).toBe('未连接电脑端，消息没有发送。');
+  });
+
+  it('连接态发送：草稿出栈、用户消息上屏', async () => {
+    readyBridge([]);
+    useConversationStore.setState({ activeSessionId: 't1', session: { ...useConversationStore.getState().session, id: 't1', messages: [] } });
+    const view = await render(<ComposerPanel />);
+    await fireEvent.changeText(view.getByLabelText('消息输入框'), '检查 Android 构建');
+    await fireEvent.press(view.getByLabelText('发送消息'));
     expect(useComposerStore.getState().draft).toBe('');
-    expect(useComposerStore.getState().generating).toBe(true);
     expect(useConversationStore.getState().session.messages[0]?.text).toBe('检查 Android 构建');
-    expect(useConversationStore.getState().session.messages[0]?.attachments?.[0]?.name).toBe('设计.pdf');
   });
 
   it('keeps only attachment and send controls in the input area', async () => {
@@ -63,26 +101,36 @@ describe('composer components', () => {
     expect(useAttachmentStore.getState().items).toHaveLength(0);
   });
 
-  it('configures model, thinking, permission and context in one panel', async () => {
+  it('configures model, thinking and permission from the computer model catalog', async () => {
+    readyBridge([
+      { provider: 'walk', modelId: 'walk-model', reasoning: true },
+      { provider: 'walk', modelId: 'walk-fast' },
+    ]);
     const view = await render(<TestWrapper><><ChatHeader /><TaskConfigSheet /></></TestWrapper>);
     await fireEvent.press(view.getByLabelText('任务配置'));
-    await fireEvent.changeText(view.getByLabelText('搜索模型'), 'Claude');
-    await fireEvent.press(view.getByText('Claude Sonnet 5'));
+    await act(() => Promise.resolve());
+    await view.rerender(<TestWrapper><><ChatHeader /><TaskConfigSheet /></></TestWrapper>);
+    await fireEvent.press(view.getByText('walk-fast'));
     await fireEvent.press(view.getByText('高'));
     await fireEvent.press(view.getByText('仅规划'));
-    expect(useComposerStore.getState()).toMatchObject({ model: 'claude-sonnet-5', thinking: 'high', permission: 'plan' });
-    expect(view.getByText('上下文 · 24%')).toBeTruthy();
+    expect(useComposerStore.getState()).toMatchObject({ model: 'walk/walk-fast', thinking: 'high', permission: 'plan' });
+    // 上下文百分比没有真值来源——面板不再给固定数字
+    expect(view.queryByText(/上下文 ·/)).toBeNull();
   });
 
-  it('shows high context risk and default configuration guidance', async () => {
-    useComposerStore.getState().setContextPercent(91);
+  it('未连接时不摆占位模型（症状：未配对时列出一整排假模型）', async () => {
+    bridgeOffline();
     const view = await render(<TestWrapper><><ChatHeader /><TaskConfigSheet /></></TestWrapper>);
     await fireEvent.press(view.getByLabelText('任务配置'));
-    expect(view.getByText('上下文 · 91%')).toBeTruthy();
+    expect(view.getByText('模型目录来自电脑端——连接后在此选择（设备与连接页配对）。')).toBeTruthy();
+    expect(view.queryByText('GPT-5.2 Codex')).toBeNull();
+    expect(view.queryByText('Claude Sonnet 5')).toBeNull();
     expect(view.getByText('配置应用于当前对话；默认配置可在个人设置中调整。')).toBeTruthy();
   });
 
   it('removes and sends attachments', async () => {
+    readyBridge([]);
+    useConversationStore.setState({ activeSessionId: 't1', session: { ...useConversationStore.getState().session, id: 't1', messages: [] } });
     useAttachmentStore.getState().addAttachment({ id: '1', name: 'a.pdf', size: 100, kind: 'pdf', status: 'ready' });
     useComposerStore.getState().setDraft('内容');
     const view = await render(<ComposerPanel />);
@@ -104,16 +152,16 @@ describe('composer components', () => {
 
 describe('TaskConfigSheet 连接模式（写档同步链）', () => {
   it('配置项切换在非连接态不崩（syncRemote 早退）', async () => {
-    useDemoModeStore.getState().setEnabled(false);
+    bridgeOffline();
+    useNavigationStore.getState().openSheet('task-config');
     const view = await render(
       <TestWrapper>
         <TaskConfigSheet />
       </TestWrapper>,
     );
-    const rows = view.queryAllByLabelText(/gpt|claude|gemini/i);
-    if (rows.length > 0) {
-      await fireEvent.press(rows[0] as never);
-    }
-    expect(view).toBeTruthy();
+    await fireEvent.press(view.getByText('高'));
+    await fireEvent.press(view.getByText('仅规划'));
+    expect(useComposerStore.getState()).toMatchObject({ thinking: 'high', permission: 'plan' });
+    expect(invoke.mock.calls.some(([method]) => method === 'session/setThinking')).toBe(false);
   });
 });

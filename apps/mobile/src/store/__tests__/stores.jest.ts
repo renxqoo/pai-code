@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from '@jest/globals';
-import { demoSessions } from '@/fixtures/demo-data';
+import { testSession } from '@/test/session-fixture';
 import { useAttachmentStore } from '@/store/attachment-store';
 import { useComposerStore } from '@/store/composer-store';
 import { useConversationStore } from '@/store/conversation-store';
@@ -7,13 +7,19 @@ import { useHistoryStore } from '@/store/history-store';
 import { useNavigationStore } from '@/store/navigation-store';
 import { useSettingsStore } from '@/store/settings-store';
 
+const SESSIONS = [
+  testSession('session-mobile', { messages: [{ id: 'm1', kind: 'user', text: '你好', createdAt: '10:00' }] }),
+  testSession('session-b'),
+  testSession('session-c'),
+];
+
 describe('mobile UI stores', () => {
   beforeEach(() => {
     useNavigationStore.setState({ drawerOpen: false, sheet: null });
-    useComposerStore.setState({ draft: '', model: 'gpt-5.2-codex', thinking: 'medium', permission: 'ask', sending: false, generating: false, contextPercent: 24 });
-    useHistoryStore.setState({ sessions: demoSessions, query: '' });
+    useComposerStore.setState({ draft: '', model: '', thinking: 'medium', permission: 'ask', sending: false, generating: false });
+    useHistoryStore.setState({ sessions: SESSIONS, query: '' });
     useAttachmentStore.setState({ items: [] });
-    useSettingsStore.setState({ theme: 'system', defaultModel: 'gpt-5.2-codex', defaultThinking: 'medium', defaultPermission: 'ask', notifications: true, haptics: true, compactHistory: false });
+    useSettingsStore.setState({ theme: 'system', defaultModel: 'walk/walk-model', defaultThinking: 'medium', defaultPermission: 'ask', notifications: true, haptics: true, compactHistory: false });
     useConversationStore.getState().startNewSession();
     useConversationStore.setState({ workspaceId: null });
   });
@@ -27,10 +33,10 @@ describe('mobile UI stores', () => {
   });
 
   it('selects model, thinking and permission', () => {
-    useComposerStore.getState().selectModel('claude-sonnet-5');
+    useComposerStore.getState().selectModel('walk/walk-model');
     useComposerStore.getState().selectThinking('high');
     useComposerStore.getState().selectPermission('plan');
-    expect(useComposerStore.getState()).toMatchObject({ model: 'claude-sonnet-5', thinking: 'high', permission: 'plan' });
+    expect(useComposerStore.getState()).toMatchObject({ model: 'walk/walk-model', thinking: 'high', permission: 'plan' });
   });
 
   it('rejects empty and duplicate submissions and bounds draft length', () => {
@@ -43,11 +49,8 @@ describe('mobile UI stores', () => {
     expect(useComposerStore.getState().submitDraft()).toBe(false);
   });
 
-  it('clamps context percentage and toggles generation', () => {
-    useComposerStore.getState().setContextPercent(-4);
-    expect(useComposerStore.getState().contextPercent).toBe(0);
-    useComposerStore.getState().setContextPercent(140);
-    expect(useComposerStore.getState().contextPercent).toBe(100);
+  it('starts with no preselected model and toggles generation', () => {
+    expect(useComposerStore.getState().model).toBe('');
     useComposerStore.getState().toggleGeneration();
     expect(useComposerStore.getState().generating).toBe(true);
     useComposerStore.getState().toggleGeneration();
@@ -67,7 +70,7 @@ describe('mobile UI stores', () => {
     useHistoryStore.getState().deleteSession(id);
     expect(useHistoryStore.getState().sessions.some((item) => item.id === id)).toBe(false);
     useHistoryStore.getState().deleteSession('missing');
-    expect(useHistoryStore.getState().sessions).toHaveLength(demoSessions.length - 1);
+    expect(useHistoryStore.getState().sessions).toHaveLength(SESSIONS.length - 1);
   });
 
   it('manages attachment deduplication, failure and removal', () => {
@@ -83,7 +86,7 @@ describe('mobile UI stores', () => {
 
   it('updates settings with a safe model fallback', () => {
     useSettingsStore.getState().setDefaultModel('   ');
-    expect(useSettingsStore.getState().defaultModel).toBe('gpt-5.2-codex');
+    expect(useSettingsStore.getState().defaultModel).toBe('walk/walk-model');
     useSettingsStore.getState().setTheme('dark');
     useSettingsStore.getState().setDefaultThinking('high');
     useSettingsStore.getState().setDefaultPermission('auto');
@@ -94,7 +97,7 @@ describe('mobile UI stores', () => {
   });
 
   it('opens sessions, appends messages and resolves permissions once', () => {
-    const session = demoSessions[0];
+    const session = SESSIONS[0];
     if (session === undefined) throw new Error('fixture missing');
     useConversationStore.getState().openSession(session);
     useConversationStore.getState().appendMessage({ id: 'm', kind: 'user', text: '继续', createdAt: 'now' });

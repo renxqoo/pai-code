@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
 
 import { copy } from '@/strings';
+import { TOPBAR_HEIGHT } from '@shared/window-chrome';
 
 type NoticeStripProps = {
   notices: readonly { id: string; text: string }[];
@@ -14,7 +15,7 @@ type NoticeStripProps = {
 function NoticeStrip({ notices, onDismiss, suppressed }: NoticeStripProps) {
   if (suppressed || notices.length === 0) return null;
   return (
-    <div data-slot="notice-strip" className="pointer-events-none fixed inset-x-0 top-[46px] z-[60] flex flex-col items-center gap-[6px]">
+    <div data-slot="notice-strip" className="pointer-events-none fixed inset-x-0 z-[60] flex flex-col items-center gap-[6px]" style={{ top: TOPBAR_HEIGHT }}>
       {notices.map((notice) => (
         <div
           key={notice.id}

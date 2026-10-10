@@ -6,11 +6,17 @@ import { DeleteAction } from '@/features/history/delete-action';
 import { HistoryDrawer } from '@/features/history/history-drawer';
 import { PinAction } from '@/features/history/pin-action';
 import { SessionSheet } from '@/features/history/session-sheet';
-import { demoSessions } from '@/fixtures/demo-data';
+import { testSession } from '@/test/session-fixture';
 import { useConversationStore } from '@/store/conversation-store';
 import { useHistoryStore } from '@/store/history-store';
 import { useNavigationStore } from '@/store/navigation-store';
 import { TestWrapper } from '@/test/test-wrapper';
+
+const SESSIONS = [
+  testSession('session-refactor', { title: '优化移动端对话时间线', project: 'agent-app' }),
+  testSession('session-mobile', { title: 'X3code Mobile 视觉走查', project: 'X3code Mobile', preview: '已完成 5 个页面的移动端适配检查。' }),
+  testSession('session-release', { title: '检查发布前变更', project: 'agent-app', state: 'paused' }),
+];
 
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush, back: jest.fn() }) }));
@@ -18,7 +24,7 @@ jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush, back: jest
 describe('history sheets', () => {
   beforeEach(() => {
     mockPush.mockClear();
-    useHistoryStore.setState({ sessions: demoSessions, query: '' });
+    useHistoryStore.setState({ sessions: SESSIONS, query: '' });
     useConversationStore.getState().startNewSession();
     useNavigationStore.setState({ drawerOpen: false, sheet: null });
   });
@@ -65,7 +71,7 @@ describe('history sheets', () => {
   });
 
   it('renames, pins, archives and deletes active session', async () => {
-    const session = demoSessions[1];
+    const session = SESSIONS[1];
     if (session === undefined) throw new Error('fixture missing');
     useConversationStore.getState().openSession(session);
     await act(() => Promise.resolve(useNavigationStore.getState().openSheet('session-actions')));

@@ -19,6 +19,8 @@ export type ColorScheme = {
   accent: string;
   accentSoft: string;
   destructive: string;
+  /** 运行中停止键中性灰：不与破坏性红混淆（发送位运行态专用） */
+  halt: string;
   success: string;
   /** diff 行对照色：新增/删除的前景与软底（红绿成对，两端同语义） */
   diffAdd: string;
@@ -49,6 +51,7 @@ export const lightColors: ColorScheme = {
   accent: '#09090B',
   accentSoft: '#F4F4F5',
   destructive: '#DC2626',
+  halt: '#D4D4D8',
   success: '#16A34A',
   diffAdd: '#15803D',
   diffAddSoft: '#E7F6EC',
@@ -75,6 +78,7 @@ export const darkColors: ColorScheme = {
   accent: '#FAFAFA',
   accentSoft: '#1C1C1F',
   destructive: '#EF4444',
+  halt: '#3F3F46',
   success: '#22C55E',
   diffAdd: '#4ADE80',
   diffAddSoft: 'rgba(74, 222, 128, 0.12)',

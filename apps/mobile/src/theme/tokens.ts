@@ -24,6 +24,8 @@ export const layout = {
   controlHeight: 38,
   composerMinHeight: 112,
   maxContentWidth: 760,
+  /** 项目组内元素（会话行、「显示更多」）相对组外行的左缩进。 */
+  groupRowIndent: 26,
 } as const;
 
 // 消息流单一间距节奏（T50）：块间距只挂 marginTop，值必须取自本表。

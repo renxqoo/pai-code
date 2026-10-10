@@ -20,10 +20,11 @@ type SettingsState = {
 };
 
 export const useSettingsStore = create<SettingsState>((set) => ({
-  theme: 'system', locale: 'zh-CN', defaultModel: 'gpt-5.2-codex', defaultThinking: 'medium', defaultPermission: 'edit-confirm',
+  theme: 'system', locale: 'zh-CN', defaultModel: '', defaultThinking: 'medium', defaultPermission: 'edit-confirm',
   notifications: true, haptics: true, compactHistory: false,
   setTheme: (theme) => set({ theme }),
-  setDefaultModel: (defaultModel) => set({ defaultModel: defaultModel.trim() || 'gpt-5.2-codex' }),
+  // 空值不回落任何预设模型：默认模型只有电脑端目录一个来源，没选就是没选
+  setDefaultModel: (defaultModel) => set((state) => ({ defaultModel: defaultModel.trim().length === 0 ? state.defaultModel : defaultModel.trim() })),
   setDefaultThinking: (defaultThinking) => set({ defaultThinking }),
   setDefaultPermission: (defaultPermission) => set({ defaultPermission }),
   toggleNotifications: () => set((state) => ({ notifications: !state.notifications })),

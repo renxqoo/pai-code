@@ -6,14 +6,6 @@ export type ThinkingLevel = 'off' | 'low' | 'medium' | 'high';
 export type PermissionMode = 'edit-confirm' | 'auto' | 'plan' | 'full';
 export type RuntimeStatus = 'idle' | 'working' | 'paused';
 
-export type ModelOption = {
-  id: string;
-  name: string;
-  provider: string;
-  description: string;
-  accent: string;
-};
-
 export type AttachmentKind = 'image' | 'pdf' | 'document' | 'archive';
 export type AttachmentStatus = 'preparing' | 'ready' | 'failed';
 
@@ -76,11 +68,4 @@ export type ConversationSession = {
   startedAtMs?: number;
   endedAtMs?: number;
   messages: readonly ChatMessage[];
-};
-
-export type WorkspaceOption = {
-  id: string;
-  name: string;
-  path: string;
-  connected: boolean;
 };

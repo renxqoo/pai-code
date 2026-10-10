@@ -51,6 +51,7 @@
     --color-diff-add: var(--diff-add);
     --color-diff-del: var(--diff-del);
     --color-stop: var(--stop);
+    --color-halt: var(--halt);
     --color-meta-faint: var(--meta-faint);
     --font-mono: ui-monospace, 'SFMono-Regular', 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
     --radius-sm: calc(var(--radius) * 0.6);
@@ -106,6 +107,8 @@
     --diff-del: oklch(0.663 0.198 22);
     --stop: oklch(0.663 0.219 23.6);
     --meta-faint: oklch(0.765 0.007 286.2);
+    /* 运行中停止键中性灰：与发送禁用灰同档，不与破坏性红混淆 */
+    --halt: oklch(0.87 0 0);
 }
 
 .dark {
@@ -151,6 +154,7 @@
     --diff-del: oklch(0.72 0.19 22);
     --stop: oklch(0.663 0.219 23.6);
     --meta-faint: oklch(0.6 0.008 286.2);
+    --halt: oklch(0.37 0 0);
 }
 
 @layer base {

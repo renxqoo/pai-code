@@ -6,9 +6,7 @@ import { ContentCard } from '@/components/ui/content-card';
 import { SectionHeader } from '@/components/ui/section-header';
 import { useSettingsStore } from '@/store/settings-store';
 import { useAppTheme } from '@/theme/theme-context';
-import { models as demoModels } from '@/strings/zh';
 import { spacing } from '@/theme/tokens';
-import { useDemoModeStore } from '@/store/demo-mode-store';
 import { getBridge, useBridgeStatus } from '@/mobile/relay/runtime';
 
 interface ModelEntry {
@@ -22,12 +20,11 @@ export default function ModelsRoute() {
   const { colors } = useAppTheme();
   const selected = useSettingsStore((state) => state.defaultModel);
   const select = useSettingsStore((state) => state.setDefaultModel);
-  const demo = useDemoModeStore((state) => state.enabled);
   const { status } = useBridgeStatus();
   const [entries, setEntries] = React.useState<readonly ModelEntry[] | null>(null);
 
   React.useEffect(() => {
-    if (demo || status !== 'ready') return;
+    if (status !== 'ready') return;
     const bridge = getBridge();
     if (bridge === null) return;
     void bridge.client.invoke('model/list', {}).then((outcome: unknown) => {
@@ -42,10 +39,10 @@ export default function ModelsRoute() {
         })),
       );
     });
-  }, [demo, status]);
+  }, [status]);
 
-  const list: readonly ModelEntry[] = demo ? demoModels : (entries ?? []);
-  const loading = !demo && status === 'ready' && entries === null;
+  const list: readonly ModelEntry[] = entries ?? [];
+  const loading = status === 'ready' && entries === null;
 
   return (
     <View style={{ backgroundColor: colors.settingsBackground, flex: 1 }}>

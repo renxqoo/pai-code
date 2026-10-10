@@ -1,6 +1,8 @@
 import type { ComponentProps, ReactNode } from 'react';
 import type { ExtraProps } from 'streamdown';
 
+import { openViewer } from '@/image-viewer/image-viewer-store';
+
 type StreamdownImageProps = ComponentProps<'img'> & ExtraProps;
 
 /**
@@ -18,7 +20,8 @@ export function safeImageSrc(src: string | undefined): string | null {
 
 /**
  * streamdown 图片覆写：外链懒加载且不外泄 referrer；不可信来源降级为 alt 文本，
- * 不产生任何网络请求。图片最大宽受正文列约束。
+ * 不产生任何网络请求。图片最大宽受正文列约束；点击开灯箱预览（单图，
+ * src 已过白名单，灯箱不重复判定）。
  */
 function StreamdownImage({ node: _node, src, alt, ...rest }: StreamdownImageProps): ReactNode {
   const url = safeImageSrc(src);
@@ -26,15 +29,23 @@ function StreamdownImage({ node: _node, src, alt, ...rest }: StreamdownImageProp
     const label = typeof alt === 'string' && alt.length > 0 ? alt : '';
     return label.length > 0 ? <span className="break-all text-muted-foreground/70">[image: {label}]</span> : null;
   }
+  const label = typeof alt === 'string' ? alt : '';
   return (
-    <img
-      {...rest}
-      src={url}
-      alt={alt}
-      loading="lazy"
-      referrerPolicy="no-referrer"
-      className="max-w-full rounded-[10px] border border-border"
-    />
+    <button
+      type="button"
+      onClick={() => openViewer([{ src: url, name: label }], 0)}
+      className="cursor-zoom-in"
+    >
+      <img
+        {...rest}
+        src={url}
+        alt={alt}
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        draggable={false}
+        className="max-w-full rounded-[10px] border border-border"
+      />
+    </button>
   );
 }
 

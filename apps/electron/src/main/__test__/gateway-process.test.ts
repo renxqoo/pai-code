@@ -28,7 +28,8 @@ describe('gateway-process（Electron owner 面装配）', () => {
     expect(gateway.status()).toBe('stopped');
     const result = await gateway.command({ command: 'gw/status' });
     expect(result['success']).toBe(false);
-    expect(result['error']).toBe('gateway not configured');
+    // 合成终局与线上 commandError 同形状（code + message）——管道单形状
+    expect(result['error']).toEqual({ code: 'gateway-not-configured', message: 'gateway not configured' });
   });
 
   test('gateway 入口不存在：同样 stub 形态', async () => {
@@ -64,7 +65,8 @@ describe('gateway-process（Electron owner 面装配）', () => {
     const result = await gateway.command({ command: 'gw/status' });
     const elapsed = Date.now() - started;
     expect(result['success']).toBe(false);
-    expect(String(result['error'])).toContain('gateway');
+    // 网关退出终局：reason 取 message（gateway exited / gateway not connected）
+    expect(String((result['error'] as { message?: unknown })['message'])).toContain('gateway');
     expect(elapsed).toBeLessThan(6_000); // 10s 前已结案
   });
 

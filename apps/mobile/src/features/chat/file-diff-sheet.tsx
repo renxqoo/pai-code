@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { Pencil } from 'lucide-react-native';
 
 import { objectName } from '@x3code/ui-thread';
@@ -24,7 +24,6 @@ export function FileDiffSheet() {
   const name = group === null ? '' : objectName(group.path) || copy.fileDiffUnknown;
   return (
     <Sheet onClose={close} title={copy.fileDiffTitle} visible={group !== null}>
-      <ScrollView contentContainerStyle={{ paddingBottom: spacing.xs5 }} showsVerticalScrollIndicator={false}>
         <View style={{ alignItems: 'center', flexDirection: 'row', marginBottom: spacing.sm, marginTop: spacing.xs }}>
           <Pencil color={colors.textMuted} size={16} />
           <Text accessibilityRole="header" style={{ color: colors.text, fontSize: type.row.fontSize, fontWeight: '700', marginLeft: 7 }}>
@@ -39,7 +38,6 @@ export function FileDiffSheet() {
         <View style={{ backgroundColor: colors.surfaceSubtle, borderRadius: radius.md }}>
           {group !== null ? <DiffLines hunks={group.hunks} /> : null}
         </View>
-      </ScrollView>
     </Sheet>
   );
 }

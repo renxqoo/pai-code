@@ -4,6 +4,7 @@ import { ChevronDown, Folder, MoreHorizontal, PanelRight } from 'lucide-react';
 import { IconButton, MenuButton, type MenuItemDef } from '@x3code/ui';
 
 import { WINDOWS_CAPTION_WIDTH } from '@/lib/platform';
+import { TOPBAR_HEIGHT } from '@shared/window-chrome';
 import { reduceTitleEdit, titleCommit, type TitleEditState } from '@/thread/title-edit';
 
 type ThreadHeaderProps = {
@@ -73,8 +74,9 @@ function ThreadHeader({
 
   return (
     <header
-      className="app-drag flex h-[46px] shrink-0 items-center gap-3 pl-[20px]  transition-[padding] duration-200 motion-reduce:transition-none"
+      className="app-drag flex shrink-0 items-center gap-3 pl-[20px] transition-[padding] duration-200 motion-reduce:transition-none"
       style={{
+        height: TOPBAR_HEIGHT,
         paddingLeft: sidebarCollapsed ? 'calc(var(--titlebar-left-w, 190px))' : undefined,
         paddingRight: WINDOWS_CAPTION_WIDTH + 20,
       }}
@@ -100,7 +102,7 @@ function ThreadHeader({
             type="button"
             onClick={startEditing}
             title={labels.renameTitleAria}
-            className="cursor-pointer truncate rounded px-[3px] py-[2px] text-[12.5px] leading-none font-medium text-foreground outline-none transition-colors hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50"
+            className="max-w-[46vw] cursor-pointer truncate rounded px-[3px] py-[2px] text-[12.5px] leading-none font-medium text-foreground outline-none transition-colors hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             {sessionTitle}
           </button>

@@ -57,6 +57,14 @@ describe('ThreadHeader', () => {
     expect(html).not.toContain('新建');
   });
 
+  test('症状回归：超长标题展示区限半窗宽（max-w 省略号截断，撑不爆头部）', () => {
+    const html = render({ sessionTitle: '很长的会话标题'.repeat(20) });
+    const title = /<button[^>]*>[\s\S]*?很长的会话标题[\s\S]*?<\/button>/.exec(html);
+    if (title === null) throw new Error('title button not found');
+    expect(title[0]).toContain('max-w-[46vw]');
+    expect(title[0]).toContain('truncate');
+  });
+
   test.each<[boolean, string]>([
     [true, 'true'],
     [false, 'false'],

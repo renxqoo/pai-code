@@ -8,6 +8,7 @@ import { SessionListRegion } from '@/sidebar/session-list-region';
 import { SidebarFooter } from '@/sidebar/sidebar-footer';
 import { ViewSwitchTabs } from '@/sidebar/view-switch-tabs';
 import { useSidebarResize } from '@/hooks/use-sidebar-resize';
+import { TOPBAR_HEIGHT } from '@shared/window-chrome';
 import { SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH, uiStore } from '@/ui/ui-store';
 
 import { cn } from '@/lib/utils';
@@ -31,7 +32,7 @@ function Sidebar(): React.JSX.Element {
       )}
     >
       {/* 顶行由 fixed 标题覆盖块承担，这里只留等高占位 */}
-      <div aria-hidden="true" className="h-[46px] shrink-0 " />
+      <div aria-hidden="true" className="shrink-0" style={{ height: TOPBAR_HEIGHT }} />
       {projectFiles.target !== null ? (
         /* 项目文件面板：整个内容区让位（快捷区/搜索/Tab/列表不渲染），底部工具条同图不渲染 */
         <div className="flex min-h-0 flex-1 flex-col pt-1 pb-2">

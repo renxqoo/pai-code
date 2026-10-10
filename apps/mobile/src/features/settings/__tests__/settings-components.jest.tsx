@@ -17,7 +17,7 @@ describe('settings components', () => {
   beforeEach(() => {
     mockPush.mockClear();
     useNavigationStore.setState({ drawerOpen: false, sheet: null });
-    useSettingsStore.setState({ theme: 'system', defaultModel: 'gpt-5.2-codex', defaultThinking: 'medium', defaultPermission: 'ask', notifications: true, haptics: true, compactHistory: false });
+    useSettingsStore.setState({ theme: 'system', defaultModel: 'walk/walk-model', defaultThinking: 'medium', defaultPermission: 'ask', notifications: true, haptics: true, compactHistory: false });
   });
 
   it('renders and changes appearance', async () => {

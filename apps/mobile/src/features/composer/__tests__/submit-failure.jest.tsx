@@ -11,7 +11,8 @@ import { useComposerSubmit } from '../use-composer-submit';
 import { useComposerStore } from '@/store/composer-store';
 import { useConversationStore } from '@/store/conversation-store';
 import { useAttachmentStore } from '@/store/attachment-store';
-import { useDemoModeStore } from '@/store/demo-mode-store';
+import { useHistoryStore } from '@/store/history-store';
+import { testSession } from '@/test/session-fixture';
 import { initializeRelayRuntime, loadBootstrap } from '@/mobile/relay/runtime';
 
 interface InvokeLog {
@@ -60,8 +61,10 @@ describe('发送管线（症状：发不出去 + 只显示未知错误）', () =
   beforeEach(() => {
     useComposerStore.setState({ draft: '', sending: false, generating: false });
     useAttachmentStore.setState({ items: [] });
-    useDemoModeStore.setState({ enabled: false });
     useConversationStore.getState().startNewSession();
+    // 新建会话只认电脑端候选内的目录（cwd 守卫）：给一条在册工作空间
+    useHistoryStore.setState({ sessions: [testSession('ws-session', { project: '/work/agent-app' })], query: '' });
+    useConversationStore.getState().chooseWorkspace('/work/agent-app', 'agent-app', '/work/agent-app');
   });
 
   it('失败原因可读：scope-denied 展示中文原因而非未知错误', async () => {
@@ -108,5 +111,31 @@ describe('发送管线（症状：发不出去 + 只显示未知错误）', () =
     await submitOnce();
     const failure = useConversationStore.getState().session.messages.find((message) => message.kind === 'status');
     expect(failure?.text).toContain('桌面端不可用');
+  });
+
+  it('未选工作空间时拒绝新建（症状：把「未选择工作空间」当目录发给 hub 建出错线程）', async () => {
+    const log = stubHost(() => ({ ok: true, data: null }));
+    useConversationStore.getState().chooseWorkspace('未选择工作空间', '未选择工作空间');
+    useComposerStore.getState().setDraft('继续');
+    await submitOnce();
+    expect(log.map((entry) => entry.command)).not.toContain('session/start');
+    const failure = useConversationStore.getState().session.messages.find((message) => message.kind === 'status');
+    expect(failure?.text).toContain('先选择电脑端已有的工作空间');
+  });
+
+  it('选中的目录不在电脑端候选内时拒绝新建（症状：凭空目录被 hub 写入信任注册表）', async () => {
+    const log = stubHost(() => ({ ok: true, data: null }));
+    useConversationStore.getState().chooseWorkspace('/work/never-used', 'never-used', '/work/never-used');
+    useComposerStore.getState().setDraft('继续');
+    await submitOnce();
+    expect(log.map((entry) => entry.command)).not.toContain('session/start');
+  });
+
+  it('候选内的工作空间带上真路径建会话', async () => {
+    const log = stubHost(() => ({ ok: true, data: { threadId: 't-new' } }));
+    useComposerStore.getState().setDraft('继续');
+    await submitOnce();
+    const start = log.find((entry) => entry.command === 'session/start');
+    expect(start?.args['cwd']).toBe('/work/agent-app');
   });
 });

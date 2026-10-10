@@ -12,8 +12,6 @@ import { useSessionElapsed } from '@/features/chat/use-session-elapsed';
 import { useConversationStore } from '@/store/conversation-store';
 import { useNavigationStore } from '@/store/navigation-store';
 import { useComposerStore } from '@/store/composer-store';
-import { agentConversation } from '@/fixtures/agent-conversation';
-import { useDemoModeStore } from '@/store/demo-mode-store';
 
 export function ChatScreen() {
   const scrollRef = React.useRef<ScrollView>(null);
@@ -25,12 +23,6 @@ export function ChatScreen() {
   const openSheet = useNavigationStore((state) => state.openSheet);
   const setDraft = useComposerStore((state) => state.setDraft);
   const generating = useComposerStore((state) => state.generating);
-  const openSession = useConversationStore((state) => state.openSession);
-  const demoEnabled = useDemoModeStore((state) => state.enabled);
-  const onDemo = () => {
-    openSession(agentConversation);
-    useConversationStore.getState().requestPermission({ id: 'demo-permission', title: '运行移动端检查', command: 'bun test --runInBand', approved: null });
-  };
   
   const onContentSizeChange = () => {
     if (nearBottomRef.current) scrollRef.current?.scrollToEnd({ animated: false });
@@ -47,7 +39,7 @@ export function ChatScreen() {
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ backgroundColor: colors.background, flex: 1 }}>
       <View style={{ paddingTop: insets.top }}><ChatHeader /></View>
       <View style={{ flex: 1 }}>
-        {session.messages.length === 0 ? <EmptyChat detached={session.detached === true} onDemo={demoEnabled ? onDemo : () => {}} onPrompt={setDraft} onWorkspace={() => openSheet('workspace')} /> : <ScrollView ref={scrollRef} testID="conversation-scroll" contentContainerStyle={{ alignSelf: 'center', maxWidth: 760, paddingBottom: bottomPadding, paddingHorizontal: spacing.xs3, width: '100%' }} keyboardShouldPersistTaps="handled" onContentSizeChange={onContentSizeChange} onScroll={onScroll} scrollEventThrottle={16}><TimelineList elapsedMs={elapsedMs} generating={generating} messages={session.messages} /><PermissionCard /></ScrollView>}
+        {session.messages.length === 0 ? <EmptyChat detached={session.detached === true} onPrompt={setDraft} onWorkspace={() => openSheet('workspace')} /> : <ScrollView ref={scrollRef} testID="conversation-scroll" contentContainerStyle={{ alignSelf: 'center', maxWidth: 760, paddingBottom: bottomPadding, paddingHorizontal: spacing.xs3, width: '100%' }} keyboardShouldPersistTaps="handled" onContentSizeChange={onContentSizeChange} onScroll={onScroll} scrollEventThrottle={16}><TimelineList elapsedMs={elapsedMs} generating={generating} messages={session.messages} /><PermissionCard /></ScrollView>}
       </View>
       <View
         onLayout={(event) => setDockHeight(event.nativeEvent.layout.height)}

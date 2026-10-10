@@ -8,7 +8,6 @@ type ComposerState = {
   permission: PermissionMode;
   sending: boolean;
   generating: boolean;
-  contextPercent: number;
   setDraft: (draft: string) => void;
   selectModel: (model: string) => void;
   selectThinking: (thinking: ThinkingLevel) => void;
@@ -16,11 +15,10 @@ type ComposerState = {
   submitDraft: () => boolean;
   toggleGeneration: () => void;
   setGenerating: (generating: boolean) => void;
-  setContextPercent: (percent: number) => void;
 };
 
 export const useComposerStore = create<ComposerState>((set, get) => ({
-  draft: '', model: 'gpt-5.2-codex', thinking: 'medium', permission: 'edit-confirm', sending: false, generating: false, contextPercent: 24,
+  draft: '', model: '', thinking: 'medium', permission: 'edit-confirm', sending: false, generating: false,
   setDraft: (draft) => set({ draft: draft.slice(0, 10000) }),
   selectModel: (model) => set({ model }),
   selectThinking: (thinking) => set({ thinking }),
@@ -33,5 +31,4 @@ export const useComposerStore = create<ComposerState>((set, get) => ({
   },
   toggleGeneration: () => set((state) => ({ generating: !state.generating, sending: false })),
   setGenerating: (generating) => set({ generating }),
-  setContextPercent: (contextPercent) => set({ contextPercent: Math.max(0, Math.min(100, Math.round(contextPercent))) }),
 }));

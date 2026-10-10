@@ -6,7 +6,8 @@
  * **sessionPath**（PC 端真相——sidebar/build-pinned-list 同源），非 cwd。
  * 部分更新（对抗审查 H3 修复）：残缺视图（sessionDied 等）不覆盖既有 title/cwd/
  * lastActivityAt——逐字段缺席保留。
- * 状态映射（M9）：live+streaming=working、live=idle、parked=paused、dead=idle。
+ * 状态映射：live+streaming=working、live/parked=dead 之外的常态=idle、dead=paused
+ * （paused 只表示 worker 异常退出待处理；parked 是闲置回收后的静置，桌面端标「已归档」）。
  */
 import type { ConversationSession } from '@/types/domain';
 
@@ -35,8 +36,11 @@ interface SavedLike {
 
 const stateOf = (raw: SessionLike): ConversationSession['state'] => {
   if (raw.state === 'live') return raw.streaming === true ? 'working' : 'idle';
-  if (raw.state === 'parked') return 'paused';
-  return 'idle'; // dead：折叠为 idle（与 PC 不显示运行态一致）
+  // dead = worker 异常退出（桌面端标「异常」）——唯一需要用户处理的状态；
+  // parked = 闲置回收/重启后的正常静置（桌面端标「已归档」），使用时会懒恢复，
+  // 把它标成待处理会让每一条历史会话都挂红标。
+  if (raw.state === 'dead') return 'paused';
+  return 'idle';
 };
 
 const timeLabelOf = (lastActivityAt: number): string => {
@@ -164,7 +168,7 @@ export function createHistorySync(callbacks: HistorySyncCallbacks) {
   };
 }
 
-/** saved 会话（listSaved）并入（去重 by threadId —— live 优先）。 */
+/** saved 会话（listSaved）并入（去重 by threadId —— live 优先）。盘上历史没有 worker 态，静置即 idle。 */
 export function mergeSaved(current: ConversationSession[], saved: SavedLike[]): ConversationSession[] {
   const live = new Set(current.map((session) => session.id));
   const extra: ConversationSession[] = [];
@@ -175,7 +179,7 @@ export function mergeSaved(current: ConversationSession[], saved: SavedLike[]): 
       preview: '',
       project: raw.cwd ?? '',
       timeLabel: timeLabelOf(raw.lastActivityAt ?? 0),
-      state: 'paused',
+      state: 'idle',
       pinned: false,
       archived: false,
       unread: false,

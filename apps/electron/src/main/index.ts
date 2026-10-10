@@ -19,6 +19,7 @@ import { resolveAppPaths, resolveUserDataDir } from './paths';
 import { createPaiRuntime } from './x3code-runtime';
 import { staleGateway, startGatewayProcess, type GatewayProcess } from './gateway-process';
 import { createProviderKeyStore } from './provider-key-store';
+import { TRAFFIC_LIGHT_Y } from '../shared/window-chrome';
 import { createRuntimeMonitor } from '@x3code/infra';
 import { writeDiagnosticsBundle } from './export-diagnostics';
 
@@ -174,7 +175,7 @@ void app.whenReady().then(async () => {
       show: false,
       // macOS 红绿灯内嵌；Windows 隐藏标题栏（保留系统边框可 resize），caption 由渲染层自绘
       titleBarStyle: isDarwin ? 'hiddenInset' : 'hidden',
-      ...(isDarwin ? { trafficLightPosition: { x: 14, y: 17 } } : {}),
+      ...(isDarwin ? { trafficLightPosition: { x: 14, y: TRAFFIC_LIGHT_Y } } : {}),
       webPreferences: {
         // 沙箱渲染进程只接受 CJS preload（构建配置同步输出 .cjs）
         preload: join(__dirname, '../preload/index.cjs'),

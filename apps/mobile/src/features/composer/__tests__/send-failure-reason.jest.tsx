@@ -12,7 +12,6 @@ import { renderHook } from '@testing-library/react-native';
 import { useComposerSubmit } from '@/features/composer/use-composer-submit';
 import { useComposerStore } from '@/store/composer-store';
 import { useConversationStore } from '@/store/conversation-store';
-import { useDemoModeStore } from '@/store/demo-mode-store';
 
 const invoke = jest.fn();
 
@@ -51,7 +50,6 @@ describe('发送失败原因可见性（症状：只显示 transient）', () => 
   beforeEach(() => {
     invoke.mockReset();
     invoke.mockImplementation((method: string) => Promise.resolve(method === 'session/liveThreads' ? LIVE_T1 : { ok: false, error: { kind: 'transient', message: 'unknown_thread' } }));
-    useDemoModeStore.getState().setEnabled(false);
     useComposerStore.setState({ draft: '', sending: false, generating: false });
     useConversationStore.setState({ permissionRequest: null, activeSessionId: 't1', session: { ...useConversationStore.getState().session, id: 't1', messages: [], detached: false } });
     readyBridge();

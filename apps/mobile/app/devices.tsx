@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { ActivityIndicator, ScrollView, Text, TextInput, View } from 'react-native';
-import { KeyRound, Link2, RefreshCw, Smartphone } from 'lucide-react-native';
+import { Link2, RefreshCw, Smartphone } from 'lucide-react-native';
 import { PageHeader } from '@/components/navigation/page-header';
 import { Card } from '@/components/ui/card';
 import { ContentCard } from '@/components/ui/content-card';
@@ -79,7 +79,6 @@ export default function DevicesRoute() {
   const [pairCode, setPairCode] = React.useState('');
   const [pairing, setPairing] = React.useState(false);
   const [pairError, setPairError] = React.useState<string | null>(null);
-  const [sas, setSas] = React.useState<string | null>(null);
   const [hasCredentials, setHasCredentials] = React.useState(relayCredentialsStore.load() !== null);
   const [qrScanning, setQrScanning] = React.useState(false);
   React.useEffect(() => {
@@ -96,7 +95,6 @@ export default function DevicesRoute() {
     pairingInFlightRef.current = true;
     setPairing(true);
     setPairError(null);
-    setSas(null);
     let wire: ReturnType<typeof makePairingWire> | null = null;
     try {
       wire = makePairingWire(relayUrl, ticket);
@@ -111,13 +109,12 @@ export default function DevicesRoute() {
         deviceInfo: { name: identity.deviceId, deviceType: 'phone', platform: Platform.OS, appVersion: '1' },
       });
       session.onStep((step: PairingStep) => {
-        if (step.phase === 'sas-shown') setSas(step.sas);
         if (step.phase === 'failed') setPairError(step.reason);
       });
       if (manualCode !== undefined) {
         await session.startManual(manualCode, identity.deviceId);
       }
-      // SAS 展示后呈递长期钥（owner 在桌面端按 SAS 确认）
+      // 呈递长期钥（注册表写入门；确认由桌面 owner 自动完成，手机侧不比对数字）
       await session.submitDeviceKeys(identity);
       const registered = await session.waitRegistered();
       if (!registered.ok) {
@@ -230,16 +227,6 @@ export default function DevicesRoute() {
           size="small"
         />
         {pairing ? <ActivityIndicator color={colors.textFaint} style={{ marginTop: spacing.sm }} /> : null}
-        {sas !== null ? (
-          <Card style={{ alignItems: 'center', marginTop: spacing.sm, padding: spacing.xs4 }}>
-            <View style={{ alignItems: 'center', flexDirection: 'row', gap: 8 }}>
-              <KeyRound color={colors.success} size={16} />
-              <Text style={{ color: colors.textMuted, fontSize: 12 }}>比对桌面端数字</Text>
-            </View>
-            <Text style={{ color: colors.text, fontSize: 34, fontWeight: '700', letterSpacing: 8, marginTop: 8 }}>{sas}</Text>
-            <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 6, textAlign: 'center' }}>两串数字一致时在桌面端点「确认」完成配对</Text>
-          </Card>
-        ) : null}
         {pairError !== null ? <Text style={{ color: colors.destructive, fontSize: 12, marginTop: spacing.sm }}>{pairError}</Text> : null}
 
         <QrScanModal

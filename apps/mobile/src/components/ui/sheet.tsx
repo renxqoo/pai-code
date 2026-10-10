@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Modal, Pressable, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X } from 'lucide-react-native';
 import { useAppTheme } from '@/theme/theme-context';
@@ -21,7 +21,9 @@ export function Sheet({ visible, title, onClose, children }: SheetProps) {
             <Text accessibilityRole="header" style={{ color: colors.text, flex: 1, fontSize: 18, fontWeight: '700' }}>{title}</Text>
             <IconButton icon={X} label="关闭" onPress={onClose} />
           </View>
-          {children}
+          <ScrollView contentContainerStyle={{ paddingBottom: spacing.xs4 }} showsVerticalScrollIndicator={false}>
+            {children}
+          </ScrollView>
         </View>
       </View>
     </Modal>

@@ -82,7 +82,7 @@ describe('列表元数据归并（症状：未命名对话 + 20734 天前）', (
     const sessions = emitted[emitted.length - 1] ?? [];
     const row = sessions.find((session) => session.id === 'tOld');
     expect(row?.detached).toBe(false);
-    expect(row?.state).toBe('paused');
+    expect(row?.state).toBe('idle');
     expect(row?.title).toBe('归档会话');
   });
 });

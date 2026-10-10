@@ -25,6 +25,7 @@ import { useCommandPanel } from '@/screens/use-command-panel';
 import { ThreadStage } from '@/screens/thread-stage';
 import { PulsePanel } from '@/pulse-panel/pulse-panel';
 import { NewTaskPage } from '@/screens/new-task-page';
+import { ImageViewerHost } from '@/image-viewer/image-viewer-host';
 import { uiStore } from '@/ui/ui-store';
 
 import { copy } from '@/strings';
@@ -183,6 +184,7 @@ function WorkspaceMain(): React.JSX.Element {
         }}
       />
       <NoticeStrip notices={notices} onDismiss={workspaceActions.dismissNotice} suppressed={commandPanelOpen} />
+      <ImageViewerHost />
     </div>
   );
 }

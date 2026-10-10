@@ -8,7 +8,6 @@ import { AttachmentChip } from '@/features/composer/attachment-chip';
 import { CompactComposer } from '@/features/composer/compact-composer';
 import { FocusedComposer } from '@/features/composer/focused-composer';
 import { useComposerSubmit } from '@/features/composer/use-composer-submit';
-import { useDemoModeStore } from '@/store/demo-mode-store';
 import { getBridge } from '@/mobile/relay/runtime';
 import { useConversationStore } from '@/store/conversation-store';
 
@@ -32,7 +31,6 @@ export function ComposerPanel({ embedded = false }: ComposerPanelProps) {
       return;
     }
     toggleGeneration();
-    if (useDemoModeStore.getState().enabled) return;
     const bridge = getBridge();
     const threadId = useConversationStore.getState().activeSessionId;
     if (bridge?.status === 'ready' && threadId !== null) {

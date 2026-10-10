@@ -2,6 +2,8 @@
   "name": "@x3code/electron",
   "private": true,
   "version": "0.0.0",
+  "description": "X3code desktop app",
+  "author": "wangrenren <wangrenren611@gmail.com>",
   "type": "module",
   "main": "out/main/index.js",
   "scripts": {
@@ -31,7 +33,7 @@
     "@vitejs/plugin-react": "^5.0.2",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.2.6",
-    "electron": "^44.2.0",
+    "electron": "44.7.0",
     "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
     "happy-dom": "^20.14.3",

@@ -5,7 +5,8 @@
     "jsx": "react-jsx",
     "types": ["node"],
     "paths": {
-      "@/*": ["./src/renderer/src/*"]
+      "@/*": ["./src/renderer/src/*"],
+      "@shared/*": ["./src/shared/*"]
     }
   },
   "include": ["src", "electron.vite.config.ts", "vite-plugin-slim-fonts.ts"],

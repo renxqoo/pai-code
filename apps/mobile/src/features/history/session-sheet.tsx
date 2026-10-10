@@ -10,7 +10,6 @@ import { PinAction } from '@/features/history/pin-action';
 import { useConversationStore } from '@/store/conversation-store';
 import { useHistoryStore } from '@/store/history-store';
 import { useNavigationStore } from '@/store/navigation-store';
-import { useDemoModeStore } from '@/store/demo-mode-store';
 import { attachThread, getBridge } from '@/mobile/relay/runtime';
 
 /**
@@ -34,7 +33,6 @@ export function SessionSheet() {
   const close = () => { setTitle(''); closeSheet(); };
 
   const bridgeReady = (): boolean => {
-    if (useDemoModeStore.getState().enabled) return false;
     const bridge = getBridge();
     return bridge?.status === 'ready';
   };

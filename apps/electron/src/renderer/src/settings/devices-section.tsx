@@ -2,10 +2,12 @@ import * as React from 'react';
 import QRCode from 'qrcode';
 
 import type { RelayConfig } from '@x3code/contracts';
+import { readGatewayOwnerResponse } from '@x3code/contracts';
 import { ActionButton } from '@x3code/ui';
-import { KeyRound, QrCode, RefreshCw, ShieldOff, Smartphone } from 'lucide-react';
+import { QrCode, RefreshCw, ShieldOff, Smartphone } from 'lucide-react';
 
 import { copy } from '@/strings';
+import { writeClipboardText } from '@/lib/clipboard';
 import { SettingsCard } from './settings-card';
 import { SettingsPageHeader } from './settings-page-header';
 import { SettingsRow } from './settings-row';
@@ -14,21 +16,22 @@ import { SettingsRow } from './settings-row';
 type GatewayResult = { ok: false; reason: string } | { ok: true; body: Record<string, unknown> };
 
 /**
- * 网关应答判读（单一真相：owner-dispatch 的 response 包裹 `{success, data|error}`）。
- * 失败原因原样透出——曾被形状检查替换成无信息的硬编码兜底文案，排障无从下手。
+ * 网关应答判读（单一真相 = contracts readGatewayOwnerResponse）：失败 error 为
+ * commandError 对象（code+message），reason 取 message、code 兜底——线上不存在
+ * 字符串 error 形态，曾按字符串判读致网关真实原因全部落进「网关未给出原因」兜底。
  */
 function gatewayError(result: GatewayResult): string | null {
   if (!result.ok) return result.reason;
-  const body = result.body as { success?: unknown; error?: unknown };
-  if (body.success === true) return null;
-  return typeof body.error === 'string' && body.error.length > 0 ? body.error : copy.settings.pairFailed;
+  const response = readGatewayOwnerResponse(result.body);
+  if (response === null || response.ok) return null;
+  return response.reason;
 }
 
 /** 成功应答的数据面（`{success:true,data}`）；失败/形状异常 → null。 */
 function gatewayData(result: GatewayResult): unknown {
   if (!result.ok) return null;
-  const body = result.body as { success?: unknown; data?: unknown };
-  return body.success === true ? (body.data ?? null) : null;
+  const response = readGatewayOwnerResponse(result.body);
+  return response?.ok === true ? response.data : null;
 }
 
 /** gw/status 数据。 */
@@ -55,6 +58,8 @@ interface PairingSession {
   qrPayload: string;
   manualCode: string;
   expiresAt: number;
+  /** 复制反馈随会话走：新起一次配对自然是 idle，不必另存一份复位。 */
+  copyState: 'idle' | 'copied' | 'failed';
 }
 
 /** preload gateway 面形状。 */
@@ -75,7 +80,7 @@ const SCOPE_LABEL: Record<string, string> = { read: '只读', interact: '可交�
 const now = (): number => Date.now();
 
 /**
- * 设备与连接（remote-access owner 面板）：网关状态、发起配对（QR 载荷展示 + SAS 确认）、
+ * 设备与连接（remote-access owner 面板）：网关状态、发起配对（QR 载荷 + 6 位码展示，收尾由本机自动确认）、
  * 已配对设备管理（改档/撤销）。数据全部经 gateway owner socket（桌面 = 全权 owner）。
  */
 export function DevicesSection({ relay, onRelaySave }: DevicesSectionProps): React.ReactElement {
@@ -85,10 +90,11 @@ export function DevicesSection({ relay, onRelaySave }: DevicesSectionProps): Rea
   const [devices, setDevices] = React.useState<DeviceRow[]>([]);
   const [pairing, setPairing] = React.useState<PairingSession | null>(null);
   const [pairingScope, setPairingScope] = React.useState<'read' | 'interact' | 'full'>('interact');
-  const [sasInput, setSasInput] = React.useState('');
   const [qrImage, setQrImage] = React.useState<string | null>(null);
-  const [ownerSas, setOwnerSas] = React.useState<string | null>(null);
   const [pairingError, setPairingError] = React.useState<string | null>(null);
+  const [pairDone, setPairDone] = React.useState(false);
+  /** 确认在途锁：确认命令往返期间后续轮询不再重复下发（重复确认会被网关按「已用」拒，面板会冒出假错误）。 */
+  const confirmingRef = React.useRef(false);
   const [busy, setBusy] = React.useState(false);
   const [relayUrl, setRelayUrl] = React.useState(relay.relayUrl);
   const [relayFingerprint, setRelayFingerprint] = React.useState(relay.relayKeyFingerprint);
@@ -149,12 +155,10 @@ export function DevicesSection({ relay, onRelaySave }: DevicesSectionProps): Rea
     return () => clearInterval(timer);
   }, [pairing]);
 
-  // owner 侧 SAS 轮询：手机 PAKE/QR 请求到达后网关即算出，两端数字供目视比对
+  // 配对收尾：手机完成扫码/输码后网关算出比对码，本机（owner）读出并自动确认——
+  // 人不再手输比对码，确认这一步由本机代劳。设备钥呈递与本确认解耦，序次错位时本轮跳过、下轮重试。
   React.useEffect(() => {
-    if (gateway === undefined || pairing === null) {
-      setOwnerSas(null);
-      return;
-    }
+    if (gateway === undefined || pairing === null) return;
     let cancelled = false;
     const tick = (): void => {
       void gateway
@@ -162,7 +166,29 @@ export function DevicesSection({ relay, onRelaySave }: DevicesSectionProps): Rea
         .then((result) => {
           if (cancelled) return;
           const data = gatewayData(result) as { ownerSas?: unknown } | null;
-          if (typeof data?.ownerSas === 'string' && data.ownerSas.length > 0) setOwnerSas(data.ownerSas);
+          const sas = typeof data?.ownerSas === 'string' ? data.ownerSas : '';
+          if (sas.length === 0 || confirmingRef.current) return;
+          confirmingRef.current = true;
+          return gateway
+            .command({ command: 'gw/pairing/confirm', args: { pairingId: pairing.pairingId, ownerTypedSas: sas } })
+            .then((confirmed) => {
+              if (cancelled) return;
+              const failure = gatewayError(confirmed);
+              if (failure === null) {
+                setPairing(null);
+                setPairingError(null);
+                setPairDone(true);
+                refresh();
+                return;
+              }
+              // 设备钥呈递与确认的先后不固定：本轮不算失败，释放在途锁下轮重试
+              // （竞态鉴别按网关原句——error 经镜像解码后的 reason）
+              if (failure === 'device keys not presented') {
+                confirmingRef.current = false;
+                return;
+              }
+              setPairingError(failure);
+            });
         })
         .catch(() => undefined);
     };
@@ -172,13 +198,14 @@ export function DevicesSection({ relay, onRelaySave }: DevicesSectionProps): Rea
       cancelled = true;
       clearInterval(timer);
     };
-  }, [gateway, pairing]);
+  }, [gateway, pairing, refresh]);
 
   const startPairing = (): void => {
     if (gateway === undefined || busy) return;
     setBusy(true);
     setPairingError(null);
-    setSasInput('');
+    setPairDone(false);
+    confirmingRef.current = false;
     void gateway
       .command({ command: 'gw/pairing/start', args: { scope: pairingScope, mode: 'qr' } })
       .then((result) => {
@@ -195,28 +222,7 @@ export function DevicesSection({ relay, onRelaySave }: DevicesSectionProps): Rea
           setPairingError(copy.settings.pairBadResponse);
           return;
         }
-        setPairing({ pairingId, qrPayload, manualCode: typeof manualCode === 'string' ? manualCode : '', expiresAt: now() + 120_000 });
-      })
-      .finally(() => {
-        setBusy(false);
-      });
-  };
-
-  const confirmSas = (): void => {
-    if (gateway === undefined || pairing === null || busy) return;
-    setBusy(true);
-    void gateway
-      .command({ command: 'gw/pairing/confirm', args: { pairingId: pairing.pairingId, ownerTypedSas: sasInput.trim() } })
-      .then((result) => {
-        const failure = gatewayError(result);
-        if (failure !== null) {
-          setPairingError(failure);
-          return;
-        }
-        setPairing(null);
-        setSasInput('');
-        setPairingError(null);
-        refresh();
+        setPairing({ pairingId, qrPayload, manualCode: typeof manualCode === 'string' ? manualCode : '', expiresAt: now() + 120_000, copyState: 'idle' });
       })
       .finally(() => {
         setBusy(false);
@@ -255,9 +261,13 @@ export function DevicesSection({ relay, onRelaySave }: DevicesSectionProps): Rea
     });
   };
 
-  const copyPayload = (): void => {
-    if (pairing === null) return;
-    void navigator.clipboard?.writeText(pairing.qrPayload);
+  const copyPairingCode = (): void => {
+    if (pairing === null || pairing.manualCode.length === 0) return;
+    const manualCode = pairing.manualCode;
+    setPairing((current) => (current === null ? null : { ...current, copyState: 'copied' }));
+    void writeClipboardText(manualCode).then((ok) => {
+      setPairing((current) => (current === null ? null : { ...current, copyState: ok ? 'copied' : 'failed' }));
+    });
   };
 
   if (gateway === undefined) {
@@ -347,57 +357,41 @@ export function DevicesSection({ relay, onRelaySave }: DevicesSectionProps): Rea
             <div className="mt-[14px] flex flex-col gap-[10px]">
               <p className="text-[12px] text-muted-foreground">{copy.settings.pairShowPayload}</p>
               {qrImage !== null ? (
-                <div className="flex items-start gap-[14px]">
-                  <img alt="pairing qr" className="h-[180px] w-[180px] rounded-lg border border-border bg-white p-[6px]" src={qrImage} />
-                  <div className="flex min-w-0 flex-1 flex-col gap-[10px]">
-                    <p className="text-[12px] leading-[17px] text-muted-foreground">手机端「设置 → 设备与连接」扫码，或输入下方 6 位配对码；随后比对两侧数字并在下方确认。</p>
-                    {pairing.manualCode.length > 0 ? (
-                      <p className="select-all font-mono text-[30px] font-bold tracking-[0.32em] text-foreground">{pairing.manualCode}</p>
-                    ) : null}
-                    <div>
-                      <ActionButton size="sm" variant="outline" onClick={copyPayload}>
-                        {copy.settings.pairCopy}
-                      </ActionButton>
-                    </div>
-                  </div>
-                </div>
+                <img alt="pairing qr" className="h-[180px] w-[180px] rounded-lg border border-border bg-white p-[6px]" src={qrImage} />
               ) : (
-                <div className="flex items-center gap-[10px]">
-                  <code className="max-w-full flex-1 overflow-hidden text-ellipsis whitespace-nowrap rounded-lg border border-border bg-surface-subtle px-[10px] py-[8px] text-[11px] text-foreground">
-                    {pairing.qrPayload.slice(0, 96)}…
-                  </code>
-                  <ActionButton size="sm" variant="outline" onClick={copyPayload}>
-                    {copy.settings.pairCopy}
-                  </ActionButton>
-                </div>
+                <code className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap rounded-lg border border-border bg-surface-subtle px-[10px] py-[8px] text-[11px] text-foreground">
+                  {pairing.qrPayload.slice(0, 96)}…
+                </code>
               )}
-              <div className="flex items-center gap-[8px]">
-                {ownerSas !== null ? (
-                  <div className="flex flex-col">
-                    <span className="select-all font-mono text-[22px] font-bold tracking-[0.3em] text-foreground">{ownerSas}</span>
-                    <span className="text-[11px] text-muted-foreground">{copy.settings.sasOwnerLabel}</span>
+              <div className="flex flex-col gap-[10px]">
+                <p className="text-[12px] leading-[17px] text-muted-foreground">{copy.settings.pairScanHint}</p>
+                {/* 6 位码不挂在二维码分支下：二维码生成慢/失败时手输路径仍要有码可抄 */}
+                {pairing.manualCode.length > 0 ? (
+                  <p className="select-all font-mono text-[30px] font-bold tracking-[0.32em] text-foreground">{pairing.manualCode}</p>
+                ) : null}
+                {/* 复制的是 6 位码本身——手机端配对框只收数字，粘 JSON 载荷会被截成第一个数字 */}
+                {pairing.manualCode.length > 0 ? (
+                  <div className="flex items-center gap-[8px]">
+                    <ActionButton size="sm" variant="outline" onClick={copyPairingCode}>
+                      {copy.settings.pairCopy}
+                    </ActionButton>
+                    {pairing.copyState !== 'idle' ? (
+                      <p className={pairing.copyState === 'copied' ? 'text-[12px] text-emerald-600' : 'text-[12px] text-destructive'}>
+                        {pairing.copyState === 'copied' ? copy.settings.pairCodeCopied : copy.settings.pairCopyFailed}
+                      </p>
+                    ) : null}
                   </div>
                 ) : null}
-                <input
-                  aria-label={copy.settings.sasInputLabel}
-                  className="w-[140px] rounded-lg border border-border bg-transparent px-[10px] py-[8px] text-[15px] tracking-[0.3em] text-foreground"
-                  inputMode="numeric"
-                  maxLength={6}
-                  onChange={(event) => { setSasInput(event.target.value.replace(/\D/g, '').slice(0, 6)); }}
-                  placeholder="000000"
-                  value={sasInput}
-                />
-                <ActionButton size="sm" onClick={confirmSas} disabled={sasInput.length !== 6 || busy}>
-                  <KeyRound className="h-[13px] w-[13px]" aria-hidden />
-                  {copy.settings.sasConfirm}
-                </ActionButton>
+              </div>
+              <div className="flex items-center gap-[8px]">
+                <p className="flex-1 text-[12px] text-muted-foreground">{copy.settings.pairWaiting}</p>
                 <ActionButton size="sm" variant="outline" onClick={cancelPairing}>
                   {copy.settings.pairCancel}
                 </ActionButton>
               </div>
-              <p className="text-[12px] text-muted-foreground">{ownerSas !== null ? copy.settings.sasCompareHint : copy.settings.sasWaitHint}</p>
             </div>
           ) : null}
+          {pairDone && pairing === null ? <p className="mt-[10px] text-[12px] text-emerald-600">{copy.settings.pairDone}</p> : null}
           {pairingError !== null ? <p className="mt-[10px] text-[12px] text-destructive">{pairingError}</p> : null}
         </SettingsCard>
 

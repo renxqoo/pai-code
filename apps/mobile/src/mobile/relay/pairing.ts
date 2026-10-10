@@ -4,8 +4,8 @@
  * 两条路径（WIRE 契约）：
  * - QR：扫桌面端 qrPayload {relayUrl, pairingId, gatewayEphemeralPub}（含 pairingTicket）→
  *   连 relay /pairing 面 → request {ephemeralPub, deviceInfo} → 回 sas {sas, gatewaySignature}
- * - 手输码：输 8 位码 → PAKE（pake-a → pake-b+confirm）
- * 共同收尾：SAS 目视比对由 owner 在桌面端确认（confirmWithSas 带 deviceLongTermPub）；
+ * - 手输码：输 6 位码 → PAKE（pake-a → pake-b+confirm）
+ * 共同收尾：SAS 由桌面 owner 自动比对确认（confirmWithSas 带 deviceLongTermPub）；
  * 手机侧呈递 device-keys 帧 → ack → 等待 ready 转正式会话。
  *
  * 帧线格式：L3 明文信封（pairing_ 地址域——配对通道无 ratchet，钥建立前的约定形态）。
@@ -53,13 +53,13 @@ export interface PairingSessionLike {
   readonly registeredDeviceId: string | null;
   /** relay 节点 id（token 续期签名挑战的转录域；ack 未带则 null）。 */
   readonly relayNodeId: string | null;
-  /** SAS 6 位（目视比对——桌面 owner 端输入确认）。 */
+  /** SAS 6 位（桌面 owner 自动确认；手机侧不再展示比对）。 */
   readonly sas: string | null;
   /** 步进回调（UI 驱动面）；返回退订。 */
   onStep(listener: (step: PairingStep) => void): () => void;
-  /** 8 位手输码发起（QR 路径跳过）。 */
+  /** 6 位手输码发起（QR 路径跳过）。 */
   startManual(code: string, deviceName: string): Promise<void>;
-  /** 呈递设备长期钥（SAS 确认后——gateway 注册表写入门）。 */
+  /** 呈递设备长期钥（owner 确认时 gateway 注册表写入门）。 */
   submitDeviceKeys(keys: DeviceIdentity): Promise<void>;
   /** 等注册完成（owner confirm 落账——poll gateway 注册态或收 ready 帧）。 */
   waitRegistered(timeoutMs?: number): Promise<{ ok: true; sharedSecret: string } | { ok: false; reason: string }>;

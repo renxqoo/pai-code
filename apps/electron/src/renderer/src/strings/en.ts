@@ -399,5 +399,15 @@ export const en = {
     searchPlaceholder: 'Search models...',
     empty: 'No matching models',
   },
+  imageViewer: {
+    close: 'Close preview',
+    zoomIn: 'Zoom in',
+    zoomOut: 'Zoom out',
+    reset: 'Reset zoom',
+    prev: 'Previous image',
+    next: 'Next image',
+    error: 'Image not available',
+    counter: (index: number, total: number): string => `Image ${index} of ${total}`,
+  },
   errorCopy: enErrorCopy,
 };

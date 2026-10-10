@@ -48,6 +48,7 @@ async function flush(): Promise<void> {
   });
 }
 
+
 const buttonOf = (view: RenderHandle, text: string): HTMLButtonElement | undefined =>
   [...view.container.querySelectorAll('button')].find((button) => button.textContent?.includes(text));
 
@@ -57,12 +58,28 @@ afterEach(() => {
 });
 
 describe('DevicesSection（症状回归：配对失败被吞成兜底文案）', () => {
-  test('症状回归：网关 success:false 应答 → 展示网关原因，不出现 bad pairing response', async () => {
-    const view = section({}, () => Promise.resolve({ ok: true, body: { success: false, error: 'relayKeyFingerprint required for QR pairing' } }));
+  test('症状回归：网关 success:false 应答（error 为 commandError 对象）→ 展示 message，不出现 bad pairing response', async () => {
+    const view = section({}, () => Promise.resolve({ ok: true, body: { success: false, error: { code: 'gw-command-failed', message: 'relayKeyFingerprint required for QR pairing' } } }));
     buttonOf(view, copy.settings.pairStart)?.click();
     await flush();
     expect(view.container.textContent).toContain('relayKeyFingerprint required for QR pairing');
     expect(view.container.textContent).not.toContain('bad pairing response');
+    view.unmount();
+  });
+
+  test('症状回归：error 无 message（如 owner-only 判定）→ reason 取 code', async () => {
+    const view = section({}, () => Promise.resolve({ ok: true, body: { success: false, error: { code: 'owner-only' } } }));
+    buttonOf(view, copy.settings.pairStart)?.click();
+    await flush();
+    expect(view.container.textContent).toContain('owner-only');
+    view.unmount();
+  });
+
+  test('症状回归：error 缺席（host 透逓路径）→ reason 取 code 兑底（诚实展示机器码）', async () => {
+    const view = section({}, () => Promise.resolve({ ok: true, body: { success: false } }));
+    buttonOf(view, copy.settings.pairStart)?.click();
+    await flush();
+    expect(view.container.textContent).toContain('gw-command-failed');
     view.unmount();
   });
 
@@ -157,6 +174,54 @@ describe('DevicesSection（症状回归：配对失败被吞成兜底文案）',
     view.unmount();
   });
 
+  test('症状回归：配对面不再要人输入比对码（面板无 SAS 输入框、无确认按钮）', async () => {
+    const view = section({}, (payload) => {
+      if (payload.command === 'gw/pairing/start') return okBody({ pairingId: 'p1', qrPayload: 'payload-1', manualCode: '246813' });
+      return okBody({});
+    });
+    buttonOf(view, copy.settings.pairStart)?.click();
+    await flush();
+    const inputs = [...view.container.querySelectorAll('input')].map((input) => input.getAttribute('aria-label'));
+    expect(inputs).not.toContain('SAS 确认码');
+    expect(view.container.textContent).toContain('246813');
+    expect(view.container.textContent).toContain(copy.settings.pairWaiting);
+    view.unmount();
+  });
+
+  test('手机完成扫码/输码后本机自动确认：用网关给的比对码发 gw/pairing/confirm', async () => {
+    const confirms: Array<Record<string, unknown>> = [];
+    const view = section({}, (payload) => {
+      if (payload.command === 'gw/pairing/start') return okBody({ pairingId: 'p1', qrPayload: 'payload-1', manualCode: '246813' });
+      if (payload.command === 'gw/pairing/status') return okBody({ pairingId: 'p1', ownerSas: '392653' });
+      if (payload.command === 'gw/pairing/confirm') {
+        confirms.push(payload.args ?? {});
+        return okBody({ deviceId: 'd-1' });
+      }
+      return okBody({});
+    });
+    buttonOf(view, copy.settings.pairStart)?.click();
+    await flush();
+    await flush();
+    expect(confirms).toEqual([{ pairingId: 'p1', ownerTypedSas: '392653' }]);
+    expect(view.container.textContent).toContain(copy.settings.pairDone);
+    view.unmount();
+  });
+
+  test('设备钥尚未呈递 → 本轮静默跳过（不把正常时序差报成失败）', async () => {
+    const view = section({}, (payload) => {
+      if (payload.command === 'gw/pairing/start') return okBody({ pairingId: 'p1', qrPayload: 'payload-1', manualCode: '246813' });
+      if (payload.command === 'gw/pairing/status') return okBody({ pairingId: 'p1', ownerSas: '392653' });
+      if (payload.command === 'gw/pairing/confirm') return { ok: true, body: { success: false, error: { code: 'gw-command-failed', message: 'device keys not presented' } } };
+      return okBody({});
+    });
+    buttonOf(view, copy.settings.pairStart)?.click();
+    await flush();
+    await flush();
+    expect(view.container.textContent).not.toContain('device keys not presented');
+    expect(view.container.textContent).toContain(copy.settings.pairWaiting);
+    view.unmount();
+  });
+
   test('relay 表单：草稿取自偏好面，保存回传完整配置', async () => {
     const saved: Array<{ relayUrl: string; relayKeyFingerprint: string }> = [];
     stubGateway();
@@ -182,6 +247,85 @@ describe('DevicesSection（症状回归：配对失败被吞成兜底文案）',
     expect(saved).toEqual([{ remoteEnabled: true, relayUrl: 'wss://relay.example.com', relayKeyFingerprint: 'fp-1' }]);
     expect(view.container.textContent).toContain(copy.settings.relaySaved);
     view.unmount();
+  });
+});
+
+/**
+ * 症状回归：点「复制」拿到的内容始终是 "1"。
+ * 手机端配对框是 maxLength=6 + 只留数字，PC 端复制的是配对载荷 JSON 时，
+ * 粘贴后前 6 个字符是 {"v":1, → 过滤后正好剩 1，用户永远配不上对。
+ * 复制必须落在 6 位配对码本身，且写失败要如实报。
+ */
+describe('配对码复制（症状：复制内容始终是 1）', () => {
+  const pairingData = (manualCode: string): Record<string, unknown> => ({
+    pairingId: 'pr_1',
+    manualCode,
+    qrPayload: '{"v":1,"relayUrl":"ws://192.168.1.2:8787","pairingId":"pr_1","pairingTicket":"tk"}',
+  });
+
+  /**
+   * 点击连同其后整条 then 链（配对命令 / 剪贴板写入）一起进 act：
+   * 拆成 click + flush 会把中途的状态更新漏在 act 之外，测试噪音只增不减。
+   */
+  async function press(view: RenderHandle, text: string): Promise<void> {
+    await React.act(async () => {
+      buttonOf(view, text)?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  }
+
+  function withClipboard(writeText: (text: string) => Promise<void>): () => void {
+    const prior = Object.getOwnPropertyDescriptor(globalThis.navigator, 'clipboard');
+    Object.defineProperty(globalThis.navigator, 'clipboard', { value: { writeText }, configurable: true });
+    return () => {
+      if (prior === undefined) delete (globalThis.navigator as { clipboard?: unknown }).clipboard;
+      else Object.defineProperty(globalThis.navigator, 'clipboard', prior);
+    };
+  }
+
+  test('复制的是 6 位配对码本身，不是 JSON 配对载荷', async () => {
+    const written: string[] = [];
+    const restore = withClipboard((text) => { written.push(text); return Promise.resolve(); });
+    try {
+      const view = section({}, (payload) => payload.command === 'gw/pairing/start' ? okBody(pairingData('681206')) : Promise.resolve({ ok: true, body: {} }));
+      await press(view, copy.settings.pairStart);
+      expect(view.container.textContent).toContain('681206');
+      await press(view, copy.settings.pairCopy);
+      expect(written).toEqual(['681206']);
+      expect(written[0]).not.toContain('relayUrl');
+      expect(view.container.textContent).toContain(copy.settings.pairCodeCopied);
+      view.unmount();
+    } finally {
+      restore();
+    }
+  });
+
+  test('剪贴板写失败如实报，不让用户以为复制成功', async () => {
+    const restore = withClipboard(() => Promise.reject(new Error('denied')));
+    try {
+      const view = section({}, (payload) => payload.command === 'gw/pairing/start' ? okBody(pairingData('681206')) : Promise.resolve({ ok: true, body: {} }));
+      await press(view, copy.settings.pairStart);
+      await press(view, copy.settings.pairCopy);
+      expect(view.container.textContent).toContain(copy.settings.pairCopyFailed);
+      view.unmount();
+    } finally {
+      restore();
+    }
+  });
+
+  test('没有 6 位码时不给复制入口（复制空串是静默失败）', async () => {
+    const written: string[] = [];
+    const restore = withClipboard((text) => { written.push(text); return Promise.resolve(); });
+    try {
+      const view = section({}, (payload) => payload.command === 'gw/pairing/start' ? okBody({ pairingId: 'pr_1', manualCode: '', qrPayload: '{"v":1}' }) : Promise.resolve({ ok: true, body: {} }));
+      await press(view, copy.settings.pairStart);
+      expect(buttonOf(view, copy.settings.pairCopy)).toBeUndefined();
+      view.unmount();
+    } finally {
+      restore();
+    }
   });
 });
 

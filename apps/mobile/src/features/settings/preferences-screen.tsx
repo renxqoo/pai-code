@@ -12,14 +12,13 @@ import { useNavigationStore } from '@/store/navigation-store';
 import { useSettingsStore } from '@/store/settings-store';
 import { useAppTheme } from '@/theme/theme-context';
 import { spacing } from '@/theme/tokens';
-import { models, thinkingLevels } from '@/strings/zh';
+import { thinkingLevels } from '@/strings/zh';
 
 export function PreferencesScreen() {
   const router = useRouter();
   const { colors } = useAppTheme();
   const settings = useSettingsStore();
   const openSheet = useNavigationStore((state) => state.openSheet);
-  const model = models.find((item) => item.id === settings.defaultModel);
   const thinking = thinkingLevels.find((item) => item.id === settings.defaultThinking);
   const permission = { 'edit-confirm': '每次确认', auto: '自动批准', plan: '仅规划', full: '完全信任' }[settings.defaultPermission];
   return (
@@ -29,7 +28,7 @@ export function PreferencesScreen() {
         <ScrollView contentContainerStyle={{ padding: spacing.xs3 }}>
           <SectionHeader title="默认任务行为" />
           <ContentCard items={[
-            { detail: '新对话使用的模型', label: '默认模型', onPress: () => router.push('/models'), trailing: model?.name ?? '选择' },
+            { detail: '新对话使用的模型', label: '默认模型', onPress: () => router.push('/models'), trailing: settings.defaultModel ?? '选择' },
             { detail: '新对话的思考强度', label: '默认思考强度', onPress: () => openSheet('settings-thinking'), trailing: thinking?.label ?? '选择' },
             { detail: '新对话的权限模式', label: '默认权限模式', onPress: () => openSheet('settings-permission'), trailing: permission },
           ]} />

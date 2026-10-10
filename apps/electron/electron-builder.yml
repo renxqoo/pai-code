@@ -11,7 +11,7 @@ productName: X3code
 electronDownload:
   force: false
   checksums:
-    electron-v44.2.0-darwin-arm64.zip: f906dff5d054b1b92e5711781b13cc206fd7139ce66467503b9d0a3e6fbc9b02
+    electron-v44.7.0-darwin-arm64.zip: e04e411b58a0a14375dd21b0ab4a378fd38930a702e4e20e322fee4849404c0b
 directories:
   output: release
 files:

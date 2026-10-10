@@ -8,6 +8,7 @@
 
 export type EscAction =
   | { kind: 'none' }
+  | { kind: 'close-image-viewer' }
   | { kind: 'close-usage' }
   | { kind: 'close-project-files' }
   | { kind: 'close-new-task' }
@@ -42,6 +43,8 @@ export type EscState = {
   generating: boolean;
   /** 存在在途子代理时停止不可恢复，需先经确认条。 */
   agentsActive: boolean;
+  /** 图片预览灯箱（最上层覆盖层）：开着时 Esc 只关灯箱，不穿透底层链。 */
+  imageViewerOpen: boolean;
 };
 
 export type EscLayer = {
@@ -51,8 +54,9 @@ export type EscLayer = {
   readonly action: EscAction;
 };
 
-/** 覆盖层收起注册表：注册序即 Esc 收起序——本地浮层 → 命令面板（兜底层）→ 整页覆盖（用量/新建任务/设置）→ 侧栏内嵌层（文件面板）→ 右侧面板容器。 */
+/** 覆盖层收起注册表：注册序即 Esc 收起序——灯箱（全屏最上层）→ 本地浮层 → 命令面板（兜底层）→ 整页覆盖（用量/新建任务/设置）→ 侧栏内嵌层（文件面板）→ 右侧面板容器。 */
 export const escLayers: readonly EscLayer[] = [
+  { id: 'image-viewer', isOpen: (state) => state.imageViewerOpen, action: { kind: 'close-image-viewer' } },
   { id: 'local-dialog', isOpen: (state) => state.localDialogOpen, action: { kind: 'close-local-dialog' } },
   { id: 'command-panel', isOpen: (state) => state.commandPanelOpen, action: { kind: 'none' } },
   { id: 'usage', isOpen: (state) => state.usageOpen, action: { kind: 'close-usage' } },

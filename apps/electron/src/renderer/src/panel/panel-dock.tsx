@@ -4,6 +4,7 @@ import { X } from 'lucide-react';
 import { IconButton } from '@x3code/ui';
 
 import { WINDOWS_CAPTION_WIDTH } from '@/lib/platform';
+import { TOPBAR_HEIGHT } from '@shared/window-chrome';
 
 type PanelDockTab = {
   id: string
@@ -33,8 +34,8 @@ function PanelDock({ tabs, activeId, onSelect, onCloseTab, onClose, closeAria, c
   return (
     <aside className="flex h-full w-[360px] shrink-0 flex-col border-l border-border bg-background">
       <div
-        className="flex h-[46px] shrink-0 items-center gap-[6px] border-b border-border pl-[10px]"
-        style={{ paddingRight: WINDOWS_CAPTION_WIDTH + 10 }}
+        className="flex shrink-0 items-center gap-[6px] border-b border-border pl-[10px]"
+        style={{ height: TOPBAR_HEIGHT, paddingRight: WINDOWS_CAPTION_WIDTH + 10 }}
       >
         <div className="flex min-w-0 flex-1 items-center gap-[4px] overflow-x-auto">
           {tabs.map((tab) => {

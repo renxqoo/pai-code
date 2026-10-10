@@ -2,15 +2,9 @@ import * as React from 'react';
 import { Text, View } from 'react-native';
 import { useAppTheme } from '@/theme/theme-context';
 import { radius, spacing } from '@/theme/tokens';
-import { useDemoModeStore } from '@/store/demo-mode-store';
 import { getBridge, useBridgeStatus } from '@/mobile/relay/runtime';
 import { useConversationStore } from '@/store/conversation-store';
-
-const demoUsage = [
-  { label: 'GPT-5.2 Codex', percent: 62, value: '79.6K' },
-  { label: 'Claude Sonnet 5', percent: 24, value: '30.8K' },
-  { label: 'Gemini 3 Pro', percent: 14, value: '18.0K' },
-] as const;
+import { copy } from '@/strings/zh';
 
 interface UsageRow {
   label: string;
@@ -21,12 +15,11 @@ interface UsageRow {
 /** 活跃会话的 token 分析（session/tokenAnalytics：used/window 构成占比）。 */
 export function UsageCard() {
   const { colors } = useAppTheme();
-  const demo = useDemoModeStore((state) => state.enabled);
   const { status } = useBridgeStatus();
   const [rows, setRows] = React.useState<readonly UsageRow[] | null>(null);
 
   React.useEffect(() => {
-    if (demo || status !== 'ready') return;
+    if (status !== 'ready') return;
     const bridge = getBridge();
     if (bridge === null) return;
     const threadId = useConversationStore.getState().activeSessionId;
@@ -53,13 +46,13 @@ export function UsageCard() {
       }
       setRows(rowsOut);
     });
-  }, [demo, status]);
+  }, [status]);
 
-  const list: readonly UsageRow[] = demo ? demoUsage : (rows ?? []);
+  const list: readonly UsageRow[] = rows ?? [];
 
   return (
     <View style={{ backgroundColor: colors.surface, borderRadius: 24, padding: spacing.xs4, shadowColor: '#3F3F46', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.07, shadowRadius: 22, elevation: 3 }}>
-      {list.length === 0 ? <Text style={{ color: colors.textMuted, fontSize: 13, paddingVertical: 10 }}>连接电脑并打开一个会话后显示用量。</Text> : null}
+      {list.length === 0 ? <Text style={{ color: colors.textMuted, fontSize: 13, paddingVertical: 10 }}>{copy.usageNoSession}</Text> : null}
       {list.map((item, index) => (
         <View key={item.label} style={{ borderTopColor: colors.divider, borderTopWidth: index === 0 ? 0 : 1, paddingVertical: 13 }}>
           <View style={{ alignItems: 'center', flexDirection: 'row' }}>

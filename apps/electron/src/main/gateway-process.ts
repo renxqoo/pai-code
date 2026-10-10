@@ -11,6 +11,14 @@ import { connect, type Socket } from 'node:net';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import type { GatewayCommandError } from '@x3code/contracts';
+
+/**
+ * 管道合成终局（网关入口缺失/断连/退出/超时）：与线上 commandError 同形状，
+ * IPC 管道里 error 只有一种形态——渲染层按 code/message 单一真相判读。
+ */
+const gatewayFailure = (code: string, message: string): GatewayCommandError => ({ code, message });
+
 export interface OwnerFrame {
   kind: string;
   streamId?: string;
@@ -53,10 +61,10 @@ const COMMAND_DEFAULT_TIMEOUT_MS = 10_000;
 export function startGatewayProcess(deps: GatewayProcessDeps): GatewayProcess {
   const log = (message: string): void => deps.log(message);
   /** 拒挂起命令：响应永不到达（子进程退出/连接断开），立即结案而非空等超时。 */
-  const failPending = (reason: string): void => {
+  const failPending = (error: GatewayCommandError): void => {
     for (const waiter of pending.values()) {
       clearTimeout(waiter.timer);
-      waiter.resolve({ id: '', command: '', success: false, error: reason });
+      waiter.resolve({ id: '', command: '', success: false, error });
     }
     pending.clear();
   };
@@ -74,7 +82,7 @@ export function startGatewayProcess(deps: GatewayProcessDeps): GatewayProcess {
     log('gateway_entry_missing');
     state = 'stopped';
     return {
-      command: () => Promise.resolve({ id: '', command: '', success: false, error: 'gateway not configured' }),
+      command: () => Promise.resolve({ id: '', command: '', success: false, error: gatewayFailure('gateway-not-configured', 'gateway not configured') }),
       onEvent: () => () => undefined,
       connected: () => false,
       status: () => 'stopped',
@@ -104,7 +112,7 @@ export function startGatewayProcess(deps: GatewayProcessDeps): GatewayProcess {
     state = 'stopped';
     socket?.destroy();
     socket = null;
-    failPending('gateway exited');
+    failPending(gatewayFailure('gateway-exited', 'gateway exited'));
   });
 
   const dispatchFrame = (frame: OwnerFrame): void => {
@@ -153,7 +161,7 @@ export function startGatewayProcess(deps: GatewayProcessDeps): GatewayProcess {
       if (socket === s) {
         socket = null;
         state = child?.exitCode === null ? 'starting' : 'stopped';
-        failPending('gateway not connected');
+        failPending(gatewayFailure('gateway-not-connected', 'gateway not connected'));
         setTimeout(connectOwner, 1_500);
       }
     });
@@ -169,14 +177,14 @@ export function startGatewayProcess(deps: GatewayProcessDeps): GatewayProcess {
     command(spec) {
       return new Promise((resolve) => {
         if (socket === null) {
-          resolve({ id: '', command: spec.command, success: false, error: 'gateway not connected' });
+          resolve({ id: '', command: spec.command, success: false, error: gatewayFailure('gateway-not-connected', 'gateway not connected') });
           return;
         }
         ownerSeq += 1;
         const id = `o${ownerSeq}`;
         const timer = setTimeout(() => {
           pending.delete(id);
-          resolve({ id, command: spec.command, success: false, error: 'timeout' });
+          resolve({ id, command: spec.command, success: false, error: gatewayFailure('gateway-timeout', `timeout after ${spec.timeoutMs ?? COMMAND_DEFAULT_TIMEOUT_MS}ms`) });
         }, spec.timeoutMs ?? COMMAND_DEFAULT_TIMEOUT_MS);
         pending.set(id, { resolve, timer });
         socket.write(`${JSON.stringify({ kind: 'command', streamId: 'owner', seq: ownerSeq, body: { command: spec.command, id, args: spec.args ?? {} } })}\n`);
@@ -194,7 +202,7 @@ export function startGatewayProcess(deps: GatewayProcessDeps): GatewayProcess {
       state = 'stopped';
       socket?.destroy();
       socket = null;
-      failPending('gateway stopped');
+      failPending(gatewayFailure('gateway-not-connected', 'gateway stopped'));
       if (child?.exitCode === null) {
         const dying = child;
         await new Promise<void>((resolve) => {

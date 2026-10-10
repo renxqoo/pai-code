@@ -2,22 +2,32 @@ import { fireEvent, render, within } from "@testing-library/react-native";
 import { beforeEach, describe, expect, it } from "@jest/globals";
 import * as React from "react";
 import { ChatScreen } from "@/features/chat/chat-screen";
-import { demoSessions } from "@/fixtures/demo-data";
+import { testSession } from "@/test/session-fixture";
 import { useConversationStore } from "@/store/conversation-store";
 import { useNavigationStore } from "@/store/navigation-store";
 import { useComposerStore } from "@/store/composer-store";
-import { useDemoModeStore } from "@/store/demo-mode-store";
 import { TestWrapper } from "@/test/test-wrapper";
+
+const session = testSession("session-timeline", {
+  title: "时间线走查",
+  preview: "折叠过程流与底部避让。",
+  project: "agent-app",
+  messages: [
+    { id: "u1", kind: "user", text: "把思考与工具调用收拢成可折叠的过程流。", createdAt: "10:00" },
+    { id: "a1", kind: "assistant", text: "过程流默认折叠，正文与状态保持独立。", createdAt: "10:01" },
+    { id: "t1", kind: "tool", toolName: "bash", createdAt: "10:01", status: "ok", durationMs: 900, exitCode: 0, argsPreview: "bun test", text: "18 suites 通过" },
+    { id: "s1", kind: "status", text: "时间线分组落地", createdAt: "10:02", status: "ok", durationMs: 12000, summary: "0 个错误" },
+  ],
+});
 
 describe("ChatScreen", () => {
   beforeEach(() => {
-    useDemoModeStore.getState().setEnabled(true);
     useConversationStore.getState().startNewSession();
     useNavigationStore.setState({ drawerOpen: false, sheet: null });
     useComposerStore.setState({ generating: false });
   });
 
-  it("renders empty chat, opens workspace and enters the demo timeline", async () => {
+  it("renders empty chat and opens workspace（无示例对话入口）", async () => {
     const view = await render(
       <TestWrapper>
         <ChatScreen />
@@ -25,14 +35,11 @@ describe("ChatScreen", () => {
     );
     await fireEvent.press(view.getByText("选择工作空间"));
     expect(useNavigationStore.getState().sheet).toBe("workspace");
-    await fireEvent.press(view.getByText("查看示例对话"));
-    expect(useConversationStore.getState().session.id).toBe("session-agent-journey");
-    expect(useConversationStore.getState().permissionRequest?.approved).toBeNull();
+    expect(view.queryByText("查看示例对话")).toBeNull();
+    expect(useConversationStore.getState().session.messages).toHaveLength(0);
   });
 
   it("tracks near-bottom scroll state without pulling the view away", async () => {
-    const session = demoSessions[0];
-    if (session === undefined) throw new Error("fixture missing");
     useConversationStore.getState().openSession(session);
     const view = await render(
       <TestWrapper>
@@ -63,8 +70,6 @@ describe("ChatScreen", () => {
   });
 
   it("renders a folded process turn, its result and the composer", async () => {
-    const session = demoSessions[0];
-    if (session === undefined) throw new Error("fixture missing");
     useConversationStore.getState().openSession(session);
     const view = await render(
       <TestWrapper>
@@ -78,8 +83,6 @@ describe("ChatScreen", () => {
   });
 
   it("底部避让随实测输入区高度走（症状：iOS 上最底部消息/加载行被输入框遮盖）", async () => {
-    const session = demoSessions[0];
-    if (session === undefined) throw new Error("fixture missing");
     useConversationStore.getState().openSession(session);
     const view = await render(
       <TestWrapper>
@@ -97,8 +100,6 @@ describe("ChatScreen", () => {
   });
 
   it("执行中指示在消息流末尾随列表滚动、不悬浮在输入区上方（症状：单条消息时与末消息隔着大片空白）", async () => {
-    const session = demoSessions[0];
-    if (session === undefined) throw new Error("fixture missing");
     useConversationStore.getState().openSession(session);
     useComposerStore.setState({ generating: true });
     const view = await render(

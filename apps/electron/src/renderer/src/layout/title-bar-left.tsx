@@ -7,6 +7,7 @@ import { IconButton } from '@x3code/ui';
 import { useObservedWidth } from '@/hooks/use-observed-width';
 import { useWindowState } from '@/hooks/use-window-state';
 import { TITLEBAR_LEFT_PADDING, TITLEBAR_LEFT_PADDING_FULLSCREEN } from '@/lib/platform';
+import { TOPBAR_HEIGHT } from '@shared/window-chrome';
 
 type TitleBarLeftProps = {
   titleName: string
@@ -32,8 +33,9 @@ function TitleBarLeft({ titleName, toggleLabel, collapsed, sidebarWidth, onToggl
   return (
     <div
       ref={rootRef}
-      className="app-drag pointer-events-none fixed top-0 left-0 z-30 flex h-[46px] items-center gap-[10px] pr-4 transition-[padding] duration-200 motion-reduce:transition-none"
+      className="app-drag pointer-events-none fixed top-0 left-0 z-30 flex items-center gap-[10px] pr-4 transition-[padding] duration-200 motion-reduce:transition-none"
       style={{
+        height: TOPBAR_HEIGHT,
         paddingLeft: fullscreen ? TITLEBAR_LEFT_PADDING_FULLSCREEN : TITLEBAR_LEFT_PADDING,
         maxWidth: collapsed ? undefined : sidebarWidth,
       }}

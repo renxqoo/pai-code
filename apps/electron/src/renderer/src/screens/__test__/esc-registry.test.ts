@@ -20,12 +20,14 @@ function base(overrides: Partial<EscState> = {}): EscState {
     confirmStop: false,
     generating: false,
     agentsActive: false,
+    imageViewerOpen: false,
     ...overrides,
   };
 }
 
 /** 各层 isOpen 对应的 EscState 开关位（表驱动种子）。 */
 const layerSwitches: Readonly<Record<string, Partial<EscState>>> = {
+  'image-viewer': { imageViewerOpen: true },
   'local-dialog': { localDialogOpen: true },
   'command-panel': { commandPanelOpen: true },
   usage: { usageOpen: true },
@@ -40,6 +42,7 @@ describe('escLayers 注册表', () => {
     const kinds = escLayers.map((layer) => layer.action.kind);
     expect(new Set(kinds).size).toBe(escLayers.length); // 无重复
     expect(kinds).toEqual([
+      'close-image-viewer',
       'close-local-dialog',
       // 兜底层：产出的 none 也占词表一位，保证「每层恰一个动作」不被后来者绕过
       'none',

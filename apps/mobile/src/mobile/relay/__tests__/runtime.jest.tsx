@@ -89,7 +89,7 @@ describe('relay runtime 路由与装配分支', () => {
     });
   });
 
-  it('sessionDied：活跃线程收敛一次（恰一次失败行）+ 历史列表 dead 态', () => {
+  it('sessionDied：活跃线程收敛一次（恰一次失败行）+ 历史列表 dead 标异常', () => {
     const rt = initializeRelayRuntime();
     const client = rt.client as unknown as { dispatch(rawEvent: unknown): void };
     attachThread('t-die');
@@ -101,7 +101,7 @@ describe('relay runtime 路由与装配分支', () => {
     expect(failureRows.length).toBe(1);
     expect(conversationStoreModule.useConversationStore.getState().session.messages.length).toBeGreaterThan(0);
     const { useHistoryStore } = historyStoreModule;
-    expect(useHistoryStore.getState().sessions.find((s) => s.id === 't-die')?.state).toBe('idle');
+    expect(useHistoryStore.getState().sessions.find((s) => s.id === 't-die')?.state).toBe('paused');
     attachThread(null);
   });
 

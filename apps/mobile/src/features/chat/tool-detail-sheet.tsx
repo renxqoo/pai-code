@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { Clock3 } from 'lucide-react-native';
 
 import { detailOutput, toolKindOf, toolPreviewMono, toolRowLabelOf, toolSummary } from '@x3code/ui-thread';
@@ -34,7 +34,6 @@ export function ToolDetailSheet() {
   const rowIcon = view === null ? toolRowIcon('') : toolRowIcon(view.name);
   return (
     <Sheet onClose={close} title={copy.toolDetailTitle} visible={message !== null}>
-      <ScrollView contentContainerStyle={{ paddingBottom: spacing.xs5 }} showsVerticalScrollIndicator={false}>
         <View style={{ alignItems: 'center', flexDirection: 'row', marginBottom: spacing.sm, marginTop: spacing.xs }}>
           {React.createElement(rowIcon, { color: colors.textMuted, size: 16 })}
           <Text accessibilityRole="header" style={{ color: colors.text, fontSize: type.row.fontSize, fontWeight: '700', marginLeft: 7 }}>
@@ -90,7 +89,6 @@ export function ToolDetailSheet() {
         <Text style={{ color: colors.textMuted, fontSize: type.row.fontSize, lineHeight: type.row.lineHeight, marginTop: spacing.sm }}>
           {copy.toolDetailNote}
         </Text>
-      </ScrollView>
     </Sheet>
   );
 }

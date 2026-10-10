@@ -1,15 +1,15 @@
 import * as React from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { Code2, MessageSquareText, SearchCheck, ShieldCheck } from 'lucide-react-native';
+import { Code2, SearchCheck, ShieldCheck } from 'lucide-react-native';
 import { useAppTheme } from '@/theme/theme-context';
 import { radius, spacing, type } from '@/theme/tokens';
 import { X3codeMark } from '@/components/brand/x3code-mark';
 import { EmptyChatSuggestion } from '@/features/chat/empty-chat-suggestion';
 import { copy } from '@/strings/zh';
 
-type EmptyChatProps = { onWorkspace: () => void; onPrompt: (prompt: string) => void; onDemo: () => void; detached?: boolean };
+type EmptyChatProps = { onWorkspace: () => void; onPrompt: (prompt: string) => void; detached?: boolean };
 
-export function EmptyChat({ onWorkspace, onPrompt, onDemo, detached = false }: EmptyChatProps) {
+export function EmptyChat({ onWorkspace, onPrompt, detached = false }: EmptyChatProps) {
   const { colors } = useAppTheme();
   // 归档在电脑端、宿主表已无表项的会话：手机端既读不到历史也唤不活，直说而非给假入口
   if (detached) {
@@ -30,7 +30,6 @@ export function EmptyChat({ onWorkspace, onPrompt, onDemo, detached = false }: E
         <EmptyChatSuggestion icon={Code2} label={copy.quickAnalyze} onPress={() => onPrompt('分析当前项目结构、关键模块和潜在风险，并给出可执行改进计划。')} />
         <EmptyChatSuggestion icon={SearchCheck} label={copy.quickFix} onPress={() => onPrompt('定位当前项目中的错误或失败测试，分析根因并完成修复。')} />
         <EmptyChatSuggestion icon={ShieldCheck} label={copy.quickReview} onPress={() => onPrompt('审查当前代码变更，检查正确性、安全性和可维护性。')} />
-        <EmptyChatSuggestion icon={MessageSquareText} label={copy.demoConversation} onPress={onDemo} />
       </View>
     </View>
   );

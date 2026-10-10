@@ -5,6 +5,8 @@ import { ChatBubble, CopyButton, IconButton } from '@x3code/ui';
 
 import { copy } from '@/strings';
 import { writeClipboardText } from '@/lib/clipboard';
+import { imageDataUrl } from '@/composer/read-image-file';
+import { openViewer } from '@/image-viewer/image-viewer-store';
 import { parseSkillInvocation, toSkillInvocationInput } from './skill-invocation';
 import { SkillInvocationMessage } from './skill-invocation-message';
 import type { SessionMessage } from './thread-model';
@@ -31,12 +33,24 @@ function UserMessageRow({ message, onEdit, onEditRerun, onRetry }: UserMessageRo
       {message.images.length > 0 ? (
         <div className="flex max-w-full flex-wrap justify-end gap-[6px] pb-[6px]">
           {message.images.map((image, index) => (
-            <img
+            <button
               key={`${message.id}:${index}`}
-              src={`data:${image.mimeType};base64,${image.data}`}
-              alt=""
-              className="size-[120px] rounded-[10px] border border-border object-cover"
-            />
+              type="button"
+              onClick={() =>
+                openViewer(
+                  message.images.map((item) => ({ src: imageDataUrl(item), name: '' })),
+                  index,
+                )
+              }
+              className="cursor-zoom-in overflow-hidden rounded-[10px] border border-border"
+            >
+              <img
+                src={imageDataUrl(image)}
+                alt=""
+                draggable={false}
+                className="size-[120px] object-cover"
+              />
+            </button>
           ))}
         </div>
       ) : null}

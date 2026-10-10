@@ -174,10 +174,13 @@ describe('发送/停止键状态机（禁用灰 / 可发黑 / 生成中空输入
     expect(tag).toContain('type="submit"');
   });
 
-  test('症状回归（生成中+空输入保持红色停止）：停止键 bg-stop 在位，发送键不渲染', () => {
+  test('症状回归（生成中+空输入保持灰色停止）：停止键 bg-halt 中性灰在位，发送键不渲染', () => {
     const html = renderToStaticMarkup(<ComposerActionsRow {...makeProps({ canSend: false, generating: true })} />);
     const tag = buttonTag(html, copy.composer.stop);
-    expect(tag).toContain('bg-stop');
+    expect(tag).toContain('bg-halt');
+    expect(tag).toContain('text-foreground');
+    expect(tag).not.toContain('bg-stop');
+    expect(tag).not.toContain('text-white');
     expect(tag).toContain('type="button"');
     expect(buttonTag(html, copy.composer.send)).toBeNull();
   });
