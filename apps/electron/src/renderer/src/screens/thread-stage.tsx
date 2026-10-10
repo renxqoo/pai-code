@@ -39,7 +39,6 @@ function ThreadStage(): React.JSX.Element {
   const executing = generating || thread.bashRunning || thread.compacting;
   /** 运行计时只随执行态走表（子代理计时在 AgentPanel 各自门控） */
   const now = useElapsedNow(executing);
-  const queueCount = thread.queue.steering.length + thread.queue.followUp.length;
   const cwd = activeSession?.cwd ?? '';
 
   const header = useThreadHeaderAssembly({
@@ -47,8 +46,6 @@ function ThreadStage(): React.JSX.Element {
     cwd,
     sessionTitle: activeSession?.title ?? '',
     generating,
-    compacting: thread.compacting,
-    queueCount,
   });
 
   /** 页面滚动：菜单栏固定，消息流独占滚动容器，贴底跟随挂在容器上；
@@ -79,7 +76,7 @@ function ThreadStage(): React.JSX.Element {
   return (
     <>
       {/* 固定头区：菜单栏全宽不随页面滚动（拖拽区连续无侧栏间隙断档），掉线横幅保持内容列节奏 */}
-      <ThreadHeader {...header} onStatusJump={scrollToBottom} />
+      <ThreadHeader {...header} />
       {hostDown ? (
         <div className="shrink-0 px-[40px]">
           <HostDownBanner onOpenSettings={onOpenSettings} />

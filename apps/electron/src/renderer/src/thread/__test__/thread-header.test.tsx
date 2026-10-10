@@ -3,16 +3,12 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { ThreadHeader } from '../thread-header';
 import { projectMenuItems, sessionMenuItems } from '../header-menus';
-import type { ThreadStatusKind } from '../thread-status';
 
 const LABELS = {
-  toggleMaximize: '切换最大化',
   toggleSplitView: '切换分栏',
-  statusAria: '会话状态',
   renameTitleAria: '重命名会话',
   projectMenuAria: '项目操作',
   sessionMenuAria: '会话操作',
-  statusLabel: '运行中',
 };
 
 const PROJECT_MENU = projectMenuItems({
@@ -38,17 +34,14 @@ function render(overrides: Partial<Parameters<typeof ThreadHeader>[0]> = {}): st
       projectName="agent-app"
       sessionTitle="新会话"
       sidebarCollapsed={false}
-      status="idle"
       panelOpen={false}
       labels={LABELS}
       projectMenu={PROJECT_MENU}
       sessionMenu={SESSION_MENU}
       onProjectAction={() => undefined}
       onRenameTitle={() => undefined}
-      onStatusJump={() => undefined}
       onTogglePanel={() => undefined}
       onSessionAction={() => undefined}
-      onToggleMaximize={() => undefined}
       {...overrides}
     />,
   );
@@ -75,24 +68,25 @@ describe('ThreadHeader', () => {
     expect(toggle[0]).toContain('lucide-panel-right');
   });
 
-  test.each<[ThreadStatusKind, string]>([
-    ['running', '运行中'],
-    ['permission', '等待权限'],
-    ['compacting', '压缩中'],
-    ['queued', '排队中'],
-  ])('状态 chip %s 显示文案 %s', (status, label) => {
-    const html = render({ status, labels: { ...LABELS, statusLabel: label } });
-    expect(html).toContain(label);
-  });
-
-  test('空闲态不渲染状态 chip（降噪）', () => {
-    const html = render({ status: 'idle' });
+  test('症状回归：头部不渲染状态胶囊（运行/权限/压缩/排队状态均无入口与圆点）', () => {
+    const html = render();
     expect(html).not.toContain('会话状态');
+    expect(html).not.toContain('animate-pulse');
+    for (const label of ['运行中', '等待权限', '压缩中', '排队中']) {
+      expect(html).not.toContain(label);
+    }
   });
 
-  test('等待权限态带呼吸动画类；项目/会话菜单 aria 就位；「+视图」菜单已删（用户裁决——与面板开关/快捷键重复）', () => {
-    const html = render({ status: 'permission', labels: { ...LABELS, statusLabel: '等待权限' } });
-    expect(html).toContain('animate-pulse');
+  test('症状回归：头部不渲染全屏切换（面板开关是右端唯一图标按钮）', () => {
+    const html = render();
+    expect(html).not.toContain('切换最大化');
+    expect(html).not.toContain('lucide-maximize-2');
+    // 面板开关仍在位（红框右侧那个竖条图标保留）
+    expect(html).toContain('aria-label="切换分栏"');
+  });
+
+  test('项目/会话菜单 aria 就位；「+视图」菜单已删（用户裁决——与面板开关/快捷键重复）', () => {
+    const html = render();
     expect(html).toContain('aria-label="项目操作"');
     expect(html).toContain('aria-label="会话操作"');
     expect(html).not.toContain('打开视图');

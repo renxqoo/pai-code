@@ -47,7 +47,6 @@ export const en = {
     empty: 'No files to show',
   },
   thread: {
-    toggleMaximize: 'Toggle maximize',
     openDiff: 'Open Diff',
     turnFailedLabel: 'Request failed',
     turnAbortedLabel: 'Aborted',
@@ -61,14 +60,6 @@ export const en = {
     sessionClose: 'Close session',
     sessionArchive: 'Archive session',
     renameTitleAria: 'Rename conversation',
-    statusAria: 'Conversation status',
-    status: {
-      idle: 'Idle',
-      running: 'Running',
-      permission: 'Waiting for permission',
-      compacting: 'Compacting',
-      queued: 'Queued',
-    },
     openFailed: (reason: string): string => `Failed to open (${reason}).`,
     openEditorMissing: openEditorMissingCopy,
     copyFailed: 'Copy failed. Try again.',

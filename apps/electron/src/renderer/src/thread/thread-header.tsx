@@ -1,67 +1,49 @@
 import * as React from 'react';
-import { ChevronDown, Folder, Maximize2, MoreHorizontal, PanelRight } from 'lucide-react';
+import { ChevronDown, Folder, MoreHorizontal, PanelRight } from 'lucide-react';
 
 import { IconButton, MenuButton, type MenuItemDef } from '@x3code/ui';
 
 import { WINDOWS_CAPTION_WIDTH } from '@/lib/platform';
 import { reduceTitleEdit, titleCommit, type TitleEditState } from '@/thread/title-edit';
-import type { ThreadStatusKind } from '@/thread/thread-status';
 
 type ThreadHeaderProps = {
   projectName: string
   sessionTitle: string
   /** 侧栏收起时左侧避让固定标题块（--titlebar-left-w 由标题覆盖块发布） */
   sidebarCollapsed: boolean
-  status: ThreadStatusKind
   /** 右侧面板是否有打开的 tab（开关按钮的展开态）。 */
   panelOpen: boolean
   labels: {
-    toggleMaximize: string
     toggleSplitView: string
-    statusAria: string
     renameTitleAria: string
     projectMenuAria: string
     sessionMenuAria: string
-    statusLabel: string
   }
   projectMenu: readonly MenuItemDef[]
   sessionMenu: readonly MenuItemDef[]
   onProjectAction: (id: string) => void
   onRenameTitle: (name: string) => void
-  onStatusJump: () => void
   onTogglePanel: () => void
   onSessionAction: (id: string) => void
-  onToggleMaximize: () => void
 }
 
-/** 状态圆点配色：等待权限琥珀呼吸、运行绿脉冲、压缩蓝脉冲、排队灰。 */
-const STATUS_DOT_CLASS: Record<Exclude<ThreadStatusKind, 'idle'>, string> = {
-  permission: 'bg-amber-500 animate-pulse',
-  running: 'bg-emerald-500 animate-pulse',
-  compacting: 'bg-sky-500 animate-pulse',
-  queued: 'bg-muted-foreground/70',
-};
-
 /**
- * 主区头部：全宽拖拽行（与标题覆盖块同排）——项目菜单 + 可编辑标题 + 状态 chip +
- * 变更入口 + 会话菜单 + 全屏开关 + 面板开关；内容右端避让 Windows caption。
+ * 主区头部：全宽拖拽行（与标题覆盖块同排）——项目菜单 + 可编辑标题 + 会话菜单
+ * + 面板开关；内容右端避让 Windows caption。
  * 「重命名」是头部内部 UX（点标题/菜单进入行内编辑），其余动作经回调上抛。
  */
 function ThreadHeader({
   projectName,
   sessionTitle,
   sidebarCollapsed,
-  status,
   panelOpen,
   labels,
   projectMenu,
   sessionMenu,
   onProjectAction,
   onRenameTitle,
-  onStatusJump,
   onTogglePanel,
   onSessionAction,
-  onToggleMaximize,
 }: ThreadHeaderProps) {
   const [editing, setEditing] = React.useState<TitleEditState>(null);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
@@ -136,18 +118,6 @@ function ThreadHeader({
             className="h-[22px] w-[200px] rounded-md bg-transparent px-[4px] text-[12.5px] leading-none font-medium text-foreground outline-none ring-1 ring-ring/40 focus-visible:ring-2 focus-visible:ring-ring"
           />
         )}
-        {status === 'idle' ? null : (
-          <button
-            type="button"
-            onClick={onStatusJump}
-            aria-label={labels.statusAria}
-            title={labels.statusLabel}
-            className="flex shrink-0 cursor-pointer items-center gap-[5px] rounded-full px-[7px] py-[3px] text-[11px] leading-none text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
-            <span aria-hidden="true" className={`size-[6px] shrink-0 rounded-full ${STATUS_DOT_CLASS[status]}`} />
-            {labels.statusLabel}
-          </button>
-        )}
       </div>
       <div className="app-no-drag ml-auto flex shrink-0 items-center gap-[10px]">
         <MenuButton
@@ -162,12 +132,9 @@ function ThreadHeader({
         />
       </div>
       <div className="app-no-drag ml-[8px] flex shrink-0 items-center gap-[10px]">
-        <IconButton label={labels.toggleMaximize} size="sm" onClick={onToggleMaximize}>
-          <Maximize2 strokeWidth={1.75} />
-        </IconButton>
         {/*
-         * 右侧面板开关（还原旧头部位次：最大化右侧）：面板开着（任一 tab 在）
-         * 点击整组收起，关着点击以 Diff 视图打开；多标签细节入口在 ⌘⇧D/⌘⇧A。
+         * 右侧面板开关：面板开着（任一 tab 在）点击整组收起，关着点击以 Diff 视图
+         * 打开；多标签细节入口在 ⌘⇧D/⌘⇧A。
          */}
         <IconButton
           label={labels.toggleSplitView}

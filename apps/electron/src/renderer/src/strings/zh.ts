@@ -48,7 +48,6 @@ export const zh: typeof en = {
     empty: '没有可展示的文件',
   },
   thread: {
-    toggleMaximize: '切换最大化',
     openDiff: '打开 Diff',
     turnFailedLabel: '请求失败',
     turnAbortedLabel: '已中止',
@@ -62,14 +61,6 @@ export const zh: typeof en = {
     sessionClose: '关闭会话',
     sessionArchive: '归档会话',
     renameTitleAria: '重命名会话',
-    statusAria: '会话状态',
-    status: {
-      idle: '空闲',
-      running: '运行中',
-      permission: '等待权限',
-      compacting: '压缩中',
-      queued: '排队中',
-    },
     openFailed: (reason: string): string => `打开失败（${reason}）。`,
     openEditorMissing: openEditorMissingCopy,
     copyFailed: '复制失败，请重试。',
